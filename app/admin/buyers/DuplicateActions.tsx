@@ -7,17 +7,22 @@ import {
   refundLatestInvoiceAction,
   extendStripeTrialAction,
 } from "@/lib/admin/stripeActions";
+import ConfirmModal from "../_components/ConfirmModal";
 
 /**
  * Action-Buttons für eine einzelne Duplikat-Zeile (oder allgemein für
- * eine Stripe-Subscription/-Customer im Admin). Jede Aktion läuft
- * durch ein einfaches `confirm()`-Dialog (kein E-Mail-Tippen) und
- * schreibt sofort live in Stripe.
- *
- * Layout: Löschen prominent (häufigster Fall bei Duplikaten),
- * "Bis Periodenende" daneben als Alternative, Refund + Trial nur als
- * kleine Sekundär-Buttons.
+ * eine Stripe-Subscription/-Customer im Admin). Jede Aktion zeigt ein
+ * echtes ConfirmModal statt window.confirm().
  */
+
+type PendingAction = {
+  title: string;
+  message: string;
+  confirmLabel: string;
+  danger: boolean;
+  execute: () => void;
+};
+
 export default function DuplicateActions({
   email,
   source,
@@ -29,18 +34,27 @@ export default function DuplicateActions({
   subscriptionId: string | null;
   customerId: string | null;
 }) {
-  const [pending, startTransition] = useTransition();
+  const [isPending, startTransition] = useTransition();
   const [refundOpen, setRefundOpen] = useState(false);
   const [trialOpen, setTrialOpen] = useState(false);
   const [refundAmount, setRefundAmount] = useState("");
   const [trialDays, setTrialDays] = useState("7");
+  const [modal, setModal] = useState<PendingAction | null>(null);
 
-  function call(
+  function ask(action: PendingAction) {
+    setModal(action);
+  }
+
+  function confirm() {
+    if (!modal) return;
+    modal.execute();
+    setModal(null);
+  }
+
+  function run(
     action: (fd: FormData) => Promise<{ ok: boolean; error?: string }>,
     fields: Record<string, string>,
-    confirmMsg: string,
-  ): void {
-    if (!confirm(confirmMsg)) return;
+  ) {
     const fd = new FormData();
     for (const [k, v] of Object.entries(fields)) fd.append(k, v);
     startTransition(async () => {
@@ -52,175 +66,199 @@ export default function DuplicateActions({
   }
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 6, minWidth: 220 }}>
-      {subscriptionId ? (
-        <>
+    <>
+      <ConfirmModal
+        open={!!modal}
+        title={modal?.title ?? ""}
+        message={modal?.message}
+        confirmLabel={modal?.confirmLabel ?? "Bestätigen"}
+        danger={modal?.danger ?? false}
+        onConfirm={confirm}
+        onCancel={() => setModal(null)}
+      />
+
+      <div style={{ display: "flex", flexDirection: "column", gap: 6, minWidth: 220 }}>
+        {subscriptionId ? (
+          <>
+            <button
+              type="button"
+              disabled={isPending}
+              style={btnDanger}
+              onClick={() =>
+                ask({
+                  title: "Subscription sofort kündigen?",
+                  message: `${subscriptionId}\n\nUser verliert Pro-Zugang sofort.`,
+                  confirmLabel: "Sofort kündigen",
+                  danger: true,
+                  execute: () => run(cancelStripeSubAction, { subscriptionId, mode: "now", email }),
+                })
+              }
+            >
+              ✕ Sofort kündigen
+            </button>
+            <button
+              type="button"
+              disabled={isPending}
+              style={btnSecondary}
+              onClick={() =>
+                ask({
+                  title: "Bis Periodenende kündigen?",
+                  message: `${subscriptionId}\n\nUser behält Pro bis Periodenende, dann automatisch beendet.`,
+                  confirmLabel: "Bis Periodenende kündigen",
+                  danger: false,
+                  execute: () => run(cancelStripeSubAction, { subscriptionId, mode: "period_end", email }),
+                })
+              }
+            >
+              ⏳ Bis Periodenende
+            </button>
+          </>
+        ) : null}
+
+        {customerId ? (
           <button
             type="button"
-            disabled={pending}
+            disabled={isPending}
             style={btnDanger}
             onClick={() =>
-              call(
-                cancelStripeSubAction,
-                { subscriptionId, mode: "now", email },
-                `Subscription ${subscriptionId} SOFORT in Stripe kündigen?\n\nUser verliert Pro sofort.`,
-              )
+              ask({
+                title: "Stripe-Customer löschen?",
+                message: `${customerId}\n\nNur möglich wenn keine aktive Subscription mehr hängt. Diese Aktion kann nicht rückgängig gemacht werden.`,
+                confirmLabel: "Customer löschen",
+                danger: true,
+                execute: () => run(deleteStripeCustomerAction, { customerId, email }),
+              })
             }
           >
-            ✕ Sofort kündigen
+            🗑 Customer löschen
           </button>
-          <button
-            type="button"
-            disabled={pending}
-            style={btnSecondary}
-            onClick={() =>
-              call(
-                cancelStripeSubAction,
-                { subscriptionId, mode: "period_end", email },
-                `Subscription ${subscriptionId} zum Periodenende kündigen?\n\nUser behält Pro bis Periodenende, danach automatisch aus.`,
-              )
-            }
-          >
-            ⏳ Bis Periodenende
-          </button>
-        </>
-      ) : null}
+        ) : null}
 
-      {customerId ? (
-        <button
-          type="button"
-          disabled={pending}
-          style={btnDanger}
-          onClick={() =>
-            call(
-              deleteStripeCustomerAction,
-              { customerId, email },
-              `Stripe-Customer ${customerId} LÖSCHEN?\n\nKlappt nur, wenn keine aktive Subscription mehr dranhängt.`,
-            )
-          }
-        >
-          🗑 Customer löschen
-        </button>
-      ) : null}
-
-      {subscriptionId ? (
-        <>
-          {!refundOpen ? (
-            <button
-              type="button"
-              disabled={pending}
-              style={btnTiny}
-              onClick={() => setRefundOpen(true)}
-            >
-              € Refund letzte Zahlung…
-            </button>
-          ) : (
-            <div style={miniRow}>
-              <input
-                type="text"
-                inputMode="decimal"
-                placeholder="leer = voll, sonst € z.B. 12.50"
-                value={refundAmount}
-                onChange={(e) => setRefundAmount(e.target.value)}
-                style={miniInput}
-              />
+        {subscriptionId ? (
+          <>
+            {!refundOpen ? (
               <button
                 type="button"
-                disabled={pending}
-                style={btnTinyPrimary}
-                onClick={() => {
-                  const amount = refundAmount.trim();
-                  const cents = amount
-                    ? Math.round(Number(amount.replace(",", ".")) * 100).toString()
-                    : "";
-                  if (amount && (!cents || Number(cents) <= 0)) {
-                    alert("Ungültiger Betrag");
-                    return;
-                  }
-                  call(
-                    refundLatestInvoiceAction,
-                    { subscriptionId, email, amountCents: cents },
-                    `Refund auf Subscription ${subscriptionId}: ${
-                      amount ? `${amount}€ Teilrefund` : "VOLL-Refund letzte Invoice"
-                    }?`,
-                  );
-                  setRefundOpen(false);
-                  setRefundAmount("");
-                }}
-              >
-                Refund
-              </button>
-              <button
-                type="button"
+                disabled={isPending}
                 style={btnTiny}
-                onClick={() => {
-                  setRefundOpen(false);
-                  setRefundAmount("");
-                }}
+                onClick={() => setRefundOpen(true)}
               >
-                ×
+                € Refund letzte Zahlung…
               </button>
-            </div>
-          )}
+            ) : (
+              <div style={miniRow}>
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  placeholder="leer = voll, sonst € z.B. 12.50"
+                  value={refundAmount}
+                  onChange={(e) => setRefundAmount(e.target.value)}
+                  style={miniInput}
+                />
+                <button
+                  type="button"
+                  disabled={isPending}
+                  style={btnTinyPrimary}
+                  onClick={() => {
+                    const amount = refundAmount.trim();
+                    const cents = amount
+                      ? Math.round(Number(amount.replace(",", ".")) * 100).toString()
+                      : "";
+                    if (amount && (!cents || Number(cents) <= 0)) {
+                      alert("Ungültiger Betrag");
+                      return;
+                    }
+                    ask({
+                      title: "Refund durchführen?",
+                      message: `${amount ? `${amount} € Teilrefund` : "Vollständiger Refund"} auf ${subscriptionId}.`,
+                      confirmLabel: "Refund auslösen",
+                      danger: false,
+                      execute: () => {
+                        run(refundLatestInvoiceAction, { subscriptionId, email, amountCents: cents });
+                        setRefundOpen(false);
+                        setRefundAmount("");
+                      },
+                    });
+                  }}
+                >
+                  Refund
+                </button>
+                <button
+                  type="button"
+                  style={btnTiny}
+                  onClick={() => {
+                    setRefundOpen(false);
+                    setRefundAmount("");
+                  }}
+                >
+                  ×
+                </button>
+              </div>
+            )}
 
-          {!trialOpen ? (
-            <button
-              type="button"
-              disabled={pending}
-              style={btnTiny}
-              onClick={() => setTrialOpen(true)}
-            >
-              ⏰ Trial verlängern…
-            </button>
-          ) : (
-            <div style={miniRow}>
-              <input
-                type="number"
-                min={1}
-                max={365}
-                placeholder="Tage"
-                value={trialDays}
-                onChange={(e) => setTrialDays(e.target.value)}
-                style={{ ...miniInput, width: 60 }}
-              />
+            {!trialOpen ? (
               <button
                 type="button"
-                disabled={pending}
-                style={btnTinyPrimary}
-                onClick={() => {
-                  const days = Number(trialDays);
-                  if (!Number.isFinite(days) || days < 1 || days > 365) {
-                    alert("1–365 Tage");
-                    return;
-                  }
-                  call(
-                    extendStripeTrialAction,
-                    { subscriptionId, days: String(days), email },
-                    `Trial um ${days} Tage verlängern?`,
-                  );
-                  setTrialOpen(false);
-                }}
+                disabled={isPending}
+                style={btnTiny}
+                onClick={() => setTrialOpen(true)}
               >
-                +{trialDays}d
+                ⏰ Trial verlängern…
               </button>
-              <button type="button" style={btnTiny} onClick={() => setTrialOpen(false)}>
-                ×
-              </button>
-            </div>
-          )}
-        </>
-      ) : null}
+            ) : (
+              <div style={miniRow}>
+                <input
+                  type="number"
+                  min={1}
+                  max={365}
+                  placeholder="Tage"
+                  value={trialDays}
+                  onChange={(e) => setTrialDays(e.target.value)}
+                  style={{ ...miniInput, width: 60 }}
+                />
+                <button
+                  type="button"
+                  disabled={isPending}
+                  style={btnTinyPrimary}
+                  onClick={() => {
+                    const days = Number(trialDays);
+                    if (!Number.isFinite(days) || days < 1 || days > 365) {
+                      alert("1–365 Tage");
+                      return;
+                    }
+                    ask({
+                      title: `Trial um ${days} Tage verlängern?`,
+                      message: `Subscription: ${subscriptionId}`,
+                      confirmLabel: `+${days} Tage`,
+                      danger: false,
+                      execute: () => {
+                        run(extendStripeTrialAction, { subscriptionId, days: String(days), email });
+                        setTrialOpen(false);
+                      },
+                    });
+                  }}
+                >
+                  +{trialDays}d
+                </button>
+                <button type="button" style={btnTiny} onClick={() => setTrialOpen(false)}>
+                  ×
+                </button>
+              </div>
+            )}
+          </>
+        ) : null}
 
-      {!subscriptionId && !customerId ? (
-        <span style={{ color: "#999", fontSize: 12 }}>
-          {source === "beta"
-            ? "Beta — bitte direkt im Stripe-Dashboard"
-            : "keine Stripe-IDs"}
-        </span>
-      ) : null}
+        {!subscriptionId && !customerId ? (
+          <span style={{ color: "#999", fontSize: 12 }}>
+            {source === "beta"
+              ? "Beta — bitte direkt im Stripe-Dashboard"
+              : "keine Stripe-IDs"}
+          </span>
+        ) : null}
 
-      {pending ? <span style={{ color: "#666", fontSize: 11 }}>läuft…</span> : null}
-    </div>
+        {isPending ? <span style={{ color: "#666", fontSize: 11 }}>läuft…</span> : null}
+      </div>
+    </>
   );
 }
 

@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import CaseStatusCell from "../_components/CaseStatusCell";
 
 export type BetaRow = {
   id: string;
@@ -57,9 +58,6 @@ function fmtAmount(cents: number | null | undefined, ccy: string | null | undefi
 function fmtSessionId(id: string | null | undefined): string {
   const s = (id ?? "").trim();
   if (!s) return "—";
-  // Stripe session ids look like `cs_test_a1B2c3...` (~66 chars). Show the
-  // first 16 chars so the column doesn't blow up the table width; the full
-  // value is still copyable from the cell's `title` tooltip.
   if (s.length <= 18) return s;
   return `${s.slice(0, 16)}…`;
 }
@@ -113,12 +111,13 @@ export default function BuyersTables({ beta, pro, pageLimit, betaTruncated, proT
                 <th style={thStyle}>Session-ID</th>
                 <th style={thStyle}>Erstellt</th>
                 <th style={thStyle}>Fulfilled</th>
+                <th style={thStyle}>Fall</th>
               </tr>
             </thead>
             <tbody>
               {filteredBeta.length === 0 ? (
                 <tr>
-                  <td colSpan={7} style={{ ...tdStyle, textAlign: "center", color: "#888" }}>
+                  <td colSpan={8} style={{ ...tdStyle, textAlign: "center", color: "#888" }}>
                     {needle ? "Keine Treffer." : "Keine Reservierungen."}
                   </td>
                 </tr>
@@ -134,6 +133,9 @@ export default function BuyersTables({ beta, pro, pageLimit, betaTruncated, proT
                     </td>
                     <td style={tdStyle}>{fmtDate(r.created_at)}</td>
                     <td style={tdStyle}>{fmtDate(r.fulfilled_at)}</td>
+                    <td style={tdStyle}>
+                      <CaseStatusCell rowKey={`beta-${r.id}`} />
+                    </td>
                   </tr>
                 ))
               )}
@@ -162,12 +164,13 @@ export default function BuyersTables({ beta, pro, pageLimit, betaTruncated, proT
                 <th style={thStyle}>Period endet</th>
                 <th style={thStyle}>Session-ID</th>
                 <th style={thStyle}>Erstellt</th>
+                <th style={thStyle}>Fall</th>
               </tr>
             </thead>
             <tbody>
               {filteredPro.length === 0 ? (
                 <tr>
-                  <td colSpan={7} style={{ ...tdStyle, textAlign: "center", color: "#888" }}>
+                  <td colSpan={8} style={{ ...tdStyle, textAlign: "center", color: "#888" }}>
                     {needle ? "Keine Treffer." : "Keine Pro-Abos."}
                   </td>
                 </tr>
@@ -183,6 +186,9 @@ export default function BuyersTables({ beta, pro, pageLimit, betaTruncated, proT
                       {fmtSessionId(r.stripe_session_id)}
                     </td>
                     <td style={tdStyle}>{fmtDate(r.created_at)}</td>
+                    <td style={tdStyle}>
+                      <CaseStatusCell rowKey={`pro-${r.id}`} />
+                    </td>
                   </tr>
                 ))
               )}
@@ -194,29 +200,14 @@ export default function BuyersTables({ beta, pro, pageLimit, betaTruncated, proT
   );
 }
 
-const h2Style: React.CSSProperties = {
-  fontSize: 16,
-  margin: "0 0 8px",
-};
-
-const countStyle: React.CSSProperties = {
-  fontWeight: 400,
-  color: "#666",
-  fontSize: 14,
-};
-
+const h2Style: React.CSSProperties = { fontSize: 16, margin: "0 0 8px" };
+const countStyle: React.CSSProperties = { fontWeight: 400, color: "#666", fontSize: 14 };
 const tableWrapStyle: React.CSSProperties = {
   overflowX: "auto",
   border: "1px solid #e5e5e5",
   borderRadius: 6,
 };
-
-const tableStyle: React.CSSProperties = {
-  width: "100%",
-  borderCollapse: "collapse",
-  fontSize: 14,
-};
-
+const tableStyle: React.CSSProperties = { width: "100%", borderCollapse: "collapse", fontSize: 14 };
 const thStyle: React.CSSProperties = {
   textAlign: "left",
   padding: "8px 10px",
@@ -225,13 +216,11 @@ const thStyle: React.CSSProperties = {
   fontWeight: 600,
   whiteSpace: "nowrap",
 };
-
 const tdStyle: React.CSSProperties = {
   padding: "8px 10px",
   borderBottom: "1px solid #f0f0f0",
   whiteSpace: "nowrap",
 };
-
 const monoTdStyle: React.CSSProperties = {
   ...tdStyle,
   fontFamily:
@@ -239,7 +228,6 @@ const monoTdStyle: React.CSSProperties = {
   fontSize: 13,
   color: "#444",
 };
-
 const searchStyle: React.CSSProperties = {
   width: "100%",
   maxWidth: 420,
