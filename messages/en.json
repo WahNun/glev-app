@@ -463,6 +463,7 @@
     "units_unit": "u",
     "duration_unit": "min",
     "moment_label": "When",
+    "taken_label": "Taken",
     "backdated_hint": "Back-dated — {when}. No live CGM, values pulled from history.",
     "default_now_hint": "Default: now. Up to 365 days back-datable.",
     "note_label": "Note (optional)",

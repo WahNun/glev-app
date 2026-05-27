@@ -463,6 +463,7 @@
     "units_unit": "IE",
     "duration_unit": "min",
     "moment_label": "Zeitpunkt",
+    "taken_label": "Genommen",
     "backdated_hint": "Rückdatiert — {when}. Kein Live-CGM, Werte werden aus dem Verlauf geholt.",
     "default_now_hint": "Standard: jetzt. Bis zu 365 Tage rückdatierbar.",
     "note_label": "Notiz (optional)",

@@ -267,11 +267,12 @@ export function InsulinForm({ initialType = "bolus" }: { initialType?: "bolus" |
   }
   const [notes, setNotes] = useState("");
   const [status, setStatus] = useState<Status>({ kind: "idle" });
-  // Injection time picker — defaults to "now" for live submissions.
-  // Users can back-date up to 365 days for forgotten / retroactive
-  // shots. Stored as the datetime-local string format ("YYYY-MM-DDTHH:mm")
-  // and converted to a real ISO instant in handleSubmit.
-  const [at, setAt] = useState<string>(() => nowLocalDt());
+  // Quick-chip "Taken" picker state — mirrors ExerciseForm.startedMinAgo.
+  // 0 = "Now" (live submission), > 0 = minutes ago (retroactive),
+  // TAKEN_CUSTOM = "Andere Zeit…" (custom datetime picker visible).
+  const [takenMinAgo, setTakenMinAgo] = useState<number>(0);
+  const [customTakenAt, setCustomTakenAt] = useState<string>(() => nowLocalDt());
+  const usingCustomTaken = takenMinAgo === TAKEN_CUSTOM;
   // Today's meals, newest first, capped at 10 — feeds the optional
   // "Zu Mahlzeit verknüpfen" dropdown that only renders for bolus entries.
   // Refetched whenever the user toggles to bolus so a meal logged in
@@ -323,12 +324,16 @@ export function InsulinForm({ initialType = "bolus" }: { initialType?: "bolus" |
   // Accept "5" and "7,5" (German decimal). Empty/garbage parses to NaN
   // → invalidates the form via the existing `Number.isFinite` check.
   const u = Number((units ?? "").replace(",", "."));
-  const atDate = parseLocalDt(at);
-  // Validate the picker too — invalid date OR more than 365 days back
-  // OR > 1 minute in the future (small grace window for clock drift)
-  // disables the submit button.
   const nowMs = Date.now();
-  const atValid = !!atDate && atDate.getTime() >= nowMs - 365 * 86400_000 && atDate.getTime() <= nowMs + 60_000;
+  // Derive effective injection instant from quick-chip or custom picker.
+  // Quick-chip paths are always valid (they map to fixed minute offsets);
+  // custom path validates the same range as the old datetime input did.
+  const atDate: Date | null = usingCustomTaken
+    ? parseLocalDt(customTakenAt)
+    : new Date(nowMs - takenMinAgo * 60_000);
+  const atValid = usingCustomTaken
+    ? (!!atDate && atDate.getTime() >= nowMs - 365 * 86400_000 && atDate.getTime() <= nowMs + 60_000)
+    : true;
   const valid = type && name.trim().length > 0 && Number.isFinite(u) && u > 0 && u <= 100 && atValid;
 
   async function handleSubmit() {
@@ -376,9 +381,10 @@ export function InsulinForm({ initialType = "bolus" }: { initialType?: "bolus" |
       setUnits(type === "bolus" ? "5" : "20");
       setNotes("");
       setRelatedMealId("");
-      // Reset the picker to a fresh "now" so the next log doesn't
-      // silently inherit the previous back-date.
-      setAt(nowLocalDt());
+      // Reset both the chip picker and the custom datetime so the next
+      // log doesn't silently inherit the previous back-date.
+      setTakenMinAgo(0);
+      setCustomTakenAt(nowLocalDt());
     } catch (e) {
       // Defensive: lib functions SHOULD wrap supabase errors in Error
       // (see lib/insulin.ts), but PostgrestError / AuthError are plain
@@ -473,21 +479,71 @@ export function InsulinForm({ initialType = "bolus" }: { initialType?: "bolus" |
           />
         </div>
         <div>
-          {/* Injection time picker — both Bolus and Basal can be back-dated
-              up to 365 days for forgotten / retroactive shots. Native
-              datetime-local picker handles date AND time in one widget.
-              Defaults to "now". When the chosen time is > 5 min in the
-              past, handleSubmit skips the live CGM pull and lets the
-              scheduler fill from history (mirrors the Exercise form). */}
-          <label style={labelStyle}>{t("moment_label")}</label>
-          <input
-            style={inp}
-            type="datetime-local"
-            value={at}
-            min={oneYearAgoLocalDt()}
-            max={nowLocalDt()}
-            onChange={e => setAt(e.target.value)}
+          {/* Quick-chip "Taken" picker — mirrors ExerciseForm "Started".
+              Most common cases (Now / 30m / 1h / 2h / 3h ago) are one
+              tap; "Andere Zeit…" unlocks a full datetime picker for
+              edge cases. When a chip > 0 is selected handleSubmit
+              treats the entry as retroactive: cgm_glucose_at_log stays
+              NULL and the CGM scheduler resolves both the baseline and
+              the post-fetch windows from CGM history immediately. */}
+          <label style={labelStyle}>{t("taken_label")}</label>
+          <TimeQuickChips
+            value={usingCustomTaken ? -999 : takenMinAgo}
+            onChange={setTakenMinAgo}
+            accent={GREEN}
+            ariaLabel={t("taken_label")}
+            options={TAKEN_OPTIONS.map(o => ({
+              value: o.value,
+              label: o.value === 0 ? t("started_now_btn") : t("started_ago_btn", { label: o.label }),
+            }))}
           />
+          <button
+            type="button"
+            aria-pressed={usingCustomTaken}
+            onClick={() => {
+              hapticSelection();
+              setTakenMinAgo(usingCustomTaken ? 0 : TAKEN_CUSTOM);
+            }}
+            style={{
+              marginTop: 8,
+              padding: "8px 12px",
+              fontSize: 13,
+              fontWeight: 600,
+              background: usingCustomTaken ? `${GREEN}1f` : "transparent",
+              color: usingCustomTaken ? GREEN : "var(--text-muted)",
+              border: `1px dashed ${usingCustomTaken ? GREEN : "var(--border-strong)"}`,
+              borderRadius: 8,
+              cursor: "pointer",
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 6,
+              transition: "all 0.15s",
+            }}
+          >
+            <svg
+              width="13" height="13" viewBox="0 0 24 24" fill="none"
+              stroke="currentColor" strokeWidth="2.2"
+              strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"
+            >
+              <rect x="3" y="4" width="18" height="18" rx="2" />
+              <line x1="16" y1="2" x2="16" y2="6" />
+              <line x1="8"  y1="2" x2="8"  y2="6" />
+              <line x1="3"  y1="10" x2="21" y2="10" />
+              <path d="M14 16l-3 3-2-2" />
+            </svg>
+            {t("started_custom_btn")}
+          </button>
+          {usingCustomTaken && (
+            <input
+              style={{ ...inp, marginTop: 8 }}
+              type="datetime-local"
+              min={oneYearAgoLocalDt()}
+              max={nowLocalDt()}
+              value={customTakenAt}
+              onChange={e => setCustomTakenAt(e.target.value)}
+              aria-label={t("started_custom_btn")}
+            />
+          )}
           <div style={{ fontSize: 13, color: "var(--text-faint)", marginTop: 6 }}>
             {atDate && nowMs - atDate.getTime() > 5 * 60_000
               ? t("backdated_hint", { when: relativeAgo(nowMs - atDate.getTime(), t) })
@@ -636,6 +692,20 @@ export function InsulinForm({ initialType = "bolus" }: { initialType?: "bolus" |
     </div>
   );
 }
+
+// Quick-chip options for the Insulin "Taken" picker. Wider range than
+// the Exercise "Started" picker (max 3 h) because users more often
+// forget to log a bolus 2–3 hours after the fact than a workout.
+const TAKEN_OPTIONS: { value: number; label: string }[] = [
+  { value: 0,   label: "Now" },
+  { value: 30,  label: "30m" },
+  { value: 60,  label: "1h" },
+  { value: 120, label: "2h" },
+  { value: 180, label: "3h" },
+];
+// Sentinel: when takenMinAgo equals this value the custom datetime
+// picker is shown instead of a quick chip.
+const TAKEN_CUSTOM = -1;
 
 // New exercise taxonomy used by the form. Legacy `hypertrophy` rows
 // remain valid in the DB and are mapped to "Strength" for display, but
