@@ -1933,6 +1933,7 @@ function InsulinReadingsBackfill({ logId, slots }: {
     currentValue: number | null;
   }>;
 }) {
+  const txBf = useTranslations("entriesExpand");
   const [inputs, setInputs] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState<BackfillField | null>(null);
   const [err,  setErr]  = useState<string | null>(null);
@@ -1949,7 +1950,7 @@ function InsulinReadingsBackfill({ logId, slots }: {
     const raw = (inputs[s.field] ?? "").trim();
     const n = raw === "" ? null : Number(raw);
     if (n != null && (!Number.isFinite(n) || n < 30 || n > 600)) {
-      setErr("Enter a glucose value between 30 and 600 mg/dL.");
+      setErr(txBf("ex_backfill_err_range"));
       return;
     }
     setBusy(s.field); setErr(null);
@@ -1959,7 +1960,7 @@ function InsulinReadingsBackfill({ logId, slots }: {
       // expanded view, evaluation copy, and outcome badge.
       window.dispatchEvent(new CustomEvent("glev:insulin-updated"));
     } catch (e) {
-      setErr(e instanceof Error ? e.message : "Could not save reading.");
+      setErr(e instanceof Error ? e.message : txBf("ex_backfill_err_save"));
     } finally { setBusy(null); }
   }
 
@@ -1974,10 +1975,10 @@ function InsulinReadingsBackfill({ logId, slots }: {
       gap: 8,
     }}>
       <div style={{ fontSize:11, color:"var(--text-dim)", letterSpacing:"0.08em", fontWeight:600 }}>
-        MANUAL OVERRIDE
+        {txBf("ex_manual_override")}
       </div>
       <div style={{ fontSize:13, color:"var(--text-muted)", lineHeight:1.5 }}>
-        Auto-fetch couldn't pull from your CGM. Enter the meter reading and we'll backfill the entry.
+        {txBf("ex_backfill_hint")}
       </div>
       <div style={{
         display: "grid",
@@ -2277,7 +2278,7 @@ function BolusRowCard({ log, meals, isOpen, onToggle, onDelete, deleting }: {
               {/* Historic ICR snapshot (frozen at log time). Shows "—"
                   for legacy rows or pre-ICR-config entries so a doctor
                   reviewing the log can tell "no snapshot" from "0". */}
-              <Detail label="ICR AT LOG" value={icrLabel ?? "—"}/>
+              <Detail label={tx("detail_icr_at_log")} value={icrLabel ?? "—"}/>
             </div>
           </ExPanel>
 
@@ -2289,9 +2290,9 @@ function BolusRowCard({ log, meals, isOpen, onToggle, onDelete, deleting }: {
           <BolusMealLinkPanel log={log} meals={meals} />
 
           {/* 2) Glucose tracking ----------------------------------- */}
-          <ExPanel title="GLUCOSE TRACKING">
+          <ExPanel title={tx("panel_glucose_tracking")}>
             <Detail
-              label="BG AT LOG"
+              label={tx("detail_bg_at_log")}
               value={before != null ? `${Math.round(before)} mg/dL` : "—"}
             />
             <div style={{ height:8 }}/>
@@ -2301,14 +2302,14 @@ function BolusRowCard({ log, meals, isOpen, onToggle, onDelete, deleting }: {
               themeColor={INSULIN_ACCENT}
               slots={[
                 {
-                  label: "1h Post",
+                  label: tx("post_label_1h"),
                   fetchType: "after_1h",
                   fetchedValue: at1h,
                   windowStartIso: log.created_at,
                   expectedFetchAtIso: expect1h.toISOString(),
                 },
                 {
-                  label: "2h Post",
+                  label: tx("post_label_2h"),
                   fetchType: "after_2h",
                   fetchedValue: at2h,
                   windowStartIso: log.created_at,
@@ -2318,8 +2319,8 @@ function BolusRowCard({ log, meals, isOpen, onToggle, onDelete, deleting }: {
             />
             {(d1h != null || d2h != null) && (
               <div style={{ display:"grid", gridTemplateColumns:"repeat(2,1fr)", gap:8, marginTop:8 }}>
-                <BolusDeltaPill label="Δ AT LOG → +1H" delta={d1h}/>
-                <BolusDeltaPill label="Δ AT LOG → +2H" delta={d2h}/>
+                <BolusDeltaPill label={tx("ex_delta_at_log_1h")} delta={d1h}/>
+                <BolusDeltaPill label={tx("ex_delta_at_log_2h")} delta={d2h}/>
               </div>
             )}
             {/* Mini glucose trend — visible once ≥2 readings exist so the
@@ -2327,9 +2328,9 @@ function BolusRowCard({ log, meals, isOpen, onToggle, onDelete, deleting }: {
                 tap/hover to inspect exact values (crosshair). */}
             {(() => {
               const pts = [
-                before != null ? { t: d.getTime(),        v: before, label: "AT LOG" } : null,
-                at1h   != null ? { t: expect1h.getTime(), v: at1h,   label: "+1H"    } : null,
-                at2h   != null ? { t: expect2h.getTime(), v: at2h,   label: "+2H"    } : null,
+                before != null ? { t: d.getTime(),        v: before, label: tx("ex_label_at_log") } : null,
+                at1h   != null ? { t: expect1h.getTime(), v: at1h,   label: tx("ex_label_plus_1h") } : null,
+                at2h   != null ? { t: expect2h.getTime(), v: at2h,   label: tx("ex_label_plus_2h") } : null,
               ].filter((p): p is { t: number; v: number; label: string } => p !== null);
               if (pts.length < 2) return null;
               return (
@@ -2344,8 +2345,8 @@ function BolusRowCard({ log, meals, isOpen, onToggle, onDelete, deleting }: {
               <InsulinReadingsBackfill
                 logId={log.id}
                 slots={[
-                  { label:"1H reading", field:"after_1h", expectedAt:expect1h, currentValue:at1h },
-                  { label:"2H reading", field:"after_2h", expectedAt:expect2h, currentValue:at2h },
+                  { label:tx("ex_backfill_1h"), field:"after_1h", expectedAt:expect1h, currentValue:at1h },
+                  { label:tx("ex_backfill_2h"), field:"after_2h", expectedAt:expect2h, currentValue:at2h },
                 ]}
               />
             </div>
@@ -2532,12 +2533,12 @@ function BasalRowCard({ log, isOpen, onToggle, onDelete, deleting }: {
             }}>
               {trend.state === "loading" && (
                 <div style={{ fontSize:13, color:"var(--text-dim)", textAlign:"center", padding:"24px 0" }}>
-                  Loading CGM history…
+                  {tx("basal_cgm_loading")}
                 </div>
               )}
               {trend.state === "error" && (
                 <div style={{ fontSize:13, color:"var(--text-dim)", textAlign:"center", padding:"24px 0" }}>
-                  CGM not connected or history unavailable.
+                  {tx("basal_cgm_unavailable")}
                 </div>
               )}
               {trend.state === "ready" && (
@@ -2548,7 +2549,7 @@ function BasalRowCard({ log, isOpen, onToggle, onDelete, deleting }: {
                   toMs={toMs}
                   markerMs={d.getTime()}
                   color={accent}
-                  manualLabel={locale.startsWith("de") ? "Manuell" : "Manual"}
+                  manualLabel={tx("basal_manual_label")}
                   locale={locale}
                 />
               )}
@@ -2561,24 +2562,24 @@ function BasalRowCard({ log, isOpen, onToggle, onDelete, deleting }: {
                 <span>−6 h</span>
                 <span>−4 h</span>
                 <span>−2 h</span>
-                <span>injection</span>
+                <span>{tx("basal_injection_label")}</span>
               </div>
             </div>
             {/* Window stats. */}
             {stats != null && (
               <div style={{ display:"grid", gridTemplateColumns:"repeat(4,minmax(0,1fr))", gap:8, marginTop:8 }}>
-                <Detail label="MIN" value={`${stats.min} mg/dL`}/>
-                <Detail label="MAX" value={`${stats.max} mg/dL`}/>
-                <Detail label="AVG" value={`${stats.avg} mg/dL`}/>
-                <Detail label="READINGS" value={`${stats.count}`}/>
+                <Detail label={tx("detail_min")} value={`${stats.min} mg/dL`}/>
+                <Detail label={tx("detail_max")} value={`${stats.max} mg/dL`}/>
+                <Detail label={tx("detail_avg")} value={`${stats.avg} mg/dL`}/>
+                <Detail label={tx("detail_readings")} value={`${stats.count}`}/>
               </div>
             )}
           </ExPanel>
 
           {/* 3) Stored post-fetches (12h / 24h) — context only ----- */}
-          <ExPanel title="POST-INJECTION CHECKPOINTS">
+          <ExPanel title={tx("panel_post_checkpoints")}>
             <Detail
-              label="BG AT LOG"
+              label={tx("detail_bg_at_log")}
               value={before != null ? `${Math.round(before)} mg/dL` : "—"}
             />
             <div style={{ height:8 }}/>
@@ -2588,14 +2589,14 @@ function BasalRowCard({ log, isOpen, onToggle, onDelete, deleting }: {
               themeColor={BASAL_ACCENT}
               slots={[
                 {
-                  label: "12h Post",
+                  label: tx("post_label_12h"),
                   fetchType: "after_12h",
                   fetchedValue: at12h,
                   windowStartIso: log.created_at,
                   expectedFetchAtIso: expect12h.toISOString(),
                 },
                 {
-                  label: "24h Post",
+                  label: tx("post_label_24h"),
                   fetchType: "after_24h",
                   fetchedValue: at24h,
                   windowStartIso: log.created_at,
@@ -2609,8 +2610,8 @@ function BasalRowCard({ log, isOpen, onToggle, onDelete, deleting }: {
               <InsulinReadingsBackfill
                 logId={log.id}
                 slots={[
-                  { label:"12H reading", field:"after_12h", expectedAt:expect12h, currentValue:at12h },
-                  { label:"24H reading", field:"after_24h", expectedAt:expect24h, currentValue:at24h },
+                  { label:tx("ex_backfill_12h"), field:"after_12h", expectedAt:expect12h, currentValue:at12h },
+                  { label:tx("ex_backfill_24h"), field:"after_24h", expectedAt:expect24h, currentValue:at24h },
                 ]}
               />
             </div>
@@ -2788,9 +2789,9 @@ function ExerciseRowCard({ log, allLogs, isOpen, onToggle, onDelete, deleting, o
           </ExPanel>
 
           {/* 2) Glucose tracking ----------------------------------- */}
-          <ExPanel title="GLUCOSE TRACKING">
+          <ExPanel title={tx("panel_glucose_tracking")}>
             <Detail
-              label="BG BEFORE"
+              label={tx("mini_bg_before")}
               value={before != null ? `${Math.round(before)} mg/dL` : "—"}
             />
             <div style={{ height:8 }}/>
@@ -2800,14 +2801,14 @@ function ExerciseRowCard({ log, allLogs, isOpen, onToggle, onDelete, deleting, o
               themeColor={EXERCISE_ACCENT}
               slots={[
                 {
-                  label: "Workout End",
+                  label: tx("ex_slot_workout_end"),
                   fetchType: "at_end",
                   fetchedValue: atEnd ?? null,
                   windowStartIso: log.created_at,
                   expectedFetchAtIso: expectAtEnd.toISOString(),
                 },
                 {
-                  label: "1h Post-End",
+                  label: tx("ex_slot_1h_post_end"),
                   fetchType: "exer_after_1h",
                   fetchedValue: after1h ?? null,
                   windowStartIso: end.toISOString(),
@@ -2818,17 +2819,17 @@ function ExerciseRowCard({ log, allLogs, isOpen, onToggle, onDelete, deleting, o
             {/* Coloured deltas — only show once both endpoints exist. */}
             {(dEnd != null || d1h != null) && (
               <div style={{ display:"grid", gridTemplateColumns:"repeat(2,1fr)", gap:8, marginTop:8 }}>
-                <DeltaPill label="Δ BEFORE → AT END" delta={dEnd}/>
-                <DeltaPill label="Δ BEFORE → +1H"    delta={d1h}/>
+                <DeltaPill label={tx("ex_delta_before_at_end")} delta={dEnd}/>
+                <DeltaPill label={tx("ex_delta_before_1h")}    delta={d1h}/>
               </div>
             )}
             {/* Mini glucose trend — visible once ≥2 readings exist.
                 Tap/hover shows exact value at each checkpoint via crosshair. */}
             {(() => {
               const pts = [
-                before  != null ? { t: start.getTime(),       v: before,  label: "BEFORE"  } : null,
-                atEnd   != null ? { t: end.getTime(),         v: atEnd,   label: "AT END"  } : null,
-                after1h != null ? { t: expect1h.getTime(),    v: after1h, label: "+1H"     } : null,
+                before  != null ? { t: start.getTime(),       v: before,  label: tx("ex_label_before") } : null,
+                atEnd   != null ? { t: end.getTime(),         v: atEnd,   label: tx("ex_label_at_end") } : null,
+                after1h != null ? { t: expect1h.getTime(),    v: after1h, label: tx("ex_label_plus_1h") } : null,
               ].filter((p): p is { t: number; v: number; label: string } => p !== null);
               if (pts.length < 2) return null;
               return (
@@ -2958,7 +2959,7 @@ function ExerciseEditor({ log, onSaved, onCancel }: {
     if (busy) return;
     setErr(null);
     if (!Number.isFinite(duration) || !Number.isInteger(duration) || duration <= 0 || duration > 600) {
-      setErr("Dauer muss eine ganze Zahl zwischen 1 und 600 Minuten sein.");
+      setErr(tx("ex_err_duration"));
       return;
     }
     setBusy(true);
@@ -2987,7 +2988,7 @@ function ExerciseEditor({ log, onSaved, onCancel }: {
       // CGM history within ±15 min of the new time.
       if (!isSynced && startedAtLocal.trim() !== startedAtSeed.trim() && startedAtLocal.trim() !== "") {
         const iso = localToIso(startedAtLocal);
-        if (!iso) { setErr("Ungültige Uhrzeit."); setBusy(false); return; }
+        if (!iso) { setErr(tx("ex_err_time")); setBusy(false); return; }
         patch.started_at = iso;
       }
 
@@ -3009,7 +3010,7 @@ function ExerciseEditor({ log, onSaved, onCancel }: {
       });
       onSaved(updated);
     } catch (e) {
-      setErr(e instanceof Error ? e.message : "Konnte nicht speichern.");
+      setErr(e instanceof Error ? e.message : tx("ex_err_save"));
     } finally {
       setBusy(false);
     }
@@ -3019,7 +3020,7 @@ function ExerciseEditor({ log, onSaved, onCancel }: {
     <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
       <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:12 }}>
         <div style={{ fontSize:11, color:"var(--text-dim)", letterSpacing:"0.1em", fontWeight:700 }}>
-          WORKOUT BEARBEITEN
+          {tx("ex_editor_title")}
         </div>
         <span style={{
           padding:"4px 10px", borderRadius:99, fontSize:12, fontWeight:700,
@@ -3164,7 +3165,7 @@ function ExerciseEditor({ log, onSaved, onCancel }: {
       </div>
 
       <CollapsibleField
-        label="Notiz"
+        label={tx("ins_editor_notes")}
         accent={EXERCISE_ACCENT}
         hasValue={notes.trim().length > 0}
       >
@@ -3216,14 +3217,14 @@ function ExerciseEditor({ log, onSaved, onCancel }: {
             marginTop:18, // align with SaveButton's marginTop
           }}
         >
-          Abbrechen
+          {tx("ex_cancel")}
         </button>
         <SaveButton
           onClick={handleSave}
           disabled={busy}
           busy={busy}
           accent={EXERCISE_ACCENT}
-          label="Speichern"
+          label={tx("ex_save")}
           successKey={savedTick || null}
         />
       </div>
@@ -3467,7 +3468,7 @@ function HypoShareTile({ hypoCount, classifiedCount, share }: {
   const pct = enough ? Math.round(share! * 100) : null;
   const text = !enough
     ? "—"
-    : `${pct}% · ${hypoCount} of ${classifiedCount}`;
+    : tx("ex_hypo_count", { pct: pct!, hypoCount, classifiedCount });
   return (
     <div style={{
       background:"var(--surface-soft)",
@@ -3648,6 +3649,7 @@ function MealEditor({ meal, onSaved, onCancel }: {
   onSaved: (updated: Meal) => void;
   onCancel: () => void;
 }) {
+  const tx = useTranslations("entriesExpand");
   // Carbs input now follows the user's chosen display unit (g / BE / KE)
   // — same pattern as the engine wizard. The value is seeded via
   // carbUnit.fromGrams() and converted back via carbUnit.toGrams() on
@@ -3845,7 +3847,7 @@ function MealEditor({ meal, onSaved, onCancel }: {
       } else {
         const d = new Date(trimmed);
         if (Number.isNaN(d.getTime())) {
-          setErr("Ungültige Uhrzeit. Bitte Datum und Zeit prüfen.");
+          setErr(tx("ex_err_time_verbose"));
           return;
         }
         mealTimeIso = d.toISOString();
@@ -3863,7 +3865,7 @@ function MealEditor({ meal, onSaved, onCancel }: {
       } else {
         const gv = parseNum(glucose);
         if (gv === null || gv <= 0) {
-          setErr("Glukose muss eine positive Zahl sein.");
+          setErr(tx("ex_err_glucose"));
           return;
         }
         glucoseToWrite = gv;
@@ -3882,7 +3884,7 @@ function MealEditor({ meal, onSaved, onCancel }: {
       });
       onSaved(updated);
     } catch (e) {
-      setErr(e instanceof Error ? e.message : "Konnte nicht speichern.");
+      setErr(e instanceof Error ? e.message : tx("ex_err_save"));
     } finally {
       setBusy(false);
     }
@@ -3892,7 +3894,7 @@ function MealEditor({ meal, onSaved, onCancel }: {
     <div ref={rootRef} style={{ display:"flex", flexDirection:"column", gap:14, scrollMarginTop:110 }}>
       <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:12 }}>
         <div style={{ fontSize:11, color:"var(--text-dim)", letterSpacing:"0.1em", fontWeight:700 }}>
-          EINTRAG BEARBEITEN
+          {tx("meal_editor_title")}
         </div>
         <span style={{ padding:"4px 10px", borderRadius:99, fontSize:12, fontWeight:700, background:`${ACCENT}20`, color:ACCENT, border:`1px solid ${ACCENT}40`, letterSpacing:"0.04em", textTransform:"uppercase" }}>
           Editor
@@ -3900,9 +3902,7 @@ function MealEditor({ meal, onSaved, onCancel }: {
       </div>
 
       <div style={{ fontSize:13, color:"var(--text-dim)", lineHeight:1.5 }}>
-        Korrigiert Makros, Bolus und Uhrzeit nachträglich.
-        Outcome-Klassifikation und Calories werden automatisch neu berechnet.
-        Glukose-Werte bleiben unverändert.
+        {tx("meal_editor_hint")}
       </div>
 
       <div style={{ display:"grid", gridTemplateColumns:"repeat(2,1fr)", gap:8 }}>
@@ -3913,11 +3913,11 @@ function MealEditor({ meal, onSaved, onCancel }: {
       </div>
 
       <EditField
-        label="Bolus (u) — leer lassen für 'noch offen'"
+        label={tx("meal_editor_bolus_label")}
         value={bolus}
         onChange={setBolus}
         accent={ACCENT}
-        placeholder="z.B. 2.5"
+        placeholder={tx("meal_editor_bolus_placeholder")}
       />
 
       {/* Editable meal time — native datetime-local picker so iOS /
@@ -3929,7 +3929,7 @@ function MealEditor({ meal, onSaved, onCancel }: {
           field with the closest CGM reading from the user's history. */}
       <label style={{ display:"flex", flexDirection:"column", gap:4 }}>
         <span style={{ fontSize:11, color:"var(--text-dim)", letterSpacing:"0.1em", fontWeight:700 }}>
-          UHRZEIT
+          {tx("meal_editor_time_label")}
         </span>
         <input
           type="datetime-local"
@@ -3959,7 +3959,7 @@ function MealEditor({ meal, onSaved, onCancel }: {
           was hand-typed or pulled from the stream. */}
       <label style={{ display:"flex", flexDirection:"column", gap:4 }}>
         <span style={{ fontSize:11, color:"var(--text-dim)", letterSpacing:"0.1em", fontWeight:700 }}>
-          GLUKOSE VORHER (mg/dL)
+          {tx("meal_editor_glucose_label")}
         </span>
         <input
           type="number"
@@ -3970,7 +3970,7 @@ function MealEditor({ meal, onSaved, onCancel }: {
             setGlucoseSource("manual");
             manualEditCounter.current += 1; // invalidate any pending CGM fetch
           }}
-          placeholder="z.B. 110"
+          placeholder={tx("meal_editor_glucose_placeholder")}
           style={{
             background:"var(--surface-soft)",
             border:`1px solid ${GREEN}40`,
@@ -3995,11 +3995,11 @@ function MealEditor({ meal, onSaved, onCancel }: {
               glucoseSource === "cgm-error"   ? PINK : "var(--text-dim)",
             letterSpacing:"0.02em", marginTop:2,
           }}>
-            {glucoseSource === "cgm-auto"    && "✓ automatisch aus CGM-Historie übernommen"}
-            {glucoseSource === "cgm-loading" && "Suche CGM-Messung zur gewählten Uhrzeit…"}
-            {glucoseSource === "cgm-miss"    && "Keine CGM-Messung ±15 min um diese Zeit gefunden — bitte manuell eintragen."}
-            {glucoseSource === "cgm-error"   && "CGM gerade nicht erreichbar — bitte manuell eintragen oder später erneut versuchen."}
-            {glucoseSource === "manual"      && "Manuell überschrieben"}
+            {glucoseSource === "cgm-auto"    && tx("meal_cgm_auto")}
+            {glucoseSource === "cgm-loading" && tx("meal_cgm_loading")}
+            {glucoseSource === "cgm-miss"    && tx("meal_cgm_miss")}
+            {glucoseSource === "cgm-error"   && tx("meal_cgm_error")}
+            {glucoseSource === "manual"      && tx("meal_cgm_manual")}
           </span>
         )}
       </label>
@@ -4026,7 +4026,7 @@ function MealEditor({ meal, onSaved, onCancel }: {
             letterSpacing:"0.02em",
           }}
         >
-          Abbrechen
+          {tx("ex_cancel")}
         </button>
         <button
           onClick={handleSave}
@@ -4043,7 +4043,7 @@ function MealEditor({ meal, onSaved, onCancel }: {
             letterSpacing:"0.02em",
           }}
         >
-          {busy ? "Speichere…" : "Speichern"}
+          {busy ? tx("ex_saving") : tx("ex_save")}
         </button>
       </div>
     </div>
@@ -4463,7 +4463,7 @@ function InfluenceEditor({ log, onSaved, onCancel }: {
       if (nn !== (log.notes   ?? null)) patch.notes = nn;
       if (occurredLocal.trim() !== occurredSeed.trim() && occurredLocal.trim() !== "") {
         const iso = localToIso(occurredLocal);
-        if (!iso) { setErr("Ungültige Uhrzeit."); setBusy(false); return; }
+        if (!iso) { setErr(tx("ex_err_time")); setBusy(false); return; }
         patch.occurred_at = iso;
       }
 
@@ -4472,7 +4472,7 @@ function InfluenceEditor({ log, onSaved, onCancel }: {
       queueMicrotask(() => window.dispatchEvent(new Event("glev:influence-updated")));
       onSaved(updated);
     } catch (e) {
-      setErr(e instanceof Error ? e.message : "Konnte nicht speichern.");
+      setErr(e instanceof Error ? e.message : tx("ex_err_save"));
     } finally { setBusy(false); }
   }
 
@@ -4622,7 +4622,7 @@ function SymptomEditor({ log, onSaved, onCancel }: {
       if (nn !== (log.notes ?? null)) patch.notes = nn;
       if (occurredLocal.trim() !== occurredSeed.trim() && occurredLocal.trim() !== "") {
         const iso = localToIso(occurredLocal);
-        if (!iso) { setErr("Ungültige Uhrzeit."); setBusy(false); return; }
+        if (!iso) { setErr(tx("ex_err_time")); setBusy(false); return; }
         patch.occurred_at = iso;
       }
 
@@ -4631,7 +4631,7 @@ function SymptomEditor({ log, onSaved, onCancel }: {
       queueMicrotask(() => window.dispatchEvent(new Event("glev:symptom-updated")));
       onSaved(updated);
     } catch (e) {
-      setErr(e instanceof Error ? e.message : "Konnte nicht speichern.");
+      setErr(e instanceof Error ? e.message : tx("ex_err_save"));
     } finally { setBusy(false); }
   }
 
@@ -4795,6 +4795,7 @@ function InsulinEntryEditor({ log, onSaved, onCancel }: {
   onSaved: () => void;
   onCancel: () => void;
 }) {
+  const txIe = useTranslations("entriesExpand");
   const accent = log.insulin_type === "bolus" ? INSULIN_ACCENT : BASAL_ACCENT;
   const [createdLocal, setCreatedLocal] = useState<string>(() => isoToLocal(log.created_at));
   const [createdSeed] = useState<string>(() => isoToLocal(log.created_at));
@@ -4809,7 +4810,7 @@ function InsulinEntryEditor({ log, onSaved, onCancel }: {
     if (busy) return;
     setErr(null);
     if (!Number.isFinite(units) || units < 0 || units > 200) {
-      setErr("Dosis muss zwischen 0 und 200 U liegen."); return;
+      setErr(txIe("ex_err_dose")); return;
     }
     setBusy(true);
     try {
@@ -4823,7 +4824,7 @@ function InsulinEntryEditor({ log, onSaved, onCancel }: {
       if (normNotes !== (log.notes ?? null)) patch.notes = normNotes;
       if (createdLocal.trim() !== createdSeed.trim() && createdLocal.trim() !== "") {
         const iso = localToIso(createdLocal);
-        if (!iso) { setErr("Ungültige Uhrzeit."); setBusy(false); return; }
+        if (!iso) { setErr(txIe("ex_err_time")); setBusy(false); return; }
         patch.created_at = iso;
       }
       if (Object.keys(patch).length === 0) { setBusy(false); onCancel(); return; }
@@ -4832,7 +4833,7 @@ function InsulinEntryEditor({ log, onSaved, onCancel }: {
       queueMicrotask(() => window.dispatchEvent(new Event("glev:insulin-updated")));
       onSaved();
     } catch (e) {
-      setErr(e instanceof Error ? e.message : "Konnte nicht speichern.");
+      setErr(e instanceof Error ? e.message : txIe("ex_err_save"));
     } finally {
       setBusy(false);
     }
@@ -4844,7 +4845,7 @@ function InsulinEntryEditor({ log, onSaved, onCancel }: {
     <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
       <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:12 }}>
         <div style={{ fontSize:11, color:"var(--text-dim)", letterSpacing:"0.1em", fontWeight:700 }}>
-          {log.insulin_type === "bolus" ? "BOLUS BEARBEITEN" : "BASAL BEARBEITEN"}
+          {log.insulin_type === "bolus" ? txIe("ins_editor_title_bolus") : txIe("ins_editor_title_basal")}
         </div>
         <span style={{
           padding:"4px 10px", borderRadius:99, fontSize:12, fontWeight:700,
@@ -4855,26 +4856,25 @@ function InsulinEntryEditor({ log, onSaved, onCancel }: {
       </div>
 
       <div style={{ fontSize:13, color:"var(--text-dim)", lineHeight:1.5 }}>
-        Korrigiert Dosis, Insulin-Name, Uhrzeit und Notiz nachträglich.
-        {log.insulin_type === "bolus" &&
-          " Wenn du die Zeit änderst, wird der Glukose-Wert beim Logging aus der CGM-Historie der neuen Uhrzeit nachgezogen (sofern verfügbar)."}
+        {txIe("ins_editor_hint")}
+        {log.insulin_type === "bolus" && txIe("ins_editor_hint_bolus_time")}
       </div>
 
       <DateTimeField
-        label="Uhrzeit"
+        label={txIe("ins_editor_time_field")}
         value={createdLocal}
         onChange={setCreatedLocal}
         accent={accent}
         hint={
           timeChanged && log.insulin_type === "bolus"
-            ? "Glukose-Wert wird beim Speichern für die neue Zeit aus der CGM-Historie nachgezogen."
+            ? txIe("ins_editor_time_hint")
             : undefined
         }
       />
 
       <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
         <label style={{ fontSize:13, color:"var(--text-dim)" }}>
-          Dosis —{" "}
+          {txIe("ins_editor_dose_prefix")} —{" "}
           <span style={{ color:accent, fontWeight:700, fontFamily:"var(--font-mono)" }}>
             {units.toFixed(units % 1 === 0 ? 0 : 1)} U
           </span>
@@ -4887,11 +4887,11 @@ function InsulinEntryEditor({ log, onSaved, onCancel }: {
           step={0.5}
           unit="U"
           accent={accent}
-          ariaLabel="Dosis"
+          ariaLabel={txIe("ins_editor_dose_prefix")}
         />
       </div>
 
-      <CollapsibleField label="Insulin-Name" accent={accent} hasValue={name.trim().length > 0}>
+      <CollapsibleField label={txIe("ins_editor_insulin_name")} accent={accent} hasValue={name.trim().length > 0}>
         <input
           type="text"
           value={name}
@@ -4906,7 +4906,7 @@ function InsulinEntryEditor({ log, onSaved, onCancel }: {
         />
       </CollapsibleField>
 
-      <CollapsibleField label="Notiz" accent={accent} hasValue={notes.trim().length > 0}>
+      <CollapsibleField label={txIe("ins_editor_notes")} accent={accent} hasValue={notes.trim().length > 0}>
         <input
           type="text"
           value={notes}
@@ -4938,13 +4938,13 @@ function InsulinEntryEditor({ log, onSaved, onCancel }: {
             cursor:busy ? "not-allowed" : "pointer", letterSpacing:"0.02em",
             marginTop:18,
           }}
-        >Abbrechen</button>
+        >{txIe("ex_cancel")}</button>
         <SaveButton
           onClick={handleSave}
           disabled={busy}
           busy={busy}
           accent={accent}
-          label="Speichern"
+          label={txIe("ex_save")}
           successKey={savedTick || null}
         />
       </div>
@@ -4964,6 +4964,7 @@ function CycleEditor({ log, onSaved, onCancel }: {
   onCancel: () => void;
 }) {
   const t = useTranslations("engineLog");
+  const tx = useTranslations("entriesExpand");
   const accent = "#FF2D78";
   const isBleeding = log.flow_intensity != null;
   const [startDate, setStartDate] = useState<string>(log.start_date);
@@ -4994,7 +4995,7 @@ function CycleEditor({ log, onSaved, onCancel }: {
       queueMicrotask(() => window.dispatchEvent(new Event("glev:menstrual-updated")));
       onSaved(updated);
     } catch (e) {
-      setErr(e instanceof Error ? e.message : "Konnte nicht speichern.");
+      setErr(e instanceof Error ? e.message : tx("ex_err_save"));
     } finally {
       setBusy(false);
     }
@@ -5004,7 +5005,7 @@ function CycleEditor({ log, onSaved, onCancel }: {
     <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
       <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:12 }}>
         <div style={{ fontSize:11, color:"var(--text-dim)", letterSpacing:"0.1em", fontWeight:700 }}>
-          ZYKLUS BEARBEITEN
+          {tx("cycle_editor_title")}
         </div>
         <span style={{
           padding:"4px 10px", borderRadius:99, fontSize:12, fontWeight:700,
@@ -5050,7 +5051,7 @@ function CycleEditor({ log, onSaved, onCancel }: {
         </div>
       )}
 
-      <CollapsibleField label="Notiz" accent={accent} hasValue={notes.trim().length > 0}>
+      <CollapsibleField label={tx("ins_editor_notes")} accent={accent} hasValue={notes.trim().length > 0}>
         <input
           type="text"
           value={notes}
@@ -5081,7 +5082,7 @@ function CycleEditor({ log, onSaved, onCancel }: {
             color:"var(--text-body)", fontSize:14, fontWeight:600,
             cursor:busy ? "not-allowed" : "pointer", letterSpacing:"0.02em",
           }}
-        >Abbrechen</button>
+        >{tx("ex_cancel")}</button>
         <button
           type="button"
           onClick={handleSave}
@@ -5091,7 +5092,7 @@ function CycleEditor({ log, onSaved, onCancel }: {
             background:accent, color:"#fff",
             fontSize:14, fontWeight:700, cursor:busy?"not-allowed":"pointer",
           }}
-        >{busy ? "…" : "Speichern"}</button>
+        >{busy ? tx("ex_saving") : tx("ex_save")}</button>
       </div>
     </div>
   );
