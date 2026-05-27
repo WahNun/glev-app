@@ -4,7 +4,9 @@ import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const PBXPROJ = resolve(__dirname, "..", "ios", "App", "App.xcodeproj", "project.pbxproj");
+const PBXPROJ =
+  process.env.PBXPROJ_PATH ??
+  resolve(__dirname, "..", "ios", "App", "App.xcodeproj", "project.pbxproj");
 
 function usage() {
   console.error(
