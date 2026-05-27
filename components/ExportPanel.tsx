@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { useTranslations, useLocale } from "next-intl";
 import { usePlan } from "@/hooks/usePlan";
 import UpgradeGate from "@/components/UpgradeGate";
@@ -277,6 +278,7 @@ const ROWS: RowSpec[] = [
  */
 export default function ExportPanel() {
   const { canAccess } = usePlan();
+  const router = useRouter();
   const t = useTranslations("export");
   const bcp47 = localeToBcp47(useLocale());
   const { unit: carbUnit, label: carbUnitLabel } = useCarbUnit();
@@ -1256,14 +1258,18 @@ export default function ExportPanel() {
                 {allLabel}
               </button>
             ) : (
-              <div style={{
-                flex: "1 1 200px",
-                padding: "14px", borderRadius: 12,
-                border: `1px solid ${BORDER}`,
-                background: "var(--surface-soft)",
-                display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
-                opacity: 0.6,
-              }}>
+              <button
+                onClick={() => router.push("/pro")}
+                style={{
+                  flex: "1 1 200px",
+                  padding: "14px", borderRadius: 12,
+                  border: `1px solid ${BORDER}`,
+                  background: "var(--surface-soft)",
+                  display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+                  opacity: 0.6,
+                  cursor: "pointer",
+                }}
+              >
                 <span style={{ fontSize: 14 }}>🔒</span>
                 <span style={{ fontSize: 14, fontWeight: 600, color: "var(--text-dim)" }}>
                   {t("all_btn_idle")}
@@ -1276,7 +1282,7 @@ export default function ExportPanel() {
                 }}>
                   Glev+
                 </span>
-              </div>
+              </button>
             )}
             {canAccess("pdf_report") ? (
               <button
@@ -1310,14 +1316,18 @@ export default function ExportPanel() {
                 {pdfLabel}
               </button>
             ) : (
-              <div style={{
-                flex: "1 1 200px",
-                padding: "14px", borderRadius: 12,
-                border: "none",
-                background: `linear-gradient(135deg, ${ACCENT}30, #3B5BE030)`,
-                display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
-                opacity: 0.7,
-              }}>
+              <button
+                onClick={() => router.push("/pro")}
+                style={{
+                  flex: "1 1 200px",
+                  padding: "14px", borderRadius: 12,
+                  border: "none",
+                  background: `linear-gradient(135deg, ${ACCENT}30, #3B5BE030)`,
+                  display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+                  opacity: 0.7,
+                  cursor: "pointer",
+                }}
+              >
                 <span style={{ fontSize: 14 }}>🔒</span>
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ opacity: 0.6 }}>
                   <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
@@ -1336,7 +1346,7 @@ export default function ExportPanel() {
                 }}>
                   Glev+
                 </span>
-              </div>
+              </button>
             )}
           </div>
         );
