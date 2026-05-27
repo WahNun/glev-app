@@ -48,7 +48,7 @@ import {
 import { fetchRecentInsulinLogs, type InsulinLog } from "@/lib/insulin";
 import { hapticSelection } from "@/lib/haptics";
 import { fetchRecentExerciseLogs, type ExerciseLog, type ExerciseType } from "@/lib/exercise";
-import { evaluateExercise, type ExerciseOutcome } from "@/lib/exerciseEval";
+import { evaluateExercise, aggregateExerciseTypeStats, PATTERN_MIN_SESSIONS, type ExerciseOutcome, type ExerciseTypeStats } from "@/lib/exerciseEval";
 import { fetchRecentMenstrualLogs, type MenstrualLog } from "@/lib/menstrual";
 import { fetchRecentSymptomLogs, type SymptomLog, type SymptomType } from "@/lib/symptoms";
 import {
@@ -75,6 +75,7 @@ const INSIGHTS_DEFAULT_ORDER = [
   "workout-outcomes",
   "workout-bg-response",
   "workout-patterns",
+  "workout-type-patterns",
   "meal-type",
   "time-of-day",
   "cycle-symptoms",
@@ -1056,6 +1057,21 @@ export default function InsightsPage() {
   ];
   const workoutPatterns = workoutPatternsAll.slice(0, 3);
   const showWorkoutPatterns = workoutPatterns.length >= 2;
+
+  // ── Per-exercise-type personal pattern stats ──
+  // Use the canonical list of non-legacy types. `hypertrophy` is collapsed
+  // into `strength` inside `aggregateExerciseTypeStats`, so we don't need
+  // to include it separately here.
+  const ALL_CANONICAL_EXERCISE_TYPES: ExerciseType[] = [
+    "strength", "cardio", "hiit", "yoga", "cycling", "run", "swimming",
+    "football", "tennis", "volleyball", "basketball", "breathwork",
+    "hot_shower", "cold_shower",
+  ];
+  const exerciseTypeStatsRows: ExerciseTypeStats[] = ALL_CANONICAL_EXERCISE_TYPES
+    .map(t => aggregateExerciseTypeStats(exercise30, t))
+    .filter((s): s is ExerciseTypeStats => s !== null && s.count >= PATTERN_MIN_SESSIONS)
+    .sort((a, b) => b.count - a.count);
+  const showExerciseTypePatterns = exerciseTypeStatsRows.length > 0;
 
   // ── Meal evaluation distribution ──
   // Each meal lands in EXACTLY one of GOOD / SPIKE / HYPO via the
@@ -2802,6 +2818,65 @@ export default function InsightsPage() {
         </FlipCard>
       ) : null,
     },
+    // ── Personal workout patterns per exercise type ──
+    {
+      id: "workout-type-patterns",
+      node: showExerciseTypePatterns ? (
+        <FlipCard
+          minHeight={CARD_MIN_H}
+          accent={ACCENT}
+          back={
+            <ThresholdBack
+              title={tInsights("workout_type_patterns_back_title")}
+              accent={ACCENT}
+              paragraphs={[
+                tInsights("workout_type_patterns_back_p1"),
+                tInsights("workout_type_patterns_back_p2"),
+                tInsights("workout_type_patterns_back_p3", { n: exerciseTypeStatsRows.length, range: rangeLabel }),
+              ]}
+            />
+          }
+        >
+          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
+            <CardLabel text={tInsights("workout_type_patterns_label")}/>
+            <div style={{ fontSize:11, color:"var(--text-dim)" }}>{tInsights("workout_type_patterns_sub")}</div>
+          </div>
+          <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+            {exerciseTypeStatsRows.map(row => {
+              const delta = row.medianDelta1h ?? row.medianDeltaAtEnd;
+              const hypoShare = row.hypoRiskShare;
+              const deltaColor = delta == null
+                ? "var(--text-muted)"
+                : delta < 0 ? GREEN : delta > 0 ? ORANGE : "var(--text-muted)";
+              const deltaSign = delta == null ? "±" : delta > 0 ? "+" : delta < 0 ? "−" : "±";
+              const deltaAbs = delta == null ? "—" : Math.abs(delta).toString();
+              const hypoColor = hypoShare != null && hypoShare >= 0.25 ? PINK : "var(--text-dim)";
+              return (
+                <div key={row.type} style={{ display:"flex", alignItems:"center", gap:8, padding:"8px 10px", background:"var(--surface-soft)", border:"1px solid var(--border-soft)", borderRadius:10 }}>
+                  <div style={{ flex:1, minWidth:0 }}>
+                    <div style={{ fontSize:13, fontWeight:700, color:"var(--text)", letterSpacing:"0.01em" }}>{exTypeLabel(row.type)}</div>
+                    <div style={{ fontSize:11, color:"var(--text-dim)", marginTop:1 }}>{tInsights("workout_type_patterns_session_count", { n: row.count })}</div>
+                  </div>
+                  <div style={{ display:"flex", flexDirection:"column", alignItems:"flex-end", gap:3 }}>
+                    <div style={{ display:"flex", alignItems:"baseline", gap:2 }}>
+                      <div style={{ fontSize:16, fontWeight:800, color:deltaColor, fontFamily:"var(--font-mono)", lineHeight:1 }}>
+                        {deltaSign}{deltaAbs}
+                      </div>
+                      {delta != null && <div style={{ fontSize:10, color:"var(--text-dim)", fontWeight:600 }}>mg/dL</div>}
+                    </div>
+                    {hypoShare != null && (
+                      <div style={{ fontSize:10, color:hypoColor, fontWeight:600, letterSpacing:"0.03em" }}>
+                        {tInsights("workout_type_patterns_hypo_share", { pct: Math.round(hypoShare * 100) })}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </FlipCard>
+      ) : null,
+    },
     {
       id: "meal-type",
       node: (
@@ -3495,6 +3570,7 @@ export default function InsightsPage() {
             dyn["workout-outcomes"] = tInsights("swipe_dyn_workouts", { n: exerciseLogs.length });
             dyn["workout-bg-response"] = tInsights("swipe_dyn_workouts", { n: exerciseLogs.length });
             dyn["workout-patterns"] = tInsights("swipe_dyn_workouts", { n: exerciseLogs.length });
+            dyn["workout-type-patterns"] = tInsights("swipe_dyn_workouts", { n: exerciseLogs.length });
           }
           if (activity.context.todaySteps != null) {
             dyn["daily-steps"] = tInsights("swipe_dyn_daily_steps", {
