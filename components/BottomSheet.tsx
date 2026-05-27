@@ -145,7 +145,7 @@ export default function BottomSheet({
       aria-modal="true"
       aria-label={title}
       style={{
-        position: "fixed", inset: 0, zIndex: 1000,
+        position: "fixed", inset: 0, zIndex: 1200,
         background: "var(--overlay)", backdropFilter: "blur(6px)",
         display: "flex", alignItems: "flex-end", justifyContent: "center",
       }}

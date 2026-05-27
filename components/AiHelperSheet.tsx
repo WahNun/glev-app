@@ -77,7 +77,7 @@ export default function AiHelperSheet({
           background: "rgba(0,0,0,0.5)",
           backdropFilter: "blur(2px)",
           WebkitBackdropFilter: "blur(2px)",
-          zIndex: 1000,
+          zIndex: 1200,
           animation: "glevSheetFadeIn 0.2s ease",
         }}
       />
@@ -94,7 +94,7 @@ export default function AiHelperSheet({
           borderRadius: "20px 20px 0 0",
           border: "1px solid var(--border)",
           borderBottom: "none",
-          zIndex: 1001,
+          zIndex: 1201,
           display: "flex",
           flexDirection: "column",
           animation: "glevSheetSlideUp 0.3s cubic-bezier(0.32,0.72,0,1)",
