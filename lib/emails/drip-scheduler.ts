@@ -70,6 +70,78 @@ function firstNameFrom(name: string | null | undefined): string | null {
  *              akzeptieren — siehe Migration
  *              `20260518_email_drip_schedule_tier_plus.sql`.
  */
+/**
+ * Plant die Trial-Reminder-Mails für einen Free-Trial-User ein:
+ *   - Tag 6 (1 Tag vor Ablauf): trial_day6_reminder
+ *   - Tag 7 (Ablauf-Tag):       trial_expired
+ *
+ * Gleiche "never throws" Semantik wie scheduleDripEmails — ein
+ * DB-Fehler hier darf die Signup-Pipeline nicht abbrechen.
+ */
+export async function scheduleTrialEmails(
+  email: string,
+  name: string | null | undefined,
+  trialStartAt: Date,
+  locale: EmailLocale = "de",
+): Promise<void> {
+  if (!email) {
+    // eslint-disable-next-line no-console
+    console.warn("[drip-scheduler] scheduleTrialEmails: skipped — empty email");
+    return;
+  }
+
+  const firstName = firstNameFrom(name);
+  const start = trialStartAt.getTime();
+
+  const rows = [
+    { type: "trial_day6_reminder" as const, days: 6 },
+    { type: "trial_expired" as const, days: 7 },
+  ].map(({ type, days }) => ({
+    email,
+    first_name: firstName,
+    tier: "free_trial",
+    email_type: type,
+    locale,
+    scheduled_at: new Date(start + days * DAY_MS).toISOString(),
+  }));
+
+  try {
+    const admin = getSupabaseAdmin();
+
+    const { data: existingUnsub } = await admin
+      .from("email_drip_unsubscribes")
+      .select("email")
+      .eq("email", email)
+      .maybeSingle();
+
+    if (existingUnsub) {
+      // eslint-disable-next-line no-console
+      console.log("[drip-scheduler] scheduleTrialEmails: skipped — unsubscribed:", email);
+      return;
+    }
+
+    const { error } = await admin
+      .from("email_drip_schedule")
+      .upsert(rows, { onConflict: "email,email_type", ignoreDuplicates: true });
+
+    if (error) {
+      // eslint-disable-next-line no-console
+      console.error("[drip-scheduler] scheduleTrialEmails: upsert failed:", {
+        email, code: error.code, message: error.message,
+      });
+      return;
+    }
+
+    // eslint-disable-next-line no-console
+    console.log("[drip-scheduler] scheduled trial reminders:", { email, count: rows.length });
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error("[drip-scheduler] scheduleTrialEmails: unexpected error:", {
+      email, err: err instanceof Error ? err.message : String(err),
+    });
+  }
+}
+
 export async function scheduleDripEmails(
   email: string,
   name: string | null | undefined,

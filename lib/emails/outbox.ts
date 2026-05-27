@@ -26,6 +26,7 @@ import {
 } from "@/lib/emails/beta-welcome";
 import { proWelcomeHtml, proWelcomeSubject } from "@/lib/emails/pro-welcome";
 import { plusWelcomeHtml, plusWelcomeSubject } from "@/lib/emails/plus-welcome";
+import { trialWelcomeHtml, trialWelcomeSubject } from "@/lib/emails/trial-welcome";
 import {
   betaFreeYearWelcomeHtml,
   betaFreeYearWelcomeSubject,
@@ -106,7 +107,8 @@ export type EmailTemplate =
   | "pro-welcome"
   | "plus-welcome"
   | "beta-free-year-welcome"
-  | "password-reset";
+  | "password-reset"
+  | "trial-welcome";
 
 /**
  * Payload shape per template. Stored as jsonb in the outbox so the
@@ -194,12 +196,24 @@ export interface PasswordResetPayload {
   locale?: EmailLocale;
 }
 
+/**
+ * Free-trial welcome — no Stripe. trialEndsAt is the ISO date string
+ * computed by /api/auth/free-trial (now + 7 days).
+ */
+export interface TrialWelcomePayload {
+  name?: string | null;
+  appUrl?: string | null;
+  trialEndsAt?: string | null;
+  locale?: EmailLocale;
+}
+
 export type EmailPayload =
   | BetaWelcomePayload
   | ProWelcomePayload
   | PlusWelcomePayload
   | BetaFreeYearWelcomePayload
-  | PasswordResetPayload;
+  | PasswordResetPayload
+  | TrialWelcomePayload;
 
 /**
  * Compile-time mapping from template name → payload shape. The
@@ -221,6 +235,7 @@ export interface PayloadByTemplate {
   "plus-welcome": PlusWelcomePayload;
   "beta-free-year-welcome": BetaFreeYearWelcomePayload;
   "password-reset": PasswordResetPayload;
+  "trial-welcome": TrialWelcomePayload;
 }
 
 interface RenderedEmail {
@@ -301,6 +316,20 @@ function renderTemplate(template: EmailTemplate, payload: EmailPayload): Rendere
         html: passwordResetHtml(
           p.name ?? null,
           p.resetUrl,
+          p.appUrl ?? null,
+          locale,
+        ),
+      };
+    }
+    case "trial-welcome": {
+      const p = payload as TrialWelcomePayload;
+      const locale: EmailLocale = p.locale === "en" ? "en" : "de";
+      return {
+        from: "Glev <info@glev.app>",
+        subject: trialWelcomeSubject(p.name ?? null, locale),
+        html: trialWelcomeHtml(
+          p.name ?? null,
+          p.trialEndsAt ?? null,
           p.appUrl ?? null,
           locale,
         ),

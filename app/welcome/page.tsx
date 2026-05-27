@@ -411,16 +411,21 @@ function WelcomeInner() {
                 )}
 
                 {notice && (
-                  <div style={{
-                    fontSize: 13, color: GREEN,
-                    padding: "10px 12px",
-                    background: `${GREEN}12`,
-                    borderRadius: 9,
-                    border: `1px solid ${GREEN}30`,
-                    lineHeight: 1.4,
-                  }}>
-                    {notice}
-                  </div>
+                  <>
+                    <div style={{
+                      fontSize: 13, color: GREEN,
+                      padding: "10px 12px",
+                      background: `${GREEN}12`,
+                      borderRadius: 9,
+                      border: `1px solid ${GREEN}30`,
+                      lineHeight: 1.4,
+                    }}>
+                      {notice}
+                    </div>
+                    <p style={{ fontSize: 12, color: "var(--text-faint)", margin: 0, lineHeight: 1.5 }}>
+                      Nichts da? Schau im <strong style={{ color: "var(--text-muted)" }}>Spam-/Junk-Ordner</strong> und such nach <strong style={{ color: "var(--text-muted)" }}>info@glev.app</strong>.
+                    </p>
+                  </>
                 )}
 
                 <button type="submit" disabled={submitting || !!notice} style={{

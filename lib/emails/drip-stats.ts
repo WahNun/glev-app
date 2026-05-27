@@ -25,6 +25,8 @@ export const DRIP_TYPES: ReadonlyArray<DripEmailType> = [
   "day7_insights",
   "day14_feedback",
   "day30_trustpilot",
+  "trial_day6_reminder",
+  "trial_expired",
 ];
 
 export interface SentRow {
@@ -147,6 +149,8 @@ export const DRIP_TYPE_LABEL: Record<DripEmailType, string> = {
   day7_insights: "Tag 7 — Insights",
   day14_feedback: "Tag 14 — Feedback",
   day30_trustpilot: "Tag 30 — Trustpilot",
+  trial_day6_reminder: "Trial Tag 6 — Erinnerung",
+  trial_expired: "Trial Tag 7 — Abgelaufen",
 };
 
 /** A single calendar day's bucket of sent + opt-out counts. */

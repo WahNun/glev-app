@@ -457,6 +457,13 @@ function ValidCard({
           Bestätigung geht an <strong style={{ color: "#fff" }}>{email}</strong>.
         </p>
       )}
+      {email && (
+        <p style={{ fontSize: 12, color: TEXT_DIM, margin: 0, lineHeight: 1.5 }}>
+          Nichts in der Inbox? Schau im{" "}
+          <strong style={{ color: "#fff" }}>Spam-/Junk-Ordner</strong>{" "}
+          und such nach <strong style={{ color: "#fff" }}>info@glev.app</strong>.
+        </p>
+      )}
 
       {/* Registration / dashboard sub-card — the load-bearing piece linked
           from the pro-welcome email. Three render branches keep the buyer

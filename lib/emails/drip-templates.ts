@@ -16,7 +16,9 @@ import { buildUnsubscribeUrl } from "@/lib/emails/unsubscribeToken";
 export type DripEmailType =
   | "day7_insights"
   | "day14_feedback"
-  | "day30_trustpilot";
+  | "day30_trustpilot"
+  | "trial_day6_reminder"
+  | "trial_expired";
 
 export interface DripRendered {
   from: string;
@@ -327,6 +329,152 @@ export function day30TrustpilotEmail(
   return { from: FROM, subject, html: wrap(title, body, unsubscribeUrl, locale) };
 }
 
+// ---- Trial Day 6 — 1 Tag vor Ablauf ---------------------------------------
+
+function trial6BodyDe(firstName: string | null): string {
+  const upgradeUrl = `${APP_URL}/#preise`;
+  return `
+    <p style="margin:0 0 20px;font-size:18px;font-weight:600;color:#0f172a;">${greeting(firstName, "de")} 👋</p>
+    <p style="margin:0 0 16px;font-size:15px;line-height:1.7;color:#374151;">
+      dein kostenloser Glev-Testzeitraum endet <strong>morgen</strong>.
+    </p>
+    <p style="margin:0 0 16px;font-size:15px;line-height:1.7;color:#374151;">
+      Wenn du weitermachen möchtest, kannst du jetzt auf <strong>Glev Smart für 9&nbsp;€/Monat</strong> upgraden — oder auf Pro für 14,90&nbsp;€/Monat, wenn du alle Features behalten willst. Kein Kreditkartenzwang während der Testphase, aber ab morgen wird der Zugang auf Free eingeschränkt.
+    </p>
+    <table cellpadding="0" cellspacing="0" style="margin:24px auto 16px;">
+      <tr><td style="background:#4F6EF7;border-radius:8px;">
+        <a href="${upgradeUrl}" style="display:inline-block;padding:14px 30px;color:#ffffff;font-size:15px;font-weight:700;text-decoration:none;letter-spacing:0.2px;">Jetzt upgraden →</a>
+      </td></tr>
+    </table>
+    <p style="margin:0 0 20px;font-size:15px;line-height:1.7;color:#374151;">
+      Falls du noch Fragen hast oder dir unsicher bist, welcher Plan zu dir passt — antworte einfach auf diese Mail.
+    </p>
+    <p style="margin:0;font-size:15px;line-height:1.7;color:#374151;">
+      Bis bald,<br /><strong>Lucas</strong><br /><span style="color:#6b7280;">Glev Team</span>
+    </p>
+  `;
+}
+
+function trial6BodyEn(firstName: string | null): string {
+  const upgradeUrl = `${APP_URL}/#pricing`;
+  return `
+    <p style="margin:0 0 20px;font-size:18px;font-weight:600;color:#0f172a;">${greeting(firstName, "en")} 👋</p>
+    <p style="margin:0 0 16px;font-size:15px;line-height:1.7;color:#374151;">
+      your free Glev trial ends <strong>tomorrow</strong>.
+    </p>
+    <p style="margin:0 0 16px;font-size:15px;line-height:1.7;color:#374151;">
+      To keep going, you can upgrade to <strong>Glev Smart for €9/month</strong> — or Pro for €14.90/month if you want to keep all features. No card was required during the trial, but from tomorrow your access will switch to the Free tier.
+    </p>
+    <table cellpadding="0" cellspacing="0" style="margin:24px auto 16px;">
+      <tr><td style="background:#4F6EF7;border-radius:8px;">
+        <a href="${upgradeUrl}" style="display:inline-block;padding:14px 30px;color:#ffffff;font-size:15px;font-weight:700;text-decoration:none;letter-spacing:0.2px;">Upgrade now →</a>
+      </td></tr>
+    </table>
+    <p style="margin:0 0 20px;font-size:15px;line-height:1.7;color:#374151;">
+      If you have questions or aren't sure which plan fits — just reply to this email.
+    </p>
+    <p style="margin:0;font-size:15px;line-height:1.7;color:#374151;">
+      Talk soon,<br /><strong>Lucas</strong><br /><span style="color:#6b7280;">Glev Team</span>
+    </p>
+  `;
+}
+
+export function trialDay6ReminderEmail(
+  firstName: string | null,
+  email: string,
+  locale: EmailLocale = "de",
+): DripRendered {
+  const unsubscribeUrl = buildUnsubscribeUrl(APP_URL, email);
+  const subject =
+    locale === "en"
+      ? "Your Glev trial ends tomorrow"
+      : "Dein Glev-Testzeitraum endet morgen";
+  const title = locale === "en" ? "Trial ends tomorrow" : "Testzeitraum endet morgen";
+  const body = locale === "en" ? trial6BodyEn(firstName) : trial6BodyDe(firstName);
+  return { from: FROM, subject, html: wrap(title, body, unsubscribeUrl, locale) };
+}
+
+// ---- Trial Day 7 — Abgelaufen, Upgrade-CTA --------------------------------
+
+function trialExpiredBodyDe(firstName: string | null): string {
+  const upgradeUrl = `${APP_URL}/#preise`;
+  return `
+    <p style="margin:0 0 20px;font-size:18px;font-weight:600;color:#0f172a;">${greeting(firstName, "de")},</p>
+    <p style="margin:0 0 16px;font-size:15px;line-height:1.7;color:#374151;">
+      dein kostenloser 7-Tage-Testzeitraum bei Glev ist heute abgelaufen. Dein Konto läuft ab sofort im Free-Modus weiter — du kannst dich weiterhin einloggen, einige Features sind aber nun eingeschränkt.
+    </p>
+    <p style="margin:0 0 16px;font-size:15px;line-height:1.7;color:#374151;">
+      Wenn du Glev weiterhin voll nutzen möchtest, wähle einen Plan:
+    </p>
+    <table width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 24px;border:1px solid #e5e7eb;border-radius:10px;overflow:hidden;">
+      <tr style="background:#f9fafb;">
+        <td style="padding:14px 18px;font-size:14px;font-weight:600;color:#0f172a;border-bottom:1px solid #e5e7eb;">Smart</td>
+        <td style="padding:14px 18px;font-size:14px;color:#374151;border-bottom:1px solid #e5e7eb;">9&nbsp;€/Monat · Kernfeatures</td>
+      </tr>
+      <tr>
+        <td style="padding:14px 18px;font-size:14px;font-weight:600;color:#0f172a;">Pro</td>
+        <td style="padding:14px 18px;font-size:14px;color:#374151;">14,90&nbsp;€/Monat · Alle Features</td>
+      </tr>
+    </table>
+    <table cellpadding="0" cellspacing="0" style="margin:0 0 20px;">
+      <tr><td style="background:#4F6EF7;border-radius:8px;">
+        <a href="${upgradeUrl}" style="display:inline-block;padding:14px 30px;color:#ffffff;font-size:15px;font-weight:700;text-decoration:none;letter-spacing:0.2px;">Plan auswählen →</a>
+      </td></tr>
+    </table>
+    <p style="margin:0;font-size:15px;line-height:1.7;color:#374151;">
+      Bei Fragen einfach antworten — ich bin direkt erreichbar.<br />
+      <strong>Lucas</strong><br /><span style="color:#6b7280;">Glev Team</span>
+    </p>
+  `;
+}
+
+function trialExpiredBodyEn(firstName: string | null): string {
+  const upgradeUrl = `${APP_URL}/#pricing`;
+  return `
+    <p style="margin:0 0 20px;font-size:18px;font-weight:600;color:#0f172a;">${greeting(firstName, "en")},</p>
+    <p style="margin:0 0 16px;font-size:15px;line-height:1.7;color:#374151;">
+      your free 7-day Glev trial ended today. Your account continues on the Free tier — you can still log in, but some features are now restricted.
+    </p>
+    <p style="margin:0 0 16px;font-size:15px;line-height:1.7;color:#374151;">
+      To keep the full experience, pick a plan:
+    </p>
+    <table width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 24px;border:1px solid #e5e7eb;border-radius:10px;overflow:hidden;">
+      <tr style="background:#f9fafb;">
+        <td style="padding:14px 18px;font-size:14px;font-weight:600;color:#0f172a;border-bottom:1px solid #e5e7eb;">Smart</td>
+        <td style="padding:14px 18px;font-size:14px;color:#374151;border-bottom:1px solid #e5e7eb;">€9/month · Core features</td>
+      </tr>
+      <tr>
+        <td style="padding:14px 18px;font-size:14px;font-weight:600;color:#0f172a;">Pro</td>
+        <td style="padding:14px 18px;font-size:14px;color:#374151;">€14.90/month · All features</td>
+      </tr>
+    </table>
+    <table cellpadding="0" cellspacing="0" style="margin:0 0 20px;">
+      <tr><td style="background:#4F6EF7;border-radius:8px;">
+        <a href="${upgradeUrl}" style="display:inline-block;padding:14px 30px;color:#ffffff;font-size:15px;font-weight:700;text-decoration:none;letter-spacing:0.2px;">Choose a plan →</a>
+      </td></tr>
+    </table>
+    <p style="margin:0;font-size:15px;line-height:1.7;color:#374151;">
+      Questions? Just reply — I'm right here.<br />
+      <strong>Lucas</strong><br /><span style="color:#6b7280;">Glev Team</span>
+    </p>
+  `;
+}
+
+export function trialExpiredEmail(
+  firstName: string | null,
+  email: string,
+  locale: EmailLocale = "de",
+): DripRendered {
+  const unsubscribeUrl = buildUnsubscribeUrl(APP_URL, email);
+  const subject =
+    locale === "en"
+      ? "Your Glev trial has ended — choose a plan"
+      : "Dein Glev-Testzeitraum ist abgelaufen — Plan wählen";
+  const title = locale === "en" ? "Trial ended" : "Testzeitraum abgelaufen";
+  const body = locale === "en" ? trialExpiredBodyEn(firstName) : trialExpiredBodyDe(firstName);
+  return { from: FROM, subject, html: wrap(title, body, unsubscribeUrl, locale) };
+}
+
 // ---- Renderer-Dispatch ----------------------------------------------------
 
 export function renderDripEmail(
@@ -342,6 +490,10 @@ export function renderDripEmail(
       return day14FeedbackEmail(firstName, email, locale);
     case "day30_trustpilot":
       return day30TrustpilotEmail(firstName, email, locale);
+    case "trial_day6_reminder":
+      return trialDay6ReminderEmail(firstName, email, locale);
+    case "trial_expired":
+      return trialExpiredEmail(firstName, email, locale);
     default: {
       const _exhaustive: never = emailType;
       throw new Error(`Unknown drip email type: ${String(_exhaustive)}`);

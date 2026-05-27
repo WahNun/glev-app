@@ -237,6 +237,11 @@ export default function SignupPage() {
             <strong style={{ color: "#fff" }}>{email}</strong> gesendet.
             Klick auf den Link um dein Konto zu aktivieren.
           </p>
+          <p style={{ fontSize: 13, color: TEXT_DIM, lineHeight: 1.5, margin: "12px 0 0" }}>
+            Nichts da? Check deinen{" "}
+            <strong style={{ color: "#fff" }}>Spam- oder Junk-Ordner</strong>{" "}
+            und such nach <strong style={{ color: "#fff" }}>info@glev.app</strong>.
+          </p>
         </div>
       </main>
     );

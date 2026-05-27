@@ -2,19 +2,23 @@
  * POST /api/auth/free-trial
  *
  * Called immediately after a free-trial signup (no Stripe).
- * Sets profiles.trial_end_at = NOW() + 7 days for the authenticated user.
+ * Sets profiles.trial_end_at = NOW() + 7 days for the authenticated user,
+ * then:
+ *   - Enqueues the bilingual trial-welcome email via the outbox (reliable,
+ *     retry-capable, deduplicated).
+ *   - Schedules trial_day6_reminder + trial_expired in email_drip_schedule
+ *     via scheduleTrialEmails() so the daily drip cron picks them up.
  *
  * Auth: Bearer token from supabase.auth.getSession() on the client,
  * or session cookie (web).
- *
- * Fire-and-forget to /api/email/trial-reminder so the welcome email
- * doesn't block the signup redirect.
  */
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
+import { enqueueEmail } from "@/lib/emails/outbox";
+import { scheduleTrialEmails } from "@/lib/emails/drip-scheduler";
 
 async function resolveUser(req: NextRequest) {
   const url  = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || "";
@@ -56,7 +60,8 @@ export async function POST(req: NextRequest) {
     const admin = getSupabaseAdmin();
 
     // Set trial_end_at = 7 days from now
-    const trialEndAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+    const trialStartAt = new Date();
+    const trialEndAt = new Date(trialStartAt.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString();
 
     const { error } = await admin
       .from("profiles")
@@ -70,17 +75,31 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
-    // Fire-and-forget welcome email (non-blocking)
-    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://glev.app";
-    fetch(`${baseUrl}/api/email/trial-reminder`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        email: user.email,
-        name: user.user_metadata?.full_name ?? user.email?.split("@")[0] ?? "there",
-        trial_end_at: trialEndAt,
-      }),
-    }).catch((e) => console.warn("[free-trial] email fire-and-forget failed:", e));
+    const email = user.email;
+    const name  = (user.user_metadata?.full_name as string | undefined) ?? null;
+
+    // Detect locale from Accept-Language header (best-effort)
+    const acceptLang = req.headers.get("accept-language") ?? "";
+    const locale = acceptLang.toLowerCase().startsWith("en") ? "en" as const : "de" as const;
+
+    // Enqueue Day-0 welcome via outbox (immediate, retryable, deduped)
+    if (email) {
+      await enqueueEmail({
+        recipient: email,
+        template: "trial-welcome",
+        payload: { name, trialEndsAt: trialEndAt, locale },
+        dedupeKey: `trial-welcome:${user.id}`,
+      }).catch((e) =>
+        console.warn("[free-trial] enqueueEmail trial-welcome failed:", e)
+      );
+    }
+
+    // Schedule Day-6 reminder + Day-7 expired via drip cron (fire-and-forget)
+    if (email) {
+      scheduleTrialEmails(email, name, trialStartAt, locale).catch((e) =>
+        console.warn("[free-trial] scheduleTrialEmails failed:", e)
+      );
+    }
 
     return NextResponse.json({ ok: true, trial_end_at: trialEndAt });
   } catch (err) {
