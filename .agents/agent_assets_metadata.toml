@@ -150,3 +150,9 @@ id = "TGktwJjTkBaBm28H7rvC0"
 uri = "file://public/feature-gating.md"
 type = "text"
 title = "Glev Feature-Gating Übersicht"
+
+[[outputs]]
+id = "vXVA383jiWMpYksdoZL6Z"
+uri = "file://public/marketer-briefing.md"
+type = "text"
+title = "Marketer Briefing — Glev Ads-Launch"
