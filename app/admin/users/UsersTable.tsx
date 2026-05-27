@@ -287,7 +287,6 @@ export default function UsersTable({
               if (r.deleted_at) flags.push("Gelöscht");
               if (r.banned_until) flags.push("Gebannt");
               if (r.manual_plan_override) flags.push("Manuell");
-              if (r.gift_label) flags.push(`🎁 ${r.gift_label}`);
               if (r.created_by_admin) flags.push("Admin-angelegt");
               if (r.role === "admin") flags.push("Admin-Rolle");
               if (!r.email_confirmed_at) flags.push("E-Mail unbestätigt");
@@ -316,17 +315,35 @@ export default function UsersTable({
                   </td>
                   <td style={tdStyle}>{r.display_name ?? "—"}</td>
                   <td style={tdStyle}>
-                    <span
-                      style={{
-                        background: c.bg,
-                        color: c.fg,
-                        padding: "2px 8px",
-                        borderRadius: 999,
-                        fontWeight: 600,
-                        fontSize: 12,
-                      }}
-                    >
-                      {planLabel(r.plan)}
+                    <span style={{ display: "inline-flex", alignItems: "center", gap: 4, flexWrap: "wrap" }}>
+                      <span
+                        style={{
+                          background: c.bg,
+                          color: c.fg,
+                          padding: "2px 8px",
+                          borderRadius: 999,
+                          fontWeight: 600,
+                          fontSize: 12,
+                        }}
+                      >
+                        {planLabel(r.plan)}
+                      </span>
+                      {r.gift_label ? (
+                        <span
+                          style={{
+                            background: "#fef9c3",
+                            color: "#92400e",
+                            border: "1px solid #fde68a",
+                            padding: "2px 6px",
+                            borderRadius: 4,
+                            fontWeight: 600,
+                            fontSize: 11,
+                            whiteSpace: "nowrap",
+                          }}
+                        >
+                          🎁 {r.gift_label}
+                        </span>
+                      ) : null}
                     </span>
                   </td>
                   <td style={tdStyle}>
