@@ -3,6 +3,10 @@ import {
   betaWelcomeSubject,
   type EmailLocale,
 } from "@/lib/emails/beta-welcome";
+import {
+  supabaseConfirmHtml,
+  SUPABASE_CONFIRM_SUBJECT,
+} from "@/lib/emails/supabase-confirm";
 import { proWelcomeHtml, proWelcomeSubject } from "@/lib/emails/pro-welcome";
 import { plusWelcomeHtml, plusWelcomeSubject } from "@/lib/emails/plus-welcome";
 import {
@@ -153,6 +157,15 @@ function buildTemplates(
         : "Admin schaltet 1 Jahr Pro via /admin/users frei — neuer User, kriegt Login-Link auf /welcome/beta",
       subject: betaFreeYearWelcomeSubject(name, locale, "pro"),
       html: betaFreeYearWelcomeHtml(name, appUrl, bfyExpiresAt, locale, bfySignupUrl, "pro"),
+    },
+    {
+      key: "supabase-confirm",
+      label: isEn ? "Supabase — Email Confirmation" : "Supabase — E-Mail-Bestätigung",
+      whenSent: isEn
+        ? "Sent by Supabase immediately after signup (paste HTML into Supabase Dashboard → Auth → Email Templates → Confirm signup)"
+        : "Wird von Supabase direkt nach Signup verschickt (HTML in Supabase Dashboard → Auth → Email Templates → Confirm signup einfügen)",
+      subject: SUPABASE_CONFIRM_SUBJECT,
+      html: supabaseConfirmHtml("https://glev.app/auth/callback?code=EXAMPLE"),
     },
     {
       key: "trial-started",
