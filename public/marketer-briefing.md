@@ -69,7 +69,13 @@ Wer zahlt aber ein niedrigeres Abo hat, sieht höherwertige Features **unscharf 
 
 ## Plattformen
 
-Ein `git push` = Web (glev.app) + iOS (TestFlight) + Android (Play Store) gleichzeitig aktualisiert. Kein separater App-Store-Build für Content-Änderungen nötig.
+| Plattform | Status |
+|---|---|
+| Web (glev.app) | ✅ Live |
+| iOS | ✅ TestFlight (Beta) — App Store ab **1. Juli** |
+| Android | ⏳ Noch nicht live — Play Store ab **1. Juli** |
+
+Sobald die nativen Shells im Store sind: Ein `git push` aktualisiert Web + iOS + Android gleichzeitig — kein neuer Store-Build nötig, solange nur Web-Inhalte geändert werden.
 
 ---
 
@@ -84,5 +90,6 @@ Ein `git push` = Web (glev.app) + iOS (TestFlight) + Android (Play Store) gleich
 | Trial 7 Tage → App-Sperre danach | ✅ Live |
 | Stripe Checkout (3 Pläne) | ✅ Live |
 | Blur-Teaser für Upsell innerhalb Pläne | ✅ Live |
-| iOS / Android App | ✅ Live |
+| iOS App (TestFlight) | ✅ Beta live |
+| Android App | ⏳ Store-Launch 1. Juli |
 | Admin: Plan + Gift-Label | ✅ Live |
