@@ -59,6 +59,11 @@ export default function SignupPage() {
   const [profileLoading, setProfileLoading] = useState(false);
   const [profileError, setProfileError] = useState<string | null>(null);
 
+  // Meta — captured in Step 1, used for CRM notification in Step 2
+  const [userId, setUserId] = useState<string | null>(null);
+  const [trialEndAt, setTrialEndAt] = useState<string | null>(null);
+  const [signedUpAt] = useState<string>(() => new Date().toISOString());
+
   const [step, setStep] = useState<Step>("signup");
   const [hover, setHover] = useState(false);
 
@@ -97,15 +102,22 @@ export default function SignupPage() {
       if (signUpError) throw signUpError;
       if (!data.user) throw new Error("Signup fehlgeschlagen – bitte erneut versuchen.");
 
+      setUserId(data.user.id);
+
       // Set trial_end_at
       const session = data.session;
       const headers: Record<string, string> = { "Content-Type": "application/json" };
       if (session?.access_token) {
         headers["Authorization"] = `Bearer ${session.access_token}`;
       }
-      await fetch("/api/auth/free-trial", { method: "POST", headers }).catch((e) =>
-        console.warn("[signup] trial API call failed:", e)
-      );
+      const trialRes = await fetch("/api/auth/free-trial", { method: "POST", headers }).catch((e) => {
+        console.warn("[signup] trial API call failed:", e);
+        return null;
+      });
+      if (trialRes?.ok) {
+        const trialData = (await trialRes.json().catch(() => null)) as { trial_end_at?: string } | null;
+        if (trialData?.trial_end_at) setTrialEndAt(trialData.trial_end_at);
+      }
 
       // Pixel Lead event
       if (typeof window !== "undefined" && (window as unknown as { fbq?: (...args: unknown[]) => void }).fbq) {
@@ -142,6 +154,29 @@ export default function SignupPage() {
             sensor_type: usesCgm === "ja" ? (sensorType || null) : null,
           },
         }).catch((e) => console.warn("[signup] profile update failed:", e));
+      }
+
+      // Fire-and-forget CRM notification — all form data + meta fields
+      if (userId) {
+        fetch("/api/crm/signup-notification", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            name:          name || null,
+            email,
+            phone:         phone || null,
+            date_of_birth: dob   || null,
+            uses_cgm:      usesCgm === "ja" ? true : usesCgm === "nein" ? false : null,
+            sensor_type:   usesCgm === "ja" ? (sensorType || null) : null,
+            user_id:       userId,
+            trial_end_at:  trialEndAt,
+            signed_up_at:  signedUpAt,
+            plan:          "free-trial-7d",
+            source_url:    typeof window !== "undefined" ? document.referrer || window.location.href : null,
+            locale:        typeof window !== "undefined" ? navigator.language : null,
+            user_agent:    typeof window !== "undefined" ? navigator.userAgent : null,
+          }),
+        }).catch((e) => console.warn("[signup] CRM notification failed:", e));
       }
     } finally {
       setStep("success");
