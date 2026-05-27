@@ -105,19 +105,25 @@ export default function SignupPage() {
 
       setUserId(data.user.id);
 
-      // Set trial_end_at
+      // Compute trial_end_at locally (now + 7 days) so the CRM email always
+      // has the correct value, even when signUp() returns no session (email
+      // confirmation required in production). The auth/callback route sets
+      // the actual DB value once the user confirms their email.
+      const localTrialEndAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+      setTrialEndAt(localTrialEndAt);
+
+      // Also attempt the API call immediately — works when Supabase returns a
+      // session directly (e.g. dev / email-confirm disabled). In production
+      // this will 401 silently, and the auth/callback handles it instead.
       const session = data.session;
-      const headers: Record<string, string> = { "Content-Type": "application/json" };
       if (session?.access_token) {
-        headers["Authorization"] = `Bearer ${session.access_token}`;
-      }
-      const trialRes = await fetch("/api/auth/free-trial", { method: "POST", headers }).catch((e) => {
-        console.warn("[signup] trial API call failed:", e);
-        return null;
-      });
-      if (trialRes?.ok) {
-        const trialData = (await trialRes.json().catch(() => null)) as { trial_end_at?: string } | null;
-        if (trialData?.trial_end_at) setTrialEndAt(trialData.trial_end_at);
+        fetch("/api/auth/free-trial", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${session.access_token}`,
+          },
+        }).catch((e) => console.warn("[signup] trial API call failed:", e));
       }
 
       // Pixel Lead event (Browser) — CAPI parallel via trackEvent
