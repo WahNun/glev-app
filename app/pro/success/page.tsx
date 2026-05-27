@@ -369,33 +369,48 @@ function ValidCard({
       return;
     }
     setSubmitting(true);
-    const { data, error: authError } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        emailRedirectTo: `${window.location.origin}/auth/callback?next=/dashboard`,
-      },
+
+    // Server-side user creation with email_confirm: true — no Supabase
+    // confirmation email is sent. The buyer already proved email ownership
+    // by completing Stripe Checkout, so a second confirmation is redundant.
+    const regRes = await fetch("/api/pro/register", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, password }),
     });
-    if (authError) {
-      // "User already registered" → friendlier message + login pointer.
-      if (/already/i.test(authError.message)) {
+    const regData = await regRes.json().catch(() => ({}));
+
+    if (!regRes.ok) {
+      const msg: string = regData?.error ?? "Unbekannter Fehler";
+      if (/already|duplicate|email_exists/i.test(msg)) {
+        // User exists — try to sign in with the supplied password.
+        // Falls through to signInWithPassword below.
+      } else if (msg === "password_too_short") {
+        setError("Bitte mindestens 6 Zeichen wählen.");
+        setSubmitting(false);
+        return;
+      } else {
+        setError(msg);
+        setSubmitting(false);
+        return;
+      }
+    }
+
+    // Sign in immediately — no email confirmation step needed.
+    const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
+    if (signInError) {
+      if (regData?.existed) {
+        // Existing account + wrong password → direct to login.
         setError(
           "Diese Email ist bereits registriert. Bitte logge dich auf /login mit deinem bestehenden Passwort ein.",
         );
       } else {
-        setError(authError.message);
+        setError(signInError.message);
       }
       setSubmitting(false);
       return;
     }
-    if (!data.session) {
-      // Supabase project may require email confirmation before auto-login.
-      setNotice(
-        "Fast geschafft — bitte prüfe dein Email-Postfach und klicke auf den Bestätigungslink, um die Registrierung abzuschließen.",
-      );
-      setSubmitting(false);
-      return;
-    }
+
     router.refresh();
     router.replace("/dashboard");
   }
