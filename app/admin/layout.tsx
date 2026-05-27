@@ -44,6 +44,8 @@ export default async function AdminLayout({
         overflowX: "hidden",
         WebkitOverflowScrolling: "touch",
         background: "#fafafa",
+        userSelect: "text",
+        WebkitUserSelect: "text",
       }}
     >
       {authed ? <AdminNav /> : null}
