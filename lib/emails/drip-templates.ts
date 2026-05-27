@@ -11,6 +11,7 @@
 import { Resend } from "resend";
 
 import type { EmailLocale } from "@/lib/emails/beta-welcome";
+import { escapeHtml } from "@/lib/emails/escape";
 import { buildUnsubscribeUrl } from "@/lib/emails/unsubscribeToken";
 
 export type DripEmailType =
@@ -122,8 +123,9 @@ function wrap(
 }
 
 function greeting(firstName: string | null, locale: EmailLocale): string {
-  if (locale === "en") return firstName ? `Hi ${firstName}` : "Hi there";
-  return firstName ? `Hallo ${firstName}` : "Hallo";
+  const safe = escapeHtml(firstName);
+  if (locale === "en") return safe ? `Hi ${safe}` : "Hi there";
+  return safe ? `Hallo ${safe}` : "Hallo";
 }
 
 // ---- Tag 7 — Insights-Tab Feature-Highlight -------------------------------

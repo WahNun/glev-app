@@ -8,6 +8,7 @@
  * framing, in either German or English depending on `locale`.
  */
 import type { EmailLocale } from '@/lib/emails/beta-welcome';
+import { escapeHtml } from '@/lib/emails/escape';
 
 export function proWelcomeHtml(
   name?: string | null,
@@ -16,7 +17,7 @@ export function proWelcomeHtml(
   trialEndsAt?: string | null,
   locale: EmailLocale = 'de',
 ): string {
-  const first = firstNameFrom(name);
+  const first = escapeHtml(firstNameFrom(name));
   const baseUrl = (appUrl || 'https://glev.app').replace(/\/$/, '');
   const resumeUrl = sessionId
     ? `${baseUrl}/pro/success?session_id=${encodeURIComponent(sessionId)}`

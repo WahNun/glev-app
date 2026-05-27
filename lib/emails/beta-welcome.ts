@@ -20,6 +20,8 @@
  *                  which is set by the checkout endpoint based on the
  *                  buyer's currency selection (USD → en, EUR → de).
  */
+import { escapeHtml } from '@/lib/emails/escape';
+
 export type EmailLocale = 'de' | 'en';
 
 export function betaWelcomeHtml(
@@ -28,7 +30,7 @@ export function betaWelcomeHtml(
   appUrl?: string | null,
   locale: EmailLocale = 'de',
 ): string {
-  const first = firstNameFrom(name);
+  const first = escapeHtml(firstNameFrom(name));
   const baseUrl = (appUrl || 'https://glev.app').replace(/\/$/, '');
   const resumeUrl = sessionId
     ? `${baseUrl}/welcome?session_id=${encodeURIComponent(sessionId)}`
