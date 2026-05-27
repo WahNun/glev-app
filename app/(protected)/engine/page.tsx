@@ -2776,9 +2776,7 @@ export default function EnginePage() {
             </div>
           )}
           {stepIndex === 1 && wizardSavedDose === null && (
-            !canAccess("engine_bolus_suggestion") ? (
-              <UpgradeGate feature="engine_bolus_suggestion" />
-            ) : (
+            <UpgradeGate feature="engine_bolus_suggestion">
             <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
             <div style={{ ...card, padding: 18, position: "relative" }}>
               {/* Back chevron — top-left of the card per user request
@@ -3304,7 +3302,7 @@ export default function EnginePage() {
                 )}
               </div>
           </div>
-            )
+            </UpgradeGate>
           )}
 
           {/* BolusExplainerSheet — fixed bottom-sheet replacing Step 3.

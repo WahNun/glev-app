@@ -90,7 +90,7 @@ const label: React.CSSProperties = {
 };
 
 export default function CgmSettingsCard() {
-  const { canAccess, loading: planLoading } = usePlan();
+  const { canAccess } = usePlan();
   const tAh = useTranslations("cgmSettings.appleHealth");
   const { unit: glucoseUnit } = useGlucoseUnit();
   const t = useTranslations("cgmSettings");
@@ -843,11 +843,8 @@ export default function CgmSettingsCard() {
 
   const connected = status?.connected === true;
 
-  if (!planLoading && !canAccess("cgm_sync")) {
-    return <UpgradeGate feature="cgm_sync" />;
-  }
-
   return (
+    <UpgradeGate feature="cgm_sync">
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       {/* STATUS CARD */}
       <div style={card}>
@@ -1920,5 +1917,6 @@ export default function CgmSettingsCard() {
         </form>
       )}
     </div>
+    </UpgradeGate>
   );
 }

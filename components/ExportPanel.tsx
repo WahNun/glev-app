@@ -2,6 +2,8 @@
 
 import { useState, useEffect } from "react";
 import { useTranslations, useLocale } from "next-intl";
+import { usePlan } from "@/hooks/usePlan";
+import UpgradeGate from "@/components/UpgradeGate";
 import { supabase } from "@/lib/supabase";
 import {
   fetchAllMeals,
@@ -274,6 +276,7 @@ const ROWS: RowSpec[] = [
  * so other rows stay enabled during a long meals export.
  */
 export default function ExportPanel() {
+  const { canAccess } = usePlan();
   const t = useTranslations("export");
   const bcp47 = localeToBcp47(useLocale());
   const { unit: carbUnit, label: carbUnitLabel } = useCarbUnit();
@@ -1251,6 +1254,7 @@ export default function ExportPanel() {
             >
               {allLabel}
             </button>
+            <UpgradeGate feature="pdf_report">
             <button
               onClick={exportPdf}
               disabled={bulkDisabled}
@@ -1286,6 +1290,7 @@ export default function ExportPanel() {
               </svg>
               {pdfLabel}
             </button>
+            </UpgradeGate>
           </div>
         );
       })()}
