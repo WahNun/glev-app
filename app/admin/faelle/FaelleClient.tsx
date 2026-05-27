@@ -4,13 +4,18 @@ import { useState, useEffect } from "react";
 import { loadAllCaseStatuses } from "../_components/CaseStatusCell";
 import CaseStatusCell from "../_components/CaseStatusCell";
 import DuplicateActions from "../buyers/DuplicateActions";
+import DuplicateSignups from "../buyers/DuplicateSignups";
 import type { BetaRow, ProRow } from "../buyers/BuyersTables";
 
 /**
  * Client-Komponente für /admin/faelle.
- * Liest case statuses aus localStorage und filtert die vom Server
- * übergebenen beta/pro-Daten auf "zu_bearbeiten"-Einträge.
+ *
+ * Zeigt zwei Kategorien:
+ * 1. Mehrfach-Registrierungen (un-dismissed) — direkt via DuplicateSignups
+ * 2. Manuell als "Zu bearbeiten" markierte Einträge — aus localStorage
  */
+
+const DUP_DISMISS_KEY = "glev_admin_dismissed_dups";
 
 function fmtDate(v: string | null | undefined): string {
   if (!v) return "—";
@@ -19,14 +24,32 @@ function fmtDate(v: string | null | undefined): string {
   return d.toISOString().slice(0, 16).replace("T", " ");
 }
 
+function countUndismissedDups(beta: BetaRow[], pro: ProRow[]): number {
+  try {
+    const dismissed: string[] = JSON.parse(localStorage.getItem(DUP_DISMISS_KEY) ?? "[]");
+    const dismissedSet = new Set(dismissed);
+    const allEmails = [
+      ...beta.map((b) => b.email.trim().toLowerCase()),
+      ...pro.map((p) => p.email.trim().toLowerCase()),
+    ];
+    const counts = new Map<string, number>();
+    for (const e of allEmails) counts.set(e, (counts.get(e) ?? 0) + 1);
+    return Array.from(counts.entries()).filter(([email, n]) => n >= 2 && !dismissedSet.has(email)).length;
+  } catch {
+    return 0;
+  }
+}
+
 export default function FaelleClient({ beta, pro }: { beta: BetaRow[]; pro: ProRow[] }) {
   const [mounted, setMounted] = useState(false);
   const [statusMap, setStatusMap] = useState<Record<string, string>>({});
+  const [undismissedDups, setUndismissedDups] = useState(0);
 
   useEffect(() => {
     setStatusMap(loadAllCaseStatuses());
+    setUndismissedDups(countUndismissedDups(beta, pro));
     setMounted(true);
-  }, []);
+  }, [beta, pro]);
 
   if (!mounted) {
     return <p style={mutedStyle}>Lade Fälle…</p>;
@@ -34,30 +57,38 @@ export default function FaelleClient({ beta, pro }: { beta: BetaRow[]; pro: ProR
 
   const openBeta = beta.filter((r) => statusMap[`beta-${r.id}`] === "zu_bearbeiten");
   const openPro = pro.filter((r) => statusMap[`pro-${r.id}`] === "zu_bearbeiten");
-  const total = openBeta.length + openPro.length;
-
-  if (total === 0) {
-    return (
-      <div style={emptyCard}>
-        <div style={{ fontSize: 32, marginBottom: 8 }}>✓</div>
-        <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 4 }}>Keine offenen Fälle</div>
-        <div style={mutedStyle}>
-          Alle Einträge sind entweder noch „Offen" oder bereits „Geklärt".{" "}
-          Gehe zu{" "}
-          <a href="/admin/buyers" style={{ color: "#3b4cdc" }}>Käufer</a>,
-          um Einträge als „Zu bearbeiten" zu markieren.
-        </div>
-      </div>
-    );
-  }
+  const manualTotal = openBeta.length + openPro.length;
+  const total = undismissedDups + manualTotal;
 
   return (
     <div>
-      <p style={{ ...mutedStyle, marginBottom: 20 }}>
-        {total} {total === 1 ? "Eintrag" : "Einträge"} als „Zu bearbeiten" markiert.
-        Status direkt hier ändern — Änderungen werden sofort in der Käufer-Übersicht sichtbar.
-      </p>
+      {total === 0 ? (
+        <div style={emptyCard}>
+          <div style={{ fontSize: 32, marginBottom: 8 }}>✓</div>
+          <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 4 }}>Keine offenen Fälle</div>
+          <div style={mutedStyle}>
+            Alle Mehrfach-Registrierungen sind geschlossen und keine Einträge als „Zu bearbeiten" markiert.{" "}
+            Gehe zu{" "}
+            <a href="/admin/buyers" style={{ color: "#3b4cdc" }}>Käufer</a> um Einträge zu markieren.
+          </div>
+        </div>
+      ) : (
+        <p style={{ ...mutedStyle, marginBottom: 20 }}>
+          {total} {total === 1 ? "offener Fall" : "offene Fälle"} —{" "}
+          {undismissedDups > 0 && `${undismissedDups} Mehrfach-Registrierung${undismissedDups > 1 ? "en" : ""}`}
+          {undismissedDups > 0 && manualTotal > 0 && ", "}
+          {manualTotal > 0 && `${manualTotal} manuell markiert`}.
+        </p>
+      )}
 
+      {/* Mehrfach-Registrierungen — direkt via DuplicateSignups (verwaltet eigenes dismissed-state) */}
+      {undismissedDups > 0 && (
+        <div style={{ marginBottom: 32 }}>
+          <DuplicateSignups beta={beta} pro={pro} />
+        </div>
+      )}
+
+      {/* Manuell markierte Einträge */}
       {openBeta.length > 0 && (
         <section style={sectionStyle}>
           <h2 style={sectionHead}>Beta-Reservierungen ({openBeta.length})</h2>
