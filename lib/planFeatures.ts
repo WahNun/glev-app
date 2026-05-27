@@ -1,10 +1,11 @@
 /**
  * Feature-Tier-Definitionen für Glev.
  *
- * Drei Zugangsstufen:
- *   "all"  — verfügbar für jeden (Free, Smart/Beta, Pro, Plus, aktiver Trial)
- *   "pro"  — ab Plan M (Glev Pro) + Plan L (Glev+) + aktiver Free-Trial
- *   "plus" — nur Plan L (Glev+)
+ * Vier Zugangsstufen:
+ *   "all"   — verfügbar für jeden (Free, Smart/Beta, Pro, Plus, aktiver Trial)
+ *   "smart" — ab Plan S (Glev Smart) + Pro + Plus + aktiver Free-Trial
+ *   "pro"   — ab Plan M (Glev Pro) + Plan L (Glev+) + aktiver Free-Trial
+ *   "plus"  — nur Plan L (Glev+)
  *
  * canAccess() ist die einzige Stelle, die diese Tiers auswertet.
  * UI-Komponenten importieren nur canAccess() — nie direkt dieses Record.
@@ -16,20 +17,20 @@
  *   "plus"  = Glev+ (L, €29/Mo)
  *
  * Trial-Logik:
- *   "free" + trialActive=true → Pro-Level-Zugang (alle "all"- und "pro"-Features)
+ *   "free" + trialActive=true → Pro-Level-Zugang (alle Features bis inkl. "pro")
  *   D-023: kein eigener Plan-Typ für Trial in computeEffectivePlan.
  */
 
 import type { EffectivePlan } from "@/lib/admin/effectivePlan";
 
-export type FeatureTier = "all" | "pro" | "plus";
+export type FeatureTier = "all" | "smart" | "pro" | "plus";
 
 /**
  * Kanonische Feature-Keys.
  * Jeder Key entspricht genau einer Zeile im Feature-Table (replit.md / Pricing-Seite).
  */
 export const FEATURE_TIERS: Record<string, FeatureTier> = {
-  // ── Alle Pläne ──────────────────────────────────────────────────────
+  // ── Alle Pläne ──────────────────────────────────────────────────────────
   meal_log_voice:          "all",
   meal_log_manual:         "all",
   insulin_log:             "all",
@@ -41,10 +42,13 @@ export const FEATURE_TIERS: Record<string, FeatureTier> = {
   food_memory:             "all",
   history_60d:             "all",
 
-  // ── Ab Plan M (Pro + Plus + aktiver Trial) ───────────────────────────
-  cgm_sync:                "pro",
-  apple_health_sync:       "pro",
-  cgm_autofill:            "pro",
+  // ── Ab Plan S (Smart + Pro + Plus + aktiver Trial) ───────────────────────
+  cgm_sync:                "smart",
+  apple_health_sync:       "smart",
+  cgm_autofill:            "smart",
+  hypo_warning:            "smart",
+
+  // ── Ab Plan M (Pro + Plus + aktiver Trial) ───────────────────────────────
   hba1c_gmi:               "pro",
   tir_analysis:            "pro",
   control_score:           "pro",
@@ -56,13 +60,13 @@ export const FEATURE_TIERS: Record<string, FeatureTier> = {
   bz_pattern_recognition:  "pro",
   settings_tips:           "pro",
   auto_apply_icr:          "pro",
-  hypo_warning:            "pro",
   icr_by_daytime:          "pro",
   custom_target_range:     "pro",
   google_sheets_import:    "pro",
   history_90d:             "pro",
+  founder_direct_line:     "pro",
 
-  // ── Nur Plan L (Plus) ────────────────────────────────────────────────
+  // ── Nur Plan L (Plus) ────────────────────────────────────────────────────
   caregiver_view:          "plus",
   push_alarm_contacts:     "plus",
   pdf_report:              "plus",
@@ -70,7 +74,6 @@ export const FEATURE_TIERS: Record<string, FeatureTier> = {
   doctor_appointment_tracker: "plus",
   since_last_appointment:  "plus",
   unlimited_history:       "plus",
-  founder_direct_line:     "pro",
   early_feature_access:    "plus",
 };
 
@@ -97,6 +100,12 @@ export function canAccess(
   switch (tier) {
     case "all":
       return true;
+    case "smart":
+      return (
+        effectivePlan === "beta" ||
+        effectivePlan === "pro" ||
+        effectivePlan === "plus"
+      );
     case "pro":
       return effectivePlan === "pro" || effectivePlan === "plus";
     case "plus":
@@ -111,7 +120,8 @@ export function canAccess(
  * nützlich für Upgrade-Hinweise in der UI.
  */
 export function requiredPlanLabel(tier: FeatureTier): string {
-  if (tier === "pro")  return "Glev Pro";
-  if (tier === "plus") return "Glev+";
+  if (tier === "smart") return "Glev Smart";
+  if (tier === "pro")   return "Glev Pro";
+  if (tier === "plus")  return "Glev+";
   return "";
 }
