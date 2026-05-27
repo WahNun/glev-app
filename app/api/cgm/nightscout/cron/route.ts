@@ -36,6 +36,41 @@ interface NsEntry {
   direction?: string;
 }
 
+export type NightscoutRow = {
+  user_id: string;
+  recorded_at: string;
+  value_mgdl: number;
+  direction: string | null;
+  source: string;
+};
+
+/**
+ * Upserts pre-fetched Nightscout rows into `nightscout_readings` and, on
+ * success, fires `fillFn` (default: `fillNearbyChecks`) for each row.
+ *
+ * Extracted so the upsert + fill behaviour can be unit-tested without
+ * spinning up a real Supabase instance or a real Nightscout server.
+ */
+export async function upsertAndFillNightscoutRows(
+  admin: import("@supabase/supabase-js").SupabaseClient,
+  userId: string,
+  rows: NightscoutRow[],
+  fillFn: typeof fillNearbyChecks = fillNearbyChecks,
+): Promise<{ ok: boolean; error?: string }> {
+  const { error: upsertErr } = await admin
+    .from("nightscout_readings")
+    .upsert(rows, { onConflict: "user_id,recorded_at" });
+
+  if (upsertErr) {
+    return { ok: false, error: upsertErr.message };
+  }
+
+  for (const row of rows) {
+    fillFn(admin, userId, row.value_mgdl, new Date(row.recorded_at)).catch(() => {});
+  }
+  return { ok: true };
+}
+
 export async function GET(req: NextRequest) {
   const cronSecret = process.env.CRON_SECRET;
   if (!cronSecret || cronSecret.length < 16) {
@@ -93,20 +128,12 @@ export async function GET(req: NextRequest) {
 
       if (rows.length === 0) { results.skipped++; continue; }
 
-      const { error: upsertErr } = await admin
-        .from("nightscout_readings")
-        .upsert(rows, { onConflict: "user_id,recorded_at" });
-
-      if (upsertErr) {
-        console.error("[nightscout/cron] upsert failed for", profile.user_id, upsertErr.message);
+      const result = await upsertAndFillNightscoutRows(admin, profile.user_id, rows);
+      if (!result.ok) {
+        console.error("[nightscout/cron] upsert failed for", profile.user_id, result.error);
         results.failed++;
       } else {
         results.success++;
-        // Fire-and-forget: try to fill open meal_timeline_checks within
-        // ±15 min of each newly stored reading. Same pattern as Apple Health sync.
-        for (const row of rows) {
-          fillNearbyChecks(admin, profile.user_id, row.value_mgdl, new Date(row.recorded_at)).catch(() => {});
-        }
       }
     } catch (e) {
       console.error("[nightscout/cron] error for", profile.user_id, (e as Error).message);

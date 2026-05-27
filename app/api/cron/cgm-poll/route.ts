@@ -72,14 +72,22 @@ function readingToRow(userId: string, source: PollSource, r: Reading): SampleRow
   };
 }
 
-async function pollOne(
+/** Injectable dependencies for `pollOne` — lets unit tests swap out
+ *  the real network calls and Supabase writes with fakes. */
+export interface PollOneDeps {
+  getHistory?: (userId: string) => Promise<{ history: Reading[]; current?: Reading | null }>;
+  adminInstance?: import("@supabase/supabase-js").SupabaseClient;
+  fillFn?: typeof fillNearbyChecks;
+}
+
+export async function pollOne(
   userId: string,
   source: PollSource,
+  deps?: PollOneDeps,
 ): Promise<{ ok: true; inserted: number; source: PollSource } | { ok: false; source: PollSource; error: string }> {
   try {
-    const out = source === "llu"
-      ? await llu.getHistory(userId)
-      : await nightscout.getHistory(userId);
+    const getHistoryFn = deps?.getHistory ?? (source === "llu" ? llu.getHistory : nightscout.getHistory);
+    const out = await getHistoryFn(userId);
     const history = out?.history || [];
     const current = source === "llu" ? out?.current ?? null : null;
     if (history.length === 0 && !current) return { ok: true, inserted: 0, source };
@@ -101,7 +109,8 @@ async function pollOne(
     }
     if (rows.length === 0) return { ok: true, inserted: 0, source };
 
-    const admin = adminClient();
+    const admin = deps?.adminInstance ?? adminClient();
+    const fillFn = deps?.fillFn ?? fillNearbyChecks;
     const { error } = await admin
       .from("cgm_samples")
       .upsert(rows, { onConflict: "user_id,timestamp", ignoreDuplicates: true });
@@ -111,7 +120,7 @@ async function pollOne(
     // Fire-and-forget: try to fill open meal_timeline_checks within
     // ±15 min of each newly stored reading. Same pattern as Apple Health sync.
     for (const row of rows) {
-      fillNearbyChecks(admin, userId, row.value_mgdl, new Date(row.timestamp)).catch(() => {});
+      fillFn(admin, userId, row.value_mgdl, new Date(row.timestamp)).catch(() => {});
     }
     return { ok: true, inserted: rows.length, source };
   } catch (e) {
