@@ -70,7 +70,7 @@ export const FEATURE_TIERS: Record<string, FeatureTier> = {
   doctor_appointment_tracker: "plus",
   since_last_appointment:  "plus",
   unlimited_history:       "plus",
-  founder_direct_line:     "plus",
+  founder_direct_line:     "pro",
   early_feature_access:    "plus",
 };
 
