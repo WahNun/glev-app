@@ -80,7 +80,7 @@ export async function GET(req: NextRequest) {
   // do their job.
   const { data: row, error } = await admin
     .from("profiles")
-    .select("manual_plan_override, manual_plan_expires_at, plan")
+    .select("manual_plan_override, manual_plan_expires_at, plan, trial_end_at")
     .eq("user_id", a.user.id)
     .maybeSingle();
   if (error) {
@@ -117,8 +117,22 @@ export async function GET(req: NextRequest) {
     subscription_status: subscriptionStatus,
   });
 
+  // Trial status — used by usePlan() / canAccess() for feature gating.
+  // D-023: kein Plan-Typ "trial"; stattdessen trial_end_at + plan === "free"
+  // kombiniert prüfen. Paid users (beta/pro/plus) bekommen trialActive=false
+  // auch wenn trial_end_at gesetzt ist — ihr Plan-Tier entscheidet.
+  const trialEndAt = (row as { trial_end_at?: string | null } | null)?.trial_end_at ?? null;
+  const trialActive =
+    plan === "free" &&
+    trialEndAt != null &&
+    new Date(trialEndAt) > new Date();
+
   return NextResponse.json(
-    { plan },
+    {
+      plan,
+      trial_active: trialActive,
+      trial_ends_at: trialEndAt,
+    },
     { status: 200, headers: { "cache-control": "no-store" } },
   );
 }

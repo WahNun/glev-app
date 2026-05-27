@@ -243,9 +243,47 @@ Loggt nur auf `console.log`. Echter Resend/Drip-Call folgt in einem Folge-Task (
 
 **Nicht wieder öffnen:** `trial_end_at` ist die einzige Trial-Tracking-Quelle. Wenn später ein Tier-Upgrade nach Trial gewünscht ist (z.B. Auto-Downgrade auf echten Free-Tier mit Feature-Flags), neue Migration + Cron-Job — nicht in `computeEffectivePlan` hineinhacken.
 
+### D-024 · Feature-Gating-Infrastruktur: planFeatures + usePlan Hook (2026-05-27)
+
+**Kontext:** Das Free-Trial-System (D-023) und die drei Pricing-Tiers (Smart/Pro/Plus) erfordern einen zentralen, wiederverwendbaren Subscription-Check.
+
+**Drei neue Artefakte:**
+
+1. **`lib/planFeatures.ts`** — Single Source of Truth für alle Feature-Tier-Zuordnungen:
+   - `FEATURE_TIERS: Record<string, FeatureTier>` — 29 Feature-Keys in drei Stufen: `"all"` / `"pro"` / `"plus"`
+   - `canAccess(feature, plan, trialActive)` — pure Funktion, fail-open bei unbekannten Keys
+   - `requiredPlanLabel(tier)` — für spätere Upgrade-Hinweise in der UI
+   - Trial-Logik: `plan === "free" && trialActive → "pro"`-Zugang (D-023 konform, kein neuer Plan-Typ)
+
+2. **`hooks/usePlan.ts`** — React Hook für alle Client-Komponenten:
+   - Fetcht `GET /api/me/plan`, cached im Modul-Scope (kein mehrfacher Request pro Page)
+   - Gibt `{ plan, trialActive, trialEndsAt, loading, canAccess(feature) }` zurück
+   - Fail-open während Loading (canAccess → true)
+   - `invalidatePlanCache()` für Post-Checkout-Refresh
+
+3. **`GET /api/me/plan` erweitert** — gibt jetzt zusätzlich zurück:
+   - `trial_active: boolean` — true wenn `plan === "free"` + `trial_end_at` in der Zukunft
+   - `trial_ends_at: string | null` — ISO-Timestamp für UI-Anzeige
+   - `trial_end_at` nun im ersten SELECT mit dabei (resilient: wenn Column fehlt → null)
+
+**Plan-Tier-Mapping:**
+- `"free"` (kein Abo) → nur `"all"`-Features
+- `"beta"` (Glev Smart, S) → nur `"all"`-Features
+- `"pro"` (Glev Pro, M) → `"all"` + `"pro"`-Features
+- `"plus"` (Glev+, L) → alle Features
+- `"free"` + `trialActive=true` → `"all"` + `"pro"`-Features (7-Tage-Trial = Pro-Level)
+
+**Bewusste Nicht-Entscheidungen:**
+- `computeEffectivePlan` bleibt unverändert (D-023: kein Trial-Plan-Typ)
+- Feature-Gates in UI-Komponenten sind NOCH NICHT verdrahtet — `canAccess()` ist bereit, aber kein einzelnes UI-Element ist noch geblockt. Folge-Tasks sperren M- und L-Features Schritt für Schritt.
+- Kein Upgrade-Prompt implementiert — kommt in eigenem Task.
+
+**Nicht wieder öffnen:** `FEATURE_TIERS` ist die einzige Stelle für Feature-Tier-Zuordnungen. Neue Features immer hier eintragen, nie lokal in einer Komponente.
+
 ---
 ## Fix Log
 | Datum | Task-Name | Asana-GID | Beschreibung |
+| 2026-05-27 | Feature-Gating-Infrastruktur: planFeatures + usePlan Hook | — | `lib/planFeatures.ts` neu: `FEATURE_TIERS` (29 Feature-Keys in drei Stufen "all"/"pro"/"plus"), `canAccess(feature, plan, trialActive)` pure Funktion (fail-open bei unbekannten Keys), `requiredPlanLabel(tier)`. `hooks/usePlan.ts` neu: Client-Hook, fetcht `GET /api/me/plan`, Modul-Level-Cache, gibt `{ plan, trialActive, trialEndsAt, loading, canAccess }` zurück, fail-open während Loading, `invalidatePlanCache()` für Post-Checkout. `app/api/me/plan/route.ts`: SELECT um `trial_end_at` erweitert, Response gibt jetzt auch `trial_active` (bool) und `trial_ends_at` (ISO) zurück. D-024 in DECISIONS.md dokumentiert (Plan-Tier-Mapping, Trial-Logik, bewusste Nicht-Entscheidungen). |
 | 2026-05-27 | Admin: Gift-Label für geschenkten Zugang | — | Neue Migration `supabase/migrations/20260527_add_gift_label.sql`: fügt `gift_label TEXT` zu `profiles` hinzu (rein informativ, kein Einfluss auf `computeEffectivePlan`). Zwei neue Server Actions `setGiftLabelAction` / `clearGiftLabelAction` in `app/admin/users/actions.ts` mit Audit-Log-Einträgen. `UserActions.tsx`: neuer "🎁 Geschenkter Zugang"-Block in der Plan-Sektion mit Dropdown (Lifetime Access / 1 Jahr kostenlos / 6M / 3M / Freundes-Zugang / Influencer / Tester / Investor / Team) + Label-Badge mit Entfernen-Button. `UsersTable.tsx`: `gift_label` im `UserRow`-Typ, neuer Filter-Tab "🎁 Geschenkt", Badge in der STATUS-Spalte, `gift_label` in der Freitext-Suche. `admin/users/page.tsx`: `gift_label` in optionalem profiles-SELECT und Row-Mapper. `admin/users/[id]/page.tsx`: gelbes Gift-Badge neben dem Plan-Badge im Header + `currentGiftLabel`-Prop an `UserActions`. Zusätzlich: `user-select: text` auf den Admin-Layout-Wrapper gesetzt, damit Text im gesamten `/admin/*`-Bereich markiert und kopiert werden kann. Kein neuer D-XXX-Eintrag — kein Schema-Breaking-Change (additive Migration), keine Auth-/Compliance-/Infrastruktur-Änderung. |
 | 2026-05-26 | Bugfix: Engine Step 1 mobile schwarz für Normal-User (ai_voice OFF) | — | `app/(protected)/engine/page.tsx`: Speak-Button-Guard `{!isMobile && (` → `{(!isMobile \|\| !aiVoiceEnabled) && (` — auf Mobile war der Speak-Button ausgeblendet (nur Desktop) und der Chat-Panel hinter `isMobile && aiVoiceEnabled` gegattet; Normal-User (Flag OFF) sahen daher leere schwarze Fläche in Step 1. Fix: Speak-Button auf Mobile anzeigen wenn `aiVoiceEnabled` false ist, sodass Normal-User weiterhin Spracheingabe für Mahlzeit-Parsing nutzen können. |
 | 2026-05-24 | Bugfix: React Infinite Loop "Maximum update depth exceeded" (Makros-prüfen-Screen, Task #679 Follow-up) | — | Root cause: `app/(protected)/layout.tsx` ist gleichzeitig Parent UND Consumer aller 4 Context-Provider (EngineHeader, ScopeHeader, EngineSource, WizardStep). Task #679's `setContext({ screen })` in `hooks/useScreenContext.ts` trigerred Layout-Re-render → Provider renderten mit neuen Inline-`value={{…}}`-Objekten → React sah Context-Änderung → Layout re-renderte als Consumer → Infinite Loop (200ms-Takt, Browser eingefroren). **Fix 1 — `hooks/useScreenContext.ts`:** `setContext({ screen })` → funktionales Update mit Early-Return-Bail-out: `setContext(prev => prev.screen === screen && !prev.glucoseSummary && !prev.iobSummary && !prev.lastMealSummary ? prev : { screen })` — verhindert State-Update wenn sich tatsächlich nichts geändert hat. **Fix 2 — alle 4 Context-Provider:** `useMemo` auf den `value`-Prop in `lib/engineHeaderContext.tsx`, `lib/engineWizardStepContext.tsx`, `lib/scopeHeaderContext.tsx`, `lib/engineSourceHeaderContext.tsx` — Provider geben exakt dasselbe Objekt-Referenz zurück solange Inhalt identisch, kein falsches Context-Changed-Signal mehr. **Fix 3 — `lib/useGlevAI.ts`:** `optsRef = useRef(opts)` + sync-`useEffect(() => { optsRef.current = opts; })` eingeführt; alle `opts?.contextSnapshot`-Zugriffe im `sendMessage`-`useCallback` auf `optsRef.current?.contextSnapshot` umgestellt; `opts?.contextSnapshot` aus dem Dep-Array von `sendMessage` entfernt (war `[messages, streaming, opts?.contextSnapshot]` → jetzt `[messages, streaming]`) — verhindert, dass ein immer-neues Inline-opts-Objekt `sendMessage` bei jedem Layout-Render neu erzeugt. Ergebnis: Browser-Konsole nach Fast-Refresh sauber, kein einziger "Maximum update depth exceeded"-Fehler mehr, Engine Step 2 "Makros prüfen" wieder bedienbar. Kein neuer D-XXX-Eintrag nötig (keine Infrastruktur-/Schema-/Auth-/Compliance-Änderung — reine React-Hook-Stabilisierung). |
