@@ -144,3 +144,9 @@ id = "kdpLIYHzlQ2InWCBnoDnO"
 uri = "file://public/feature-gating.csv"
 type = "table"
 title = "Glev Feature-Gating Übersicht"
+
+[[outputs]]
+id = "TGktwJjTkBaBm28H7rvC0"
+uri = "file://public/feature-gating.md"
+type = "text"
+title = "Glev Feature-Gating Übersicht"
