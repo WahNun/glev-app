@@ -298,4 +298,162 @@ test.describe("Settings → Arzttermine → Export chip", () => {
       page.getByRole("button", { name: LAST_APPT_CHIP_DATE_US }),
     ).toHaveCount(0);
   });
+
+  // -----------------------------------------------------------------------
+  // Picker test — two appointments
+  // -----------------------------------------------------------------------
+  // Why a separate test:
+  //   The "..." trigger only renders when the user has 2+ appointments.
+  //   The test above deliberately keeps only one appointment so its chip-
+  //   count assertions (4 → 5 → 4) stay clean and unambiguous.  This test
+  //   focuses entirely on the picker surface: does it appear, can the user
+  //   switch to an older entry, and does deleting the pinned entry fall back
+  //   gracefully to the newest remaining one?
+  //
+  // Flow:
+  //   add 2026-03-10 (newer) + 2026-01-15 (older)
+  //   → Export chip shows newest; "..." trigger is visible
+  //   → click "..." → select older date → chip label updates
+  //   → delete older appointment in Settings
+  //   → Export chip falls back to newest (wipe-on-delete)
+  test("two appointments: picker appears, pinning older entry updates chip label, deleting pinned entry falls back to latest", async ({ page }) => {
+    await loginAsTestUser(page);
+
+    // ---- ADD TWO APPOINTMENTS IN SETTINGS ----------------------------
+    await page.goto("/settings");
+    const apptsRow = page.getByRole("button", { name: APPTS_ROW_ARIA });
+    await expect(apptsRow).toBeVisible();
+    await apptsRow.click();
+
+    // The add-form's date input is always the first visible date input
+    // in the sheet (existing rows render plain text, not inputs, unless
+    // they are being edited — which they are not here).
+    const addDateInput = page.locator('input[type="date"]').first();
+    await expect(addDateInput).toBeVisible();
+
+    // Add the newer appointment first so the list order is predictable.
+    await addDateInput.fill("2026-03-10");
+    await page.getByRole("button", { name: /^(Add|Hinzufügen)$/ }).click();
+
+    // Poll until the DB row exists before inserting the second entry so
+    // the descending sort order is stable.
+    await expect.poll(
+      () => readLatestAppointment(testUser.userId),
+      { timeout: 10_000 },
+    ).toBe("2026-03-10");
+
+    // The add-form input resets after a successful add.
+    await addDateInput.fill("2026-01-15");
+    await page.getByRole("button", { name: /^(Add|Hinzufügen)$/ }).click();
+
+    // After adding the older entry the most-recent appointment is still
+    // 2026-03-10 (the sort order is descending by date).
+    await expect.poll(
+      () => readLatestAppointment(testUser.userId),
+      { timeout: 10_000 },
+    ).toBe("2026-03-10");
+
+    // ---- EXPORT PANEL: newest chip + "..." trigger visible -----------
+    await page.keyboard.press("Escape");
+    const exportRow = page.getByRole("button", { name: EXPORT_ROW_ARIA });
+    await exportRow.click();
+
+    // Wait for the "All time" chip so we know the panel's fetch settled.
+    await expect(page.getByRole("button", { name: /^(All time|Alles)$/ })).toBeVisible();
+
+    // Chip label should show 2026-03-10 (the most-recent entry).
+    // Same dual-locale strategy as the rest of the file.
+    const NEWER_CHIP_DATE_DE = /(Seit letztem Arzttermin|Since last appointment).*10[./]03[./]2026/;
+    const NEWER_CHIP_DATE_US = /(Seit letztem Arzttermin|Since last appointment).*03\/10\/2026/;
+    const newerChip = page
+      .getByRole("button", { name: NEWER_CHIP_DATE_DE })
+      .or(page.getByRole("button", { name: NEWER_CHIP_DATE_US }));
+    await expect(newerChip).toBeVisible({ timeout: 10_000 });
+
+    // Chip row: 4 standard + 1 lastAppointment = 5.
+    await expect(page.getByRole("button", { name: ANY_CHIP_LABEL })).toHaveCount(5);
+
+    // The "..." trigger must be visible because there are 2 appointments.
+    // Its aria-label is the i18n key `appointments_picker_label`:
+    //   EN: "Pick an older appointment"
+    //   DE: "Älteren Termin wählen"
+    const PICKER_ARIA = /(Pick an older appointment|Älteren Termin wählen)/;
+    const pickerTrigger = page.getByRole("button", { name: PICKER_ARIA });
+    await expect(pickerTrigger).toBeVisible();
+
+    // ---- OPEN PICKER, SELECT OLDER APPOINTMENT ----------------------
+    await pickerTrigger.click();
+
+    // The dropdown has role="listbox" and the same aria-label.
+    const listbox = page.getByRole("listbox", { name: PICKER_ARIA });
+    await expect(listbox).toBeVisible();
+
+    // Each list item has role="option" and its text is the formatted date
+    // (no prefix — just "15.01.2026" or "01/15/2026" depending on locale).
+    const OLDER_OPTION_DE = /15[./]01[./]2026/;
+    const OLDER_OPTION_US = /01\/15\/2026/;
+    const olderOption = listbox
+      .getByRole("option", { name: OLDER_OPTION_DE })
+      .or(listbox.getByRole("option", { name: OLDER_OPTION_US }));
+    await expect(olderOption).toBeVisible();
+    await olderOption.click();
+
+    // The picker closes immediately on selection.
+    await expect(listbox).not.toBeVisible();
+
+    // Chip label must now show 2026-01-15 (the pinned older entry).
+    // LAST_APPT_CHIP_DATE_DE / _US are already defined at module level
+    // and cover both "15.01.2026" and "01/15/2026" for that date.
+    const olderChip = page
+      .getByRole("button", { name: LAST_APPT_CHIP_DATE_DE })
+      .or(page.getByRole("button", { name: LAST_APPT_CHIP_DATE_US }));
+    await expect(olderChip).toBeVisible({ timeout: 5_000 });
+
+    // Chip count is unchanged — selecting an older entry doesn't add or
+    // remove chips, it only changes the date embedded in the label.
+    await expect(page.getByRole("button", { name: ANY_CHIP_LABEL })).toHaveCount(5);
+
+    // ---- DELETE THE OLDER (PINNED) APPOINTMENT IN SETTINGS ----------
+    await page.keyboard.press("Escape");
+    await apptsRow.click();
+
+    // The appointments list is sorted descending, so the second delete
+    // button (index 1 in the 0-based Playwright nth()) belongs to the
+    // older row (2026-01-15).  We use nth(1) rather than filtering by
+    // date text to stay locale-independent.
+    page.once("dialog", (d) => { void d.accept(); });
+    await page.getByRole("button", { name: /^(Delete|Löschen)$/ }).nth(1).click();
+
+    // The older row is gone; the newer one (2026-03-10) is still there.
+    await expect.poll(
+      () => readLatestAppointment(testUser.userId),
+      { timeout: 10_000 },
+    ).toBe("2026-03-10");
+
+    // ---- EXPORT PANEL: falls back to newest entry -------------------
+    // Re-opening the bottom sheet re-mounts ExportPanel.  pickedAppointmentId
+    // resets to null on mount, so activeAppointment defaults to
+    // appointments[0] — the still-present 2026-03-10 entry.  This is the
+    // observable consequence of the wipe-on-delete contract: the chip never
+    // shows a stale deleted date.
+    await page.keyboard.press("Escape");
+    await exportRow.click();
+    await expect(page.getByRole("button", { name: /^(All time|Alles)$/ })).toBeVisible();
+
+    const newerChipFinal = page
+      .getByRole("button", { name: NEWER_CHIP_DATE_DE })
+      .or(page.getByRole("button", { name: NEWER_CHIP_DATE_US }));
+    await expect(newerChipFinal).toBeVisible({ timeout: 10_000 });
+
+    // Only one appointment remains — the "..." trigger must be gone.
+    await expect(pickerTrigger).toHaveCount(0);
+
+    // The 2026-01-15 chip label must not appear anywhere.
+    await expect(
+      page.getByRole("button", { name: LAST_APPT_CHIP_DATE_DE }),
+    ).toHaveCount(0);
+    await expect(
+      page.getByRole("button", { name: LAST_APPT_CHIP_DATE_US }),
+    ).toHaveCount(0);
+  });
 });
