@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useTranslations } from "next-intl";
 import { fetchCgmHistory, invalidateCgmCache } from "@/lib/cgm/clientCache";
 import { parseLluTs as _parseLluTs } from "@/lib/time";
 import {
@@ -46,13 +47,16 @@ function glucoseLineColor(v: number): string {
   return hex(ORANGE_);
 }
 
-function formatAgo(ms: number): string {
-  const min = Math.round(ms / 60_000);
-  if (min < 1)   return "gerade eben";
-  if (min === 1) return "vor 1 min";
-  if (min < 60)  return `vor ${min} min`;
-  const h = Math.round(min / 60);
-  return h === 1 ? "vor 1 Std" : `vor ${h} Std`;
+type AgoFormatter = (ms: number) => string;
+
+function makeFormatAgo(t: ReturnType<typeof useTranslations<"LandscapeGlucoseOverlay">>): AgoFormatter {
+  return (ms: number): string => {
+    const min = Math.round(ms / 60_000);
+    if (min < 1)  return t("just_now");
+    if (min < 60) return t("minutes_ago", { n: min });
+    const h = Math.round(min / 60);
+    return t("hours_ago", { n: h });
+  };
 }
 
 function parseTrend(trend: string | number | undefined): "up" | "down" | "flat" {
@@ -80,6 +84,8 @@ type State =
   | { kind: "ok"; current: CgmPoint; history: CgmPoint[]; trend: string };
 
 export default function LandscapeGlucoseOverlay() {
+  const t = useTranslations("LandscapeGlucoseOverlay");
+  const formatAgo = makeFormatAgo(t);
   const [landscape, setLandscape] = useState(false);
   const [state, setState] = useState<State>({ kind: "loading" });
   const [, setTick] = useState(0);
@@ -168,7 +174,7 @@ export default function LandscapeGlucoseOverlay() {
 
   return (
     <div
-      aria-label="Live-Glukose Querformat"
+      aria-label={t("aria_label")}
       style={{
         position:      "fixed",
         inset:         0,
@@ -187,7 +193,7 @@ export default function LandscapeGlucoseOverlay() {
         justifyContent: "space-between",
       }}>
         <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.12em", color: GREEN, textTransform: "uppercase" }}>
-          GLUCOSE · LIVE
+          {t("header_label")}
         </span>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           {current && (
@@ -227,7 +233,7 @@ export default function LandscapeGlucoseOverlay() {
         ) : state.kind === "loading" ? (
           <span style={{ color: FAINT, fontSize: 32, letterSpacing: "0.2em" }}>· · ·</span>
         ) : (
-          <span style={{ color: FAINT, fontSize: 16 }}>Keine CGM-Daten</span>
+          <span style={{ color: FAINT, fontSize: 16 }}>{t("no_data")}</span>
         )}
       </div>
 

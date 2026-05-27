@@ -2393,6 +2393,14 @@
     "faq_q5": "Where is my data stored?",
     "faq_a5": "In the EU (Ireland) on Supabase — we deliberately chose the EU region so all health and account data stays inside the European Union, with no replication to third countries. German GDPR compliance. No data sharing, no advertising."
   },
+  "LandscapeGlucoseOverlay": {
+    "aria_label": "Live glucose landscape view",
+    "header_label": "GLUCOSE · LIVE",
+    "no_data": "No CGM data",
+    "just_now": "just now",
+    "minutes_ago": "{n} min ago",
+    "hours_ago": "{n} h ago"
+  },
   "cgm": {
     "section_title": "Does Glev work with your setup?",
     "group_supported": "Supported",

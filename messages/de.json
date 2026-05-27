@@ -2396,6 +2396,14 @@
     "faq_q5": "Wo werden meine Daten gespeichert?",
     "faq_a5": "In der EU (Irland) bei Supabase — wir haben die EU-Region bewusst gewählt, damit alle Gesundheits- und Kontodaten innerhalb der EU bleiben und nicht in Drittländer gespiegelt werden. Deutsche DSGVO. Keine Datenweitergabe, keine Werbung."
   },
+  "LandscapeGlucoseOverlay": {
+    "aria_label": "Live-Glukose Querformat",
+    "header_label": "GLUCOSE · LIVE",
+    "no_data": "Keine CGM-Daten",
+    "just_now": "gerade eben",
+    "minutes_ago": "vor {n} min",
+    "hours_ago": "vor {n} Std"
+  },
   "cgm": {
     "section_title": "Funktioniert Glev mit deinem Setup?",
     "group_supported": "Unterstützt",
