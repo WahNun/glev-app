@@ -218,14 +218,21 @@ export function unifiedOutcome(meal: Meal, now: Date = new Date()): string | nul
 
 /** Optional dependency overrides — used only in unit tests to inject
  *  spies without reaching the real Supabase client or the insulin module.
- *  Production callers omit this parameter entirely. */
+ *  Production callers omit this parameter entirely.
+ *
+ *  `_supabase` lets tests bypass the module-level singleton (which may be
+ *  frozen to the real client when running in a shared-worker suite where
+ *  Supabase env vars are present). Pass the fake client here instead of
+ *  relying solely on `globalThis._supabase` interception. */
 export interface SaveMealDeps {
   _insertInsulinLog?: typeof insertInsulinLog;
+  _supabase?: typeof supabase;
 }
 
 export async function saveMeal(input: SaveMealInput, _deps?: SaveMealDeps): Promise<Meal> {
-  if (!supabase) throw new Error("Supabase is not configured");
-  const { data: { user }, error: userError } = await supabase.auth.getUser();
+  const sb = _deps?._supabase ?? supabase;
+  if (!sb) throw new Error("Supabase is not configured");
+  const { data: { user }, error: userError } = await sb.auth.getUser();
   if (userError || !user) throw new Error("Not authenticated");
 
   const row: Record<string, unknown> = {
@@ -248,7 +255,7 @@ export async function saveMeal(input: SaveMealInput, _deps?: SaveMealDeps): Prom
   if (input.createdAt) row.created_at = input.createdAt;
   if (input.mealTime) row.meal_time = input.mealTime;
 
-  let { data, error } = await supabase
+  let { data, error } = await sb
     .from("meals")
     .insert(row)
     .select()
@@ -257,19 +264,19 @@ export async function saveMeal(input: SaveMealInput, _deps?: SaveMealDeps): Prom
   // Retry without meal_time if the column is missing (schema not migrated yet).
   if (error && /meal_time/i.test(error.message ?? "")) {
     delete row.meal_time;
-    const r2 = await supabase.from("meals").insert(row).select().single();
+    const r2 = await sb.from("meals").insert(row).select().single();
     data = r2.data; error = r2.error;
   }
   // Retry without related_meal_id if the column is missing (migration pending).
   if (error && /related_meal_id/i.test(error.message ?? "")) {
     delete row.related_meal_id;
-    const r2 = await supabase.from("meals").insert(row).select().single();
+    const r2 = await sb.from("meals").insert(row).select().single();
     data = r2.data; error = r2.error;
   }
   // Retry without pre_meal_trend if the column is missing (migration pending).
   if (error && /pre_meal_trend/i.test(error.message ?? "")) {
     delete row.pre_meal_trend;
-    const r2 = await supabase.from("meals").insert(row).select().single();
+    const r2 = await sb.from("meals").insert(row).select().single();
     data = r2.data; error = r2.error;
   }
 
@@ -279,7 +286,7 @@ export async function saveMeal(input: SaveMealInput, _deps?: SaveMealDeps): Prom
       delete row.fat_grams;
       delete row.fiber_grams;
       delete row.calories;
-      const { data: d2, error: e2 } = await supabase.from("meals").insert(row).select().single();
+      const { data: d2, error: e2 } = await sb.from("meals").insert(row).select().single();
       if (e2) throw new Error(e2.message);
       logDebug("MEAL_INSERT", { id: d2.id, carbs: input.carbsGrams, protein: input.proteinGrams, fat: input.fatGrams, fiber: input.fiberGrams, calories: input.calories, insulin: input.insulinUnits, glucose: input.glucoseBefore, mealType: input.mealType, evaluation: input.evaluation, note: "macro columns missing in DB" });
       return d2 as Meal;
@@ -330,7 +337,7 @@ export async function saveMeal(input: SaveMealInput, _deps?: SaveMealDeps): Prom
             source:       p.source ?? "open_food_facts",
           };
         });
-        await recordItemsToHistory(supabase!, user.id, items, { source: "history" });
+        await recordItemsToHistory(sb!, user.id, items, { source: "history" });
       } catch { /* see contract above */ }
     })();
   }

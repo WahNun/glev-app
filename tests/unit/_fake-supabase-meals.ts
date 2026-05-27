@@ -84,7 +84,7 @@ const noOpBuilder = {
   },
 };
 
-const fakeClient = {
+export const fakeClient = {
   auth: {
     async getUser() {
       return { data: { user: { id: FAKE_USER_ID } }, error: null };

@@ -27,6 +27,7 @@
 import {
   FAKE_MEAL_ID,
   FAKE_USER_ID,
+  fakeClient,
   setStoredMealRow,
   resetStoredMealRow,
 } from "./_fake-supabase-meals";
@@ -96,7 +97,7 @@ test("saveMeal with insulinUnits > 0 calls insertInsulinLog with correct fields"
 
   await saveMeal(
     { ...BASE_INPUT, insulinUnits: 4 },
-    { _insertInsulinLog: spy.fn },
+    { _supabase: fakeClient, _insertInsulinLog: spy.fn },
   );
   await flushAsync();
 
@@ -120,7 +121,7 @@ test("saveMeal with insulinUnits = 0 does NOT call insertInsulinLog", async () =
 
   await saveMeal(
     { ...BASE_INPUT, insulinUnits: 0 },
-    { _insertInsulinLog: spy.fn },
+    { _supabase: fakeClient, _insertInsulinLog: spy.fn },
   );
   await flushAsync();
 
@@ -138,7 +139,7 @@ test("saveMeal with insulinUnits = null does NOT call insertInsulinLog", async (
 
   await saveMeal(
     { ...BASE_INPUT, insulinUnits: null },
-    { _insertInsulinLog: spy.fn },
+    { _supabase: fakeClient, _insertInsulinLog: spy.fn },
   );
   await flushAsync();
 
@@ -155,7 +156,7 @@ test("saveMeal passes mealTime as `at` when provided", async () => {
 
   await saveMeal(
     { ...BASE_INPUT, insulinUnits: 3, mealTime },
-    { _insertInsulinLog: spy.fn },
+    { _supabase: fakeClient, _insertInsulinLog: spy.fn },
   );
   await flushAsync();
 
@@ -173,7 +174,7 @@ test("saveMeal passes createdAt as `at` when mealTime is absent", async () => {
 
   await saveMeal(
     { ...BASE_INPUT, insulinUnits: 2, createdAt },
-    { _insertInsulinLog: spy.fn },
+    { _supabase: fakeClient, _insertInsulinLog: spy.fn },
   );
   await flushAsync();
 
@@ -190,7 +191,7 @@ test("saveMeal forwards glucoseBefore as cgm_glucose_at_log in the mirror call",
 
   await saveMeal(
     { ...BASE_INPUT, insulinUnits: 5, glucoseBefore: 142 },
-    { _insertInsulinLog: spy.fn },
+    { _supabase: fakeClient, _insertInsulinLog: spy.fn },
   );
   await flushAsync();
 
@@ -209,7 +210,7 @@ test("a throwing insertInsulinLog does not cause saveMeal to reject", async () =
 
   const meal = await saveMeal(
     { ...BASE_INPUT, insulinUnits: 6 },
-    { _insertInsulinLog: throwingFn },
+    { _supabase: fakeClient, _insertInsulinLog: throwingFn },
   );
   await flushAsync();
 

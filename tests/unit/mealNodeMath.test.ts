@@ -149,40 +149,74 @@ test.describe("defaults match the product spec from Task #673", () => {
   });
 });
 
-// ── bgCheckColor — Task #734 ─────────────────────────────────────────────────
-// Pins the clinical color thresholds used to colour the glucose badge
-// and sensor indicator dot on each meal-node-cluster knob. A silent
-// threshold change (e.g. hypo boundary drifting from 70 to 80) would
-// render the wrong badge colour without failing any visual test.
+// ── bgCheckColor — Task #739 ─────────────────────────────────────────────────
+// Pins the 5-zone clinical color model for the glucose badge on each
+// meal-node-cluster knob (Task #739: "Show BZ check results on the
+// meal node cluster").
+//
+// Zones:
+//   < 70 mg/dL    → red   (#EF4444) — hypoglycemia
+//   70–80 mg/dL   → amber (#F59E0B) — borderline low
+//   80–160 mg/dL  → green (#22C55E) — ideal post-meal range
+//   160–180 mg/dL → amber (#F59E0B) — borderline high
+//   > 180 mg/dL   → red   (#EF4444) — hyperglycemia
+//
+// Both hypo and hyper map to red; borderline edges map to amber.
+
+const RED   = "#EF4444";
+const AMBER = "#F59E0B";
+const GREEN = "#22C55E";
 
 test.describe("bgCheckColor", () => {
-  test("hypoglycemia (< 70 mg/dL) → red (#EF4444)", () => {
-    expect(bgCheckColor(69)).toBe("#EF4444");
-    expect(bgCheckColor(54)).toBe("#EF4444");  // Level-2 hypo threshold
-    expect(bgCheckColor(40)).toBe("#EF4444");
-    expect(bgCheckColor(0)).toBe("#EF4444");
+  // ── hypo (red) ──────────────────────────────────────────────────────
+  test("hypoglycemia (< 70 mg/dL) → red", () => {
+    expect(bgCheckColor(0)).toBe(RED);
+    expect(bgCheckColor(40)).toBe(RED);
+    expect(bgCheckColor(54)).toBe(RED);  // Level-2 hypo threshold
+    expect(bgCheckColor(69)).toBe(RED);
+    expect(bgCheckColor(69.9)).toBe(RED);
   });
 
-  test("boundary: exactly 70 mg/dL → green (in range, not hypo)", () => {
-    expect(bgCheckColor(70)).toBe("#22C55E");
+  // ── borderline low (amber) ──────────────────────────────────────────
+  test("boundary 70 mg/dL → amber (borderline low, not green)", () => {
+    expect(bgCheckColor(70)).toBe(AMBER);
+  });
+  test("75 mg/dL → amber (borderline low midpoint)", () => {
+    expect(bgCheckColor(75)).toBe(AMBER);
+  });
+  test("boundary 80 mg/dL → amber (borderline low upper edge, inclusive)", () => {
+    expect(bgCheckColor(80)).toBe(AMBER);
   });
 
-  test("in-range values (70–180 mg/dL) → green (#22C55E)", () => {
-    expect(bgCheckColor(70)).toBe("#22C55E");
-    expect(bgCheckColor(100)).toBe("#22C55E");
-    expect(bgCheckColor(112)).toBe("#22C55E");  // the spec's example seed value
-    expect(bgCheckColor(140)).toBe("#22C55E");
-    expect(bgCheckColor(180)).toBe("#22C55E");
+  // ── ideal range (green) ─────────────────────────────────────────────
+  test("81 mg/dL → green (just inside ideal range)", () => {
+    expect(bgCheckColor(81)).toBe(GREEN);
+  });
+  test("in-range values (81–160 mg/dL) → green", () => {
+    expect(bgCheckColor(100)).toBe(GREEN);
+    expect(bgCheckColor(112)).toBe(GREEN);  // spec example
+    expect(bgCheckColor(140)).toBe(GREEN);
+  });
+  test("boundary 160 mg/dL → green (ideal upper edge, inclusive)", () => {
+    expect(bgCheckColor(160)).toBe(GREEN);
   });
 
-  test("boundary: exactly 180 mg/dL → green (in range, not hyper)", () => {
-    expect(bgCheckColor(180)).toBe("#22C55E");
+  // ── borderline high (amber) ─────────────────────────────────────────
+  test("161 mg/dL → amber (just above ideal, borderline high)", () => {
+    expect(bgCheckColor(161)).toBe(AMBER);
+  });
+  test("170 mg/dL → amber (borderline high midpoint)", () => {
+    expect(bgCheckColor(170)).toBe(AMBER);
+  });
+  test("boundary 180 mg/dL → amber (borderline high upper edge, inclusive)", () => {
+    expect(bgCheckColor(180)).toBe(AMBER);
   });
 
-  test("hyperglycemia (> 180 mg/dL) → amber (#F59E0B)", () => {
-    expect(bgCheckColor(181)).toBe("#F59E0B");
-    expect(bgCheckColor(200)).toBe("#F59E0B");
-    expect(bgCheckColor(250)).toBe("#F59E0B");
-    expect(bgCheckColor(400)).toBe("#F59E0B");
+  // ── hyper (red) ─────────────────────────────────────────────────────
+  test("hyperglycemia (> 180 mg/dL) → red", () => {
+    expect(bgCheckColor(181)).toBe(RED);
+    expect(bgCheckColor(200)).toBe(RED);
+    expect(bgCheckColor(250)).toBe(RED);
+    expect(bgCheckColor(400)).toBe(RED);
   });
 });

@@ -82,16 +82,23 @@ const KNOB_R = 6;      // 12px diameter
 const PLUS_R = 8;      // 16px diameter
 const PLUS_DY = 22;    // vertical offset of "+" below center
 
-/** Color for a glucose badge based on clinical range thresholds.
- *  < 70 mg/dL  → red   (hypoglycemia)
- *  70–180 mg/dL → green (in range)
- *  > 180 mg/dL → amber (hyperglycemia)
+/** Color for a glucose badge — 5-zone clinical model:
+ *  < 70 mg/dL   → red   (#EF4444) — hypoglycemia
+ *  70–80 mg/dL  → amber (#F59E0B) — borderline low
+ *  80–160 mg/dL → green (#22C55E) — ideal post-meal range
+ *  160–180 mg/dL → amber (#F59E0B) — borderline high
+ *  > 180 mg/dL  → red   (#EF4444) — hyperglycemia
+ *
+ * Both hypo and hyper use red so users immediately recognise values
+ * outside the safe range; amber marks the borderline edges.
  *
  * Exported for unit tests (`tests/unit/mealNodeMath.test.ts`). */
 export function bgCheckColor(mgdl: number): string {
-  if (mgdl < 70) return "#EF4444";
-  if (mgdl > 180) return "#F59E0B";
-  return "#22C55E";
+  if (mgdl < 70)  return "#EF4444"; // hypo
+  if (mgdl <= 80) return "#F59E0B"; // borderline low
+  if (mgdl <= 160) return "#22C55E"; // ideal
+  if (mgdl <= 180) return "#F59E0B"; // borderline high
+  return "#EF4444"; // hyper
 }
 
 export interface ArmState {
@@ -324,16 +331,16 @@ export default function MealNodeCluster(props: MealNodeClusterProps) {
               {hasBg && !isDragging && (
                 <g style={{ pointerEvents: "none" }}>
                   <rect
-                    x={x - 18} y={cy - KNOB_R - 20}
-                    width={36} height={14} rx={4}
+                    x={x - 28} y={cy - KNOB_R - 20}
+                    width={56} height={14} rx={4}
                     fill={bgColor!} opacity={0.92}
                   />
                   <text
                     x={x} y={cy - KNOB_R - 10}
-                    fontSize={9} fontWeight={700}
+                    fontSize={8} fontWeight={700}
                     textAnchor="middle" fill="white"
                   >
-                    {a.bgAtCheck}
+                    {a.bgAtCheck} mg/dL
                   </text>
                   <title>{t("bg_at_check_badge_title", { value: a.bgAtCheck! })}</title>
                 </g>
