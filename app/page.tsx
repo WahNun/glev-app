@@ -684,6 +684,23 @@ export default function PreviewHome() {
         }}
       >
         <div style={{ textAlign: "center", marginBottom: 32 }}>
+          <div style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 6,
+            fontSize: 11,
+            fontWeight: 700,
+            letterSpacing: "0.08em",
+            textTransform: "uppercase",
+            color: MINT,
+            border: `1px solid ${MINT}44`,
+            borderRadius: 999,
+            padding: "4px 12px",
+            marginBottom: 16,
+          }}>
+            <span aria-hidden="true">✦</span>
+            {t("pricing_eyebrow")}
+          </div>
           <h2
             style={{
               fontSize: "clamp(28px, 4vw, 36px)",
