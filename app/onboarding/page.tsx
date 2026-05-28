@@ -24,6 +24,7 @@ import LogMealStep from "./log-meal";
 import EngineStep from "./engine";
 import InsightsStep from "./insights";
 import CgmStep from "./cgm";
+import InstallStep from "./install";
 import type { Step } from "./_shared";
 
 export default function OnboardingPage() {
@@ -39,7 +40,7 @@ function OnboardingFlow() {
   const params = useSearchParams();
   const [submitting, setSubmitting] = useState(false);
   const raw = parseInt(params.get("step") ?? "0", 10);
-  const step = (Number.isFinite(raw) ? Math.min(5, Math.max(0, raw)) : 0) as Step;
+  const step = (Number.isFinite(raw) ? Math.min(6, Math.max(0, raw)) : 0) as Step;
 
   function goTo(n: number) {
     router.push(`/onboarding?step=${n}`);
@@ -66,11 +67,10 @@ function OnboardingFlow() {
   }
 
   function next() {
-    if (step >= 5) {
-      // Step 5 (CGM) is the final step. Skipping or hitting the
-      // top-right Skip from CGM completes onboarding without a
-      // CGM connection — the user lands on /dashboard and can
-      // wire up a CGM later from Settings.
+    if (step >= 6) {
+      // Step 6 (Install) is the final step. Hitting Continue or
+      // either Skip surface completes onboarding and lands the
+      // user on /dashboard.
       void complete();
       return;
     }
@@ -89,5 +89,6 @@ function OnboardingFlow() {
   if (step === 2) return <LogMealStep onNext={next} onBack={back} onSkip={skip} />;
   if (step === 3) return <EngineStep onNext={next} onBack={back} onSkip={skip} />;
   if (step === 4) return <InsightsStep onNext={next} onBack={back} />;
-  return <CgmStep onSkip={skip} onBack={back} primaryDisabled={submitting} />;
+  if (step === 5) return <CgmStep onSkip={() => goTo(6)} onBack={back} primaryDisabled={submitting} />;
+  return <InstallStep onNext={next} onBack={back} onSkip={skip} />;
 }

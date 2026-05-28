@@ -2802,6 +2802,22 @@
       "method_medtronic_nightscout_body": "Via CareLink uploader into your Nightscout instance.",
       "method_other_apple_health_body": "Works with any CGM that syncs to Apple Health (iOS).",
       "method_other_nightscout_body": "If your CGM writes readings into a Nightscout instance."
+    },
+    "install": {
+      "headline": "Add Glev to your home screen",
+      "sub": "Make Glev feel like a native app — no App Store needed.",
+      "android_title": "Android (Chrome)",
+      "android_step_1": "Open Glev in Chrome and tap the three-dot menu (⋮) in the top right.",
+      "android_step_2": "Tap \"Install app\" or \"Add to Home screen\".",
+      "android_step_3": "Confirm by tapping \"Install\" in the dialog that appears.",
+      "android_step_4": "Glev now appears as an app icon on your home screen.",
+      "ios_title": "iPhone / iPad (Safari)",
+      "ios_step_1": "Open Glev in Safari and tap the Share icon (□↑) at the bottom.",
+      "ios_step_2": "Scroll down and tap \"Add to Home Screen\".",
+      "ios_step_3": "Adjust the name if you like and tap \"Add\".",
+      "ios_step_4": "Glev now appears as an app icon on your home screen.",
+      "done": "Done",
+      "skip_later": "Skip — I'll do this later"
     }
   },
   "setupPage": {
