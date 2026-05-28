@@ -207,6 +207,72 @@ function LegalPageInner() {
             <h2><span className="num">11</span> Änderungen</h2>
             <p>Wir behalten uns vor, diese Datenschutzerklärung bei Bedarf anzupassen. Bei wesentlichen Änderungen werden registrierte Nutzer per E-Mail informiert. <strong>Stand: Mai 2026.</strong></p>
           </section>
+
+          <section id="dse-12">
+            <h2><span className="num">12</span> Android-App (Glev) – Google Play Data Safety</h2>
+
+            <div className="info-box">
+              <strong>📱 Dieser Abschnitt gilt für die Glev Android-App im Google Play Store</strong>
+              Die nachfolgenden Angaben spiegeln exakt die im Google Play Data-Safety-Formular deklarierten Datenkategorien. / The information below reflects exactly the data categories declared in the Google Play Data Safety form.
+            </div>
+
+            <h3>12.1 Erhobene Datenkategorien / Data collected</h3>
+            <table>
+              <thead>
+                <tr>
+                  <th>Kategorie / Category</th>
+                  <th>Daten / Data</th>
+                  <th>Zweck / Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><strong>Konto / Account</strong></td>
+                  <td>E-Mail-Adresse / Email address</td>
+                  <td>Anmeldung &amp; Kontoverwaltung / Sign-in &amp; account management</td>
+                </tr>
+                <tr>
+                  <td><strong>Gesundheit &amp; Fitness / Health &amp; Fitness</strong></td>
+                  <td>Blutzuckerwerte, Insulindosen, Mahlzeiten, Sport, Zyklus- und Symptomnotizen / Blood glucose readings, insulin doses, meals, exercise, cycle &amp; symptom notes</td>
+                  <td>Kernfunktion der App – Tracking und Auswertung / Core app function – tracking and analysis</td>
+                </tr>
+                <tr>
+                  <td><strong>App-Aktivität / App activity</strong></td>
+                  <td>In-App-Diagnose (keine Drittanbieter-Analyse-SDKs) / In-app diagnostics (no third-party analytics SDK)</td>
+                  <td>Fehlerbehebung und App-Stabilität / Bug fixing and app stability</td>
+                </tr>
+              </tbody>
+            </table>
+
+            <h3>12.2 Datenweitergabe / Data sharing</h3>
+            <p><strong>DE:</strong> Es werden <strong>keine</strong> Daten an Dritte weitergegeben. Alle Gesundheits- und Kontodaten verbleiben auf unseren Servern (Supabase EU-Region Irland).</p>
+            <p><strong>EN:</strong> <strong>No data is shared with third parties.</strong> All health and account data stays on our servers (Supabase EU region, Ireland).</p>
+
+            <h3>12.3 Verschlüsselung / Encryption</h3>
+            <p><strong>DE:</strong> Alle Daten werden <strong>verschlüsselt übertragen</strong> (HTTPS/TLS) und verschlüsselt gespeichert (Encryption at Rest via Supabase).</p>
+            <p><strong>EN:</strong> All data is <strong>encrypted in transit</strong> (HTTPS/TLS) and encrypted at rest (via Supabase).</p>
+
+            <h3>12.4 Speicherdauer / Retention</h3>
+            <p><strong>DE:</strong> Konto- und Gesundheitsdaten werden bis zur Kontolöschung gespeichert. Nach Kontolöschung werden alle personenbezogenen Daten innerhalb von <strong>30 Tagen</strong> gelöscht.</p>
+            <p><strong>EN:</strong> Account and health data is retained until account deletion. After deletion, all personal data is removed within <strong>30 days</strong>.</p>
+
+            <h3>12.5 Datenlöschung / Data deletion</h3>
+            <div className="highlight-box">
+              <strong>🗑️ So kannst du deine Daten löschen / How to delete your data</strong>
+              <p style={{ marginBottom: "0.5rem" }}><strong>DE:</strong> Du kannst dein Konto und alle gespeicherten Daten jederzeit löschen:</p>
+              <ol style={{ paddingLeft: "1.4rem", marginBottom: "0.85rem" }}>
+                <li>Glev-App öffnen → <strong>Einstellungen</strong> → <strong>Konto löschen</strong></li>
+                <li>Alternativ per E-Mail an <a href="mailto:support@glev.app">support@glev.app</a> mit dem Betreff „Datenlöschung"</li>
+              </ol>
+              <p style={{ marginBottom: "0.5rem" }}><strong>EN:</strong> You can delete your account and all stored data at any time:</p>
+              <ol style={{ paddingLeft: "1.4rem", marginBottom: 0 }}>
+                <li>Open the Glev app → <strong>Settings</strong> → <strong>Delete account</strong></li>
+                <li>Alternatively, email <a href="mailto:support@glev.app">support@glev.app</a> with the subject "Data deletion"</li>
+              </ol>
+            </div>
+            <p><strong>DE:</strong> Nach Eingang deines Löschantrags werden alle personenbezogenen Daten innerhalb von 30 Tagen unwiderruflich gelöscht. Eine Bestätigung erhältst du per E-Mail.</p>
+            <p><strong>EN:</strong> Upon receiving your deletion request, all personal data will be irreversibly deleted within 30 days. You will receive a confirmation by email.</p>
+          </section>
         </div>
       </div>
 
