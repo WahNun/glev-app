@@ -244,7 +244,7 @@ async function applyBaseline() {
   await ensureTrackingTable(ref, token);
   const alreadyRecorded = await getAppliedMigrations(ref, token);
 
-  let count = 0;
+  const pending = [];
   for (const filename of allFiles) {
     if (alreadyRecorded.has(filename)) {
       info(`  skip (already recorded): ${filename}`);
@@ -253,24 +253,35 @@ async function applyBaseline() {
     const filePath = path.join(MIGRATIONS_DIR, filename);
     const sql = await readFile(filePath, 'utf8');
     const hash = sha256Of(sql);
-    const safeName = filename.replace(/'/g, "''");
-    await runQuery(
-      ref,
-      token,
-      `INSERT INTO schema_migrations (filename, sha256)
-       VALUES ('${safeName}', '${hash}')
-       ON CONFLICT (filename) DO NOTHING;`
-    );
-    ok(`  baselined: ${filename}`);
-    count++;
+    pending.push({ filename, hash });
   }
 
-  if (count === 0) {
+  if (pending.length === 0) {
     ok('All files were already recorded — nothing new to baseline.');
-  } else {
-    ok(`Baseline complete — recorded ${count} file(s).`);
-    ok('From now on, --all will only apply NEW migration files added after this baseline.');
+    return;
   }
+
+  info(`Inserting ${pending.length} new record(s) in a single batch query…`);
+
+  const valuesList = pending
+    .map(({ filename, hash }) => {
+      const safeName = filename.replace(/'/g, "''");
+      return `('${safeName}', '${hash}')`;
+    })
+    .join(',\n    ');
+
+  await runQuery(
+    ref,
+    token,
+    `INSERT INTO schema_migrations (filename, sha256)\n  VALUES\n    ${valuesList}\n  ON CONFLICT (filename) DO NOTHING;`
+  );
+
+  for (const { filename } of pending) {
+    ok(`  baselined: ${filename}`);
+  }
+
+  ok(`Baseline complete — recorded ${pending.length} file(s).`);
+  ok('From now on, --all will only apply NEW migration files added after this baseline.');
 }
 
 // ── single-file mode (original behaviour) ────────────────────────────────────
