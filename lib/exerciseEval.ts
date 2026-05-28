@@ -255,6 +255,28 @@ export function exerciseTypeLabel(t: ExerciseType): string {
   }
 }
 
+/**
+ * Short glyph shown inside the monogram circle on the dashboard's
+ * recent-entries row. Team sports get an emoji so the list is
+ * scannable at a glance; other types keep a single Latin letter so
+ * the circle stays visually calm.
+ *
+ *   ⚽ football   🎾 tennis   🏐 volleyball   🏀 basketball
+ *   C  cycling    S  swimming
+ *   E  everything else (cardio, hiit, run, strength, yoga, …)
+ */
+export function exerciseTypeGlyph(type: ExerciseType): string {
+  switch (type) {
+    case "football":   return "⚽";
+    case "tennis":     return "🎾";
+    case "volleyball": return "🏐";
+    case "basketball": return "🏀";
+    case "cycling":    return "C";
+    case "swimming":   return "S";
+    default:           return "E";
+  }
+}
+
 /** Locale-aware version of `exerciseTypeLabel`. Pass a translator
  *  bound to the `insights` namespace (e.g. `useTranslations("insights")`)
  *  — that's where the `exercise_type_*` keys live in

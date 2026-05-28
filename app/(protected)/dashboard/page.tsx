@@ -11,7 +11,7 @@ import { type InsulinType } from "@/lib/iob";
 import IOBCard from "@/components/IOBCard";
 import IOBHistoryChart from "@/components/IOBHistoryChart";
 import { fetchRecentExerciseLogs, type ExerciseLog } from "@/lib/exercise";
-import { evaluateExercise, exerciseTypeLabelI18n } from "@/lib/exerciseEval";
+import { evaluateExercise, exerciseTypeLabelI18n, exerciseTypeGlyph } from "@/lib/exerciseEval";
 import { fetchMacroTargets, DEFAULT_MACRO_TARGETS, type MacroTargets, getTargetRange, fetchTargetRange, type TargetRange, fetchInsulinType } from "@/lib/userSettings";
 import { fetchCgmSamples } from "@/lib/cgmSamplesClient";
 import { TYPE_COLORS, getEvalColor, chipLabelsFrom } from "@/lib/mealTypes";
@@ -1510,6 +1510,7 @@ function UnifiedRecentRow({ row, locale, onClick }: { row: RecentRow; locale: st
     row.kind === "meal"     ? "M"
     : row.kind === "bolus"  ? "B"
     : row.kind === "basal"  ? "L"   // Long-acting — disambiguates from bolus B
+    : row.kind === "exercise" ? exerciseTypeGlyph(row.exercise!.exercise_type)
     :                         "E";
 
   const ts = parseDbDate(row.ts);
@@ -1561,13 +1562,18 @@ function UnifiedRecentRow({ row, locale, onClick }: { row: RecentRow; locale: st
         alignItems:"center", cursor:"pointer",
       }}
     >
-      {/* Left circle */}
+      {/* Left circle — emoji glyphs (length > 1) get a slightly larger
+           font size and drop the monospace weight since it doesn't apply
+           to emoji renderers; letter glyphs keep the original mono style. */}
       <div style={{
         width:36, height:36, borderRadius:"50%",
         background:`${accent.color}20`, color:accent.color,
         display:"flex", alignItems:"center", justifyContent:"center",
-        fontWeight:800, fontSize:14, flexShrink:0,
-        border:`1px solid ${accent.color}40`, fontFamily:"var(--font-mono)",
+        fontWeight: letter.length > 1 ? 400 : 800,
+        fontSize:   letter.length > 1 ? 18  : 14,
+        flexShrink:0,
+        border:`1px solid ${accent.color}40`,
+        fontFamily: letter.length > 1 ? "sans-serif" : "var(--font-mono)",
       }}>
         {letter}
       </div>
