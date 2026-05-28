@@ -23,6 +23,7 @@ import {
   day30TrustpilotEmail,
   trialDay6ReminderEmail,
   trialExpiredEmail,
+  reEngagementEmail,
 } from "@/lib/emails/drip-templates";
 import {
   trialWelcomeHtml,
@@ -221,6 +222,18 @@ function buildTemplates(
         whenSent: isEn
           ? "7 days after trial start — drip cron at 09:00 UTC"
           : "7 Tage nach Trial-Start — Drip-Cron um 09:00 UTC",
+        subject: r.subject,
+        html: r.html,
+      };
+    })(),
+    (() => {
+      const r = reEngagementEmail(name, email, locale);
+      return {
+        key: "re-engagement",
+        label: isEn ? "Free Trial — Re-Engagement (48h inactiv)" : "Free Trial — Re-Engagement (48h inaktiv)",
+        whenSent: isEn
+          ? "Automatically scheduled by daily drip cron when a trial user hasn't been seen for 48h — sent once per user"
+          : "Automatisch vom täglichen Drip-Cron geplant, wenn ein Trial-User 48h nicht aktiv war — wird nur einmal pro User verschickt",
         subject: r.subject,
         html: r.html,
       };

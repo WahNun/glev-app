@@ -19,7 +19,8 @@ export type DripEmailType =
   | "day14_feedback"
   | "day30_trustpilot"
   | "trial_day6_reminder"
-  | "trial_expired";
+  | "trial_expired"
+  | "re_engagement";
 
 export interface DripRendered {
   from: string;
@@ -122,6 +123,15 @@ function wrap(
 </html>`;
 }
 
+// Click-Tracking: alle CTA-Links gehen durch /api/email/click?t=<id>&u=<base64url>
+// so dass der erste Klick in email_drip_schedule.clicked_at festgehalten wird.
+// Ohne scheduleId (z. B. in der Admin-Vorschau) bleibt der Link unverändert.
+function trackLink(url: string, scheduleId?: string): string {
+  if (!scheduleId) return url;
+  const encoded = Buffer.from(url).toString("base64url");
+  return `${APP_URL}/api/email/click?t=${encodeURIComponent(scheduleId)}&u=${encoded}`;
+}
+
 function greeting(firstName: string | null, locale: EmailLocale): string {
   const safe = escapeHtml(firstName);
   if (locale === "en") return safe ? `Hi ${safe}` : "Hi there";
@@ -130,8 +140,8 @@ function greeting(firstName: string | null, locale: EmailLocale): string {
 
 // ---- Tag 7 — Insights-Tab Feature-Highlight -------------------------------
 
-function day7BodyDe(firstName: string | null): string {
-  const insightsUrl = `${APP_URL}/insights`;
+function day7BodyDe(firstName: string | null, scheduleId?: string): string {
+  const insightsUrl = trackLink(`${APP_URL}/insights`, scheduleId);
   return `
     <p style="margin:0 0 20px;font-size:18px;font-weight:600;color:#0f172a;">${greeting(firstName, "de")} 👋</p>
     <p style="margin:0 0 16px;font-size:15px;line-height:1.7;color:#374151;">
@@ -154,8 +164,8 @@ function day7BodyDe(firstName: string | null): string {
   `;
 }
 
-function day7BodyEn(firstName: string | null): string {
-  const insightsUrl = `${APP_URL}/insights`;
+function day7BodyEn(firstName: string | null, scheduleId?: string): string {
+  const insightsUrl = trackLink(`${APP_URL}/insights`, scheduleId);
   return `
     <p style="margin:0 0 20px;font-size:18px;font-weight:600;color:#0f172a;">${greeting(firstName, "en")} 👋</p>
     <p style="margin:0 0 16px;font-size:15px;line-height:1.7;color:#374151;">
@@ -182,6 +192,7 @@ export function day7InsightsEmail(
   firstName: string | null,
   email: string,
   locale: EmailLocale = "de",
+  scheduleId?: string,
 ): DripRendered {
   const unsubscribeUrl = buildUnsubscribeUrl(APP_URL, email);
   const subject =
@@ -189,7 +200,7 @@ export function day7InsightsEmail(
       ? "Your first week with Glev — check the Insights"
       : "Deine erste Woche mit Glev — schau in die Insights";
   const title = locale === "en" ? "Your first week with Glev" : "Deine erste Woche mit Glev";
-  const body = locale === "en" ? day7BodyEn(firstName) : day7BodyDe(firstName);
+  const body = locale === "en" ? day7BodyEn(firstName, scheduleId) : day7BodyDe(firstName, scheduleId);
   return { from: FROM, subject, html: wrap(title, body, unsubscribeUrl, locale) };
 }
 
@@ -268,8 +279,8 @@ export function day14FeedbackEmail(
 
 // ---- Tag 30 — Trustpilot-Bewertungsanfrage --------------------------------
 
-function day30BodyDe(firstName: string | null): string {
-  const trustpilotUrl = "https://www.trustpilot.com/evaluate/glev.app";
+function day30BodyDe(firstName: string | null, scheduleId?: string): string {
+  const trustpilotUrl = trackLink("https://www.trustpilot.com/evaluate/glev.app", scheduleId);
   return `
     <p style="margin:0 0 20px;font-size:18px;font-weight:600;color:#0f172a;">${greeting(firstName, "de")} 👋</p>
     <p style="margin:0 0 16px;font-size:15px;line-height:1.7;color:#374151;">
@@ -292,8 +303,8 @@ function day30BodyDe(firstName: string | null): string {
   `;
 }
 
-function day30BodyEn(firstName: string | null): string {
-  const trustpilotUrl = "https://www.trustpilot.com/evaluate/glev.app";
+function day30BodyEn(firstName: string | null, scheduleId?: string): string {
+  const trustpilotUrl = trackLink("https://www.trustpilot.com/evaluate/glev.app", scheduleId);
   return `
     <p style="margin:0 0 20px;font-size:18px;font-weight:600;color:#0f172a;">${greeting(firstName, "en")} 👋</p>
     <p style="margin:0 0 16px;font-size:15px;line-height:1.7;color:#374151;">
@@ -320,6 +331,7 @@ export function day30TrustpilotEmail(
   firstName: string | null,
   email: string,
   locale: EmailLocale = "de",
+  scheduleId?: string,
 ): DripRendered {
   const unsubscribeUrl = buildUnsubscribeUrl(APP_URL, email);
   const subject =
@@ -327,14 +339,14 @@ export function day30TrustpilotEmail(
       ? "One month of Glev — would you review us?"
       : "Ein Monat Glev — magst du uns bewerten?";
   const title = locale === "en" ? "One month of Glev" : "Ein Monat Glev";
-  const body = locale === "en" ? day30BodyEn(firstName) : day30BodyDe(firstName);
+  const body = locale === "en" ? day30BodyEn(firstName, scheduleId) : day30BodyDe(firstName, scheduleId);
   return { from: FROM, subject, html: wrap(title, body, unsubscribeUrl, locale) };
 }
 
 // ---- Trial Day 6 — 1 Tag vor Ablauf ---------------------------------------
 
-function trial6BodyDe(firstName: string | null): string {
-  const upgradeUrl = `${APP_URL}/#preise`;
+function trial6BodyDe(firstName: string | null, scheduleId?: string): string {
+  const upgradeUrl = trackLink(`${APP_URL}/#preise`, scheduleId);
   return `
     <p style="margin:0 0 20px;font-size:18px;font-weight:600;color:#0f172a;">${greeting(firstName, "de")} 👋</p>
     <p style="margin:0 0 16px;font-size:15px;line-height:1.7;color:#374151;">
@@ -357,8 +369,8 @@ function trial6BodyDe(firstName: string | null): string {
   `;
 }
 
-function trial6BodyEn(firstName: string | null): string {
-  const upgradeUrl = `${APP_URL}/#pricing`;
+function trial6BodyEn(firstName: string | null, scheduleId?: string): string {
+  const upgradeUrl = trackLink(`${APP_URL}/#pricing`, scheduleId);
   return `
     <p style="margin:0 0 20px;font-size:18px;font-weight:600;color:#0f172a;">${greeting(firstName, "en")} 👋</p>
     <p style="margin:0 0 16px;font-size:15px;line-height:1.7;color:#374151;">
@@ -385,6 +397,7 @@ export function trialDay6ReminderEmail(
   firstName: string | null,
   email: string,
   locale: EmailLocale = "de",
+  scheduleId?: string,
 ): DripRendered {
   const unsubscribeUrl = buildUnsubscribeUrl(APP_URL, email);
   const subject =
@@ -392,14 +405,14 @@ export function trialDay6ReminderEmail(
       ? "Your Glev trial ends tomorrow"
       : "Dein Glev-Testzeitraum endet morgen";
   const title = locale === "en" ? "Trial ends tomorrow" : "Testzeitraum endet morgen";
-  const body = locale === "en" ? trial6BodyEn(firstName) : trial6BodyDe(firstName);
+  const body = locale === "en" ? trial6BodyEn(firstName, scheduleId) : trial6BodyDe(firstName, scheduleId);
   return { from: FROM, subject, html: wrap(title, body, unsubscribeUrl, locale) };
 }
 
 // ---- Trial Day 7 — Abgelaufen, Upgrade-CTA --------------------------------
 
-function trialExpiredBodyDe(firstName: string | null): string {
-  const upgradeUrl = `${APP_URL}/#preise`;
+function trialExpiredBodyDe(firstName: string | null, scheduleId?: string): string {
+  const upgradeUrl = trackLink(`${APP_URL}/#preise`, scheduleId);
   return `
     <p style="margin:0 0 20px;font-size:18px;font-weight:600;color:#0f172a;">${greeting(firstName, "de")},</p>
     <p style="margin:0 0 16px;font-size:15px;line-height:1.7;color:#374151;">
@@ -430,8 +443,8 @@ function trialExpiredBodyDe(firstName: string | null): string {
   `;
 }
 
-function trialExpiredBodyEn(firstName: string | null): string {
-  const upgradeUrl = `${APP_URL}/#pricing`;
+function trialExpiredBodyEn(firstName: string | null, scheduleId?: string): string {
+  const upgradeUrl = trackLink(`${APP_URL}/#pricing`, scheduleId);
   return `
     <p style="margin:0 0 20px;font-size:18px;font-weight:600;color:#0f172a;">${greeting(firstName, "en")},</p>
     <p style="margin:0 0 16px;font-size:15px;line-height:1.7;color:#374151;">
@@ -466,6 +479,7 @@ export function trialExpiredEmail(
   firstName: string | null,
   email: string,
   locale: EmailLocale = "de",
+  scheduleId?: string,
 ): DripRendered {
   const unsubscribeUrl = buildUnsubscribeUrl(APP_URL, email);
   const subject =
@@ -473,7 +487,76 @@ export function trialExpiredEmail(
       ? "Your Glev trial has ended — choose a plan"
       : "Dein Glev-Testzeitraum ist abgelaufen — Plan wählen";
   const title = locale === "en" ? "Trial ended" : "Testzeitraum abgelaufen";
-  const body = locale === "en" ? trialExpiredBodyEn(firstName) : trialExpiredBodyDe(firstName);
+  const body = locale === "en" ? trialExpiredBodyEn(firstName, scheduleId) : trialExpiredBodyDe(firstName, scheduleId);
+  return { from: FROM, subject, html: wrap(title, body, unsubscribeUrl, locale) };
+}
+
+// ---- Re-Engagement — 48h kein Login während activem Trial -----------------
+
+function reEngagementBodyDe(firstName: string | null, scheduleId?: string): string {
+  const appUrl = trackLink(`${APP_URL}/dashboard`, scheduleId);
+  return `
+    <p style="margin:0 0 20px;font-size:18px;font-weight:600;color:#0f172a;">${greeting(firstName, "de")} 👋</p>
+    <p style="margin:0 0 16px;font-size:15px;line-height:1.7;color:#374151;">
+      wir haben gemerkt, dass du die letzten Tage nicht in Glev warst. Das ist völlig okay — manchmal ist der Alltag einfach zu voll.
+    </p>
+    <p style="margin:0 0 16px;font-size:15px;line-height:1.7;color:#374151;">
+      Wenn du magst: Alles ist noch da. Deine Einträge, deine Insulindaten, deine Glukosekurven — genau so wie du sie gelassen hast.
+    </p>
+    <table cellpadding="0" cellspacing="0" style="margin:24px auto 16px;">
+      <tr><td style="background:#4F6EF7;border-radius:8px;">
+        <a href="${appUrl}" style="display:inline-block;padding:14px 30px;color:#ffffff;font-size:15px;font-weight:700;text-decoration:none;letter-spacing:0.2px;">Glev öffnen →</a>
+      </td></tr>
+    </table>
+    <p style="margin:0 0 20px;font-size:15px;line-height:1.7;color:#374151;">
+      Falls etwas nicht funktioniert oder du eine Frage hast — antworte einfach auf diese Mail. Ich bin direkt erreichbar.
+    </p>
+    <p style="margin:0;font-size:15px;line-height:1.7;color:#374151;">
+      Bis bald,<br /><strong>Lucas</strong><br /><span style="color:#6b7280;">Glev Team</span>
+    </p>
+  `;
+}
+
+function reEngagementBodyEn(firstName: string | null, scheduleId?: string): string {
+  const appUrl = trackLink(`${APP_URL}/dashboard`, scheduleId);
+  return `
+    <p style="margin:0 0 20px;font-size:18px;font-weight:600;color:#0f172a;">${greeting(firstName, "en")} 👋</p>
+    <p style="margin:0 0 16px;font-size:15px;line-height:1.7;color:#374151;">
+      we noticed you haven't been in Glev for a couple of days. That's okay — life gets busy.
+    </p>
+    <p style="margin:0 0 16px;font-size:15px;line-height:1.7;color:#374151;">
+      Whenever you're ready: everything is still there. Your entries, your insulin logs, your glucose curves — exactly as you left them.
+    </p>
+    <table cellpadding="0" cellspacing="0" style="margin:24px auto 16px;">
+      <tr><td style="background:#4F6EF7;border-radius:8px;">
+        <a href="${appUrl}" style="display:inline-block;padding:14px 30px;color:#ffffff;font-size:15px;font-weight:700;text-decoration:none;letter-spacing:0.2px;">Open Glev →</a>
+      </td></tr>
+    </table>
+    <p style="margin:0 0 20px;font-size:15px;line-height:1.7;color:#374151;">
+      If something wasn't working or you have a question — just reply to this email. I'm here.
+    </p>
+    <p style="margin:0;font-size:15px;line-height:1.7;color:#374151;">
+      Talk soon,<br /><strong>Lucas</strong><br /><span style="color:#6b7280;">Glev Team</span>
+    </p>
+  `;
+}
+
+export function reEngagementEmail(
+  firstName: string | null,
+  email: string,
+  locale: EmailLocale = "de",
+  scheduleId?: string,
+): DripRendered {
+  const unsubscribeUrl = buildUnsubscribeUrl(APP_URL, email);
+  const subject =
+    locale === "en"
+      ? "Everything okay? Your Glev account is waiting"
+      : "Alles okay? Dein Glev-Konto wartet auf dich";
+  const title = locale === "en" ? "We miss you" : "Wir vermissen dich";
+  const body =
+    locale === "en"
+      ? reEngagementBodyEn(firstName, scheduleId)
+      : reEngagementBodyDe(firstName, scheduleId);
   return { from: FROM, subject, html: wrap(title, body, unsubscribeUrl, locale) };
 }
 
@@ -484,18 +567,21 @@ export function renderDripEmail(
   firstName: string | null,
   email: string,
   locale: EmailLocale = "de",
+  scheduleId?: string,
 ): DripRendered {
   switch (emailType) {
     case "day7_insights":
-      return day7InsightsEmail(firstName, email, locale);
+      return day7InsightsEmail(firstName, email, locale, scheduleId);
     case "day14_feedback":
       return day14FeedbackEmail(firstName, email, locale);
     case "day30_trustpilot":
-      return day30TrustpilotEmail(firstName, email, locale);
+      return day30TrustpilotEmail(firstName, email, locale, scheduleId);
     case "trial_day6_reminder":
-      return trialDay6ReminderEmail(firstName, email, locale);
+      return trialDay6ReminderEmail(firstName, email, locale, scheduleId);
     case "trial_expired":
-      return trialExpiredEmail(firstName, email, locale);
+      return trialExpiredEmail(firstName, email, locale, scheduleId);
+    case "re_engagement":
+      return reEngagementEmail(firstName, email, locale, scheduleId);
     default: {
       const _exhaustive: never = emailType;
       throw new Error(`Unknown drip email type: ${String(_exhaustive)}`);

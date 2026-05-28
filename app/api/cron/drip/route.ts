@@ -39,6 +39,81 @@ import {
   type DripEmailType,
 } from "@/lib/emails/drip-templates";
 
+// ---- Re-Engagement Auto-Scheduler -----------------------------------------
+//
+// Läuft einmal pro Cron-Aufruf (vor der eigentlichen Send-Queue).
+// Sucht Trial-User, die seit ≥48h nicht mehr aktiv waren, und planted
+// eine re_engagement-Row in email_drip_schedule — falls noch keine
+// existiert. Der normale Send-Loop verschickt sie dann im selben Lauf.
+//
+// Bedingungen:
+//   - profiles.trial_end_at IS NOT NULL (Trial-User)
+//   - profiles.trial_end_at > NOW() (Trial noch aktiv)
+//   - profiles.last_seen_at < NOW() - 48h ODER last_seen_at IS NULL
+//   - Kein existierender re_engagement-Eintrag für diese E-Mail-Adresse
+
+async function scheduleReEngagementBatch(
+  admin: ReturnType<typeof getSupabaseAdmin>,
+): Promise<number> {
+  const now = new Date();
+  const fortyEightHoursAgo = new Date(
+    now.getTime() - 48 * 60 * 60 * 1000,
+  ).toISOString();
+
+  const { data: inactiveProfiles, error: profileErr } = await admin
+    .from("profiles")
+    .select("user_id, language")
+    .not("trial_end_at", "is", null)
+    .gt("trial_end_at", now.toISOString())
+    .or(`last_seen_at.is.null,last_seen_at.lt.${fortyEightHoursAgo}`);
+
+  if (profileErr || !inactiveProfiles || inactiveProfiles.length === 0) {
+    return 0;
+  }
+
+  // Auth-User-Daten holen (E-Mail + Name)
+  const { data: authData } = await admin.auth.admin.listUsers({ perPage: 1000 });
+  const userMap = new Map(
+    (authData?.users ?? []).map((u) => [u.id, u]),
+  );
+
+  let scheduled = 0;
+  for (const profile of inactiveProfiles) {
+    const user = userMap.get(profile.user_id as string);
+    if (!user?.email) continue;
+
+    // Bereits geplant?
+    const { data: existing } = await admin
+      .from("email_drip_schedule")
+      .select("id")
+      .eq("email", user.email)
+      .eq("email_type", "re_engagement")
+      .maybeSingle();
+
+    if (existing) continue;
+
+    const firstName =
+      (user.user_metadata?.full_name as string | undefined)?.split(" ")[0] ??
+      null;
+    const locale = (profile.language as string) === "en" ? "en" : "de";
+
+    const { error: insertErr } = await admin
+      .from("email_drip_schedule")
+      .insert({
+        email: user.email,
+        first_name: firstName,
+        tier: "free_trial",
+        email_type: "re_engagement",
+        scheduled_at: now.toISOString(),
+        locale,
+      });
+
+    if (!insertErr) scheduled++;
+  }
+
+  return scheduled;
+}
+
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
@@ -98,6 +173,13 @@ async function handle(req: NextRequest): Promise<NextResponse> {
 
   const admin = getSupabaseAdmin();
   const nowIso = new Date().toISOString();
+
+  // 0. Re-Engagement: inaktive Trial-User erkennen und planen.
+  const reEngagementScheduled = await scheduleReEngagementBatch(admin);
+  if (reEngagementScheduled > 0) {
+    // eslint-disable-next-line no-console
+    console.log("[cron/drip] re-engagement scheduled:", { count: reEngagementScheduled });
+  }
 
   // 1. Fällige, noch nicht versendete Rows holen, älteste zuerst.
   //    Wir holen auch last_error IS NOT NULL Rows (stuck/failed) —
@@ -191,6 +273,7 @@ async function handle(req: NextRequest): Promise<NextResponse> {
         raw.first_name,
         raw.email,
         locale,
+        raw.id,
       );
       const { data, error } = await resend.emails.send({
         from: rendered.from,

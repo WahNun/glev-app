@@ -17,6 +17,7 @@ import ThemeToggle from "@/components/ThemeToggle";
 import { useFeatureFlag } from "@/lib/featureFlags";
 import { useScreenContext } from "@/hooks/useScreenContext";
 import { EngineHeaderProvider, useEngineHeader } from "@/lib/engineHeaderContext";
+import TrialCountdownBanner from "@/components/TrialCountdownBanner";
 import { EngineSourceHeaderProvider, useEngineSourceHeader } from "@/lib/engineSourceHeaderContext";
 import { EngineWizardStepProvider, useEngineWizardStep } from "@/lib/engineWizardStepContext";
 import { VoiceRecordingProvider, useVoiceRecording } from "@/lib/voiceRecordingContext";
@@ -137,6 +138,15 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
       router.push(path);
     },
   });
+  // Heartbeat: last_seen_at einmal pro Session aktualisieren (Re-Engagement-Tracking).
+  useEffect(() => {
+    const SESSION_KEY = "glev_heartbeat_sent";
+    if (typeof sessionStorage !== "undefined" && !sessionStorage.getItem(SESSION_KEY)) {
+      sessionStorage.setItem(SESSION_KEY, "1");
+      fetch("/api/me/heartbeat", { method: "POST", credentials: "include" }).catch(() => {});
+    }
+  }, []);
+
   // CGM-source for the "● Live" header pill on /dashboard.
   const [cgmSource, setCgmSource] = useState<string | null>(null);
   useEffect(() => {
@@ -963,6 +973,7 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
       </aside>
 
       <main ref={mainRef} className="glev-main" style={{ flex: 1, padding: "28px 32px", maxWidth: "100%", overflowX: "hidden", zoom: 1.12 }}>
+        <TrialCountdownBanner />
         {children}
       </main>
 
