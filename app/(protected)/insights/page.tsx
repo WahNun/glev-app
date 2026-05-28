@@ -285,6 +285,9 @@ export default function InsightsPage() {
   // card retitled). Null/unset is treated as "show everything" so
   // pre-onboarding users aren't worse off.
   const [sex, setSex] = useState<Sex | null>(null);
+  // Which symptom row (by key) is currently expanded to show the
+  // individual CGM readings. Null = all collapsed.
+  const [expandedSymptom, setExpandedSymptom] = useState<string | null>(null);
   // User-set manual ICR loaded from `user_settings.icr_g_per_unit`
   // (Lucas-Spec May 14 — see lib/userSettings.ts EngineIcrInfo for the
   // sister engine-computed value). Shown alongside the engine ICR in
@@ -3211,14 +3214,14 @@ export default function InsightsPage() {
       }
 
       // Symptom ranking: count occurrences and track running severity sum.
-      const symStats: Record<string, { count: number; sevSum: number; glucoseSum: number; glucoseCount: number }> = {};
+      const symStats: Record<string, { count: number; sevSum: number; glucoseSum: number; glucoseCount: number; glucoseEntries: { value: number; occurredAt: string }[] }> = {};
       let totalSymptomEntries = 0;
       for (const s of symptomLogs) {
         const occ = new Date(s.occurred_at).getTime();
         if (occ < windowStartMs || occ >= windowEndMs) continue;
         totalSymptomEntries += 1;
         for (const sym of s.symptom_types || []) {
-          const cur = symStats[sym] ||= { count: 0, sevSum: 0, glucoseSum: 0, glucoseCount: 0 };
+          const cur = symStats[sym] ||= { count: 0, sevSum: 0, glucoseSum: 0, glucoseCount: 0, glucoseEntries: [] };
           cur.count += 1;
           // Per-symptom severity from the severities map. Fall back to
           // the row average when a legacy / mis-keyed entry is missing
@@ -3240,16 +3243,24 @@ export default function InsightsPage() {
           if (typeof s.cgm_glucose_at_log === "number" && s.cgm_glucose_at_log !== null) {
             cur.glucoseSum += s.cgm_glucose_at_log;
             cur.glucoseCount += 1;
+            cur.glucoseEntries.push({ value: s.cgm_glucose_at_log, occurredAt: s.occurred_at });
           }
         }
       }
       const topSymptoms = Object.entries(symStats)
-        .map(([k, v]) => ({
-          key: k as SymptomType,
-          count: v.count,
-          avgSev: v.sevSum / v.count,
-          avgGlucose: v.glucoseCount > 0 ? Math.round(v.glucoseSum / v.glucoseCount) : null,
-        }))
+        .map(([k, v]) => {
+          const entries = [...v.glucoseEntries].sort((a, b) => a.occurredAt.localeCompare(b.occurredAt));
+          const values = entries.map(e => e.value);
+          return {
+            key: k as SymptomType,
+            count: v.count,
+            avgSev: v.sevSum / v.count,
+            avgGlucose: v.glucoseCount > 0 ? Math.round(v.glucoseSum / v.glucoseCount) : null,
+            minGlucose: values.length > 0 ? Math.min(...values) : null,
+            maxGlucose: values.length > 0 ? Math.max(...values) : null,
+            glucoseEntries: entries,
+          };
+        })
         .sort((a, b) => b.count - a.count)
         .slice(0, 3);
 
@@ -3392,30 +3403,85 @@ export default function InsightsPage() {
                   {tInsights("symptom_top_label")}
                 </div>
                 <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
-                  {topSymptoms.map(s => (
-                    <div key={s.key} style={{ display:"grid", gridTemplateColumns:"1fr auto auto auto", gap:8, alignItems:"center", padding:"6px 10px", background:"var(--surface-soft)", borderRadius:8 }}>
-                      <div style={{ fontSize:13, fontWeight:600, color:"var(--text)" }}>
-                        {tInsights(`symptom_${s.key}` as never)}
+                  {topSymptoms.map(s => {
+                    const isExpanded = expandedSymptom === s.key;
+                    const hasEntries = s.glucoseEntries.length > 0;
+                    return (
+                      <div key={s.key} style={{ background:"var(--surface-soft)", borderRadius:8, overflow:"hidden" }}>
+                        <button
+                          onClick={() => setExpandedSymptom(isExpanded ? null : s.key)}
+                          style={{ display:"grid", gridTemplateColumns:"1fr auto auto auto auto", gap:8, alignItems:"center", padding:"6px 10px", width:"100%", background:"transparent", border:"none", cursor:"pointer", textAlign:"left" }}
+                          aria-expanded={isExpanded}
+                        >
+                          <div style={{ fontSize:13, fontWeight:600, color:"var(--text)" }}>
+                            {tInsights(`symptom_${s.key}` as never)}
+                          </div>
+                          <div style={{ fontSize:12, color:"var(--text-dim)", fontFamily:"var(--font-mono)" }}>
+                            ×{s.count}
+                          </div>
+                          {s.avgGlucose !== null && (
+                            <div style={{ fontSize:12, color:"var(--text-dim)", fontFamily:"var(--font-mono)", whiteSpace:"nowrap" }}>
+                              ∅ {s.avgGlucose} mg/dL
+                            </div>
+                          )}
+                          {s.avgGlucose === null && <div />}
+                          <div style={{ display:"flex", gap:2 }} aria-label={`avg ${s.avgSev.toFixed(1)} of 5`}>
+                            {[1,2,3,4,5].map(n => (
+                              <span key={n} style={{
+                                width:5, height:5, borderRadius:99,
+                                background: n <= Math.round(s.avgSev) ? "#A78BFA" : "var(--border-strong)",
+                              }}/>
+                            ))}
+                          </div>
+                          <div style={{ fontSize:10, color:"var(--text-dim)", lineHeight:1 }}>
+                            {isExpanded ? "▲" : "▼"}
+                          </div>
+                        </button>
+                        {isExpanded && (
+                          <div style={{ padding:"8px 10px 10px", borderTop:"1px solid var(--border)" }}>
+                            {hasEntries ? (
+                              <>
+                                <div style={{ display:"flex", gap:12, marginBottom:8 }}>
+                                  <div style={{ fontSize:11, color:"var(--text-dim)" }}>
+                                    <span style={{ fontWeight:700, color:"var(--text)", fontFamily:"var(--font-mono)" }}>{s.minGlucose}</span>
+                                    {" "}{tInsights("symptom_detail_min")}
+                                  </div>
+                                  <div style={{ fontSize:11, color:"var(--text-dim)" }}>
+                                    <span style={{ fontWeight:700, color:"var(--text)", fontFamily:"var(--font-mono)" }}>{s.avgGlucose}</span>
+                                    {" "}∅
+                                  </div>
+                                  <div style={{ fontSize:11, color:"var(--text-dim)" }}>
+                                    <span style={{ fontWeight:700, color:"var(--text)", fontFamily:"var(--font-mono)" }}>{s.maxGlucose}</span>
+                                    {" "}{tInsights("symptom_detail_max")}
+                                  </div>
+                                  <div style={{ fontSize:11, color:"var(--text-dim)", marginLeft:"auto" }}>
+                                    mg/dL
+                                  </div>
+                                </div>
+                                <div style={{ display:"flex", flexDirection:"column", gap:4 }}>
+                                  {s.glucoseEntries.map((entry, idx) => {
+                                    const d = new Date(entry.occurredAt);
+                                    const dateStr = d.toLocaleDateString(locale, { day:"2-digit", month:"short" });
+                                    const timeStr = d.toLocaleTimeString(locale, { hour:"2-digit", minute:"2-digit" });
+                                    return (
+                                      <div key={idx} style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+                                        <div style={{ fontSize:11, color:"var(--text-dim)" }}>{dateStr} {timeStr}</div>
+                                        <div style={{ fontSize:12, fontWeight:600, fontFamily:"var(--font-mono)", color:"var(--text)" }}>{entry.value} mg/dL</div>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              </>
+                            ) : (
+                              <div style={{ fontSize:12, color:"var(--text-faint)", fontStyle:"italic" }}>
+                                {tInsights("symptom_detail_no_glucose")}
+                              </div>
+                            )}
+                          </div>
+                        )}
                       </div>
-                      <div style={{ fontSize:12, color:"var(--text-dim)", fontFamily:"var(--font-mono)" }}>
-                        ×{s.count}
-                      </div>
-                      {s.avgGlucose !== null && (
-                        <div style={{ fontSize:12, color:"var(--text-dim)", fontFamily:"var(--font-mono)", whiteSpace:"nowrap" }}>
-                          ∅ {s.avgGlucose} mg/dL
-                        </div>
-                      )}
-                      {s.avgGlucose === null && <div />}
-                      <div style={{ display:"flex", gap:2 }} aria-label={`avg ${s.avgSev.toFixed(1)} of 5`}>
-                        {[1,2,3,4,5].map(n => (
-                          <span key={n} style={{
-                            width:5, height:5, borderRadius:99,
-                            background: n <= Math.round(s.avgSev) ? "#A78BFA" : "var(--border-strong)",
-                          }}/>
-                        ))}
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             ) : (
