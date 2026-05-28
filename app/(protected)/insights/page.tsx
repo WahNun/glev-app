@@ -276,15 +276,9 @@ export default function InsightsPage() {
   const [postBolusChecks, setPostBolusChecks] = useState<PostBolusCheckRaw[]>([]);
   const [aiConsentHistory, setAiConsentHistory] = useState<boolean | null>(null);
   const [loading, setLoading]           = useState(true);
-  // Relink-panel open state lives HERE (not inside RelinkSourceLine) because
-  // the FlipCard around the engine card renders its `children` twice — once
-  // as a hidden ghost in normal flow (sets parent height) and once absolutely
-  // positioned as the visible front. Local useState in RelinkSourceLine made
-  // only the front instance grow when toggled, the ghost stayed collapsed,
-  // parent height never updated, and the expanded panel bled visually into
-  // the next grid row. Lifting the state here makes both ghost + front see
-  // the same `open` value, so the ghost grows in lock-step and the parent
-  // grid cell expands cleanly.
+  // Relink-panel open state lives HERE (not inside RelinkSourceLine) so that
+  // the panel expansion triggers a re-render of the FlipCard wrapper and the
+  // grid cell correctly resizes when the user expands the panel.
   const [relinkOpen, setRelinkOpen]     = useState(false);
   // Biological sex — gates the cycle half of the "Zyklus & Symptome"
   // card. Male users see a symptoms-only variant (cycle stats hidden,
@@ -4215,10 +4209,9 @@ function InsightsSwipePager({
   }, [active, items.length]);
 
   // Measure each card's natural height. Re-measures automatically when
-  // a FlipCard expands its back (FlipCard renders a hidden ghost in
-  // normal flow that drives parent height) or when underlying data
-  // refreshes. The map key is the slot index; we keep stale entries
-  // around so swiping between already-measured cards is jank-free.
+  // a FlipCard expands its back or when underlying data refreshes.
+  // The map key is the slot index; we keep stale entries around so
+  // swiping between already-measured cards is jank-free.
   React.useLayoutEffect(() => {
     if (typeof ResizeObserver === "undefined") return;
     const observers: ResizeObserver[] = [];
@@ -4657,9 +4650,8 @@ function RelinkSourceLine({
   engineMeals: Meal[];
   engineBoluses: InsulinLog[];
   onLinked: (bolusId: string, mealId: string) => void;
-  /** Controlled — must be lifted to the InsightsPage level. See the
-   *  note next to `relinkOpen` useState for why local state breaks
-   *  the FlipCard ghost-mirror layout. */
+  /** Controlled — lifted to the InsightsPage level so FlipCard
+   *  re-renders correctly when the panel expands. */
   open: boolean;
   onToggle: (next: boolean) => void;
 }) {
@@ -4961,17 +4953,14 @@ function Sparkline({ values, color, height = 36 }: { values: number[]; color: st
 }
 
 /**
- * FlipCard — generic flip wrapper with dynamic height.
+ * FlipCard — generic flip wrapper with CSS-grid height.
  *
- * Height behaviour: an INVISIBLE ghost div sits in normal flow rendering
- * the *active* face's content — that's what determines the parent's
- * height. Both the real front and back faces are absolutely positioned
- * over the ghost. When the user flips, the active face swaps at the
- * midpoint of the 0.55 s spin (275 ms) — exactly when the card is
- * edge-on and the height change is hidden behind the perspective. This
- * means:
- *   • Front-only state → parent = front content height (tight, matches mockup)
- *   • Flipped state → parent grows to back content height (no clipping, no scroll)
+ * Height behaviour: front and back faces are placed in the same CSS
+ * grid cell (`gridArea: "1/1"`), so both are rendered exactly once and
+ * the card's natural height equals max(front, back) without any hidden
+ * ghost/duplicate nodes. `backfaceVisibility: hidden` keeps the
+ * invisible face from painting; `transformStyle: preserve-3d` on the
+ * grid container drives the Y-rotation flip.
  *
  * Padding / borderRadius defaults match the mockup's `MockCard`.
  */
@@ -5065,10 +5054,10 @@ function FlipCard({
   back: React.ReactNode;
   accent?: string;
   padding?: string;
-  /** Minimum height for the ghost div that drives the card's natural height.
-   *  Set to CARD_MIN_H on all standard insight cards for uniform sizing.
-   *  Accepts a number (px) or a CSS string (e.g. clamp/calc with 100dvh)
-   *  so the hero pager can scale viewport-relative on small phones. */
+  /** Minimum height applied to the flip stage so all standard insight
+   *  cards have uniform sizing. Accepts a number (px) or a CSS string
+   *  (e.g. clamp/calc with 100dvh) so the hero pager can scale
+   *  viewport-relative on small phones. */
   minHeight?: number | string;
   /** "glass" applies an Apple-style Liquid Glass surface: translucent
    *  backdrop blur, refractive 1px border, and a soft inner highlight
@@ -5080,17 +5069,6 @@ function FlipCard({
   variant?: "default" | "glass";
 }) {
   const [flipped, setFlipped] = useState(false);
-  // Which face's content the ghost mirrors. Swapped at flip-midpoint
-  // (~275 ms) so the parent-height jump happens while the card is
-  // edge-on — invisible to the user.
-  const [activeFace, setActiveFace] = useState<"front"|"back">("front");
-
-  useEffect(() => {
-    const target = flipped ? "back" : "front";
-    if (target === activeFace) return;
-    const t = setTimeout(() => setActiveFace(target), 275);
-    return () => clearTimeout(t);
-  }, [flipped, activeFace]);
 
   // ── Liquid-Glass shell (variant="glass") ──────────────────────────
   // Apple iOS 26-style frosted surface. Three stacked layers fake the
@@ -5150,27 +5128,24 @@ function FlipCard({
     <div
       onClick={() => setFlipped(f => !f)}
       className="glev-flip-card"
-      style={{ position:"relative", cursor:"pointer", perspective:1400 }}
+      style={{ cursor:"pointer", perspective:1400 }}
       role="button"
       tabIndex={0}
       onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setFlipped(f => !f); } }}
       aria-pressed={flipped}
     >
-      {/* GHOST — invisible, in normal flow, determines parent height.
-          minHeight enforces uniform card sizing across the pager. */}
-      <div aria-hidden style={{ visibility:"hidden", pointerEvents:"none", minHeight: minHeight || undefined, ...(activeFace==="back" ? backShell : frontShell) }}>
-        {activeFace === "back" ? back : children}
-      </div>
-      {/* FLIP STAGE — absolutely overlays the ghost. */}
+      {/* FLIP STAGE — CSS grid stacks front + back in the same cell so
+          each face is rendered exactly once. Card height = max(front, back). */}
       <div style={{
-        position:"absolute", inset:0,
+        display:"grid",
+        minHeight: minHeight || undefined,
         transformStyle:"preserve-3d",
         transition:"transform 0.55s cubic-bezier(0.4,0,0.2,1)",
         transform: flipped ? "rotateY(180deg)" : "rotateY(0deg)",
       }}>
         {/* FRONT */}
         <div style={{
-          position:"absolute", inset:0,
+          gridArea:"1/1",
           backfaceVisibility:"hidden",
           ...frontShell,
         }}>
@@ -5178,7 +5153,7 @@ function FlipCard({
         </div>
         {/* BACK */}
         <div style={{
-          position:"absolute", inset:0,
+          gridArea:"1/1",
           backfaceVisibility:"hidden",
           transform:"rotateY(180deg)",
           ...backShell,
@@ -5206,20 +5181,12 @@ function FlipBack({ title, accent, paragraphs }: { title: string; accent: string
 }
 
 /** Compact 2-up stat tile used by the performance-tiles card.
- *  Same dynamic-height ghost trick as FlipCard: parent height tracks
- *  the active face so flipping to a longer back grows the tile rather
- *  than clipping/scrolling. Tile shrinks back when flipped to front. */
+ *  Uses the same CSS-grid stacking approach as FlipCard: front and back
+ *  are placed in the same grid cell so card height = max(front, back)
+ *  with no duplicate DOM nodes. */
 type InsightTile = { label:string; val:string; sub:string; color:string; formula:string; explain:string; infoBack?: React.ReactNode };
 function InsightFlipTile({ tile }: { tile: InsightTile }) {
   const [flipped, setFlipped] = useState(false);
-  const [activeFace, setActiveFace] = useState<"front"|"back">("front");
-
-  useEffect(() => {
-    const target = flipped ? "back" : "front";
-    if (target === activeFace) return;
-    const t = setTimeout(() => setActiveFace(target), 250); // midpoint of 0.5 s flip
-    return () => clearTimeout(t);
-  }, [flipped, activeFace]);
 
   // Tile padding raised from 10→16 vertical so the small tiles
   // (Raw ICR, Ø Glucose, Trefferquote, Ø Insulin) breathe — label,
@@ -5268,23 +5235,20 @@ function InsightFlipTile({ tile }: { tile: InsightTile }) {
       tabIndex={0}
       aria-pressed={flipped}
       onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setFlipped(f => !f); } }}
-      style={{ position:"relative", cursor:"pointer", perspective:1000 }}
+      style={{ cursor:"pointer", perspective:1000 }}
     >
-      {/* GHOST — invisible, in normal flow, determines parent height. */}
-      <div aria-hidden style={{ visibility:"hidden", pointerEvents:"none", ...(activeFace==="back" ? backShell : frontShell) }}>
-        {activeFace === "back" ? backContent : frontContent}
-      </div>
-      {/* FLIP STAGE */}
+      {/* FLIP STAGE — CSS grid stacks front + back in the same cell so
+          each face is rendered exactly once. Card height = max(front, back). */}
       <div style={{
-        position:"absolute", inset:0,
+        display:"grid",
         transformStyle:"preserve-3d",
         transition:"transform 0.5s cubic-bezier(0.4,0,0.2,1)",
         transform: flipped ? "rotateY(180deg)" : "rotateY(0deg)",
       }}>
-        <div style={{ position:"absolute", inset:0, backfaceVisibility:"hidden", ...frontShell }}>
+        <div style={{ gridArea:"1/1", backfaceVisibility:"hidden", ...frontShell }}>
           {frontContent}
         </div>
-        <div style={{ position:"absolute", inset:0, backfaceVisibility:"hidden", transform:"rotateY(180deg)", ...backShell }}>
+        <div style={{ gridArea:"1/1", backfaceVisibility:"hidden", transform:"rotateY(180deg)", ...backShell }}>
           {backContent}
         </div>
       </div>

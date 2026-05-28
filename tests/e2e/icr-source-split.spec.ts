@@ -298,13 +298,6 @@ test.describe("ICR-source three-way split — Engine + Insights render path", ()
   });
 
   test("Insights ICR card shows the split in DE and EN", async ({ page, context }) => {
-    // The Insights ICR card sits inside a CardFlip wrapper (page.tsx
-    // ~L1665) that renders the front content TWICE: once as a
-    // `visibility:"hidden"` ghost (sets parent height) and once inside
-    // the actual flip stage. `.first()` unfortunately picks the ghost,
-    // so every assertion below uses `.locator("visible=true").first()`
-    // to scope to the on-screen copy.
-
     // ── DE ────────────────────────────────────────────────────────
     await setLocaleCookie(context, "de");
     await loginAsTestUser(page);
@@ -312,10 +305,10 @@ test.describe("ICR-source three-way split — Engine + Insights render path", ()
     // Wait for the localized engine-card label first so we don't race
     // the on-mount fetches that populate adaptiveICR.
     await expect(
-      page.getByText(/^KH-FAKTOR$/).locator("visible=true").first(),
+      page.getByText(/^KH-FAKTOR$/).first(),
     ).toBeVisible({ timeout: 30_000 });
     await expect(
-      page.getByText(INSIGHTS_ICR_LINE_DE).locator("visible=true").first(),
+      page.getByText(INSIGHTS_ICR_LINE_DE).first(),
     ).toBeVisible({ timeout: 15_000 });
 
     // ── EN ────────────────────────────────────────────────────────
@@ -327,10 +320,10 @@ test.describe("ICR-source three-way split — Engine + Insights render path", ()
     await setLocaleCookie(context, "en");
     await page.goto("/insights");
     await expect(
-      page.getByText(/^ICR$/).locator("visible=true").first(),
+      page.getByText(/^ICR$/).first(),
     ).toBeVisible({ timeout: 30_000 });
     await expect(
-      page.getByText(INSIGHTS_ICR_LINE_EN).locator("visible=true").first(),
+      page.getByText(INSIGHTS_ICR_LINE_EN).first(),
     ).toBeVisible({ timeout: 15_000 });
   });
 });
