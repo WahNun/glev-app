@@ -1828,7 +1828,7 @@ export default function SettingsPage() {
                 placeholder={tSettings("appointments_note_placeholder")}
                 onChange={(e) => setNewApptNote(e.target.value)}
                 aria-label={tSettings("appointments_note_label")}
-                disabled={apptBusy !== null}
+                disabled={apptBusy !== null || !newApptDate}
                 maxLength={200}
               />
             </div>

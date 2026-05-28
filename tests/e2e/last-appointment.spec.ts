@@ -1,4 +1,4 @@
-// End-to-end coverage for the "Arzttermine" feature (Task #75 → #93).
+// End-to-end coverage for the "Arzttermine" feature (Task #75 → #93 → #112).
 //
 // Why this exists:
 //   Task #75 grew two coupled UI surfaces: a date control on /settings
@@ -6,9 +6,12 @@
 //   replaced the single `user_settings.last_appointment_at` scalar
 //   with a full `appointments` list, so the Settings sheet now drives
 //   add/edit/delete CRUD against a separate table while the Export
-//   chip continues to surface only the most-recent entry. The two
-//   sides share one source of truth (the `appointments` table), so
-//   the only way to prove the round-trip works is to drive the real
+//   chip continues to surface only the most-recent entry. Task #112
+//   extended coverage to the doctor-friendly note that each appointment
+//   row carries: persistence through reload, forwarding into the PDF
+//   cover, the disabled-when-no-date guard, and the 200-char cap.
+//   The two sides share one source of truth (the `appointments` table),
+//   so the only way to prove the round-trip works is to drive the real
 //   flow end-to-end:
 //     1. Add an appointment in Settings → row inserted into `appointments`.
 //     2. Visit /export → the new chip appears with the saved date.
@@ -44,7 +47,7 @@
 
 import { expect, test, type Page } from "@playwright/test";
 import fs from "node:fs";
-import { createClient } from "@supabase/supabase-js";
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { TEST_USER_FIXTURE_PATH } from "../global-setup";
 
 interface TestUser { email: string; password: string; userId: string; }
@@ -93,6 +96,93 @@ async function readLatestAppointment(userId: string): Promise<string | null> {
     throw new Error(`appointments read failed: ${error.message}`);
   }
   return (data?.appointment_at ?? null) as string | null;
+}
+
+/**
+ * Read the `note` column of the most-recent appointment row directly
+ * via the admin client (bypasses RLS). Returns `null` when the user
+ * has no appointments or when the latest row's note is NULL / empty.
+ * Used by the note round-trip specs to confirm a note that was typed
+ * in the UI reached the database, and that a deletion really removes it.
+ */
+async function readLatestAppointmentNote(userId: string): Promise<string | null> {
+  const admin = getAdminClient();
+  const { data, error } = await admin
+    .from("appointments")
+    .select("note")
+    .eq("user_id", userId)
+    .order("appointment_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error) {
+    throw new Error(`appointments note read failed: ${error.message}`);
+  }
+  const raw = (data as { note?: string | null } | null)?.note ?? null;
+  return raw && raw.trim() !== "" ? raw : null;
+}
+
+/**
+ * Seed an appointment row directly via the admin client so note-
+ * focused tests can skip the add-via-UI flow and focus purely on the
+ * read / export / delete side. Returns the inserted row's id so
+ * callers can reference it in cleanup helpers.
+ */
+async function seedAppointmentWithNote(
+  admin: SupabaseClient,
+  userId: string,
+  appointmentAt: string,
+  note: string,
+): Promise<string> {
+  const { data, error } = await admin
+    .from("appointments")
+    .insert({
+      user_id: userId,
+      appointment_at: appointmentAt,
+      note: note.trim() || null,
+      tags: [],
+    })
+    .select("id")
+    .single();
+  if (error || !data) throw new Error(`appointment seed failed: ${error?.message ?? "no data"}`);
+  return (data as { id: string }).id;
+}
+
+/**
+ * Read the legacy `user_settings.last_appointment_note` column
+ * directly via the admin client. The column still exists in the
+ * schema (migration 20260501_add_user_settings_last_appointment_note.sql)
+ * even though the application has migrated reads to the `appointments`
+ * table. Used by the "clear-date wipes note" test to confirm that
+ * the export does NOT fall back to this stale value after the
+ * appointment row is deleted.
+ */
+async function readLegacyUserSettingsNote(userId: string): Promise<string | null> {
+  const admin = getAdminClient();
+  const { data, error } = await admin
+    .from("user_settings")
+    .select("last_appointment_note")
+    .eq("user_id", userId)
+    .maybeSingle();
+  if (error) throw new Error(`user_settings note read failed: ${error.message}`);
+  const raw = (data as { last_appointment_note?: string | null } | null)
+    ?.last_appointment_note ?? null;
+  return raw && raw.trim() !== "" ? raw : null;
+}
+
+/**
+ * Write a stale note into `user_settings.last_appointment_note` so
+ * the "clear-date" test can verify the export ignores it once the
+ * corresponding `appointments` row is deleted.
+ */
+async function seedLegacyUserSettingsNote(userId: string, note: string): Promise<void> {
+  const admin = getAdminClient();
+  const { error } = await admin
+    .from("user_settings")
+    .upsert(
+      { user_id: userId, last_appointment_note: note },
+      { onConflict: "user_id" },
+    );
+  if (error) throw new Error(`user_settings note seed failed: ${error.message}`);
 }
 
 /**
@@ -445,5 +535,375 @@ test.describe("Settings → Arzttermine → Export chip", () => {
     await expect(
       page.getByRole("button", { name: LAST_APPT_CHIP_DATE_US }),
     ).toHaveCount(0);
+  });
+});
+
+// -----------------------------------------------------------------------
+// Note round-trip tests (Task #112)
+// -----------------------------------------------------------------------
+// Why a separate describe block:
+//   The tests above deliberately keep their scope narrow (chip count,
+//   date persistence, picker UX). The note feature adds four orthogonal
+//   behaviours that would bloat those tests without adding clarity:
+//
+//   1. Note persists through reload — typing a note in the add-form and
+//      saving it must produce a non-null `note` column in `appointments`
+//      AND the value must still be visible in the existing-row list after
+//      a page reload (regression guard: note not forwarded in insert or
+//      not rendered in the list).
+//
+//   2. PDF cover carries the note — when the "Seit letztem Arzttermin"
+//      chip is the active preset the ExportPanel must thread the active
+//      appointment's note into the `appointmentNote` prop handed to
+//      <GlevReport>. We assert via the same `__GLEV_CAPTURE_PDF_PROPS__`
+//      probe used in `export-panel-wiring.spec.ts` — no PDF bytes to
+//      parse, no heavy renderer to boot. A regression that wires `null`
+//      instead of the note (or wires the note regardless of the preset)
+//      shows up as a clear prop-value mismatch.
+//
+//   3. Deleting the appointment wipes the note from the DB — the note
+//      lives on the appointment row, so a hard delete must remove it.
+//      This guards the future scenario where a note might be lifted into
+//      a separate column on `user_settings` (like `last_appointment_note`
+//      was before Task #93), which could survive row deletion.
+//
+//   4. Note input disabled when no date is set — the add-form's note
+//      field must be disabled when the date input is cleared so users
+//      can't type a note that can never be saved (the Add button already
+//      guards this, but disabling the field makes the contract visible).
+//      We verify the HTML `disabled` attribute directly rather than
+//      asserting on a visual style so the check is robust across themes.
+//
+//   5. 200-character cap enforced — the note input carries
+//      `maxLength={200}` so the browser truncates longer input before
+//      it can reach the Supabase `check` constraint. Asserting the DOM
+//      attribute here is cheaper than typing 201 chars and checking
+//      the trimmed value.
+//
+// Isolation strategy:
+//   Every test starts from `resetAppointments` (no rows) and seeds via
+//   the admin client where possible, so the note assertions are always
+//   targeted at a known, freshly written row — not at whatever prior
+//   spec runs may have left behind.
+
+// The PDF probe pattern mirrors export-panel-wiring.spec.ts §PDF:
+//   addInitScript sets __GLEV_CAPTURE_PDF_PROPS__ BEFORE any navigation,
+//   exposeFunction bridges the in-page call into the Node test process,
+//   and the export action fires the probe synchronously once all fetches
+//   resolve.
+const PDF_BTN_NAME = /^(PDF Report|PDF-Report|Building PDF…|Erstelle PDF…)( \(\d+\))?$/i;
+const COUNT_LOADING = /Counting entries|Zähle Einträge/;
+
+test.describe("Settings → Arzttermine note round-trip", () => {
+  let testUser: TestUser;
+
+  test.beforeAll(() => {
+    testUser = loadTestUser();
+  });
+
+  test.beforeEach(async ({ context }) => {
+    await context.clearCookies();
+    await resetAppointments(testUser.userId);
+  });
+
+  test.afterAll(async () => {
+    await resetAppointments(testUser.userId);
+  });
+
+  // --- 1. Note persists through reload -----------------------------------
+  test("note typed in the add-form is persisted to the DB and visible after reload", async ({ page }) => {
+    await loginAsTestUser(page);
+    await page.goto("/settings");
+
+    const apptsRow = page.getByRole("button", { name: APPTS_ROW_ARIA });
+    await expect(apptsRow).toBeVisible();
+    await apptsRow.click();
+
+    // Fill the date first — the note input is disabled until a date is present.
+    const dateInput = page.locator('input[type="date"]').first();
+    await expect(dateInput).toBeVisible();
+    await dateInput.fill("2026-02-10");
+
+    // Now the note input should be enabled.
+    const NOTE_LABEL = /^(Note|Notiz)$/;
+    const noteInput = page.getByRole("textbox", { name: NOTE_LABEL });
+    await expect(noteInput).toBeEnabled();
+    await noteInput.fill("Endo Q1 checkup");
+
+    // Commit.
+    await page.getByRole("button", { name: /^(Add|Hinzufügen)$/ }).click();
+
+    // DB write must include the note.
+    await expect.poll(
+      () => readLatestAppointmentNote(testUser.userId),
+      { timeout: 10_000 },
+    ).toBe("Endo Q1 checkup");
+
+    // Reload and re-open the sheet — the existing-row list should show the note.
+    await page.reload();
+    await page.goto("/settings");
+    await expect(apptsRow).toBeVisible();
+    await apptsRow.click();
+
+    // The note value appears in the row's read-only display OR in the edit
+    // input that's rendered for existing rows. Either way the text must be
+    // present somewhere in the sheet body — we locate it by its visible value.
+    await expect(page.getByText("Endo Q1 checkup")).toBeVisible({ timeout: 10_000 });
+  });
+
+  // --- 2. PDF probe: note reaches appointmentNote prop ------------------
+  test("note is forwarded into appointmentNote when the lastAppointment chip is active", async ({ page }) => {
+    // Install the probe BEFORE any navigation so it is in place when
+    // ExportPanel mounts. The bridge mirrors export-panel-wiring.spec.ts.
+    let capturedProps: Record<string, unknown> | null = null;
+    await page.exposeFunction(
+      "__captureGlevPdfProps",
+      (props: Record<string, unknown>) => { capturedProps = props; },
+    );
+    await page.addInitScript(() => {
+      (globalThis as unknown as {
+        __GLEV_CAPTURE_PDF_PROPS__: (p: unknown) => void;
+      }).__GLEV_CAPTURE_PDF_PROPS__ = (props: unknown) => {
+        (window as unknown as {
+          __captureGlevPdfProps: (p: unknown) => void;
+        }).__captureGlevPdfProps(JSON.parse(JSON.stringify(props)));
+      };
+    });
+
+    // Seed an appointment with a note via the admin client so we don't
+    // depend on the add-form flow being correct here (that's test #1's job).
+    const admin = getAdminClient();
+    await seedAppointmentWithNote(admin, testUser.userId, "2026-02-10", "Dr. Muster A1c 7.1");
+
+    await loginAsTestUser(page);
+    await page.goto("/settings");
+
+    // Open the export sheet.
+    const exportRow = page.getByRole("button", { name: EXPORT_ROW_ARIA });
+    await expect(exportRow).toBeVisible();
+    await exportRow.click();
+
+    // Wait for the panel to fully mount (PDF button visible + count settled).
+    await expect(page.getByRole("button", { name: PDF_BTN_NAME })).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByText(COUNT_LOADING)).toHaveCount(0, { timeout: 15_000 });
+
+    // The appointment chip must be present — click it to make it the active preset.
+    const apptChip = page
+      .getByRole("button", { name: LAST_APPT_CHIP_DATE_DE })
+      .or(page.getByRole("button", { name: LAST_APPT_CHIP_DATE_US }));
+    await expect(apptChip).toBeVisible({ timeout: 10_000 });
+    await apptChip.click();
+
+    // Trigger the PDF (probe intercepts before the heavy renderer runs).
+    const pdfBtn = page.getByRole("button", { name: PDF_BTN_NAME });
+    await expect(pdfBtn).toBeEnabled();
+    await pdfBtn.click();
+
+    // Wait for the probe to fire.
+    await expect.poll(() => capturedProps, { timeout: 15_000 }).not.toBeNull();
+    const props = capturedProps!;
+
+    // The note must be forwarded as appointmentNote (not undefined / null).
+    expect(props.appointmentNote).toBe("Dr. Muster A1c 7.1");
+  });
+
+  // --- 3. Deleting the appointment wipes the note from the DB -----------
+  test("deleting an appointment with a note removes the note from the database", async ({ page }) => {
+    // Seed via admin — bypasses the add-form so this test is isolated from
+    // the UI layer and purely verifies the delete path.
+    const admin = getAdminClient();
+    await seedAppointmentWithNote(admin, testUser.userId, "2026-02-10", "Delete-me note");
+
+    // Confirm it's in the DB before we touch the UI.
+    expect(await readLatestAppointmentNote(testUser.userId)).toBe("Delete-me note");
+
+    await loginAsTestUser(page);
+    await page.goto("/settings");
+
+    const apptsRow = page.getByRole("button", { name: APPTS_ROW_ARIA });
+    await expect(apptsRow).toBeVisible();
+    await apptsRow.click();
+
+    // Delete the only appointment in the list. The confirm() dialog is
+    // auto-accepted the same way the date round-trip tests handle it.
+    page.once("dialog", (d) => { void d.accept(); });
+    await page.getByRole("button", { name: /^(Delete|Löschen)$/ }).click();
+
+    // DB must have no appointments (and therefore no note) for this user.
+    await expect.poll(
+      () => readLatestAppointment(testUser.userId),
+      { timeout: 10_000 },
+    ).toBeNull();
+
+    // A separate readLatestAppointmentNote confirms the note column is gone
+    // (not just the date). Primarily guards against a future refactor that
+    // lifts the note into a separate column on user_settings where it
+    // might survive the appointments row deletion.
+    await expect.poll(
+      () => readLatestAppointmentNote(testUser.userId),
+      { timeout: 10_000 },
+    ).toBeNull();
+  });
+
+  // --- 4. Note input disabled when date is cleared ----------------------
+  test("note input is disabled when the date field is cleared", async ({ page }) => {
+    await loginAsTestUser(page);
+    await page.goto("/settings");
+
+    const apptsRow = page.getByRole("button", { name: APPTS_ROW_ARIA });
+    await expect(apptsRow).toBeVisible();
+    await apptsRow.click();
+
+    const dateInput = page.locator('input[type="date"]').first();
+    await expect(dateInput).toBeVisible();
+
+    const NOTE_LABEL = /^(Note|Notiz)$/;
+    const noteInput = page.getByRole("textbox", { name: NOTE_LABEL });
+
+    // By default the date input is pre-filled with today, so the note
+    // input should start out enabled.
+    await expect(noteInput).toBeEnabled();
+
+    // Clear the date — the note must become disabled immediately.
+    await dateInput.fill("");
+    await expect(noteInput).toBeDisabled();
+
+    // Re-filling the date must re-enable the note.
+    await dateInput.fill("2026-02-10");
+    await expect(noteInput).toBeEnabled();
+  });
+
+  // --- 5. 200-character cap enforced via maxLength attribute -------------
+  test("note input carries maxLength=200 so the browser enforces the cap", async ({ page }) => {
+    await loginAsTestUser(page);
+    await page.goto("/settings");
+
+    const apptsRow = page.getByRole("button", { name: APPTS_ROW_ARIA });
+    await expect(apptsRow).toBeVisible();
+    await apptsRow.click();
+
+    const dateInput = page.locator('input[type="date"]').first();
+    await expect(dateInput).toBeVisible();
+    // Ensure the note input is enabled before we inspect it.
+    await dateInput.fill("2026-02-10");
+
+    const NOTE_LABEL = /^(Note|Notiz)$/;
+    const noteInput = page.getByRole("textbox", { name: NOTE_LABEL });
+    await expect(noteInput).toBeEnabled();
+
+    // Assert the HTML maxlength attribute is exactly 200 — this is the
+    // browser-level enforcement for the 200-char cap before the value
+    // can reach Supabase. We check the attribute rather than trying to
+    // type 201 characters (which Playwright would silently truncate
+    // anyway because the browser refuses input beyond maxLength).
+    await expect(noteInput).toHaveAttribute("maxlength", "200");
+  });
+
+  // --- 6. Clearing the date (deleting the appointment) wipes the note ----
+  // Why this is a distinct test from #3 (deletion):
+  //   The schema retains a legacy `user_settings.last_appointment_note`
+  //   column from before Task #93 moved appointments into a dedicated
+  //   table. If `readLastAppointment()` (or any future refactor) were
+  //   to fall back to that column when `appointments` is empty, a note
+  //   written before deletion would silently survive the "clear date"
+  //   gesture and reappear on the PDF cover.
+  //
+  //   We guard this by:
+  //   (a) seeding a stale note in `user_settings.last_appointment_note`
+  //   (b) seeding a real appointment row with the SAME note
+  //   (c) deleting the appointment via UI (= canonical "clear date")
+  //   (d) asserting via the PDF probe that `appointmentNote` is now
+  //       `undefined` — even though `user_settings.last_appointment_note`
+  //       still holds the old value.
+  //
+  //   This test would catch a regression like:
+  //     `readLastAppointment()` → checks `appointments` → empty →
+  //     falls back to `user_settings.last_appointment_note` → returns
+  //     stale note → PDF cover shows it.
+  test("clearing the date (deleting the appointment) wipes the note from the export — legacy column does not leak", async ({ page }) => {
+    const STALE_NOTE = "Stale legacy note — must not appear in export";
+
+    // (a) Write the stale note into the legacy user_settings column so a
+    //     fallback path could accidentally pick it up.
+    await seedLegacyUserSettingsNote(testUser.userId, STALE_NOTE);
+
+    // Confirm the legacy column has the value before we proceed.
+    expect(await readLegacyUserSettingsNote(testUser.userId)).toBe(STALE_NOTE);
+
+    // (b) Seed a real appointment row with the same note so the export
+    //     panel actually has a chip + note to show before deletion.
+    const admin = getAdminClient();
+    await seedAppointmentWithNote(admin, testUser.userId, "2026-02-10", STALE_NOTE);
+    expect(await readLatestAppointmentNote(testUser.userId)).toBe(STALE_NOTE);
+
+    // Install the PDF probe before navigating so it's in place when
+    // ExportPanel mounts. Same bridge pattern as test #2.
+    let capturedProps: Record<string, unknown> | null = null;
+    await page.exposeFunction(
+      "__captureGlevPdfProps",
+      (props: Record<string, unknown>) => { capturedProps = props; },
+    );
+    await page.addInitScript(() => {
+      (globalThis as unknown as {
+        __GLEV_CAPTURE_PDF_PROPS__: (p: unknown) => void;
+      }).__GLEV_CAPTURE_PDF_PROPS__ = (props: unknown) => {
+        (window as unknown as {
+          __captureGlevPdfProps: (p: unknown) => void;
+        }).__captureGlevPdfProps(JSON.parse(JSON.stringify(props)));
+      };
+    });
+
+    await loginAsTestUser(page);
+    await page.goto("/settings");
+
+    // (c) Delete the appointment via the Settings sheet — this is the
+    //     canonical "clear date" gesture in the current multi-appointment
+    //     UI (there is no separate "clear" button; deletion is the only
+    //     way to remove an appointment date anchor).
+    const apptsRow = page.getByRole("button", { name: APPTS_ROW_ARIA });
+    await expect(apptsRow).toBeVisible();
+    await apptsRow.click();
+
+    page.once("dialog", (d) => { void d.accept(); });
+    await page.getByRole("button", { name: /^(Delete|Löschen)$/ }).click();
+
+    // appointments table must now be empty.
+    await expect.poll(
+      () => readLatestAppointment(testUser.userId),
+      { timeout: 10_000 },
+    ).toBeNull();
+
+    // (d) Open the Export panel and fire the PDF probe. The chip must be
+    //     absent (no appointment chip rendered when the list is empty) and
+    //     the captured appointmentNote must be undefined — the stale
+    //     user_settings.last_appointment_note value must NOT leak through.
+    const exportRow = page.getByRole("button", { name: EXPORT_ROW_ARIA });
+    await expect(exportRow).toBeVisible();
+    await exportRow.click();
+    await expect(page.getByRole("button", { name: PDF_BTN_NAME })).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByText(COUNT_LOADING)).toHaveCount(0, { timeout: 15_000 });
+
+    // Confirm the appointment chip is gone (export panel sees no appointments).
+    await expect(
+      page.getByRole("button", { name: LAST_APPT_CHIP_DATE_DE }),
+    ).toHaveCount(0);
+    await expect(
+      page.getByRole("button", { name: LAST_APPT_CHIP_DATE_US }),
+    ).toHaveCount(0);
+
+    // Trigger the PDF probe — no chip is selected, so rangePreset should
+    // NOT be "lastAppointment" and appointmentNote must be undefined.
+    capturedProps = null;
+    const pdfBtn = page.getByRole("button", { name: PDF_BTN_NAME });
+    await expect(pdfBtn).toBeEnabled();
+    await pdfBtn.click();
+
+    await expect.poll(() => capturedProps, { timeout: 15_000 }).not.toBeNull();
+
+    // The critical assertion: the stale legacy note must not appear.
+    // `undefined` is what the export produces when no appointment chip
+    // is active — JSON.stringify drops undefined fields, so the key
+    // will simply be absent from the captured props object.
+    expect(capturedProps!.appointmentNote).toBeUndefined();
   });
 });
