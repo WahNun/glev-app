@@ -155,6 +155,25 @@ function PreviewProContent() {
         }
       `}</style>
 
+      {/* ← Zurück zur App */}
+      <div style={{ width: "100%", maxWidth: 760, margin: "0 auto 8px", padding: "0 20px", boxSizing: "border-box" }}>
+        <a
+          href="/dashboard"
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 6,
+            fontSize: 13,
+            fontWeight: 500,
+            color: "rgba(255,255,255,0.55)",
+            textDecoration: "none",
+            padding: "4px 0",
+          }}
+        >
+          ← App
+        </a>
+      </div>
+
       {/* 1. HERO */}
       <section
         style={{

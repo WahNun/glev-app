@@ -1,10 +1,26 @@
 "use client";
 
-import Link from "next/link";
+import { useState } from "react";
+import { useLocale } from "next-intl";
 import { usePlan } from "@/hooks/usePlan";
 import { requiredPlanLabel, FEATURE_TIERS } from "@/lib/planFeatures";
 
 const ACCENT = "#4F6EF7";
+
+async function startCheckout(locale: string): Promise<string | null> {
+  try {
+    const res = await fetch("/api/checkout/pro", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ locale }),
+    });
+    const data = (await res.json().catch(() => ({}))) as { url?: string; error?: string };
+    if (!res.ok || !data.url) return null;
+    return data.url;
+  } catch {
+    return null;
+  }
+}
 
 export default function UpgradeGate({
   feature,
@@ -20,6 +36,19 @@ export default function UpgradeGate({
   opacity?: number;
 }) {
   const { canAccess, loading } = usePlan();
+  const locale = useLocale();
+  const [busy, setBusy] = useState(false);
+
+  const handleUpgrade = async () => {
+    if (busy) return;
+    setBusy(true);
+    const url = await startCheckout(locale);
+    if (url) {
+      window.location.href = url;
+    } else {
+      setBusy(false);
+    }
+  };
 
   if (loading || canAccess(feature)) {
     return <>{children}</>;
@@ -30,8 +59,10 @@ export default function UpgradeGate({
 
   if (variant === "row") {
     return (
-      <Link
-        href="/pro"
+      <button
+        type="button"
+        onClick={(e) => { e.stopPropagation(); void handleUpgrade(); }}
+        disabled={busy}
         aria-label={`${planName} erforderlich`}
         style={{
           display: "inline-flex",
@@ -42,14 +73,16 @@ export default function UpgradeGate({
           borderRadius: 8,
           background: `${ACCENT}14`,
           color: ACCENT,
-          textDecoration: "none",
+          border: "none",
+          cursor: busy ? "default" : "pointer",
           flexShrink: 0,
           fontSize: 14,
           lineHeight: 1,
+          opacity: busy ? 0.6 : 1,
         }}
       >
-        🔒
-      </Link>
+        {busy ? "…" : "🔒"}
+      </button>
     );
   }
 
@@ -69,8 +102,10 @@ export default function UpgradeGate({
         </div>
       )}
 
-      <Link
-        href="/pro"
+      <button
+        type="button"
+        onClick={() => void handleUpgrade()}
+        disabled={busy}
         style={{
           position: children ? "absolute" : "relative",
           inset: children ? 0 : undefined,
@@ -82,8 +117,10 @@ export default function UpgradeGate({
           padding: children ? 0 : "36px 24px",
           minHeight: children ? undefined : 200,
           textAlign: "center",
-          textDecoration: "none",
-          cursor: "pointer",
+          background: "transparent",
+          border: "none",
+          cursor: busy ? "default" : "pointer",
+          width: "100%",
         }}
       >
         <div
@@ -99,7 +136,7 @@ export default function UpgradeGate({
             boxShadow: "0 8px 32px rgba(0,0,0,0.18)",
           }}
         >
-          <div style={{ fontSize: 28, lineHeight: 1 }}>🔒</div>
+          <div style={{ fontSize: 28, lineHeight: 1 }}>{busy ? "⏳" : "🔒"}</div>
 
           <div
             style={{
@@ -135,20 +172,20 @@ export default function UpgradeGate({
             style={{
               display: "inline-block",
               padding: "10px 22px",
-              background: ACCENT,
-              color: "var(--on-accent)",
+              background: busy ? `${ACCENT}88` : ACCENT,
+              color: "#fff",
               borderRadius: 9,
               fontSize: 13,
               fontWeight: 700,
-              textDecoration: "none",
               letterSpacing: "-0.01em",
               marginTop: 2,
+              transition: "background 0.15s",
             }}
           >
-            Upgraden →
+            {busy ? "Weiterleitung …" : "Upgraden →"}
           </div>
         </div>
-      </Link>
+      </button>
     </div>
   );
 }
