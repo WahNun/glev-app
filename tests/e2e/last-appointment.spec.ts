@@ -98,9 +98,12 @@ async function readLatestAppointment(userId: string): Promise<string | null> {
 /**
  * Reset the test user back to "no appointments" so each test starts
  * from a pristine baseline regardless of how a previous run left the
- * row. Also clears `user_settings.last_appointment_at` so the
- * idempotent migration backfill can't silently reintroduce a stale
- * appointment if the test re-runs against the same user.
+ * row.
+ *
+ * Note: Task #113 dropped `user_settings.last_appointment_at` and
+ * `last_appointment_note`. The legacy upsert that used to null those
+ * columns is removed — the `appointments` table is the sole source of
+ * truth now.
  */
 async function resetAppointments(userId: string) {
   const admin = getAdminClient();
@@ -110,19 +113,6 @@ async function resetAppointments(userId: string) {
     .eq("user_id", userId);
   if (delErr) {
     throw new Error(`appointments clear failed: ${delErr.message}`);
-  }
-  // Also wipe the legacy scalar so the migration's backfill (which is
-  // idempotent on the SQL level — `INSERT … ON CONFLICT DO NOTHING`
-  // — and the still-readable column on `user_settings`) can't sneak
-  // a row back in if someone re-runs the migration mid-suite.
-  const { error: upErr } = await admin
-    .from("user_settings")
-    .upsert(
-      { user_id: userId, last_appointment_at: null },
-      { onConflict: "user_id" },
-    );
-  if (upErr) {
-    throw new Error(`user_settings reset failed: ${upErr.message}`);
   }
 }
 
