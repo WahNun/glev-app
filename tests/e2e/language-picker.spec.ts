@@ -202,7 +202,33 @@ async function switchLocaleViaPicker(page: Page, next: "de" | "en") {
   await page.waitForLoadState("load");
 }
 
+/**
+ * Read the persisted language from profiles via the service-role admin
+ * client (bypasses RLS — same pattern as carb-unit-picker.spec.ts).
+ * The `profiles` table is keyed by `user_id`, NOT by `id` — there is no
+ * `id` column. A `.eq("id", uid)` typo silently returns 0 rows because
+ * Postgres rejects the unknown column reference; `.eq("user_id", uid)`
+ * is the only correct form. This helper is the canonical regression
+ * detector for that class of bug.
+ */
+async function readPersistedLanguage(userId: string): Promise<string | null> {
+  const admin = getAdminClient();
+  const { data, error } = await admin
+    .from("profiles")
+    .select("language")
+    .eq("user_id", userId)
+    .maybeSingle();
+  if (error) throw new Error(`profiles.language read failed: ${error.message}`);
+  return (data?.language ?? null) as string | null;
+}
+
 test.describe("Settings → Language picker", () => {
+  let testUser: ReturnType<typeof loadTestUser>;
+
+  test.beforeAll(() => {
+    testUser = loadTestUser();
+  });
+
   // Test-isolation guard. The Playwright suite shares one Supabase test
   // user (tests/global-setup.ts) across every spec, and `setLocale()` is
   // designed to ALSO persist the choice to `profiles.language` so the
@@ -290,6 +316,115 @@ test.describe("Settings → Language picker", () => {
     // And the chosen-locale section header is still rendered; the boot
     // locale's header must be gone.
     await expect(page.getByRole("heading", { name: APPEARANCE_HEADER_EN })).toBeVisible();
+    await expect(page.getByRole("heading", { name: APPEARANCE_HEADER_DE })).toHaveCount(0);
+  });
+
+  test("switching language persists to profiles.language in the DB", async ({ page, context, baseURL }) => {
+    // This test guards the write-side of the persistence path:
+    // `persistLocaleToProfile()` in lib/locale.ts must write to
+    // `profiles.language` using `.eq("user_id", uid)` — NOT `.eq("id",
+    // uid)`. The `profiles` table has no `id` column, so the wrong key
+    // causes Postgres to return 0 updated rows without an error, which
+    // means the DB row stays stale while the cookie flips. This spec
+    // catches exactly that silent regression.
+    await context.clearCookies();
+    await pinStartingLocale(context, baseURL!, "de");
+    await loginAsTestUser(page);
+
+    // Verify the DB baseline before driving the picker.
+    expect(await readPersistedLanguage(testUser.userId)).toBe("de");
+
+    await page.goto("/settings");
+    await expect(page.getByRole("heading", { name: APPEARANCE_HEADER_DE })).toBeVisible();
+
+    // Drive the picker: de → en.
+    await switchLocaleViaPicker(page, "en");
+
+    // The cookie must flip (existing coverage from the first test), and
+    // critically the DB row must also update. `persistLocaleToProfile`
+    // fires fire-and-forget BEFORE the reload, so by the time the reload
+    // finishes the row should already be committed — but we poll with a
+    // generous timeout to absorb any network jitter in CI.
+    await expect.poll(
+      () => readPersistedLanguage(testUser.userId),
+      { timeout: 10_000, message: "profiles.language must be updated to 'en' via .eq(\"user_id\", uid)" },
+    ).toBe("en");
+
+    // Reverse check: en → de must also write through.
+    await switchLocaleViaPicker(page, "de");
+    await expect.poll(
+      () => readPersistedLanguage(testUser.userId),
+      { timeout: 10_000, message: "profiles.language must revert to 'de'" },
+    ).toBe("de");
+  });
+
+  test("LanguageSync reconciles cookie ↔ DB and triggers reload when they disagree", async ({ page, context, baseURL }) => {
+    // This test guards the read-side of the cross-device sync path:
+    // `LanguageSync` (components/LanguageSync.tsx) is mounted inside the
+    // protected layout and runs on every page load. It fetches
+    // `profiles.language` via Supabase and compares it to the
+    // NEXT_LOCALE cookie. If they disagree, it overwrites the cookie with
+    // the DB value and calls `window.location.reload()` so the server
+    // re-runs i18n/request.ts with the correct locale.
+    //
+    // The same `.eq("user_id", uid)` fix applies on the read side: before
+    // the fix, `.eq("id", uid)` returned 0 rows → `dbLang` was null →
+    // LanguageSync bailed out early → the cross-device sync never fired.
+    //
+    // Scenario: the user changed language to "en" on another device
+    // (simulated by writing "en" directly into the DB via the admin
+    // client), but the current device still has the old "de" cookie.
+    // On the next page load LanguageSync must detect the mismatch,
+    // flip the cookie to "en", and reload — resulting in an English UI.
+    await context.clearCookies();
+
+    // Simulate "other device switched to English" by writing to DB directly.
+    const admin = getAdminClient();
+    await admin
+      .from("profiles")
+      .update({ language: "en" })
+      .eq("user_id", testUser.userId);
+
+    // Current device: cookie says "de" (or absent — absence means the
+    // server falls back to DEFAULT_LOCALE="de", so both cases are covered
+    // by pinning to "de" here).
+    await pinStartingLocale(context, baseURL!, "de");
+
+    await loginAsTestUser(page);
+
+    // Navigate to any protected page — LanguageSync is mounted in the
+    // protected layout wrapper and fires on every route. /settings is
+    // convenient because we also check the section header below.
+    //
+    // We must wait for a possible reload triggered by LanguageSync. The
+    // component calls `window.location.reload()` after writing the cookie,
+    // which fires a framenavigated event. Use waitForURL with a regex that
+    // matches /settings to catch the reload settling on the same URL.
+    await page.goto("/settings");
+
+    // LanguageSync fires asynchronously (inside a useEffect). We give it
+    // up to 15 s to detect the mismatch, flip the cookie, and reload.
+    // `waitForFunction` polls the predicate in the page context until it
+    // returns truthy or the timeout is reached.
+    await page.waitForFunction(
+      (cookieName) => {
+        const match = document.cookie.match(new RegExp(`(^|;\\s*)${cookieName}=([^;]*)`));
+        return match ? decodeURIComponent(match[2]) === "en" : false;
+      },
+      LOCALE_COOKIE,
+      { timeout: 15_000 },
+    );
+
+    // After the cookie flip, LanguageSync reloads the page. Wait for the
+    // post-reload document to settle before asserting copy.
+    await page.waitForLoadState("load");
+
+    // Cookie must now hold "en" (LanguageSync wrote it from the DB value).
+    expect(await getLocaleCookieValue(page)).toBe("en");
+
+    // The server re-rendered with the English bundle — English section
+    // header must be visible, German one gone.
+    await expect(page.getByRole("heading", { name: APPEARANCE_HEADER_EN })).toBeVisible({ timeout: 10_000 });
     await expect(page.getByRole("heading", { name: APPEARANCE_HEADER_DE })).toHaveCount(0);
   });
 });

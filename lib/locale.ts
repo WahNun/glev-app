@@ -90,7 +90,7 @@ async function persistLocaleToProfile(next: Locale): Promise<void> {
     const { data } = await supabase.auth.getUser();
     const uid = data.user?.id;
     if (!uid) return;
-    await supabase.from("profiles").update({ language: next }).eq("id", uid);
+    await supabase.from("profiles").update({ language: next }).eq("user_id", uid);
   } catch {
     // Network/profile errors must not block the language switch.
   }

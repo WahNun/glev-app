@@ -34,7 +34,7 @@ export default function LanguageSync() {
       const { data: profile } = await supabase
         .from("profiles")
         .select("language")
-        .eq("id", uid)
+        .eq("user_id", uid)
         .maybeSingle();
       if (cancelled) return;
 
