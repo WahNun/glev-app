@@ -25,6 +25,7 @@ import {
 } from "@/lib/insulinEval";
 import CgmSparkline, { type SparklinePoint } from "@/components/CgmSparkline";
 import GlucoseMiniSparkline from "@/components/GlucoseMiniSparkline";
+import PostDoseCurveChart, { type PostDoseSample } from "@/components/PostDoseCurveChart";
 import IosTapButton from "@/components/IosTapButton";
 import { fetchFingersticks } from "@/lib/fingerstick";
 import { TYPE_COLORS, TYPE_LABELS, TYPE_EXPLAIN, getEvalColor, getEvalLabel, chipLabelsFrom } from "@/lib/mealTypes";
@@ -2212,6 +2213,27 @@ function BolusRowCard({ log, meals, isOpen, onToggle, onDelete, deleting }: {
   const dateStr = d.toLocaleDateString(locale, { month:"short", day:"numeric" });
   const timeStr = fmtTime(d);
 
+  // Dense 0-180 min CGM curve from bolus_glucose_samples. Fetched
+  // lazily on first expand; stays cached in local state for the
+  // lifetime of this card mount so re-opens don't re-fetch.
+  const [bolusCurve, setBolusCurve] = useState<{
+    state: "idle" | "loading" | "ready";
+    samples: PostDoseSample[];
+  }>({ state: "idle", samples: [] });
+
+  useEffect(() => {
+    if (!isOpen || log.insulin_type !== "bolus") return;
+    if (bolusCurve.state !== "idle") return;
+    setBolusCurve({ state: "loading", samples: [] });
+    fetch(`/api/insulin/${encodeURIComponent(log.id)}/curve`, { cache: "no-store" })
+      .then(async (r) => {
+        if (!r.ok) return;
+        const j = await r.json() as { samples?: PostDoseSample[] };
+        setBolusCurve({ state: "ready", samples: j.samples ?? [] });
+      })
+      .catch(() => setBolusCurve({ state: "ready", samples: [] }));
+  }, [isOpen, log.id, log.insulin_type, bolusCurve.state]);
+
   const accent  = INSULIN_ACCENT;
   const evalInfo = evaluateBolus(log);
   const badgeColor = evalInfo.color;
@@ -2327,10 +2349,22 @@ function BolusRowCard({ log, meals, isOpen, onToggle, onDelete, deleting }: {
                 <BolusDeltaPill label={tx("ex_delta_at_log_2h")} delta={d2h}/>
               </div>
             )}
-            {/* Mini glucose trend — visible once ≥2 readings exist so the
-                user can see the shape of their response at a glance and
-                tap/hover to inspect exact values (crosshair). */}
-            {(() => {
+            {/* Dense 3-h glucose curve from bolus_glucose_samples.
+                Falls back to the legacy 2-point mini sparkline when the
+                dense curve hasn't been populated yet (CGM not connected,
+                or the job is still pending). */}
+            {bolusCurve.samples.length >= 2 ? (
+              <div style={{ marginTop:8, background:"var(--surface-soft)", border:`1px solid ${BORDER}`, borderRadius:10, padding:"10px 12px" }}>
+                <div style={{ fontSize:11, fontWeight:700, letterSpacing:"0.08em", color:"var(--text-dim)", marginBottom:8 }}>
+                  3-H GLUCOSE CURVE
+                </div>
+                <PostDoseCurveChart
+                  samples={bolusCurve.samples}
+                  hadHypo={log.had_hypo_window}
+                  color={accent}
+                />
+              </div>
+            ) : (() => {
               const pts = [
                 before != null ? { t: d.getTime(),        v: before, label: tx("ex_label_at_log") } : null,
                 at1h   != null ? { t: expect1h.getTime(), v: at1h,   label: tx("ex_label_plus_1h") } : null,
@@ -2682,6 +2716,27 @@ function ExerciseRowCard({ log, allLogs, isOpen, onToggle, onDelete, deleting, o
   const tx = useTranslations("entriesExpand");
   const locale = useLocale();
   const { format: fmtTime } = useTimeFormat();
+
+  // Dense 0-180 min CGM curve from exercise_glucose_samples (anchored
+  // at workout END). Fetched lazily on first expand.
+  const [exerciseCurve, setExerciseCurve] = useState<{
+    state: "idle" | "loading" | "ready";
+    samples: PostDoseSample[];
+  }>({ state: "idle", samples: [] });
+
+  useEffect(() => {
+    if (!isOpen) return;
+    if (exerciseCurve.state !== "idle") return;
+    setExerciseCurve({ state: "loading", samples: [] });
+    fetch(`/api/exercise/${encodeURIComponent(log.id)}/curve`, { cache: "no-store" })
+      .then(async (r) => {
+        if (!r.ok) return;
+        const j = await r.json() as { samples?: PostDoseSample[] };
+        setExerciseCurve({ state: "ready", samples: j.samples ?? [] });
+      })
+      .catch(() => setExerciseCurve({ state: "ready", samples: [] }));
+  }, [isOpen, log.id, exerciseCurve.state]);
+
   // Apple-Health-synced rows carry the real workout window in
   // started_at / ended_at — prefer those when present so the displayed
   // STARTED / ENDED reflect what the watch recorded, not the
@@ -2827,9 +2882,21 @@ function ExerciseRowCard({ log, allLogs, isOpen, onToggle, onDelete, deleting, o
                 <DeltaPill label={tx("ex_delta_before_1h")}    delta={d1h}/>
               </div>
             )}
-            {/* Mini glucose trend — visible once ≥2 readings exist.
-                Tap/hover shows exact value at each checkpoint via crosshair. */}
-            {(() => {
+            {/* Dense 3-h glucose curve from exercise_glucose_samples
+                (anchored at workout END). Falls back to the legacy
+                2-point mini sparkline when the job is still pending. */}
+            {exerciseCurve.samples.length >= 2 ? (
+              <div style={{ marginTop:8, background:"var(--surface-soft)", border:`1px solid ${BORDER}`, borderRadius:10, padding:"10px 12px" }}>
+                <div style={{ fontSize:11, fontWeight:700, letterSpacing:"0.08em", color:"var(--text-dim)", marginBottom:8 }}>
+                  3-H GLUCOSE CURVE (POST-WORKOUT)
+                </div>
+                <PostDoseCurveChart
+                  samples={exerciseCurve.samples}
+                  hadHypo={log.had_hypo_window}
+                  color={accent}
+                />
+              </div>
+            ) : (() => {
               const pts = [
                 before  != null ? { t: start.getTime(),       v: before,  label: tx("ex_label_before") } : null,
                 atEnd   != null ? { t: end.getTime(),         v: atEnd,   label: tx("ex_label_at_end") } : null,
