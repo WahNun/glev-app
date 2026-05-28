@@ -23,13 +23,13 @@ import Link from "next/link";
 import { useLocale } from "next-intl";
 
 const ACCENT      = "#4F6EF7";
-const SURFACE     = "#111117";
-const SURFACE_ALT = "#141420";
-const BORDER      = "rgba(255,255,255,0.08)";
-const TEXT        = "#FFFFFF";
-const TEXT_STRONG = "rgba(255,255,255,0.85)";
-const TEXT_SOFT   = "rgba(255,255,255,0.65)";
-const TEXT_MUTED  = "rgba(255,255,255,0.45)";
+const SURFACE     = "var(--surface)";
+const SURFACE_ALT = "var(--surface-alt)";
+const BORDER      = "var(--border)";
+const TEXT        = "var(--text)";
+const TEXT_STRONG = "var(--text-strong)";
+const TEXT_SOFT   = "var(--text-body)";
+const TEXT_MUTED  = "var(--text-dim)";
 
 type Content = {
   back: string;

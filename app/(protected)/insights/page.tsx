@@ -1350,7 +1350,7 @@ export default function InsightsPage() {
                     display:"flex",
                     height:14,
                     borderRadius:99,
-                    background:"rgba(255,255,255,0.06)",
+                    background:"var(--border-soft)",
                     boxShadow:"inset 0 1px 1px rgba(0,0,0,0.35), inset 0 -1px 0 rgba(255,255,255,0.05)",
                   }}
                 >
@@ -2361,7 +2361,7 @@ export default function InsightsPage() {
                           display:"flex", flexDirection:"column", gap:6,
                           marginTop:8,
                           padding:"8px 10px", borderRadius:8,
-                          background:"var(--card-2, rgba(255,255,255,0.03))",
+                          background:"var(--surface-soft)",
                           border:"1px solid var(--border)",
                         }}>
                           {adaptiveICR.windows.map(w => {
@@ -2500,7 +2500,7 @@ export default function InsightsPage() {
                                         style={{
                                           fontSize:11, fontWeight:700,
                                           padding:"4px 10px", borderRadius:99,
-                                          background: ACCENT, color:"#fff",
+                                          background: ACCENT, color:"var(--on-accent)",
                                           border:"none",
                                           cursor: isApplying ? "default" : "pointer",
                                           opacity: isApplying ? 0.6 : 1,
@@ -5244,7 +5244,7 @@ function FlipCard({
       "linear-gradient(180deg, rgba(255,255,255,0.10) 0%, rgba(255,255,255,0.04) 50%, rgba(255,255,255,0.06) 100%)",
     backdropFilter: "blur(40px) saturate(180%)",
     WebkitBackdropFilter: "blur(40px) saturate(180%)",
-    border: "1px solid rgba(255,255,255,0.14)",
+    border: "1px solid var(--border-strong)",
     borderRadius: 18,
     padding,
     boxSizing: "border-box",

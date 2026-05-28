@@ -261,13 +261,13 @@ export default function AiSettingsPage() {
             <span style={{ fontSize: 14, fontWeight: 600, color: "var(--text-strong)" }}>{t("fab_mode_label")}</span>
             <span style={{ fontSize: 13, color: "var(--text-dim)", lineHeight: 1.3 }}>{t("fab_mode_desc")}</span>
           </div>
-          <div role="radiogroup" aria-label={t("fab_mode_label")} style={{ display: "flex", gap: 8, padding: 4, borderRadius: 10, background: "var(--surface-dim, rgba(255,255,255,0.04))", border: `1px solid ${BORDER}` }}>
+          <div role="radiogroup" aria-label={t("fab_mode_label")} style={{ display: "flex", gap: 8, padding: 4, borderRadius: 10, background: "var(--surface-soft)", border: `1px solid ${BORDER}` }}>
             {(["ai", "voice"] as const).map((opt) => {
               const active = fabMode === opt;
               return (
                 <button key={opt} type="button" role="radio" aria-checked={active}
                   onClick={() => setFabModeAndPersist(opt)}
-                  style={{ flex: 1, padding: "8px 10px", borderRadius: 8, border: "none", cursor: "pointer", fontSize: 13, fontWeight: active ? 600 : 500, color: active ? "#fff" : "var(--text-strong)", background: active ? ACCENT : "transparent", transition: "background 0.15s, color 0.15s" }}>
+                  style={{ flex: 1, padding: "8px 10px", borderRadius: 8, border: "none", cursor: "pointer", fontSize: 13, fontWeight: active ? 600 : 500, color: active ? "var(--on-accent)" : "var(--text-strong)", background: active ? ACCENT : "transparent", transition: "background 0.15s, color 0.15s" }}>
                   {t(opt === "ai" ? "fab_mode_option_ai" : "fab_mode_option_voice")}
                 </button>
               );
@@ -317,7 +317,7 @@ export default function AiSettingsPage() {
                 <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
                   <span style={{ fontSize: 14, fontWeight: 500, color: "var(--text-strong)", lineHeight: 1.25 }}>{row.title}</span>
                   {row.badge && (
-                    <span style={{ fontSize: 11, fontWeight: 600, padding: "2px 6px", borderRadius: 6, background: "var(--surface-dim, rgba(255,255,255,0.06))", color: "var(--text-dim)", border: `1px solid ${BORDER}`, textTransform: "uppercase", letterSpacing: 0.4 }}>
+                    <span style={{ fontSize: 11, fontWeight: 600, padding: "2px 6px", borderRadius: 6, background: "var(--border-soft)", color: "var(--text-dim)", border: `1px solid ${BORDER}`, textTransform: "uppercase", letterSpacing: 0.4 }}>
                       {row.badge}
                     </span>
                   )}

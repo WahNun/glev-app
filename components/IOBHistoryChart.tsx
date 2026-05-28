@@ -193,7 +193,7 @@ export default function IOBHistoryChart({ insulin, insulinType, meals }: Props) 
                 style={{
                   display: "flex",
                   gap: 4,
-                  background: "var(--surface-raised, rgba(255,255,255,0.06))",
+                  background: "var(--border-soft)",
                   borderRadius: 20,
                   padding: "2px 3px",
                   border: "1px solid var(--border)",

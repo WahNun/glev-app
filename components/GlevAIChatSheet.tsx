@@ -6,8 +6,8 @@ import { useVoxtral } from "@/hooks/useVoxtral";
 import { useTTS } from "@/hooks/useTTS";
 
 const ACCENT = "#8b5cf6";
-const SHEET_BG = "#161b22";
-const PAGE_BG = "#0f1117";
+const SHEET_BG = "var(--surface)";
+const PAGE_BG = "var(--bg)";
 
 interface Props {
   open: boolean;
@@ -52,18 +52,18 @@ function PendingActionWidget({
     maxWidth: "82%",
     padding: "10px 12px",
     borderRadius: 12,
-    background: "rgba(255,255,255,0.04)",
-    border: "1px solid rgba(255,255,255,0.08)",
+    background: "var(--surface-soft)",
+    border: "1px solid var(--border)",
     fontSize: 13,
     lineHeight: 1.45,
-    color: "rgba(255,255,255,0.92)",
+    color: "var(--text-strong)",
     display: "flex",
     flexDirection: "column",
     gap: 8,
   };
 
   const summary = (
-    <div style={{ color: "rgba(255,255,255,0.7)", fontSize: 12 }}>
+    <div style={{ color: "var(--text-body)", fontSize: 12 }}>
       {pa.summary}
     </div>
   );
@@ -82,7 +82,7 @@ function PendingActionWidget({
     return (
       <div style={{ ...baseCard, opacity: 0.6 }}>
         {summary}
-        <div style={{ color: "rgba(255,255,255,0.55)", fontSize: 13 }}>
+        <div style={{ color: "var(--text-muted)", fontSize: 13 }}>
           Abgebrochen
         </div>
       </div>
@@ -103,9 +103,9 @@ function PendingActionWidget({
               flex: 1,
               padding: "8px 10px",
               borderRadius: 8,
-              border: "1px solid rgba(255,255,255,0.15)",
-              background: "rgba(255,255,255,0.06)",
-              color: "white",
+              border: "1px solid var(--border-strong)",
+              background: "var(--border-soft)",
+              color: "var(--text-strong)",
               fontSize: 13,
               cursor: "pointer",
             }}
@@ -130,9 +130,9 @@ function PendingActionWidget({
             flex: 1,
             padding: "9px 10px",
             borderRadius: 8,
-            border: "1px solid rgba(255,255,255,0.15)",
-            background: "rgba(255,255,255,0.04)",
-            color: "rgba(255,255,255,0.8)",
+            border: "1px solid var(--border-strong)",
+            background: "var(--surface-soft)",
+            color: "var(--text-body)",
             fontSize: 13,
             cursor: busy ? "default" : "pointer",
             opacity: busy ? 0.5 : 1,
@@ -150,7 +150,7 @@ function PendingActionWidget({
             borderRadius: 8,
             border: "none",
             background: busy ? "rgba(79,110,247,0.4)" : ACCENT,
-            color: "white",
+            color: "var(--on-accent)",
             fontWeight: 600,
             fontSize: 13,
             cursor: busy ? "default" : "pointer",
@@ -354,9 +354,9 @@ export default function GlevAIChatSheet({
           right: 0,
           height: "calc(85dvh - var(--nav-bottom-total))",
           background: SHEET_BG,
-          color: "white",
+          color: "var(--text)",
           borderRadius: "20px 20px 0 0",
-          border: "1px solid rgba(255,255,255,0.08)",
+          border: "1px solid var(--border)",
           borderBottom: "none",
           zIndex: 1101,
           display: "flex",
@@ -371,11 +371,11 @@ export default function GlevAIChatSheet({
             display: "flex",
             alignItems: "center",
             padding: "14px 18px 12px",
-            borderBottom: "1px solid rgba(255,255,255,0.06)",
+            borderBottom: "1px solid var(--border-soft)",
             flexShrink: 0,
           }}
         >
-          <span style={{ fontSize: 16, fontWeight: 700, color: "white", flex: 1 }}>
+          <span style={{ fontSize: 16, fontWeight: 700, color: "var(--text)", flex: 1 }}>
             Glev AI
           </span>
           {/* Reset / clear chat button */}
@@ -395,8 +395,8 @@ export default function GlevAIChatSheet({
                 display: "flex",
                 alignItems: "center",
                 color: messages.length === 0 && !streaming
-                  ? "rgba(255,255,255,0.15)"
-                  : "rgba(255,255,255,0.5)",
+                  ? "var(--text-ghost)"
+                  : "var(--text-dim)",
                 transition: "color 0.15s",
               }}
             >
@@ -421,7 +421,7 @@ export default function GlevAIChatSheet({
               marginRight: 6,
               display: "flex",
               alignItems: "center",
-              color: tts.speaking ? ACCENT : tts.autoRead ? "rgba(255,255,255,0.7)" : "rgba(255,255,255,0.25)",
+              color: tts.speaking ? ACCENT : tts.autoRead ? "var(--text-body)" : "var(--text-faint)",
               transition: "color 0.15s",
             }}
           >
@@ -496,7 +496,7 @@ export default function GlevAIChatSheet({
             style={{
               background: "none",
               border: "none",
-              color: "rgba(255,255,255,0.6)",
+              color: "var(--text-muted)",
               cursor: "pointer",
               padding: 4,
               display: "flex",
@@ -529,7 +529,7 @@ export default function GlevAIChatSheet({
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
-                color: "rgba(255,255,255,0.45)",
+                color: "var(--text-dim)",
                 fontSize: 14,
                 textAlign: "center",
                 padding: "30px 12px",
@@ -558,11 +558,11 @@ export default function GlevAIChatSheet({
                       ? "18px 18px 4px 18px"
                       : "18px 18px 18px 4px",
                   background:
-                    m.role === "user" ? ACCENT : "rgba(255,255,255,0.05)",
-                  color: m.role === "user" ? "white" : "rgba(255,255,255,0.92)",
+                    m.role === "user" ? ACCENT : "var(--surface-soft)",
+                  color: m.role === "user" ? "var(--on-accent)" : "var(--text-strong)",
                   border:
                     m.role === "assistant"
-                      ? "1px solid rgba(255,255,255,0.06)"
+                      ? "1px solid var(--border-soft)"
                       : "none",
                   fontSize: 14,
                   lineHeight: 1.5,
@@ -580,7 +580,7 @@ export default function GlevAIChatSheet({
                       height: 14,
                       marginLeft: 3,
                       verticalAlign: "text-bottom",
-                      background: "rgba(255,255,255,0.7)",
+                      background: "var(--text-body)",
                       animation: "glevAiCaret 0.9s ease-in-out infinite",
                       borderRadius: 1,
                     }}
@@ -610,7 +610,7 @@ export default function GlevAIChatSheet({
                       display: "flex",
                       alignItems: "center",
                       gap: 3,
-                      color: isThisBubblePlaying ? ACCENT : "rgba(255,255,255,0.35)",
+                      color: isThisBubblePlaying ? ACCENT : "var(--text-faint)",
                       fontSize: 11,
                       lineHeight: 1,
                       transition: "color 0.15s",
@@ -618,10 +618,10 @@ export default function GlevAIChatSheet({
                       borderRadius: 6,
                     }}
                     onMouseEnter={(e) => {
-                      if (!isThisBubblePlaying) (e.currentTarget as HTMLButtonElement).style.color = "rgba(255,255,255,0.7)";
+                      if (!isThisBubblePlaying) (e.currentTarget as HTMLButtonElement).style.color = "var(--text-body)";
                     }}
                     onMouseLeave={(e) => {
-                      if (!isThisBubblePlaying) (e.currentTarget as HTMLButtonElement).style.color = "rgba(255,255,255,0.35)";
+                      if (!isThisBubblePlaying) (e.currentTarget as HTMLButtonElement).style.color = "var(--text-faint)";
                     }}
                   >
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -653,7 +653,7 @@ export default function GlevAIChatSheet({
             gap: 8,
             padding: "10px 16px 8px",
             background: SHEET_BG,
-            borderTop: "1px solid rgba(255,255,255,0.06)",
+            borderTop: "1px solid var(--border-soft)",
           }}
         >
           {/* Mic button — hold to talk */}
@@ -678,7 +678,7 @@ export default function GlevAIChatSheet({
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
-              background: isListening ? ACCENT : "#21262d",
+              background: isListening ? ACCENT : "var(--surface-alt)",
               animation: isListening ? "glevBtnGlowFast 0.7s ease-in-out infinite" : "none",
               touchAction: "none",
             }}
@@ -688,7 +688,7 @@ export default function GlevAIChatSheet({
               height="16"
               viewBox="0 0 24 24"
               fill="none"
-              stroke="white"
+              stroke="var(--on-accent)"
               strokeWidth="2"
               strokeLinecap="round"
               strokeLinejoin="round"
@@ -715,11 +715,11 @@ export default function GlevAIChatSheet({
             disabled={streaming}
             style={{
               flex: 1,
-              border: `1px solid ${isListening ? `${ACCENT}66` : "rgba(255,255,255,0.1)"}`,
+              border: `1px solid ${isListening ? `${ACCENT}66` : "var(--border)"}`,
               borderRadius: 20,
               padding: "10px 14px",
-              background: "rgba(255,255,255,0.04)",
-              color: "white",
+              background: "var(--surface-soft)",
+              color: "var(--text)",
               fontSize: 14,
               outline: "none",
               opacity: streaming ? 0.7 : 1,
@@ -744,7 +744,7 @@ export default function GlevAIChatSheet({
               justifyContent: "center",
             }}
           >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="white">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="var(--on-accent)">
               <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" />
             </svg>
           </button>
@@ -757,7 +757,7 @@ export default function GlevAIChatSheet({
               flexShrink: 0,
               padding: "2px 16px 4px",
               fontSize: 12,
-              color: "rgba(255,255,255,0.35)",
+              color: "var(--text-faint)",
               fontStyle: "italic",
               overflow: "hidden",
               textOverflow: "ellipsis",
@@ -792,7 +792,7 @@ export default function GlevAIChatSheet({
             background: SHEET_BG,
             fontSize: 11,
             lineHeight: 1.4,
-            color: "rgba(255,255,255,0.5)",
+            color: "var(--text-dim)",
             textAlign: "center",
           }}
         >

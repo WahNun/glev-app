@@ -75,7 +75,7 @@ export default function SegmentedChoice<V extends string>({
               textTransform: "uppercase",
               cursor: "pointer",
               background: active ? accent : "transparent",
-              color: active ? "#fff" : "var(--text-body)",
+              color: active ? "var(--on-accent)" : "var(--text-body)",
               transition: "background 120ms ease, color 120ms ease",
               fontFamily: "inherit",
               WebkitTapHighlightColor: "transparent",

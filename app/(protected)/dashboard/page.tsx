@@ -1360,7 +1360,7 @@ function RecentEntries({
     flexShrink: 0,
     width: 20, height: 44,
     background: "none", border: "none",
-    color: "rgba(255,255,255,0.28)",
+    color: "var(--text-faint)",
     display: "flex", alignItems: "center", justifyContent: "center",
     cursor: "pointer", transition: "opacity 0.15s", padding: 0,
   };

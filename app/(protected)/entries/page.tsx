@@ -4618,7 +4618,7 @@ function InfluenceEditor({ log, onSaved, onCancel }: {
         }}>{tCommon("cancel_btn")}</button>
         <button onClick={handleSave} disabled={busy} style={{
           padding:"12px", borderRadius:10, border:"none",
-          background:INFLUENCE_ACCENT, color:"#fff",
+          background:INFLUENCE_ACCENT, color:"var(--on-accent)",
           fontSize:14, fontWeight:700, cursor:busy?"not-allowed":"pointer",
         }}>{busy ? "…" : t("influence_save_btn")}</button>
       </div>
@@ -4834,7 +4834,7 @@ function SymptomEditor({ log, onSaved, onCancel }: {
         }}>{t("cancel_btn")}</button>
         <button onClick={handleSave} disabled={busy} style={{
           padding:"12px", borderRadius:10, border:"none",
-          background:SYMPTOM_ACCENT, color:"#fff",
+          background:SYMPTOM_ACCENT, color:"var(--on-accent)",
           fontSize:14, fontWeight:700, cursor:busy?"not-allowed":"pointer",
         }}>{busy ? "…" : t("symptom_save_btn")}</button>
       </div>
@@ -5176,7 +5176,7 @@ function CycleEditor({ log, onSaved, onCancel }: {
           disabled={busy}
           style={{
             padding:"13px", borderRadius:12, border:"none",
-            background:accent, color:"#fff",
+            background:accent, color:"var(--on-accent)",
             fontSize:14, fontWeight:700, cursor:busy?"not-allowed":"pointer",
           }}
         >{busy ? tx("ex_saving") : tx("ex_save")}</button>

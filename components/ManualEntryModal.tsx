@@ -579,7 +579,7 @@ export default function ManualEntryModal({
                 onChange={(e) => { setGlucose(e.target.value); setAutoFilled(s => ({ ...s, glucose: false })); }}
                 type="number" min={30} max={600}
                 placeholder={autoFilled.glucose ? t("glucose_auto_placeholder") : t("glucose_placeholder")}
-                style={{ ...inp, color: autoFilled.glucose ? ACCENT : "#fff" }}
+                style={{ ...inp, color: autoFilled.glucose ? ACCENT : "var(--text)" }}
               />
             </div>
           </div>
@@ -609,7 +609,7 @@ export default function ManualEntryModal({
           const Row = ({ label, value, accent }: { label: string; value: React.ReactNode; accent?: string }) => (
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 12, padding: "8px 0", borderBottom: `1px solid ${BORDER}` }}>
               <span style={{ fontSize: 13, color: "var(--text-dim)", letterSpacing: "0.04em" }}>{label}</span>
-              <span style={{ fontSize: 14, fontWeight: 600, color: accent ?? "#fff", textAlign: "right" }}>{value}</span>
+              <span style={{ fontSize: 14, fontWeight: 600, color: accent ?? "var(--text)", textAlign: "right" }}>{value}</span>
             </div>
           );
           const fmtTime = (d: Date | null) => d ? d.toLocaleString("de-DE", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) : "—";
@@ -721,7 +721,7 @@ export default function ManualEntryModal({
                 background: !canSubmit || cgmLoading
                   ? "var(--border-soft)"
                   : `linear-gradient(135deg, ${ACCENT}, #6B8BFF)`,
-                color: !canSubmit || cgmLoading ? "var(--text-faint)" : "#fff",
+                color: !canSubmit || cgmLoading ? "var(--text-faint)" : "var(--on-accent)",
                 fontSize: 14, fontWeight: 700,
                 cursor: !canSubmit || cgmLoading ? "not-allowed" : "pointer",
                 boxShadow: !canSubmit || cgmLoading ? "none" : `0 4px 20px ${ACCENT}40`,
@@ -743,7 +743,7 @@ export default function ManualEntryModal({
                   : saving
                   ? "var(--border-soft)"
                   : `linear-gradient(135deg, ${ACCENT}, #6B8BFF)`,
-                color: saved ? GREEN : saving ? "var(--text-faint)" : "#fff",
+                color: saved ? GREEN : saving ? "var(--text-faint)" : "var(--on-accent)",
                 fontSize: 14, fontWeight: 700,
                 cursor: saving || saved ? "default" : "pointer",
                 boxShadow: saving || saved ? "none" : `0 4px 20px ${ACCENT}40`,
@@ -762,7 +762,7 @@ export default function ManualEntryModal({
                   <span style={{
                     width: 12, height: 12,
                     border: `1.5px solid var(--text-dim)`,
-                    borderTopColor: "#fff",
+                    borderTopColor: "var(--on-accent)",
                     borderRadius: "50%",
                     animation: "mem_spin 0.7s linear infinite",
                   }}/>

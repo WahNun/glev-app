@@ -51,7 +51,7 @@ export default function MealTrendArrow({
         color,
         background:
           color === "var(--text-dim)"
-            ? "var(--surface-2, rgba(255,255,255,0.06))"
+            ? "var(--border-soft)"
             : `${color}1f`,
         flexShrink: 0,
       }}

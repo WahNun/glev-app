@@ -82,8 +82,8 @@ export default function TrialExpiredModal() {
     >
       <div
         style={{
-          background: "#12121A",
-          border: "1px solid rgba(255,255,255,0.1)",
+          background: "var(--surface)",
+          border: "1px solid var(--border)",
           borderRadius: 20,
           padding: "36px 32px",
           maxWidth: 400,
@@ -116,7 +116,7 @@ export default function TrialExpiredModal() {
           style={{
             fontSize: 22,
             fontWeight: 700,
-            color: "#fff",
+            color: "var(--text)",
             margin: 0,
             lineHeight: 1.2,
             letterSpacing: "-0.02em",
@@ -128,7 +128,7 @@ export default function TrialExpiredModal() {
         <p
           style={{
             fontSize: 15,
-            color: "rgba(255,255,255,0.6)",
+            color: "var(--text-muted)",
             margin: 0,
             lineHeight: 1.6,
           }}
@@ -144,7 +144,7 @@ export default function TrialExpiredModal() {
             display: "block",
             width: "100%",
             background: "#4F6EF7",
-            color: "#fff",
+            color: "var(--on-accent)",
             textDecoration: "none",
             borderRadius: 12,
             padding: "16px 24px",
@@ -168,7 +168,7 @@ export default function TrialExpiredModal() {
           style={{
             background: "none",
             border: "none",
-            color: "rgba(255,255,255,0.35)",
+            color: "var(--text-faint)",
             fontSize: 13,
             cursor: "pointer",
             padding: "4px 8px",

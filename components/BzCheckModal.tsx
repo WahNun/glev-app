@@ -142,21 +142,21 @@ export default function BzCheckModal({ payload, onClose }: Props) {
             width: 36,
             height: 4,
             borderRadius: 2,
-            background: "rgba(255,255,255,0.18)",
+            background: "var(--text-ghost)",
             margin: "0 auto 20px",
           }}
         />
 
         {/* Header */}
         <div style={{ marginBottom: 6 }}>
-          <div style={{ fontSize: 11, color: "rgba(255,255,255,0.5)", marginBottom: 4 }}>
+          <div style={{ fontSize: 11, color: "var(--text-dim)", marginBottom: 4 }}>
             {typeLabel}
           </div>
           <h2
             style={{
               fontSize: 18,
               fontWeight: 700,
-              color: "rgba(255,255,255,0.92)",
+              color: "var(--text-strong)",
               margin: 0,
               lineHeight: 1.3,
             }}
@@ -166,7 +166,7 @@ export default function BzCheckModal({ payload, onClose }: Props) {
           <p
             style={{
               fontSize: 13,
-              color: "rgba(255,255,255,0.55)",
+              color: "var(--text-muted)",
               margin: "6px 0 0",
               lineHeight: 1.4,
             }}
@@ -182,8 +182,8 @@ export default function BzCheckModal({ payload, onClose }: Props) {
             alignItems: "center",
             gap: 10,
             marginTop: 20,
-            background: "rgba(255,255,255,0.06)",
-            border: `1.5px solid ${errorMsg ? "rgba(255,100,100,0.6)" : "rgba(255,255,255,0.12)"}`,
+            background: "var(--border-soft)",
+            border: `1.5px solid ${errorMsg ? "rgba(255,100,100,0.6)" : "var(--border-strong)"}`,
             borderRadius: 14,
             padding: "0 14px",
           }}
@@ -210,7 +210,7 @@ export default function BzCheckModal({ payload, onClose }: Props) {
               outline: "none",
               fontSize: 28,
               fontWeight: 700,
-              color: "rgba(255,255,255,0.92)",
+              color: "var(--text-strong)",
               padding: "16px 0",
               minWidth: 0,
             }}
@@ -218,7 +218,7 @@ export default function BzCheckModal({ payload, onClose }: Props) {
           <span
             style={{
               fontSize: 14,
-              color: "rgba(255,255,255,0.45)",
+              color: "var(--text-dim)",
               flexShrink: 0,
               paddingTop: 2,
             }}
@@ -258,7 +258,7 @@ export default function BzCheckModal({ payload, onClose }: Props) {
                 : status === "saving"
                   ? "rgba(79,110,247,0.6)"
                   : ACCENT,
-            color: "#fff",
+            color: "var(--on-accent)",
             fontSize: 16,
             fontWeight: 700,
             cursor:
@@ -291,7 +291,7 @@ export default function BzCheckModal({ payload, onClose }: Props) {
               borderRadius: 14,
               border: "none",
               background: "transparent",
-              color: "rgba(255,255,255,0.45)",
+              color: "var(--text-dim)",
               fontSize: 15,
               cursor: "pointer",
             }}

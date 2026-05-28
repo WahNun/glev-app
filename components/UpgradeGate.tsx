@@ -105,7 +105,7 @@ export default function UpgradeGate({
               display: "inline-block",
               padding: "10px 22px",
               background: ACCENT,
-              color: "#fff",
+              color: "var(--on-accent)",
               borderRadius: 9,
               fontSize: 13,
               fontWeight: 700,

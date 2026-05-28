@@ -370,7 +370,7 @@ function TrendArrow({ trend, t }: { trend: TrendClass; t: EngineTranslator }): R
         display: "inline-flex", alignItems: "center", justifyContent: "center",
         minWidth: 18, height: 18, borderRadius: 4, padding: "0 4px",
         fontSize: 14, lineHeight: 1, fontWeight: 800,
-        color: m.color, background: `${m.color === "var(--text-dim)" ? "var(--surface-2, rgba(255,255,255,0.06))" : m.color + "1f"}`,
+        color: m.color, background: `${m.color === "var(--text-dim)" ? "var(--border-soft)" : m.color + "1f"}`,
       }}
     >
       {m.glyph}
@@ -2598,7 +2598,7 @@ export default function EnginePage() {
                     borderRadius: 8,
                     border: "none",
                     background: "#4f46e5",
-                    color: "#fff",
+                    color: "var(--on-accent)",
                     fontWeight: 600,
                     fontSize: 14,
                     cursor: adjustmentBusy ? "wait" : "pointer",
@@ -2980,7 +2980,7 @@ export default function EnginePage() {
                               padding: "4px 10px",
                               borderRadius: 7,
                               background: ACCENT,
-                              color: "#fff",
+                              color: "var(--on-accent)",
                               border: "none",
                               fontWeight: 600,
                               fontSize: 12,

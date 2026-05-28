@@ -1242,7 +1242,7 @@ export default function SettingsPage() {
           style={{
             width: "100%", padding: "13px", borderRadius: 12, border: "none",
             cursor: saving ? "wait" : "pointer",
-            background: `linear-gradient(135deg, ${ACCENT}, #6B8BFF)`, color: "#fff",
+            background: `linear-gradient(135deg, ${ACCENT}, #6B8BFF)`, color: "var(--on-accent)",
             fontSize: 14, fontWeight: 700,
             opacity: saving ? 0.7 : 1,
           }}
@@ -1807,7 +1807,7 @@ export default function SettingsPage() {
                   onClick={() => upd("basalActionWindowH", hours)}
                   style={{
                     background: isSel ? ACCENT : "var(--surface-soft)",
-                    color: isSel ? "#fff" : "var(--text)",
+                    color: isSel ? "var(--on-accent)" : "var(--text)",
                     border: `1px solid ${isSel ? ACCENT : BORDER}`,
                     borderRadius: 999,
                     padding: "8px 14px",
@@ -1967,7 +1967,7 @@ export default function SettingsPage() {
               style={{
                 alignSelf: "flex-start",
                 padding: "8px 16px", borderRadius: 9, border: "none",
-                background: `${ACCENT}`, color: "#fff",
+                background: `${ACCENT}`, color: "var(--on-accent)",
                 fontSize: 13, fontWeight: 700,
                 cursor: apptBusy !== null || !newApptDate ? "not-allowed" : "pointer",
                 opacity: apptBusy !== null || !newApptDate ? 0.6 : 1,
@@ -2135,7 +2135,7 @@ export default function SettingsPage() {
                             disabled={rowBusy}
                             style={{
                               padding: "6px 14px", borderRadius: 8, border: "none",
-                              background: ACCENT, color: "#fff",
+                              background: ACCENT, color: "var(--on-accent)",
                               fontSize: 13, fontWeight: 600,
                               cursor: rowBusy ? "wait" : "pointer",
                               opacity: rowBusy ? 0.6 : 1,
@@ -2548,7 +2548,7 @@ export default function SettingsPage() {
                 padding: "12px 22px", borderRadius: 10,
                 border: `1px solid ${pendingLocale ? ACCENT : BORDER}`,
                 background: pendingLocale ? ACCENT : "transparent",
-                color: pendingLocale ? "#fff" : "var(--text-faint)",
+                color: pendingLocale ? "var(--on-accent)" : "var(--text-faint)",
                 fontSize: 14, fontWeight: 600,
                 cursor: pendingLocale ? "pointer" : "not-allowed",
                 whiteSpace: "nowrap",
@@ -2634,7 +2634,7 @@ export default function SettingsPage() {
                     flex: 1,
                     padding: "9px 12px", borderRadius: 99, border: "none", cursor: "pointer",
                     background: active ? ACCENT : "transparent",
-                    color: active ? "#fff" : "var(--text-body)",
+                    color: active ? "var(--on-accent)" : "var(--text-body)",
                     fontSize: 14, fontWeight: active ? 600 : 500,
                     transition: "background 120ms ease, color 120ms ease",
                   }}
@@ -2675,7 +2675,7 @@ export default function SettingsPage() {
                     flex: 1,
                     padding: "9px 12px", borderRadius: 99, border: "none", cursor: "pointer",
                     background: active ? ACCENT : "transparent",
-                    color: active ? "#fff" : "var(--text-body)",
+                    color: active ? "var(--on-accent)" : "var(--text-body)",
                     fontSize: 14, fontWeight: active ? 600 : 500,
                     transition: "background 120ms ease, color 120ms ease",
                   }}
@@ -2791,7 +2791,7 @@ export default function SettingsPage() {
               borderRadius: 12,
               border: "none",
               background: ACCENT,
-              color: "#fff",
+              color: "var(--on-accent)",
               fontWeight: 700,
               fontSize: 14,
               fontFamily: "inherit",

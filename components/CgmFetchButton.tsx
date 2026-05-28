@@ -99,9 +99,9 @@ export default function CgmFetchButton({
           height: 28,
           padding: 0,
           borderRadius: 8,
-          border: `1px solid ${hasErr ? `${PINK}55` : "rgba(255,255,255,0.08)"}`,
-          background: hasErr ? `${PINK}10` : "rgba(255,255,255,0.03)",
-          color: hasErr ? PINK : "rgba(255,255,255,0.7)",
+          border: `1px solid ${hasErr ? `${PINK}55` : "var(--border)"}`,
+          background: hasErr ? `${PINK}10` : "var(--surface-soft)",
+          color: hasErr ? PINK : "var(--text-body)",
           cursor: loading ? "default" : "pointer",
           display: "inline-flex",
           alignItems: "center",
@@ -131,8 +131,8 @@ export default function CgmFetchButton({
             style={{
               width: 12,
               height: 12,
-              border: `1.5px solid ${(hasErr ? PINK : "#ffffff")}33`,
-              borderTopColor: hasErr ? PINK : "rgba(255,255,255,0.85)",
+              border: `1.5px solid ${hasErr ? `${PINK}33` : "var(--text-ghost)"}`,
+              borderTopColor: hasErr ? PINK : "var(--text)",
               borderRadius: "50%",
               animation: "cgmspin 0.7s linear infinite",
             }}
@@ -143,7 +143,7 @@ export default function CgmFetchButton({
             height={13}
             viewBox="0 0 24 24"
             fill="none"
-            stroke={hasErr ? PINK : "rgba(255,255,255,0.75)"}
+            stroke={hasErr ? PINK : "var(--text-body)"}
             strokeWidth="2.2"
             strokeLinecap="round"
             strokeLinejoin="round"
@@ -169,7 +169,7 @@ export default function CgmFetchButton({
           height: small ? 28 : 36,
           borderRadius: small ? 8 : 10,
           border: `1px solid ${hasErr ? `${PINK}55` : `${ACCENT}44`}`,
-          background: loading ? "rgba(255,255,255,0.04)" : hasErr ? `${PINK}14` : `${ACCENT}18`,
+          background: loading ? "var(--surface-soft)" : hasErr ? `${PINK}14` : `${ACCENT}18`,
           color: hasErr ? PINK : ACCENT,
           cursor: loading ? "default" : "pointer",
           fontSize: small ? 10 : 11,

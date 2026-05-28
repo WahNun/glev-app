@@ -659,7 +659,7 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
               iOS-Favicon). Wordmark folgt dem Theme via var(--text), aber
               das Logo-Quadrat soll in Light Mode NICHT mit-aufhellen,
               sonst löst es sich vom Header optisch auf. */}
-          <GlevLockup size={26} color="var(--text)" symbolBg="#0F0F14" />
+          <GlevLockup size={26} color="var(--text)" symbolBg="var(--surface-alt)" />
           {pathname.startsWith("/dashboard") && cgmSource && (
             <div style={{
               display: "inline-flex", alignItems: "center", gap: 5,
@@ -898,7 +898,7 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
             borderRadius: 10, cursor: "pointer", width: "100%",
           }}
         >
-          <GlevLogo size={28} bg="#0F0F14" />
+          <GlevLogo size={28} bg="var(--surface-alt)" />
         </div>
 
         <nav style={{ flex: 1, display: "flex", flexDirection: "column", gap: 2, width: "100%" }}>

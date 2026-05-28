@@ -3,7 +3,6 @@
 import { useLocale } from "next-intl";
 import { setLocale, type Locale, SUPPORTED_LOCALES } from "@/lib/locale";
 
-const BORDER = "rgba(255,255,255,0.10)";
 const ACCENT = "#4F6EF7";
 
 type Props = {
@@ -27,8 +26,8 @@ export default function LocaleSwitcher({ size = "sm", ariaLabel }: Props) {
         padding: 2,
         gap: 2,
         borderRadius: 999,
-        border: `1px solid ${BORDER}`,
-        background: "rgba(255,255,255,0.03)",
+        border: "1px solid var(--border)",
+        background: "var(--surface-soft)",
         fontFamily: "inherit",
       }}
     >
@@ -53,7 +52,7 @@ export default function LocaleSwitcher({ size = "sm", ariaLabel }: Props) {
               border: "none",
               cursor: isActive ? "default" : "pointer",
               background: isActive ? ACCENT : "transparent",
-              color: isActive ? "#fff" : "rgba(255,255,255,0.6)",
+              color: isActive ? "var(--on-accent)" : "var(--text-muted)",
               transition: "background 0.15s, color 0.15s",
               fontFamily: "inherit",
               lineHeight: 1,

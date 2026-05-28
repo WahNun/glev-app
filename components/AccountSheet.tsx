@@ -143,7 +143,7 @@ export default function AccountSheet({ open, onClose }: AccountSheetProps) {
           background:`linear-gradient(135deg, ${ACCENT}, #6B8BFF)`,
           border:`2px solid ${ACCENT}66`,
           display:"flex", alignItems:"center", justifyContent:"center",
-          fontSize:24, fontWeight:800, color:"#fff",
+          fontSize:24, fontWeight:800, color:"var(--on-accent)",
           letterSpacing:"-0.02em", flexShrink:0,
         }}>
           {initial}
@@ -295,7 +295,7 @@ export default function AccountSheet({ open, onClose }: AccountSheetProps) {
               style={{
                 flex:1, padding:"9px 0", borderRadius:8, border:"none",
                 cursor: signingOut ? "wait" : "pointer",
-                background: PINK, color:"#fff",
+                background: PINK, color:"var(--on-accent)",
                 fontSize:13, fontWeight:700,
               }}
             >

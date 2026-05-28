@@ -467,7 +467,7 @@ export default function EngineChatPanel({
               background: input.trim() && !sending
                 ? `linear-gradient(135deg, ${ACCENT}, #6B8BFF)`
                 : "var(--border-soft)",
-              color: input.trim() && !sending ? "#fff" : "var(--text-faint)",
+              color: input.trim() && !sending ? "var(--on-accent)" : "var(--text-faint)",
               fontSize:14, fontWeight:700,
               cursor: input.trim() && !sending ? "pointer" : "not-allowed",
               transition:"all 0.15s",
