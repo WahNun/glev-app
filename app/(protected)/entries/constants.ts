@@ -1,8 +1,9 @@
-export { FETCH_MEALS_DEFAULT_SINCE_DAYS } from "@/lib/meals";
 import {
+  FETCH_MEALS_DEFAULT_SINCE_DAYS,
   type FetchMealsOptions,
   type Meal,
 } from "@/lib/meals";
+export { FETCH_MEALS_DEFAULT_SINCE_DAYS };
 
 /**
  * How many days of meal history the entries page fetches on initial
