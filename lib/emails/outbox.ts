@@ -544,7 +544,7 @@ export async function flushOutbox(deps?: FlushDeps): Promise<FlushResult> {
     // eslint-disable-next-line no-console
     console.warn("[email_outbox] reclaimed stuck rows:", {
       count: reclaimed.length,
-      ids: reclaimed.map((r) => r.id),
+      ids: reclaimed.map((r: { id: string }) => r.id),
     });
   }
 
