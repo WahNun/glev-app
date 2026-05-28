@@ -18,6 +18,9 @@ interface Props {
   onConfirmAction?: (messageId: string) => void;
   onCancelAction?: (messageId: string) => void;
   onClearChat?: () => void;
+  /** Called whenever the chat sheet's STT listening state changes so the
+   *  parent (Layout.tsx) can reflect it on the FAB. */
+  onListeningChange?: (listening: boolean) => void;
 }
 
 const DISCLAIMER =
@@ -179,6 +182,7 @@ export default function GlevAIChatSheet({
   onConfirmAction,
   onCancelAction,
   onClearChat,
+  onListeningChange,
 }: Props) {
   const [input, setInput] = useState("");
   const [sttError, setSttError] = useState<string | null>(null);
@@ -270,6 +274,14 @@ export default function GlevAIChatSheet({
       document.removeEventListener("pointerdown", onDown, true);
     };
   }, [isListening, stopListening]);
+
+  // Notify parent whenever the chat sheet's STT listening state changes so
+  // the FAB in Layout.tsx can show the listening animation independently of
+  // the engine voice-recording state (voice.recording).
+  useEffect(() => {
+    onListeningChange?.(isListening);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isListening]);
 
   // Broadcast TTS speaking state so the FAB can glow green.
   useEffect(() => {

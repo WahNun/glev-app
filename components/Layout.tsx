@@ -152,6 +152,12 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
   // TTS speaking state — driven by glev:tts-speaking CustomEvents from
   // GlevAIChatSheet so the FAB can show a green glow while AI speaks.
   const [ttsSpeaking, setTtsSpeaking] = useState(false);
+
+  // aiThinking: true while the chat sheet's STT mic is active (user
+  // speaking into the chat) OR while the AI is streaming a reply.
+  // Kept separate from voice.recording (engine STT) so both can be true
+  // simultaneously without interfering with each other.
+  const [aiThinking, setAiThinking] = useState(false);
   useEffect(() => {
     function onTtsSpeaking(e: Event) {
       setTtsSpeaking((e as CustomEvent<{ active: boolean }>).detail.active);
@@ -1020,7 +1026,7 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
         <MobileGlevFab
           label={tNav("glev")}
           active={quickAddOpen || voice.recording}
-          recording={voice.recording}
+          recording={voice.recording || aiThinking || (aiVoiceEnabled && glevAi.streaming)}
           speaking={aiVoiceEnabled ? ttsSpeaking : false}
           sheetOpen={aiVoiceEnabled ? glevAi.sheetOpen : false}
           hasConversation={aiVoiceEnabled ? glevAi.messages.length > 0 && !glevAi.sheetOpen : false}
@@ -1127,6 +1133,7 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
             onConfirmAction={glevAi.confirmAction}
             onCancelAction={glevAi.cancelAction}
             onClearChat={glevAi.clearMessages}
+            onListeningChange={setAiThinking}
           />
         </>
       )}
