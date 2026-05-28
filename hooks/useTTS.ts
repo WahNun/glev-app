@@ -40,6 +40,8 @@ function pickGermanVoice(): SpeechSynthesisVoice | null {
 
 export function useTTS() {
   const [speaking, setSpeaking] = useState(false);
+  /** ID of the message currently being spoken, or null when idle. */
+  const [speakingId, setSpeakingId] = useState<string | null>(null);
   // `enabled` = master unmute (default: on)
   const [enabled, setEnabled] = useState(true);
   // `autoRead` = automatically speak AI responses (default: off)
@@ -95,11 +97,12 @@ export function useTTS() {
     }
     utteranceRef.current = null;
     setSpeaking(false);
+    setSpeakingId(null);
   }, []);
 
   /** Web Speech API fallback — used when Mistral TTS is unavailable. */
   const speakWebSpeech = useCallback(
-    (text: string) => {
+    (text: string, id?: string) => {
       if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
 
       const u = new SpeechSynthesisUtterance(text.trim());
@@ -110,19 +113,20 @@ export function useTTS() {
       const voice = pickGermanVoice();
       if (voice) u.voice = voice;
 
-      u.onstart = () => setSpeaking(true);
-      u.onend = () => { setSpeaking(false); utteranceRef.current = null; };
-      u.onerror = () => { setSpeaking(false); utteranceRef.current = null; };
+      u.onstart = () => { setSpeaking(true); setSpeakingId(id ?? null); };
+      u.onend = () => { setSpeaking(false); setSpeakingId(null); utteranceRef.current = null; };
+      u.onerror = () => { setSpeaking(false); setSpeakingId(null); utteranceRef.current = null; };
 
       utteranceRef.current = u;
       setSpeaking(true);
+      setSpeakingId(id ?? null);
       window.speechSynthesis.speak(u);
     },
     [],
   );
 
   const speak = useCallback(
-    async (text: string) => {
+    async (text: string, id?: string) => {
       if (!enabled || !text.trim()) return;
       stop();
 
@@ -147,21 +151,24 @@ export function useTTS() {
           const audio = new Audio(url);
           audioRef.current = audio;
 
-          audio.onplay = () => setSpeaking(true);
+          audio.onplay = () => { setSpeaking(true); setSpeakingId(id ?? null); };
           audio.onended = () => {
             setSpeaking(false);
+            setSpeakingId(null);
             audioRef.current = null;
             revokeBlob();
           };
           audio.onerror = () => {
             setSpeaking(false);
+            setSpeakingId(null);
             audioRef.current = null;
             revokeBlob();
             // If audio playback fails, fall back to Web Speech
-            speakWebSpeech(clean);
+            speakWebSpeech(clean, id);
           };
 
           setSpeaking(true);
+          setSpeakingId(id ?? null);
           await audio.play();
           return; // success — skip Web Speech below
         }
@@ -172,7 +179,7 @@ export function useTTS() {
       // ── Web Speech API (fallback) ─────────────────────────────────────────
       // Chrome quirk: cancel() needs a tick before speak()
       await new Promise((r) => setTimeout(r, 50));
-      speakWebSpeech(clean);
+      speakWebSpeech(clean, id);
     },
     [enabled, stop, speakWebSpeech],
   );
@@ -201,5 +208,5 @@ export function useTTS() {
     return () => { stop(); };
   }, [stop]);
 
-  return { speak, stop, speaking, enabled, toggleEnabled, autoRead, toggleAutoRead };
+  return { speak, stop, speaking, speakingId, enabled, toggleEnabled, autoRead, toggleAutoRead };
 }
