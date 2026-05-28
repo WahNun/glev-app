@@ -1,17 +1,18 @@
 /**
  * PATCH /api/profile/push-token
- *
  * Persists the device push token (FCM for Android, APNs for iOS) returned
  * by Capacitor's PushNotifications.registration event into the user's
  * profiles row. Called from lib/pushNotifications.ts immediately after
  * the native registration event fires.
- *
  * Body: { token: string; platform: "ios" | "android" }
- *
- * The endpoint is intentionally a PATCH (not PUT) — it only writes the
- * three push-token columns and leaves the rest of the profile untouched.
- *
  * Auth: cookie session (web) or Bearer token (native Capacitor shell).
+ * Returns 204 No Content on success.
+ *
+ * DELETE /api/profile/push-token
+ * Clears the push token columns (push_token, push_platform,
+ * push_token_updated_at) from the user's profiles row. Called by
+ * lib/auth.ts signOut() BEFORE the Supabase session is invalidated,
+ * so the hypo-check Edge Function stops targeting this device.
  * Returns 204 No Content on success.
  */
 
@@ -52,6 +53,26 @@ export async function PATCH(req: NextRequest): Promise<NextResponse> {
       push_token: trimmedToken,
       push_platform: platform as string,
       push_token_updated_at: new Date().toISOString(),
+    })
+    .eq("user_id", auth.user.id);
+
+  if (error) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+
+  return new NextResponse(null, { status: 204 });
+}
+
+export async function DELETE(req: NextRequest): Promise<NextResponse> {
+  const auth = await authedClient(req);
+  if (!auth.user) return badJson("unauthorized", 401);
+
+  const { error } = await auth.sb
+    .from("profiles")
+    .update({
+      push_token: null,
+      push_platform: null,
+      push_token_updated_at: null,
     })
     .eq("user_id", auth.user.id);
 

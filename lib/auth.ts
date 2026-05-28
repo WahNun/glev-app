@@ -29,6 +29,25 @@ export async function signUp(email: string, password: string): Promise<{ needsEm
 
 export async function signOut() {
   if (!supabase) return;
+
+  // Clear the server-side push token BEFORE invalidating the session so
+  // the hypo-check Edge Function stops targeting this device after logout.
+  // Fire-and-forget — a network failure is non-fatal.
+  try {
+    await fetch("/api/profile/push-token", {
+      method: "DELETE",
+      credentials: "include",
+    });
+  } catch { /* non-fatal */ }
+
+  // Remove the locally cached token so the next user signing in on the
+  // same device starts fresh.
+  try {
+    if (typeof window !== "undefined") {
+      window.localStorage.removeItem("glev_push_token");
+    }
+  } catch { /* private mode / SSR — non-fatal */ }
+
   await supabase.auth.signOut();
   // Drop in-tab CGM autofill timers + cached user-id so a different account
   // signing in next does not inherit the previous user's scheduled fills.
