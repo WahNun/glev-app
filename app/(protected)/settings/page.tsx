@@ -3460,11 +3460,7 @@ export default function SettingsPage() {
           ariaLabel={tSettings("row_open_aria", { label: tSettings("onboarding_replay_title") })}
           onClick={() => openSheetWith("onboarding")}
         />
-      </SettingsSection>
-
-      <SettingsSection title={tSettings("section_appearance")}>
         <SettingsRow
-          first
           iconColor={PURPLE}
           icon={ICON.appearance}
           label={tSettings("appearance")}
@@ -3472,11 +3468,7 @@ export default function SettingsPage() {
           ariaLabel={tSettings("row_open_aria", { label: tSettings("appearance") })}
           onClick={() => openSheetWith("appearance")}
         />
-      </SettingsSection>
-
-      <SettingsSection title={tSettings("section_goals")}>
         <SettingsRow
-          first
           iconColor={ACCENT}
           icon={ICON.target}
           label={tSettings("daily_macros_title")}
