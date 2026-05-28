@@ -3211,14 +3211,14 @@ export default function InsightsPage() {
       }
 
       // Symptom ranking: count occurrences and track running severity sum.
-      const symStats: Record<string, { count: number; sevSum: number }> = {};
+      const symStats: Record<string, { count: number; sevSum: number; glucoseSum: number; glucoseCount: number }> = {};
       let totalSymptomEntries = 0;
       for (const s of symptomLogs) {
         const occ = new Date(s.occurred_at).getTime();
         if (occ < windowStartMs || occ >= windowEndMs) continue;
         totalSymptomEntries += 1;
         for (const sym of s.symptom_types || []) {
-          const cur = symStats[sym] ||= { count: 0, sevSum: 0 };
+          const cur = symStats[sym] ||= { count: 0, sevSum: 0, glucoseSum: 0, glucoseCount: 0 };
           cur.count += 1;
           // Per-symptom severity from the severities map. Fall back to
           // the row average when a legacy / mis-keyed entry is missing
@@ -3236,10 +3236,20 @@ export default function InsightsPage() {
               : 3;
             cur.sevSum += fallback;
           }
+          // Accumulate glucose snapshot when present.
+          if (typeof s.cgm_glucose_at_log === "number" && s.cgm_glucose_at_log !== null) {
+            cur.glucoseSum += s.cgm_glucose_at_log;
+            cur.glucoseCount += 1;
+          }
         }
       }
       const topSymptoms = Object.entries(symStats)
-        .map(([k, v]) => ({ key: k as SymptomType, count: v.count, avgSev: v.sevSum / v.count }))
+        .map(([k, v]) => ({
+          key: k as SymptomType,
+          count: v.count,
+          avgSev: v.sevSum / v.count,
+          avgGlucose: v.glucoseCount > 0 ? Math.round(v.glucoseSum / v.glucoseCount) : null,
+        }))
         .sort((a, b) => b.count - a.count)
         .slice(0, 3);
 
@@ -3383,13 +3393,19 @@ export default function InsightsPage() {
                 </div>
                 <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
                   {topSymptoms.map(s => (
-                    <div key={s.key} style={{ display:"grid", gridTemplateColumns:"1fr auto auto", gap:8, alignItems:"center", padding:"6px 10px", background:"var(--surface-soft)", borderRadius:8 }}>
+                    <div key={s.key} style={{ display:"grid", gridTemplateColumns:"1fr auto auto auto", gap:8, alignItems:"center", padding:"6px 10px", background:"var(--surface-soft)", borderRadius:8 }}>
                       <div style={{ fontSize:13, fontWeight:600, color:"var(--text)" }}>
                         {tInsights(`symptom_${s.key}` as never)}
                       </div>
                       <div style={{ fontSize:12, color:"var(--text-dim)", fontFamily:"var(--font-mono)" }}>
                         ×{s.count}
                       </div>
+                      {s.avgGlucose !== null && (
+                        <div style={{ fontSize:12, color:"var(--text-dim)", fontFamily:"var(--font-mono)", whiteSpace:"nowrap" }}>
+                          ∅ {s.avgGlucose} mg/dL
+                        </div>
+                      )}
+                      {s.avgGlucose === null && <div />}
                       <div style={{ display:"flex", gap:2 }} aria-label={`avg ${s.avgSev.toFixed(1)} of 5`}>
                         {[1,2,3,4,5].map(n => (
                           <span key={n} style={{
