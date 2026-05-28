@@ -28,6 +28,7 @@ import {
   type IcrSchedule,
 } from "@/lib/icrSchedule";
 import { hapticSelection, hapticSuccess, hapticError } from "@/lib/haptics";
+import SnapSlider from "@/components/log/SnapSlider";
 
 const ACCENT = "#4F6EF7";
 const GREEN  = "#22D3A0";
@@ -359,31 +360,33 @@ function SlotCard({
         <label style={{ display: "block", fontSize: 11, color: "var(--text-faint)", marginBottom: 4 }}>
           {t("slot_icr_label")}
         </label>
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <span style={{ fontSize: 14, color: "var(--text-dim)", fontFamily: "var(--font-mono)" }}>1 :</span>
-          <input
-            type="number"
-            min={1}
-            max={100}
-            step={1}
-            value={slot.icrGPerUnit}
-            onChange={(e) => {
-              const v = Number(e.target.value);
-              if (Number.isFinite(v)) onChange({ icrGPerUnit: Math.max(1, Math.min(100, Math.round(v))) });
-            }}
-            style={{
-              flex: 1,
-              padding: "10px 12px",
-              background: "var(--surface-soft)",
-              border: `1px solid var(--border)`,
-              borderRadius: 10,
-              color: "var(--text)",
-              fontSize: 14,
-              fontFamily: "var(--font-mono)",
-              boxSizing: "border-box",
-            }}
-          />
-          <span style={{ fontSize: 12, color: "var(--text-faint)" }}>{t("slot_icr_unit")}</span>
+        <SnapSlider
+          value={slot.icrGPerUnit}
+          onChange={(v) => onChange({ icrGPerUnit: v })}
+          min={2}
+          max={40}
+          step={1}
+          unit="g/IE"
+          accent={ACCENT}
+          ariaLabel={t("slot_icr_label")}
+        />
+        <div style={{
+          display: "flex",
+          justifyContent: "space-between",
+          marginTop: 6,
+          paddingLeft: 2,
+          paddingRight: 2,
+        }}>
+          {[5, 10, 15, 20, 25, 30].map((tick) => (
+            <span key={tick} style={{
+              fontSize: 10,
+              color: slot.icrGPerUnit === tick ? ACCENT : "var(--text-ghost)",
+              fontWeight: slot.icrGPerUnit === tick ? 700 : 400,
+              transition: "color 150ms ease",
+            }}>
+              {tick}
+            </span>
+          ))}
         </div>
       </div>
     </div>
