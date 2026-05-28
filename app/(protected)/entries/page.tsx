@@ -398,6 +398,10 @@ export default function EntriesPage() {
   const [manualOpen, setManualOpen] = useState(false);
   const [currentIndex, setCurrentIndex] = useState(0);
   const _anchoredRef = useRef(false);
+  // Month-jump strip: null = "recent" mode (default last-30d load)
+  // "YYYY-MM" = jumped to that calendar month
+  const [jumpedToMonth, setJumpedToMonth] = useState<string | null>(null);
+  const [jumpLoading, setJumpLoading] = useState(false);
   const filtersWrapRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => { fetchInsulinType().then(setInsType).catch(() => {}); }, []);
@@ -689,14 +693,19 @@ export default function EntriesPage() {
     try {
       // Fetch the next page of meals (only when not exhausted) and a
       // matching slab of every other entry type in parallel.
+      // For Plus (historyLimitISO === null) use Infinity so pagination
+      // continues from a month-jump that landed beyond the 365-day window.
+      // For Free/Pro the sinceIso guard enforces the plan limit correctly.
+      const sinceDays = historyLimitISO === null ? Infinity : FETCH_MEALS_DEFAULT_SINCE_DAYS;
       const beforeCursor = oldestNonMealIso.current;
       const [more, moreIns, moreEx, moreCy, moreSy, moreInf] = await Promise.all([
         hasMoreMeals && oldestMealCreatedAt.current
-          ? executeLoadMoreFetch(
-              fetchMeals,
-              oldestMealCreatedAt.current,
-              historyLimitISO ?? undefined,
-            )
+          ? fetchMeals({
+              before: oldestMealCreatedAt.current,
+              sinceDays,
+              sinceIso: historyLimitISO ?? undefined,    // plan cap wins when more restrictive
+              limit: MEALS_PAGE_SIZE,
+            })
           : Promise.resolve([] as Awaited<ReturnType<typeof fetchMeals>>),
         beforeCursor && hasMoreNonMeals
           ? fetchRecentInsulinLogs(NON_MEAL_PAGE_DAYS, { before: beforeCursor }).catch(() => [] as InsulinLog[])
@@ -778,6 +787,66 @@ export default function EntriesPage() {
     } catch (e) { console.error(e); }
     finally { setLoadingMore(false); }
   }, [loadingMore, hasMoreMeals, hasMoreNonMeals, historyLimitISO]);
+
+  // Jump the list to a specific calendar month. Passing null resets to the
+  // default "recent" view (last MEALS_INITIAL_DAYS days). Selecting a month
+  // resets the meal list and starts keyset pagination from the end of that
+  // month, so the user can keep scrolling back from there.
+  const jumpToMonth = useCallback(async (ym: string | null) => {
+    setJumpedToMonth(ym);
+    setJumpLoading(true);
+    try {
+      if (ym === null) {
+        // Reset to default: last 30 days
+        const m = await fetchMeals({ sinceDays: MEALS_INITIAL_DAYS, limit: Infinity });
+        setMeals(m);
+        oldestMealCreatedAt.current = m.length > 0 ? m[m.length - 1].created_at : null;
+        setHasMoreMeals(m.length > 0);
+      } else {
+        // ym is "YYYY-MM"; set `before` to the first moment of next month so
+        // we load all entries UP TO (and including) the last day of ym.
+        const [yr, mo] = ym.split("-").map(Number);
+        const nextYr  = mo === 12 ? yr + 1 : yr;
+        const nextMo  = mo === 12 ? 1 : mo + 1;
+        const before  = `${nextYr}-${String(nextMo).padStart(2, "0")}-01T00:00:00.000Z`;
+        // For Plus (historyLimitISO === null) there is no plan-imposed
+        // cutoff, so we must NOT apply the 365-day practical cap — that
+        // would make month chips older than ~12 months show as dead. Use
+        // Infinity so the server window matches the UI's available months.
+        // For Free/Pro the sinceIso guard already enforces the plan limit.
+        const sinceDays = historyLimitISO === null ? Infinity : FETCH_MEALS_DEFAULT_SINCE_DAYS;
+        const m = await fetchMeals({
+          before,
+          sinceDays,
+          sinceIso: historyLimitISO ?? undefined,
+          limit: MEALS_PAGE_SIZE,
+        });
+        setMeals(m);
+        oldestMealCreatedAt.current = m.length > 0 ? m[m.length - 1].created_at : null;
+        setHasMoreMeals(m.length >= MEALS_PAGE_SIZE);
+      }
+    } catch (e) { console.error(e); }
+    finally { setJumpLoading(false); }
+  }, [historyLimitISO]);
+
+  // Available months for the jump strip, newest first, up to the plan cutoff.
+  // Plus users see up to 24 months (2 years); Free/Pro are naturally limited
+  // by their 60- or 90-day window.
+  const availableMonths = useMemo<string[]>(() => {
+    const now = new Date();
+    const cutoff = historyLimitISO
+      ? new Date(historyLimitISO)
+      : new Date(Date.now() - 365 * 2 * 86_400_000); // 2-year cap for Plus
+    const months: string[] = [];
+    // Start from first day of current month, walk backwards
+    let d = new Date(Date.UTC(now.getFullYear(), now.getMonth(), 1));
+    const cutoffMonth = new Date(Date.UTC(cutoff.getFullYear(), cutoff.getMonth(), 1));
+    while (d >= cutoffMonth && months.length < 24) {
+      months.push(`${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`);
+      d = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() - 1, 1));
+    }
+    return months;
+  }, [historyLimitISO]);
 
   // Automatically load the next page when the sentinel div scrolls into view.
   // Fires when EITHER meals OR non-meal types still have older data.
@@ -1179,6 +1248,93 @@ export default function EntriesPage() {
         </div>
         <input style={{ ...inp, width:"100%", boxSizing:"border-box" }} placeholder={tx("search_placeholder")} value={search} onChange={e => setSearch(e.target.value)}/>
       </div>
+
+      {/* MONTH-JUMP STRIP — only render when there's more than one month
+          in the user's history window. Free users with <60 days often have
+          only one month so the strip would show a single "Recent" pill and
+          a single month pill, which is not worth the chrome. */}
+      {availableMonths.length > 1 && (
+        <div
+          role="navigation"
+          aria-label={tHistory("jump_strip_aria")}
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 6,
+            overflowX: "auto",
+            scrollbarWidth: "none",
+            marginBottom: 14,
+            paddingBottom: 2, // keeps focus ring from clipping
+          }}
+        >
+          <style>{`.glev-month-strip::-webkit-scrollbar{display:none}`}</style>
+          {/* "Recent" reset chip */}
+          <button
+            onClick={() => { if (jumpedToMonth !== null) jumpToMonth(null); }}
+            disabled={jumpLoading}
+            aria-pressed={jumpedToMonth === null}
+            style={{
+              flexShrink: 0,
+              padding: "5px 12px",
+              borderRadius: 99,
+              border: `1px solid ${jumpedToMonth === null ? ACCENT + "80" : BORDER}`,
+              background: jumpedToMonth === null ? `${ACCENT}20` : "transparent",
+              color: jumpedToMonth === null ? ACCENT : "var(--text-muted)",
+              fontSize: 12,
+              fontWeight: jumpedToMonth === null ? 700 : 500,
+              cursor: jumpLoading ? "wait" : jumpedToMonth === null ? "default" : "pointer",
+              letterSpacing: "0.02em",
+              whiteSpace: "nowrap",
+              transition: "background 0.12s, color 0.12s, border-color 0.12s",
+            }}
+          >
+            {tHistory("jump_recent")}
+          </button>
+          {/* Separator */}
+          <div style={{ width: 1, height: 16, background: "var(--border)", flexShrink: 0 }} aria-hidden="true" />
+          {/* Month chips */}
+          {availableMonths.map(ym => {
+            const [yr, mo] = ym.split("-").map(Number);
+            const date = new Date(yr, mo - 1, 1);
+            const now = new Date();
+            const isCurrentYear = yr === now.getFullYear();
+            const monthLabel = date.toLocaleDateString(locale, { month: "short" });
+            const label = isCurrentYear ? monthLabel : `${monthLabel} ${String(yr).slice(2)}`;
+            const isActive = jumpedToMonth === ym;
+            return (
+              <button
+                key={ym}
+                onClick={() => { if (!isActive) jumpToMonth(ym); }}
+                disabled={jumpLoading}
+                aria-pressed={isActive}
+                title={date.toLocaleDateString(locale, { month: "long", year: "numeric" })}
+                style={{
+                  flexShrink: 0,
+                  padding: "5px 12px",
+                  borderRadius: 99,
+                  border: `1px solid ${isActive ? ACCENT + "80" : BORDER}`,
+                  background: isActive ? `${ACCENT}20` : "transparent",
+                  color: isActive ? ACCENT : "var(--text-muted)",
+                  fontSize: 12,
+                  fontWeight: isActive ? 700 : 500,
+                  cursor: jumpLoading ? "wait" : isActive ? "default" : "pointer",
+                  letterSpacing: "0.02em",
+                  whiteSpace: "nowrap",
+                  transition: "background 0.12s, color 0.12s, border-color 0.12s",
+                }}
+              >
+                {label}
+              </button>
+            );
+          })}
+          {/* Loading spinner inside the strip */}
+          {jumpLoading && (
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={ACCENT} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ flexShrink: 0, animation: "glevSpin 0.8s linear infinite" }}>
+              <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
+            </svg>
+          )}
+        </div>
+      )}
 
       {/* CARD STACK */}
       {filtered.length === 0 ? (

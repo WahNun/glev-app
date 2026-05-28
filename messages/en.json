@@ -626,7 +626,9 @@
     "no_entries": "No entries yet",
     "load_more_btn": "Load more",
     "load_more_loading": "Loading…",
-    "no_more_entries": "All entries loaded"
+    "no_more_entries": "All entries loaded",
+    "jump_recent": "Recent",
+    "jump_strip_aria": "Jump to a month"
   },
   "insights": {
     "tile_raw_icr_label": "Raw ICR",
