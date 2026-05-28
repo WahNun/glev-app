@@ -14,8 +14,32 @@ const CHECKOUT_ENDPOINT: Record<string, string> = {
   plus:  "/api/checkout/plus",
 };
 
-async function startCheckout(locale: string, tier: string): Promise<string | null> {
+/**
+ * Bestimmt ob EUR oder USD für den Stripe-Checkout verwendet werden soll.
+ *
+ * Logik:
+ *   1. Ist die Browser-Timezone in Europa? → immer EUR (locale "de")
+ *      Das erfasst EN-Nutzer aus Europa korrekt.
+ *   2. Sonst: App-Locale "de" → EUR, "en" → USD
+ *
+ * Damit bekommen DACH + alle europäischen Länder EUR,
+ * EN-US-Nutzer außerhalb Europas bekommen USD.
+ */
+function resolveCheckoutLocale(appLocale: string): string {
+  try {
+    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    if (tz.startsWith("Europe/") || tz.startsWith("Atlantic/") || tz === "UTC") {
+      return "de"; // EUR
+    }
+  } catch {
+    // Intl nicht verfügbar → Fallback auf App-Locale
+  }
+  return appLocale === "en" ? "en" : "de";
+}
+
+async function startCheckout(appLocale: string, tier: string): Promise<string | null> {
   const endpoint = CHECKOUT_ENDPOINT[tier] ?? "/api/checkout/pro";
+  const locale = resolveCheckoutLocale(appLocale);
   try {
     const res = await fetch(endpoint, {
       method: "POST",
