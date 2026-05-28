@@ -1037,7 +1037,7 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
         <MobileGlevFab
           label={tNav("glev")}
           active={quickAddOpen || voice.recording}
-          recording={voice.recording || aiThinking || (aiVoiceEnabled && glevAi.streaming)}
+          recording={!!(voice.recording || aiThinking || (aiVoiceEnabled && glevAi.streaming))}
           speaking={aiVoiceEnabled ? ttsSpeaking : false}
           sheetOpen={aiVoiceEnabled ? glevAi.sheetOpen : false}
           hasConversation={aiVoiceEnabled ? glevAi.messages.length > 0 && !glevAi.sheetOpen : false}
