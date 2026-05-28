@@ -39,7 +39,7 @@ export type FeatureFlag = "ai_voice";
 export function useFeatureFlag(flag: FeatureFlag): boolean | null {
   const [enabled, setEnabled] = useState<boolean | null>(() => {
     if (typeof window === "undefined") return null;
-    const overrides = (window as Record<string, unknown>).__GLEV_FEATURE_FLAGS__;
+    const overrides = (window as unknown as Record<string, unknown>).__GLEV_FEATURE_FLAGS__;
     if (overrides !== null && typeof overrides === "object" && flag in (overrides as object)) {
       return (overrides as Record<string, boolean>)[flag] ?? null;
     }
@@ -48,7 +48,7 @@ export function useFeatureFlag(flag: FeatureFlag): boolean | null {
 
   useEffect(() => {
     if (typeof window !== "undefined") {
-      const overrides = (window as Record<string, unknown>).__GLEV_FEATURE_FLAGS__;
+      const overrides = (window as unknown as Record<string, unknown>).__GLEV_FEATURE_FLAGS__;
       if (overrides !== null && typeof overrides === "object" && flag in (overrides as object)) {
         return;
       }

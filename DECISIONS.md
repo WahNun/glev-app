@@ -259,6 +259,7 @@ Neue Tabelle `admin_tts_config` (Singleton-Row, id = 'singleton') speichert die 
 
 ## Fix Log
 | Datum | Task-Name | Asana-GID | Beschreibung |
+| 2026-05-28 | Fix TS type cast error in lib/featureFlags.ts | — | `lib/featureFlags.ts`: `window as Record<string, unknown>` ist laut TS nicht erlaubt — über `unknown` als Zwischenschritt casten: `window as unknown as Record<string, unknown>`. Vercel TS-Check schlug fehl. |
 | 2026-05-28 | Fix TS implicit any in lib/emails/outbox.ts reclaimed.map | — | `lib/emails/outbox.ts` Z. 547: `reclaimed.map((r) => r.id)` — `r` hatte implizit `any`. Fix: `(r: { id: string })` explizit typisiert. Vercel-Build TS-Check schlug fehl. |
 | 2026-05-28 | Fix TypeScript null-vs-undefined in Layout.tsx recording prop | — | `components/Layout.tsx` Z. 1040: `aiVoiceEnabled && glevAi.streaming` liefert `null` wenn `aiVoiceEnabled === null`, aber `recording`-Prop erwartet `boolean | undefined`. Fix: `!!()` wrapper. Vercel-Build schlug mit TS2322 fehl. |
 | 2026-05-28 | Fix invalid JSON in messages/de.json (bg_warn_body unescaped ASCII quote) | — | `messages/de.json` Zeile 1525: `„Neu einrichten"` enthielt eine schließende ASCII-`"` statt eines deutschen Anführungszeichens — der JSON-Parser beendete den String vorzeitig und der Vercel-Build schlug mit „key must be a string at line 1525 column 251“ fehl. Fix: beide Anführungszeichen durch Unicode-Escapes `\u201e` („) und `\u201c` (“) ersetzt. `node -e JSON.parse` bestätigt beide Locale-Dateien als valides JSON. |
