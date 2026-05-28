@@ -268,6 +268,40 @@ export function exerciseTypeLabelI18n(
   return t(`exercise_type_${norm}`);
 }
 
+/**
+ * Returns the `insights` namespace key for the static educational
+ * pattern note of a given exercise type. Multiple aerobic types share
+ * the same key ("cardio"); strength + legacy hypertrophy collapse to
+ * "strength". Pass the result to a translator bound to the `insights`
+ * namespace (e.g. `tIns(exercisePatternNoteKey(type))`).
+ */
+export function exercisePatternNoteKey(type: ExerciseType): string {
+  switch (type) {
+    case "cardio":
+    case "cycling":
+    case "run":
+    case "swimming":
+    case "football":
+    case "tennis":
+    case "volleyball":
+    case "basketball":
+      return "exercise_pattern_note_cardio";
+    case "hiit":
+      return "exercise_pattern_note_hiit";
+    case "strength":
+    case "hypertrophy":
+      return "exercise_pattern_note_strength";
+    case "yoga":
+      return "exercise_pattern_note_yoga";
+    case "breathwork":
+      return "exercise_pattern_note_breathwork";
+    case "hot_shower":
+      return "exercise_pattern_note_hot_shower";
+    case "cold_shower":
+      return "exercise_pattern_note_cold_shower";
+  }
+}
+
 // ────────────────────────────────────────────────────────────────────
 // Cross-entry aggregation: per-exercise-type personal pattern stats.
 //

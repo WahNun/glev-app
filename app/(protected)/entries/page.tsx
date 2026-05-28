@@ -15,7 +15,7 @@ import DateTimeField, { isoToLocal, localToIso } from "@/components/log/DateTime
 import { fetchRecentMenstrualLogs, deleteMenstrualLog, updateMenstrualLog, type MenstrualLog, type FlowIntensity } from "@/lib/menstrual";
 import { fetchRecentSymptomLogs, deleteSymptomLog, updateSymptomLog, SYMPTOM_TYPES, avgSeverity, type SymptomLog, type SymptomType, type SeveritiesMap, type SeverityValue } from "@/lib/symptoms";
 import { fetchRecentInfluenceLogs, deleteInfluenceLog, updateInfluenceLog, INFLUENCE_TYPES, type InfluenceLog, type InfluenceType } from "@/lib/influences";
-import { evaluateExercise, exerciseTypeLabelI18n, patternNote, interimMessage, finalMessage, deltaColor, aggregateExerciseTypeStats, personalPatternHeadline, PATTERN_MIN_SESSIONS } from "@/lib/exerciseEval";
+import { evaluateExercise, exerciseTypeLabelI18n, exercisePatternNoteKey, interimMessage, finalMessage, deltaColor, aggregateExerciseTypeStats, personalPatternHeadline, PATTERN_MIN_SESSIONS } from "@/lib/exerciseEval";
 import {
   evaluateBolus,
   bolusInterimMessage,
@@ -2933,7 +2933,7 @@ function ExerciseRowCard({ log, allLogs, isOpen, onToggle, onDelete, deleting, o
           {/* 4) Pattern note --------------------------------------- */}
           <ExPanel title={tx("panel_pattern_note")}>
             <div style={{ fontSize:14, color:"var(--text-body)", lineHeight:1.55 }}>
-              {patternNote(log.exercise_type, locale)}
+              {tIns(exercisePatternNoteKey(log.exercise_type))}
             </div>
           </ExPanel>
 
