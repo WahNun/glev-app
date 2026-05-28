@@ -53,5 +53,36 @@ export const DEFAULT_BASAL_WINDOW_H = 24;
  * their labelled action window.  The tail decline covers the remaining 40 %.
  * Source: SmPC / ATTD consensus — used as a UX approximation only;
  * not a substitute for clinical guidance.
+ *
+ * Used as the fallback when the brand is not listed in BASAL_PK_PRESETS.
  */
 export const BASAL_PK_PEAK_FRACTION = 0.60;
+
+/**
+ * Per-brand plateau fractions for the two-phase basal ring model.
+ *
+ * Keys must match exactly the labels in BASAL_WINDOW_PRESETS (= the labels
+ * shown in Settings → Insulin → Basal brand).
+ *
+ * Physiological rationale (SmPC / ATTD consensus, UX approximation only):
+ *   • Tresiba (Degludec, 42 h)  — extremely flat ultra-long profile; the dose
+ *     stays at near-full effectiveness for ~78 % of its window before the
+ *     visible tail begins.
+ *   • Toujeo (Glargin U300, 36 h) — slightly more extended plateau than U100
+ *     due to slower subcutaneous depot dissolution; ~65 %.
+ *   • Levemir (Detemir, 20 h) — mild peak around hours 6–10 followed by a
+ *     longer tail; plateau covers only ~50 % of the window.
+ *   • All Glargin U100 variants (Lantus, Basaglar, Abasaglar, Semglee) — share
+ *     the same flat-plateau profile; ~60 % (= global default).
+ *
+ * Falls back to BASAL_PK_PEAK_FRACTION (0.60) for unknown brands.
+ */
+export const BASAL_PK_PRESETS: Record<string, number> = {
+  "Lantus (Glargin U100)":   0.60,
+  "Toujeo (Glargin U300)":   0.65,
+  "Tresiba (Degludec)":      0.78,
+  "Levemir (Detemir)":       0.50,
+  "Basaglar (Glargin U100)": 0.60,
+  "Abasaglar (Glargin)":     0.60,
+  "Semglee (Glargin)":       0.60,
+};

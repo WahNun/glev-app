@@ -3,7 +3,7 @@ import { useEffect, useState, useMemo, useRef } from "react";
 import { useTranslations } from "next-intl";
 import { calcTotalIOB, calcSingleIOB, getDIAMinutes, buildDoses, calcBasalRemaining, calcBasalFraction, resolveBolusTypeLabel, resolveBasalTypeLabel, type BolusDose, type InsulinType } from "@/lib/iob";
 import { getInsulinSettings } from "@/lib/userSettings";
-import { DEFAULT_BASAL_WINDOW_H, BASAL_PK_PEAK_FRACTION } from "@/lib/engine/constants";
+import { DEFAULT_BASAL_WINDOW_H, BASAL_PK_PEAK_FRACTION, BASAL_PK_PRESETS } from "@/lib/engine/constants";
 import type { InsulinLog } from "@/lib/insulin";
 import type { Meal } from "@/lib/meals";
 
@@ -175,11 +175,17 @@ export default function IOBCard({ insulin, insulinType, meals, currentBg, onLogB
   const basalElapsedMin = lastBasal
     ? (now - new Date(lastBasal.created_at).getTime()) / 60_000
     : null;
-  // Ring fill: stays at 1.0 during the plateau phase (first 60 % of window),
-  // then decays to 0 over the tail phase — avoids misleading users into
-  // thinking their basal coverage is already diminishing right after injection.
+  // Per-brand plateau fraction: Tresiba stays full for ~78 % of its 42h
+  // window; Levemir only ~50 %; all Glargin variants default to 60 %.
+  // Falls back to the global BASAL_PK_PEAK_FRACTION (0.60) for unknown brands.
+  const basalPkFraction = insulinBrandBasal?.trim()
+    ? (BASAL_PK_PRESETS[insulinBrandBasal.trim()] ?? BASAL_PK_PEAK_FRACTION)
+    : BASAL_PK_PEAK_FRACTION;
+  // Ring fill: stays at 1.0 during the plateau phase, then decays to 0 over
+  // the tail phase — avoids misleading users into thinking their basal
+  // coverage is already diminishing right after injection.
   const basalFraction   = basalElapsedMin !== null
-    ? calcBasalFraction(basalElapsedMin, BASAL_WINDOW_MIN, BASAL_PK_PEAK_FRACTION)
+    ? calcBasalFraction(basalElapsedMin, BASAL_WINDOW_MIN, basalPkFraction)
     : 0;
   const basalOverdue    = basalElapsedMin !== null && basalElapsedMin > BASAL_WINDOW_MIN;
   // Approximate remaining basal units using linear decay over the 24h window.
