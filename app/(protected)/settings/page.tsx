@@ -71,6 +71,10 @@ import {
   saveCycleLoggingEnabled,
 } from "@/lib/cyclePrefs";
 import {
+  fetchHapticsEnabled,
+  saveHapticsEnabled,
+} from "@/lib/hapticsPrefs";
+import {
   fetchUserProfile,
   saveUserProfile,
   cycleSurfacesAvailable,
@@ -270,6 +274,10 @@ export default function SettingsPage() {
   // DB-backed via `user_settings.cycle_logging_enabled`. Default false
   // — has to be explicitly enabled here before it shows up.
   const [cycleLoggingEnabled, setCycleLoggingEnabled] = useState(false);
+  // Haptic feedback toggle — DB-backed via `user_settings.haptics_enabled`.
+  // Default true; localStorage mirror keeps the synchronous gate in
+  // lib/haptics.ts in sync without requiring an async DB call on every tap.
+  const [hapticsEnabled, setHapticsEnabled] = useState(true);
   // Personal info (sex / birth_year / height_cm / weight_kg) collected
   // at onboarding. `sex` gates the cycle-logging row below: male users
   // never see it. The "About me" sheet exposes these for editing.
@@ -400,6 +408,7 @@ export default function SettingsPage() {
       persistLowAlarmSettingsLocally(s);
     }).catch(() => {});
     fetchCycleLoggingEnabled().then(setCycleLoggingEnabled).catch(() => {});
+    fetchHapticsEnabled().then(setHapticsEnabled).catch(() => {});
     fetchUserProfile().then(setUserProfile).catch(() => {});
     fetchIcrSchedule()
       .then((s) => setIcrScheduleSummary({
@@ -920,6 +929,21 @@ export default function SettingsPage() {
   function updNotif<K extends keyof NotificationPrefs>(key: K, val: NotificationPrefs[K]) {
     setNotifPrefs((prev) => ({ ...prev, [key]: val }));
   }
+
+  /** Toggle haptic feedback. Optimistic — flips local state + localStorage
+   *  mirror immediately (so haptics.ts reacts on the very next tap), then
+   *  persists to DB. Reverts on error. */
+  const toggleHapticsEnabled = useCallback(async (next: boolean) => {
+    const prev = hapticsEnabled;
+    setHapticsEnabled(next);
+    setSaveError("");
+    try {
+      await saveHapticsEnabled(next);
+    } catch (e) {
+      setHapticsEnabled(prev);
+      setSaveError(e instanceof Error ? e.message : tSettings("save_failed"));
+    }
+  }, [hapticsEnabled, tSettings]);
 
   /** Toggle the cycle-logging opt-in. Optimistic — flips local state
    *  immediately so the switch animates, then persists. On DB error we
@@ -3150,6 +3174,41 @@ export default function SettingsPage() {
           subtitle={notifSub}
           ariaLabel={tSettings("row_open_aria", { label: tSettings("notifications") })}
           onClick={() => openSheetWith("notifications")}
+        />
+        <SettingsRow
+          iconColor={ACCENT}
+          icon={
+            <svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+              <path d="M5 12h2a5 5 0 0 1 10 0h2" />
+              <path d="M5 12a7 7 0 0 0 14 0" />
+              <line x1="12" y1="19" x2="12" y2="22" />
+            </svg>
+          }
+          label={tSettings("row_haptics_label")}
+          subtitle={hapticsEnabled ? tSettings("row_haptics_subtitle_on") : tSettings("row_haptics_subtitle_off")}
+          ariaLabel={tSettings("row_haptics_label")}
+          onClick={() => void toggleHapticsEnabled(!hapticsEnabled)}
+          rightAdornment={
+            <div
+              role="switch"
+              aria-checked={hapticsEnabled}
+              style={{
+                width: 44, height: 26, borderRadius: 13,
+                background: hapticsEnabled ? ACCENT : "var(--border)",
+                position: "relative", transition: "background 0.2s ease",
+                flexShrink: 0, cursor: "pointer",
+              }}
+            >
+              <div style={{
+                position: "absolute", top: 3,
+                left: hapticsEnabled ? 21 : 3,
+                width: 20, height: 20, borderRadius: "50%",
+                background: "white",
+                transition: "left 0.2s ease",
+                boxShadow: "0 1px 3px rgba(0,0,0,0.2)",
+              }} />
+            </div>
+          }
         />
         <SettingsRow
           iconColor={PURPLE}

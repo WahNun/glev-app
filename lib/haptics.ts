@@ -12,6 +12,8 @@
  * never break the underlying user action (save, slider stop, …).
  */
 
+import { isHapticsEnabledSync } from "./hapticsPrefs";
+
 type HapticsModule = typeof import("@capacitor/haptics");
 
 let hapticsCache: HapticsModule | null | undefined;
@@ -61,6 +63,7 @@ function vibrateFallback(ms: number | number[]): void {
 
 /** Tiny tap — used for selection toggles, slider snap-stops, chip taps. */
 export function hapticLight(): void {
+  if (!isHapticsEnabledSync()) return;
   void (async () => {
     const h = await loadHaptics();
     if (h) {
@@ -73,6 +76,7 @@ export function hapticLight(): void {
 
 /** Stronger tap — used for primary action presses (save tap-down). */
 export function hapticMedium(): void {
+  if (!isHapticsEnabledSync()) return;
   void (async () => {
     const h = await loadHaptics();
     if (h) {
@@ -85,6 +89,7 @@ export function hapticMedium(): void {
 
 /** Selection feedback — segmented controls, dropdowns, multi-pick chips. */
 export function hapticSelection(): void {
+  if (!isHapticsEnabledSync()) return;
   void (async () => {
     const h = await loadHaptics();
     if (h) {
@@ -97,6 +102,7 @@ export function hapticSelection(): void {
 
 /** Success — fired after a successful save. */
 export function hapticSuccess(): void {
+  if (!isHapticsEnabledSync()) return;
   void (async () => {
     const h = await loadHaptics();
     if (h) {
@@ -109,6 +115,7 @@ export function hapticSuccess(): void {
 
 /** Warning — value outside target range, retroactive boundary, etc. */
 export function hapticWarning(): void {
+  if (!isHapticsEnabledSync()) return;
   void (async () => {
     const h = await loadHaptics();
     if (h) {
@@ -121,6 +128,7 @@ export function hapticWarning(): void {
 
 /** Error — validation failure / save failed. */
 export function hapticError(): void {
+  if (!isHapticsEnabledSync()) return;
   void (async () => {
     const h = await loadHaptics();
     if (h) {
