@@ -24,6 +24,8 @@
 import { test, expect } from "@playwright/test";
 
 import { lifecycleFor } from "@/lib/engine/lifecycle";
+import { resolveDisplayedOutcome } from "@/lib/engine/resolveDisplayedOutcome";
+import { reconcileEvaluation } from "@/lib/engine/reconcileEvaluation";
 import type { AdjustmentMessage } from "@/lib/engine/adjustment";
 import type { Meal } from "@/lib/meals";
 import type { InsulinSettings } from "@/lib/userSettings";
@@ -350,11 +352,12 @@ test("cache-drift: had_hypo_window=true overrides cached evaluation='GOOD' → H
 });
 
 test("cache-drift: entries-page reconcile pattern uses live outcome, not cached evaluation", () => {
-  // Pins the exact expression from app/(protected)/entries/page.tsx:
-  //   const mLc = lifecycleFor(m);
-  //   const ev  = mLc.outcome ?? m.evaluation;
-  // This test FAILS if the entries page is reverted to read m.evaluation
-  // directly, because `displayedOutcome` would then equal "GOOD".
+  // Imports and calls the ACTUAL production helper used by
+  // app/(protected)/entries/page.tsx:
+  //   import { resolveDisplayedOutcome } from "@/lib/engine/resolveDisplayedOutcome";
+  //   const ev = resolveDisplayedOutcome(m);
+  // This test FAILS if resolveDisplayedOutcome is changed to return
+  // meal.evaluation directly instead of preferring the live lifecycleFor result.
   const meal = makeMeal({
     evaluation: "GOOD",
     had_hypo_window: true,
@@ -363,21 +366,21 @@ test("cache-drift: entries-page reconcile pattern uses live outcome, not cached 
     bg_2h_at: atOffset(120),
   });
 
-  const lc = lifecycleFor(meal, NOW, SETTINGS);
-  // Mirrors the read-side reconcile in the entries page:
-  const displayedOutcome = lc.outcome ?? meal.evaluation;
+  // resolveDisplayedOutcome IS the production code path — not a re-implementation.
+  const displayedOutcome = resolveDisplayedOutcome(meal);
 
   expect(displayedOutcome).toBe("HYPO_DURING");
   expect(displayedOutcome).not.toBe(meal.evaluation); // "GOOD" must lose
 });
 
 test("cache-drift: cgm-jobs reconcile detects divergence → DB write required", () => {
-  // Mirrors the write-side reconcile in app/api/cgm-jobs/process/route.ts:
-  //   const lc       = lifecycleFor(full, ...);
-  //   const nextEval = lc.state === "final" ? lc.outcome : null;
-  //   const cachedEval = full.evaluation;
-  //   if (nextEval !== cachedEval) { await admin.from("meals").update(...) }
-  // This test fails if the `!== cachedEval` guard is removed.
+  // Calls the ACTUAL production helper used by
+  // app/api/cgm-jobs/process/route.ts:
+  //   const { reconcileEvaluation } = await import("@/lib/engine/reconcileEvaluation");
+  //   const { nextEval, shouldWrite } = reconcileEvaluation(full, preMealSamples);
+  //   if (shouldWrite) { await admin.from("meals").update(...) }
+  // This test FAILS if shouldWrite is changed to always return false, or if
+  // the `nextEval !== cachedEval` divergence guard is removed from the helper.
   const meal = makeMeal({
     evaluation: "GOOD",
     had_hypo_window: true,
@@ -386,14 +389,13 @@ test("cache-drift: cgm-jobs reconcile detects divergence → DB write required",
     bg_2h_at: atOffset(120),
   });
 
-  const lc = lifecycleFor(meal, NOW, SETTINGS);
-  const nextEval   = lc.state === "final" ? lc.outcome : null;
-  const cachedEval = meal.evaluation;
+  // reconcileEvaluation IS the production code path — not a re-implementation.
+  const { nextEval, cachedEval, shouldWrite } = reconcileEvaluation(meal);
 
-  // The reconcile MUST detect a diff and write the updated evaluation.
+  // The reconcile MUST detect a diff and request a DB write.
   expect(nextEval).toBe("HYPO_DURING");
   expect(cachedEval).toBe("GOOD");
-  expect(nextEval).not.toBe(cachedEval); // divergence confirmed → DB write needed
+  expect(shouldWrite).toBe(true); // divergence confirmed → DB write must fire
 });
 
 test("cache-drift: min_bg_180 < 70 also triggers HYPO_DURING without had_hypo_window flag", () => {
@@ -412,8 +414,8 @@ test("cache-drift: min_bg_180 < 70 also triggers HYPO_DURING without had_hypo_wi
 
   expect(lc.state).toBe("final");
   expect(lc.outcome).toBe("HYPO_DURING");
-  // Entries page reconcile expression still returns live outcome:
-  const displayedOutcome = lc.outcome ?? meal.evaluation;
+  // resolveDisplayedOutcome (the actual entries-page helper) still returns live outcome:
+  const displayedOutcome = resolveDisplayedOutcome(meal);
   expect(displayedOutcome).toBe("HYPO_DURING");
   expect(displayedOutcome).not.toBe(meal.evaluation);
 });

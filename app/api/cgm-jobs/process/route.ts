@@ -612,7 +612,7 @@ async function processCurveJob(
         .eq("id", row.id as string)
         .single();
       if (full) {
-        const { lifecycleFor } = await import("@/lib/engine/lifecycle");
+        const { reconcileEvaluation } = await import("@/lib/engine/reconcileEvaluation");
         // Pre-meal trend (Task #205): extract the 15 min of CGM history
         // that ended at meal_time from the already-fetched `history`
         // array. `anchorMs` is meal_time in ms; history covers the
@@ -637,10 +637,8 @@ async function processCurveJob(
         // pathways (HYPO_DURING / peak SPIKE / Δ-2h) don't read
         // `settings`. The ICR fallback only fires when bgAfter is null,
         // which doesn't apply here (we just back-filled curve data).
-        const lc = lifecycleFor(full as never, undefined, undefined, preMealSamples);
-        const nextEval = lc.state === "final" ? lc.outcome : null;
-        const cachedEval = (full as unknown as { evaluation: string | null }).evaluation;
-        if (nextEval !== cachedEval) {
+        const { nextEval, shouldWrite } = reconcileEvaluation(full as never, preMealSamples);
+        if (shouldWrite) {
           await admin.from("meals").update({ evaluation: nextEval }).eq("id", row.id as string);
         }
       }

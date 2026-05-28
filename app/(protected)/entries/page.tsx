@@ -30,6 +30,7 @@ import IosTapButton from "@/components/IosTapButton";
 import { fetchFingersticks } from "@/lib/fingerstick";
 import { TYPE_COLORS, TYPE_LABELS, TYPE_EXPLAIN, getEvalColor, getEvalLabel, chipLabelsFrom } from "@/lib/mealTypes";
 import { lifecycleFor, STATE_LABELS, type OutcomeState } from "@/lib/engine/lifecycle";
+import { resolveDisplayedOutcome } from "@/lib/engine/resolveDisplayedOutcome";
 import { renderEngineMessages } from "@/lib/engineMessages";
 import MealEntryCardCollapsed from "@/components/MealEntryCardCollapsed";
 import MealTrendArrow from "@/components/MealTrendArrow";
@@ -1203,7 +1204,7 @@ export default function EntriesPage() {
             // outcome and fall back to the cache only when the lifecycle
             // has nothing to say (pending / outside-window / pre-curve).
             const mLc = lifecycleFor(m);
-            const ev = mLc.outcome ?? m.evaluation;
+            const ev = resolveDisplayedOutcome(m);
             const date = parseDbDate(m.meal_time ?? m.created_at);
             const dateStr = date.toLocaleDateString(locale, { month:"short", day:"numeric" });
             const totalProt = m.protein_grams ?? (Array.isArray(m.parsed_json) ? m.parsed_json.reduce((s,f)=>s+(f.protein||0),0) : 0);
