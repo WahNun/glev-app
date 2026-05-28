@@ -101,6 +101,15 @@ const CARD_STYLE_TAG = `
 `;
 
 export default function CurrentDayGlucoseCard({ showMealNodes = false }: { showMealNodes?: boolean }) {
+  // E2E test escape hatch: Playwright sets this localStorage key via
+  // `page.addInitScript` so the cluster overlay renders in a fresh browser
+  // context without needing to visit /engine first (which normally triggers
+  // engineHdr.setVisible(true)). The key is never set in production.
+  const forceMealNodes =
+    typeof window !== "undefined" &&
+    window.localStorage.getItem("glev_test_show_meal_nodes") === "1";
+  const effectiveShowMealNodes = showMealNodes || forceMealNodes;
+
   const [s, setS] = useState<State>({ kind: "loading" });
   const [flipped, setFlipped] = useState(false);
 
@@ -270,7 +279,7 @@ export default function CurrentDayGlucoseCard({ showMealNodes = false }: { showM
             state={s}
             onCgmRefresh={onCgmRefresh}
             flippable={s.kind === "ok"}
-            showMealNodes={showMealNodes}
+            showMealNodes={effectiveShowMealNodes}
           />
         </div>
 
