@@ -133,10 +133,16 @@ export async function fetchMenstrualLogs(
   return (data || []) as MenstrualLog[];
 }
 
-export async function fetchRecentMenstrualLogs(days: number): Promise<MenstrualLog[]> {
-  const fromDate = new Date(Date.now() - days * 86400000);
-  const fromIso = fromDate.toISOString().slice(0, 10);
-  return fetchMenstrualLogs(fromIso);
+export async function fetchRecentMenstrualLogs(
+  days: number,
+  options?: { before?: string },
+): Promise<MenstrualLog[]> {
+  const toMs = options?.before ? new Date(options.before).getTime() : Date.now();
+  const fromIso = new Date(toMs - days * 86400000).toISOString().slice(0, 10);
+  const toDateStr = options?.before
+    ? new Date(options.before).toISOString().slice(0, 10)
+    : undefined;
+  return fetchMenstrualLogs(fromIso, toDateStr);
 }
 
 /**

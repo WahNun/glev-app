@@ -105,9 +105,13 @@ export async function fetchInfluenceLogs(
   return (data || []) as InfluenceLog[];
 }
 
-export async function fetchRecentInfluenceLogs(days: number): Promise<InfluenceLog[]> {
-  const fromIso = new Date(Date.now() - days * 86400000).toISOString();
-  return fetchInfluenceLogs(fromIso);
+export async function fetchRecentInfluenceLogs(
+  days: number,
+  options?: { before?: string },
+): Promise<InfluenceLog[]> {
+  const toMs = options?.before ? new Date(options.before).getTime() : Date.now();
+  const fromIso = new Date(toMs - days * 86400000).toISOString();
+  return fetchInfluenceLogs(fromIso, options?.before);
 }
 
 export async function deleteInfluenceLog(id: string): Promise<void> {

@@ -153,9 +153,13 @@ export async function fetchInsulinLogs(
   return (data || []) as InsulinLog[];
 }
 
-export async function fetchRecentInsulinLogs(days: number): Promise<InsulinLog[]> {
-  const fromIso = new Date(Date.now() - days * 86400000).toISOString();
-  return fetchInsulinLogs(fromIso);
+export async function fetchRecentInsulinLogs(
+  days: number,
+  options?: { before?: string },
+): Promise<InsulinLog[]> {
+  const toMs = options?.before ? new Date(options.before).getTime() : Date.now();
+  const fromIso = new Date(toMs - days * 86400000).toISOString();
+  return fetchInsulinLogs(fromIso, options?.before);
 }
 
 export async function deleteInsulinLog(id: string): Promise<void> {

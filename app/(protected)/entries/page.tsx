@@ -369,11 +369,22 @@ export default function EntriesPage() {
   // MEALS_INITIAL_DAYS days of meals; older entries are fetched
   // automatically as the user scrolls down (IntersectionObserver).
   const [hasMoreMeals, setHasMoreMeals] = useState(false);
+  // Independent flag for non-meal types — stays true until a full
+  // NON_MEAL_PAGE_DAYS slab returns no results from ALL five non-meal
+  // tables. Decoupled from hasMoreMeals so users with sparse meal
+  // history but dense insulin/exercise/etc. logs keep scrolling.
+  const [hasMoreNonMeals, setHasMoreNonMeals] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const oldestMealCreatedAt = useRef<string | null>(null);
   // Sentinel element watched by the IntersectionObserver for infinite scroll.
   const sentinelRef = useRef<HTMLDivElement>(null);
+  // Cursor for non-meal type pagination. Tracks the ISO boundary of the
+  // oldest slab already loaded; each scroll-trigger fetches the next
+  // NON_MEAL_PAGE_DAYS slab before this point.
+  const oldestNonMealIso = useRef<string | null>(null);
   const MEALS_PAGE_SIZE = 50;
+  const NON_MEAL_INITIAL_DAYS = 30;
+  const NON_MEAL_PAGE_DAYS = 30;
   const [filters, setFilters] = useState<FilterState>(EMPTY_FILTERS);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [search, setSearch]   = useState("");
@@ -588,13 +599,16 @@ export default function EntriesPage() {
       try {
         // Initial fetch covers the last MEALS_INITIAL_DAYS (30) days.
         // Older rows are loaded on demand via the "Weitere laden" button.
+        // Non-meal types also start with NON_MEAL_INITIAL_DAYS (30) days
+        // and paginate in sync with each "load more" click.
+        const nonMealFrom = new Date(Date.now() - NON_MEAL_INITIAL_DAYS * 86400000).toISOString();
         const [m, ins, ex, cy, sy, inf] = await Promise.all([
           executeInitialMealFetch(fetchMeals),
-          fetchRecentInsulinLogs(60).catch(() => []),
-          fetchRecentExerciseLogs(60).catch(() => []),
-          fetchRecentMenstrualLogs(120).catch(() => [] as MenstrualLog[]),
-          fetchRecentSymptomLogs(120).catch(() => [] as SymptomLog[]),
-          fetchRecentInfluenceLogs(120).catch(() => [] as InfluenceLog[]),
+          fetchRecentInsulinLogs(NON_MEAL_INITIAL_DAYS).catch(() => []),
+          fetchRecentExerciseLogs(NON_MEAL_INITIAL_DAYS).catch(() => []),
+          fetchRecentMenstrualLogs(NON_MEAL_INITIAL_DAYS).catch(() => [] as MenstrualLog[]),
+          fetchRecentSymptomLogs(NON_MEAL_INITIAL_DAYS).catch(() => [] as SymptomLog[]),
+          fetchRecentInfluenceLogs(NON_MEAL_INITIAL_DAYS).catch(() => [] as InfluenceLog[]),
         ]);
         if (!cancelled) {
           setMeals(m);
@@ -605,12 +619,19 @@ export default function EntriesPage() {
           setInfluences(inf);
           // Track the oldest loaded meal for keyset pagination.
           oldestMealCreatedAt.current = m.length > 0 ? m[m.length - 1].created_at : null;
-          // Show the "Load more" button whenever there's a chance of
-          // older rows within the 365-day window. We can't know for
-          // sure without a COUNT query, so we always show it on
-          // initial load and hide it only after a load-more page
+          // Track the lower boundary of non-meal data already loaded.
+          // Each "load more" click fetches the next NON_MEAL_PAGE_DAYS
+          // slab before this cursor.
+          oldestNonMealIso.current = nonMealFrom;
+          // Show the sentinel / spinner whenever there's a chance of
+          // older rows. We can't know for sure without a COUNT query,
+          // so we show it on initial load and hide only after a page
           // returns empty.
           setHasMoreMeals(m.length > 0);
+          // Non-meal flag: assume there's more data whenever we loaded
+          // any non-meal row. Cleared by scroll-triggered load-more
+          // once a full slab returns empty across all five types.
+          setHasMoreNonMeals(ins.length > 0 || ex.length > 0 || cy.length > 0 || sy.length > 0 || inf.length > 0);
         }
         // Persist to localStorage (with TTL) so the next visit is instant,
         // including after a native-app restart or TestFlight force-quit.
@@ -661,42 +682,117 @@ export default function EntriesPage() {
   }, []);
 
   const loadMoreMeals = useCallback(async () => {
-    if (!oldestMealCreatedAt.current || loadingMore || !hasMoreMeals) return;
+    // Allow trigger when EITHER meals OR non-meals may still have older
+    // data — decoupled so users with sparse meal history but dense
+    // insulin/exercise/etc. logs keep loading after meals exhaust.
+    if (loadingMore || (!hasMoreMeals && !hasMoreNonMeals)) return;
     setLoadingMore(true);
     try {
-      const more = await fetchMeals({
-        before: oldestMealCreatedAt.current,
-        sinceDays: FETCH_MEALS_DEFAULT_SINCE_DAYS, // practical cap for Plus (365d)
-        sinceIso: historyLimitISO ?? undefined,    // plan cap wins when more restrictive
-        limit: MEALS_PAGE_SIZE,
-      });
-      if (more.length === 0) {
-        setHasMoreMeals(false);
-      } else {
-        setMeals(prev => {
-          const ids = new Set(prev.map(m => m.id));
-          return [...prev, ...more.filter(m => !ids.has(m.id))];
+      // Fetch the next page of meals (only when not exhausted) and a
+      // matching slab of every other entry type in parallel.
+      const beforeCursor = oldestNonMealIso.current;
+      const [more, moreIns, moreEx, moreCy, moreSy, moreInf] = await Promise.all([
+        hasMoreMeals && oldestMealCreatedAt.current
+          ? fetchMeals({
+              before: oldestMealCreatedAt.current,
+              sinceDays: FETCH_MEALS_DEFAULT_SINCE_DAYS, // practical cap for Plus (365d)
+              sinceIso: historyLimitISO ?? undefined,    // plan cap wins when more restrictive
+              limit: MEALS_PAGE_SIZE,
+            })
+          : Promise.resolve([] as Awaited<ReturnType<typeof fetchMeals>>),
+        beforeCursor && hasMoreNonMeals
+          ? fetchRecentInsulinLogs(NON_MEAL_PAGE_DAYS, { before: beforeCursor }).catch(() => [] as InsulinLog[])
+          : Promise.resolve([] as InsulinLog[]),
+        beforeCursor && hasMoreNonMeals
+          ? fetchRecentExerciseLogs(NON_MEAL_PAGE_DAYS, { before: beforeCursor }).catch(() => [] as ExerciseLog[])
+          : Promise.resolve([] as ExerciseLog[]),
+        beforeCursor && hasMoreNonMeals
+          ? fetchRecentMenstrualLogs(NON_MEAL_PAGE_DAYS, { before: beforeCursor }).catch(() => [] as MenstrualLog[])
+          : Promise.resolve([] as MenstrualLog[]),
+        beforeCursor && hasMoreNonMeals
+          ? fetchRecentSymptomLogs(NON_MEAL_PAGE_DAYS, { before: beforeCursor }).catch(() => [] as SymptomLog[])
+          : Promise.resolve([] as SymptomLog[]),
+        beforeCursor && hasMoreNonMeals
+          ? fetchRecentInfluenceLogs(NON_MEAL_PAGE_DAYS, { before: beforeCursor }).catch(() => [] as InfluenceLog[])
+          : Promise.resolve([] as InfluenceLog[]),
+      ]);
+
+      // Advance the non-meal cursor and update its "has more" flag.
+      // The slab is considered exhausted only when ALL five types returned
+      // empty — a user may have insulin logs but no exercise logs for a
+      // given period, and that should not stop the cursor.
+      if (beforeCursor && hasMoreNonMeals) {
+        const nonMealSlab = moreIns.length + moreEx.length + moreCy.length + moreSy.length + moreInf.length;
+        oldestNonMealIso.current = new Date(
+          new Date(beforeCursor).getTime() - NON_MEAL_PAGE_DAYS * 86400000,
+        ).toISOString();
+        // If the slab was entirely empty, stop paging non-meal types.
+        if (nonMealSlab === 0) setHasMoreNonMeals(false);
+      }
+
+      // Append non-meal results (deduplicated by id).
+      if (moreIns.length > 0) {
+        setInsulin(prev => {
+          const ids = new Set(prev.map(x => x.id));
+          return [...prev, ...moreIns.filter(x => !ids.has(x.id))];
         });
-        if (more.length < MEALS_PAGE_SIZE) {
+      }
+      if (moreEx.length > 0) {
+        setExercise(prev => {
+          const ids = new Set(prev.map(x => x.id));
+          return [...prev, ...moreEx.filter(x => !ids.has(x.id))];
+        });
+      }
+      if (moreCy.length > 0) {
+        setCycle(prev => {
+          const ids = new Set(prev.map(x => x.id));
+          return [...prev, ...moreCy.filter(x => !ids.has(x.id))];
+        });
+      }
+      if (moreSy.length > 0) {
+        setSymptoms(prev => {
+          const ids = new Set(prev.map(x => x.id));
+          return [...prev, ...moreSy.filter(x => !ids.has(x.id))];
+        });
+      }
+      if (moreInf.length > 0) {
+        setInfluences(prev => {
+          const ids = new Set(prev.map(x => x.id));
+          return [...prev, ...moreInf.filter(x => !ids.has(x.id))];
+        });
+      }
+
+      // Update the meal cursor and visibility flag.
+      if (hasMoreMeals) {
+        if (more.length === 0) {
           setHasMoreMeals(false);
+        } else {
+          setMeals(prev => {
+            const ids = new Set(prev.map(m => m.id));
+            return [...prev, ...more.filter(m => !ids.has(m.id))];
+          });
+          if (more.length < MEALS_PAGE_SIZE) {
+            setHasMoreMeals(false);
+          }
+          oldestMealCreatedAt.current = more[more.length - 1].created_at;
         }
-        oldestMealCreatedAt.current = more[more.length - 1].created_at;
       }
     } catch (e) { console.error(e); }
     finally { setLoadingMore(false); }
-  }, [loadingMore, hasMoreMeals, historyLimitISO]);
+  }, [loadingMore, hasMoreMeals, hasMoreNonMeals, historyLimitISO]);
 
   // Automatically load the next page when the sentinel div scrolls into view.
+  // Fires when EITHER meals OR non-meal types still have older data.
   useEffect(() => {
     const el = sentinelRef.current;
-    if (!el || !hasMoreMeals) return;
+    if (!el || (!hasMoreMeals && !hasMoreNonMeals)) return;
     const observer = new IntersectionObserver(
       (entries) => { if (entries[0].isIntersecting) loadMoreMeals(); },
       { rootMargin: "200px" }
     );
     observer.observe(el);
     return () => observer.disconnect();
-  }, [loadMoreMeals, hasMoreMeals]);
+  }, [loadMoreMeals, hasMoreMeals, hasMoreNonMeals]);
 
   async function handleDelete(id: string) {
     if (!confirm("Delete this entry? This cannot be undone.")) return;
@@ -1623,8 +1719,9 @@ export default function EntriesPage() {
       )}
 
       {/* Sentinel — IntersectionObserver triggers automatic pagination when
-          this div scrolls into view. Visible only while more meals exist. */}
-      {!loading && hasMoreMeals && (
+          this div scrolls into view. Visible while meals OR non-meal
+          types (insulin, exercise, etc.) may still have older data. */}
+      {!loading && (hasMoreMeals || hasMoreNonMeals) && (
         <div ref={sentinelRef} style={{ height:1 }} aria-hidden="true" />
       )}
       {/* Spinner shown while the next page is being fetched. */}
@@ -1636,7 +1733,7 @@ export default function EntriesPage() {
           <style>{`@keyframes glevSpin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}`}</style>
         </div>
       )}
-      {!loading && !hasMoreMeals && meals.length > 0 && (
+      {!loading && !hasMoreMeals && !hasMoreNonMeals && meals.length > 0 && (
         <div style={{ textAlign:"center", color:"var(--text-ghost)", fontSize:12, padding:"12px 0 4px", letterSpacing:"0.02em" }}>
           {tHistory("no_more_entries")}
         </div>
