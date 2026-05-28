@@ -3,8 +3,8 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import RefreshingBar from "@/components/RefreshingBar";
 import { useTranslations, useLocale } from "next-intl";
-import { fetchMeals, deleteMeal, updateMeal, FETCH_MEALS_DEFAULT_SINCE_DAYS, type Meal } from "@/lib/meals";
-import { MEALS_INITIAL_DAYS, executeInitialMealFetch } from "./constants";
+import { fetchMeals, deleteMeal, updateMeal, type Meal } from "@/lib/meals";
+import { MEALS_INITIAL_DAYS, MEALS_PAGE_SIZE, executeInitialMealFetch, executeLoadMoreFetch } from "./constants";
 import { supabase } from "@/lib/supabase";
 import { fetchRecentInsulinLogs, deleteInsulinLog, updateInsulinReadings, updateInsulinLogLink, updateInsulinEntry, type InsulinLog } from "@/lib/insulin";
 import { fetchRecentExerciseLogs, deleteExerciseLog, updateExerciseLog, type ExerciseLog, type ExerciseType, type ExerciseIntensity } from "@/lib/exercise";
@@ -382,7 +382,6 @@ export default function EntriesPage() {
   // oldest slab already loaded; each scroll-trigger fetches the next
   // NON_MEAL_PAGE_DAYS slab before this point.
   const oldestNonMealIso = useRef<string | null>(null);
-  const MEALS_PAGE_SIZE = 50;
   const NON_MEAL_INITIAL_DAYS = 30;
   const NON_MEAL_PAGE_DAYS = 30;
   const [filters, setFilters] = useState<FilterState>(EMPTY_FILTERS);
@@ -693,12 +692,11 @@ export default function EntriesPage() {
       const beforeCursor = oldestNonMealIso.current;
       const [more, moreIns, moreEx, moreCy, moreSy, moreInf] = await Promise.all([
         hasMoreMeals && oldestMealCreatedAt.current
-          ? fetchMeals({
-              before: oldestMealCreatedAt.current,
-              sinceDays: FETCH_MEALS_DEFAULT_SINCE_DAYS, // practical cap for Plus (365d)
-              sinceIso: historyLimitISO ?? undefined,    // plan cap wins when more restrictive
-              limit: MEALS_PAGE_SIZE,
-            })
+          ? executeLoadMoreFetch(
+              fetchMeals,
+              oldestMealCreatedAt.current,
+              historyLimitISO ?? undefined,
+            )
           : Promise.resolve([] as Awaited<ReturnType<typeof fetchMeals>>),
         beforeCursor && hasMoreNonMeals
           ? fetchRecentInsulinLogs(NON_MEAL_PAGE_DAYS, { before: beforeCursor }).catch(() => [] as InsulinLog[])
