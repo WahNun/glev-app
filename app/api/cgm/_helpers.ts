@@ -46,14 +46,20 @@ export function errResponse(e: unknown): NextResponse {
     return NextResponse.json({ error: err.message || 'error' }, { status: err.status });
   }
   if (err?.code === 'ECONNABORTED' || err?.code === 'ETIMEDOUT') {
+    // eslint-disable-next-line no-console
+    console.error('[cgm] upstream timeout:', err?.code, err?.message);
     return NextResponse.json({ error: 'upstream timeout' }, { status: 504 });
   }
   if (err?.response?.status) {
     const s = err.response.status;
+    // eslint-disable-next-line no-console
+    console.error('[cgm] LLU upstream HTTP error:', s, err?.message);
     if (s === 401) return NextResponse.json({ error: 'LLU rejected credentials' }, { status: 502 });
     return NextResponse.json({ error: `LLU upstream ${s}` }, { status: 502 });
   }
   if (err?.upstream) {
+    // eslint-disable-next-line no-console
+    console.error('[cgm] LLU upstream error:', err?.message);
     return NextResponse.json({ error: err.message || 'upstream error' }, { status: 502 });
   }
   // eslint-disable-next-line no-console

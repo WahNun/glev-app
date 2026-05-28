@@ -12,14 +12,18 @@ import { encrypt, decrypt } from "./crypto";
 const httpAgent = new http.Agent({ keepAlive: true, maxSockets: 50 });
 const httpsAgent = new https.Agent({ keepAlive: true, maxSockets: 50 });
 
+// LLU_APP_VERSION can be updated in Vercel env vars without a code deploy
+// when Abbott rotates the accepted client version.
+const LLU_APP_VERSION = process.env.LLU_APP_VERSION || "4.16.0";
+
 const http_: AxiosInstance = axios.create({
-  timeout: 3000,
+  timeout: 8000,
   httpAgent,
   httpsAgent,
   headers: {
     "Content-Type": "application/json",
     product: "llu.android",
-    version: "4.16.0",
+    version: LLU_APP_VERSION,
     "Accept-Encoding": "gzip",
   },
   // We handle non-2xx ourselves where it matters.
@@ -30,11 +34,14 @@ async function withRetry<T>(fn: () => Promise<T>): Promise<T> {
   try {
     return await fn();
   } catch (e: unknown) {
-    const err = e as { code?: string; response?: unknown; request?: unknown };
+    const err = e as { code?: string; response?: { status?: number } | unknown; request?: unknown };
+    const responseStatus = (err.response as { status?: number } | undefined)?.status;
     const transient =
       err.code === "ECONNABORTED" ||
       err.code === "ECONNRESET" ||
       err.code === "ETIMEDOUT" ||
+      responseStatus === 502 ||
+      responseStatus === 503 ||
       (!err.response && !!err.request);
     if (!transient) throw e;
     return await fn();
