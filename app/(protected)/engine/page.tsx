@@ -9,7 +9,7 @@ import { getCurrentTrendArrow } from "@/lib/cgm/trendArrow";
 import { scheduleJobsForLog } from "@/lib/cgmJobs";
 import { TYPE_COLORS } from "@/lib/mealTypes";
 import { logDebug } from "@/lib/debug";
-import { fetchRecentInsulinLogs, type InsulinLog } from "@/lib/insulin";
+import { fetchRecentInsulinLogs, updateInsulinLogLink, type InsulinLog } from "@/lib/insulin";
 import { fetchRecentExerciseLogs, type ExerciseLog } from "@/lib/exercise";
 import { fetchRecentActivityClient, summariseActivityContext, type ActivityContext } from "@/lib/dailyActivity";
 import { HIGH_ACTIVITY_RATIO, HIGH_ACTIVITY_MIN_ABS, HIGH_ACTIVITY_MIN_SAMPLE } from "@/lib/engine/evaluation";
@@ -37,6 +37,7 @@ import { fetchLatestFingerstick, FS_OVERRIDE_WINDOW_MS } from "@/lib/fingerstick
 import { parseDbTs, parseDbDate, parseLluTs } from "@/lib/time";
 import { calcTotalIOB, applyIOBCorrection, iobCorrectionRoundedToZero, formatIOBDisplay, type InsulinType } from "@/lib/iob";
 import { resolveActiveDose } from "@/lib/engine/activeDose";
+import { BOLUS_MEAL_WINDOW_MS } from "@/lib/engine/pairing";
 import { calcEagerDose } from "@/lib/engine/eagerDose";
 import { fetchMeals } from "@/lib/meals";
 import { hapticSuccess, hapticError, hapticSelection } from "@/lib/haptics";
@@ -49,6 +50,21 @@ import UpgradeGate from "@/components/UpgradeGate";
 // datetime-local needs "YYYY-MM-DDTHH:mm" in the *local* timezone (the input
 // strips the offset). Using toISOString() would silently shift the value to
 // UTC; this helper keeps the wall-clock the user expects.
+
+/**
+ * Format an insulin log for display in the bolus-suggestion banner on the
+ * meal wizard Step 2 (Task #215). Mirrors the meal-option formatter in
+ * EngineLogTab.tsx so the label style is consistent.
+ * Example: "08:30 — Fiasp (4 IE)"
+ */
+function formatBolusOption(b: InsulinLog): string {
+  const dt = parseDbDate(b.created_at);
+  const time = dt.toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" });
+  const units = Math.round((b.units ?? 0) * 10) / 10;
+  const name = (b.insulin_name ?? "").trim() || "Bolus";
+  return `${time} — ${name} (${units} IE)`;
+}
+
 function nowLocalDateTime(): string {
   const d   = new Date();
   const off = d.getTimezoneOffset() * 60_000;
@@ -581,6 +597,12 @@ export default function EnginePage() {
   // Bolus-toggle in Step 2 (Makros): default OFF = "ohne Bolus speichern".
   // Resets to false on every new meal so the user always starts clean.
   const [bolusEnabled, setBolusEnabled] = useState(false);
+  // Task #215: ID of the insulin log the user accepted via the one-tap
+  // "Vorschlag" banner in Step 2. Non-null = user accepted the suggestion;
+  // the meal save paths call updateInsulinLogLink(linkedBolusId, saved.id)
+  // right after saveMeal so the bolus row explicitly points to the new meal.
+  // Reset to null on every resetForm so the next wizard run starts clean.
+  const [linkedBolusId, setLinkedBolusId] = useState<string | null>(null);
   // Tabs-expanded state lives in the global EngineHeaderContext so the
   // chevron control can render in the mobile app header (oben rechts
   // next to Live + user icon) instead of inside this page body. We
@@ -1045,6 +1067,32 @@ export default function EnginePage() {
     () => resolveActiveDose(result, resultICRSource, selectedICR, eagerDoses, manualDose, iob),
     [manualDose, result, resultICRSource, iob, eagerDoses, selectedICR]
   );
+
+  // Task #215: closest unlinked bolus within ±BOLUS_MEAL_WINDOW_MS of mealTime.
+  // Drives the one-tap "Vorschlag" banner in Step 2. Recomputed whenever
+  // mealTime or insulinLogs changes (user adjusts meal time, or a new bolus
+  // is logged in another tab and the page receives a refresh). Only boluses
+  // without an existing related_entry_id are considered so already-paired
+  // shots don't surface as suggestions.
+  const bolusSuggestion = useMemo<InsulinLog | null>(() => {
+    if (!mealTime || insulinLogs.length === 0) return null;
+    const mealMs = Date.parse(mealTime);
+    if (!Number.isFinite(mealMs)) return null;
+    let best: InsulinLog | null = null;
+    let bestDelta = Infinity;
+    for (const b of insulinLogs) {
+      if (b.insulin_type !== "bolus") continue;
+      if (b.related_entry_id) continue;
+      const bTs = parseDbTs(b.created_at);
+      if (!Number.isFinite(bTs)) continue;
+      const delta = Math.abs(bTs - mealMs);
+      if (delta <= BOLUS_MEAL_WINDOW_MS && delta < bestDelta) {
+        bestDelta = delta;
+        best = b;
+      }
+    }
+    return best;
+  }, [mealTime, insulinLogs]);
 
   const currentAdjustment = useMemo(() => {
     if (meals.length === 0) return null;
@@ -1724,6 +1772,8 @@ export default function EnginePage() {
       // Schedule CGM auto-fetches at +1h / +2h after meal time. Fire-and-forget;
       // failures (e.g. no CGM connected) are silent.
       void scheduleJobsForLog({ logId: saved.id, logType: "meal", refTimeIso: mealIso });
+      // Task #215: if user accepted a bolus suggestion, link it now.
+      if (linkedBolusId) { updateInsulinLogLink(linkedBolusId, saved.id).catch(() => {}); }
       // Refresh meals so the next recommendation immediately benefits.
       fetchMealsForEngine().then(setMeals).catch(() => {});
       logDebug("ENGINE.WIZARD_SAVE", { id: saved.id, carbs: cNum, insulin: result.dose, glucose: gNum, mealType: cls });
@@ -1800,6 +1850,8 @@ export default function EnginePage() {
         preMealTrend: preMealTrendNoBolus,
       });
       void scheduleJobsForLog({ logId: saved.id, logType: "meal", refTimeIso: mealIso });
+      // Task #215: if user accepted a bolus suggestion, link it now.
+      if (linkedBolusId) { updateInsulinLogLink(linkedBolusId, saved.id).catch(() => {}); }
       fetchMealsForEngine().then(setMeals).catch(() => {});
       logDebug("ENGINE.SAVE_NO_BOLUS", { id: saved.id, carbs: cNum, glucose: gNum, mealType: cls });
       hapticSuccess();
@@ -1874,6 +1926,8 @@ export default function EnginePage() {
         insulinName: getInsulinSettings().insulinBrandBolus?.trim() || null,
       });
       void scheduleJobsForLog({ logId: saved.id, logType: "meal", refTimeIso: mealIso });
+      // Task #215: if user accepted a bolus suggestion, link it now.
+      if (linkedBolusId) { updateInsulinLogLink(linkedBolusId, saved.id).catch(() => {}); }
       fetchMealsForEngine().then(setMeals).catch(() => {});
       logDebug("ENGINE.SAVE_DIRECT_BOLUS", { id: saved.id, carbs: cNum, glucose: gNum, mealType: cls, insulinUnits: iNum });
       hapticSuccess();
@@ -1948,6 +2002,8 @@ export default function EnginePage() {
         insulinName: getInsulinSettings().insulinBrandBolus?.trim() || null,
       });
       void scheduleJobsForLog({ logId: saved.id, logType: "meal", refTimeIso: mealIso });
+      // Task #215: if user accepted a bolus suggestion, link it now.
+      if (linkedBolusId) { updateInsulinLogLink(linkedBolusId, saved.id).catch(() => {}); }
       fetchMealsForEngine().then(setMeals).catch(() => {});
       logDebug("ENGINE.SAVE_EAGER_BOLUS", { id: saved.id, carbs: cNum, glucose: gNum, mealType: cls, insulinUnits: dose });
       hapticSuccess();
@@ -2032,6 +2088,8 @@ export default function EnginePage() {
         mealTime: mealIso,
         preMealTrend: preMealTrendConfirm,
       });
+      // Task #215: if user accepted a bolus suggestion, link it now.
+      if (linkedBolusId) { updateInsulinLogLink(linkedBolusId, saved.id).catch(() => {}); }
       // Park the saved row + open the decision panel. Form fields stay
       // populated so the panel has visible context — they only reset once
       // the user finishes the post-confirm flow (Bolus / Empfehlung / Cancel).
@@ -2071,6 +2129,8 @@ export default function EnginePage() {
     setPortionSuggestions(new Map());
     setDismissedSuggestions(new Set());
     setMealTime(nowLocalDateTime());
+    // Task #215: clear accepted bolus suggestion so next meal starts clean.
+    setLinkedBolusId(null);
     setConfirmErr("");
     setConfirmedMeal(null);
     setDecisionMode("decision");
@@ -2952,6 +3012,43 @@ export default function EnginePage() {
                   </div>
                 );
               })()}
+
+              {/* Task #215: Bolus-suggestion banner — reverse path of
+                  InsulinForm's meal suggestion (Task #211). When an
+                  unlinked bolus sits within ±30 min of mealTime we
+                  surface a one-tap "Vorschlag" chip so the user can
+                  explicitly pair it to the meal being logged right now.
+                  Tapping "Verknüpfen" sets linkedBolusId; the actual
+                  updateInsulinLogLink() call fires in every save path
+                  (handleSaveWithoutBolus / handleSaveWithDirectBolus /
+                  handleSaveWithEagerBolus / handleWizardSave /
+                  handleConfirmLog) right after saveMeal resolves. */}
+              {bolusSuggestion && linkedBolusId !== bolusSuggestion.id && (
+                <div style={{
+                  marginBottom: 12, padding: "10px 12px", borderRadius: 10,
+                  background: `${ACCENT}10`, border: `1px solid ${ACCENT}33`,
+                  display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap",
+                }}>
+                  <div style={{ fontSize: 13, color: "var(--text-muted)", lineHeight: 1.4, flex: 1, minWidth: 140 }}>
+                    <div style={{ fontWeight: 700, color: ACCENT, fontSize: 12, letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: 2 }}>
+                      {tEngine("meal_bolus_suggestion_label")}
+                    </div>
+                    {tEngine("meal_bolus_suggestion_body", { bolus: formatBolusOption(bolusSuggestion) })}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => { hapticSelection(); setLinkedBolusId(bolusSuggestion!.id); }}
+                    style={{
+                      padding: "8px 14px", borderRadius: 8, border: "none",
+                      background: ACCENT, color: "var(--on-accent)",
+                      fontSize: 13, fontWeight: 700, cursor: "pointer",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    {tEngine("meal_bolus_suggestion_accept")}
+                  </button>
+                </div>
+              )}
 
               {/* Glucose + Meal-Time block — uppercase section eyebrows
                   ("GLUKOSE & ZEIT", "GLUKOSE VORHER", "MAHLZEIT-ZEIT")
