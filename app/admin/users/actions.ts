@@ -465,8 +465,8 @@ export async function setManualPlanAction(formData: FormData): Promise<void> {
 
   const durationDays = parseInt(String(formData.get("durationDays") ?? "0"), 10);
 
-  if (!userId) throw new Error("userId fehlt");
-  if (!["free", "beta", "pro", "plus"].includes(plan)) throw new Error("ungültiger plan");
+  if (!userId) redirect("/admin/users?err=action_failed&msg=" + encodeURIComponent("userId fehlt"));
+  if (!["free", "beta", "pro", "plus"].includes(plan)) redirect(`/admin/users/${userId}?err=action_failed&msg=` + encodeURIComponent("ungültiger plan"));
 
   const now = new Date();
   const expiresAt =
@@ -504,7 +504,7 @@ export async function setManualPlanAction(formData: FormData): Promise<void> {
     if (isSchemaMissingError(error)) {
       redirect(`/admin/users/${userId}?err=migration`);
     }
-    throw new Error("supabase: " + error.message);
+    redirect(`/admin/users/${userId}?err=action_failed&msg=` + encodeURIComponent(error.message));
   }
 
   await writeAuditLog({
@@ -533,9 +533,9 @@ export async function setLanguageAction(formData: FormData): Promise<void> {
   const adminToken = await requireAdminToken();
   const userId = String(formData.get("userId") ?? "");
   const language = String(formData.get("language") ?? "");
-  if (!userId) throw new Error("userId fehlt");
+  if (!userId) redirect("/admin/users?err=action_failed&msg=" + encodeURIComponent("userId fehlt"));
   if (!["de", "en"].includes(language)) {
-    throw new Error("language muss 'de' oder 'en' sein");
+    redirect(`/admin/users/${userId}?err=action_failed&msg=` + encodeURIComponent("language muss 'de' oder 'en' sein"));
   }
 
   const sb = getSupabaseAdmin();
@@ -554,7 +554,7 @@ export async function setLanguageAction(formData: FormData): Promise<void> {
     if (isSchemaMissingError(error)) {
       redirect(`/admin/users/${userId}?err=migration`);
     }
-    throw new Error("supabase: " + error.message);
+    redirect(`/admin/users/${userId}?err=action_failed&msg=` + encodeURIComponent(error.message));
   }
 
   await writeAuditLog({
@@ -572,7 +572,7 @@ export async function setLanguageAction(formData: FormData): Promise<void> {
 export async function clearManualPlanAction(formData: FormData): Promise<void> {
   const adminToken = await requireAdminToken();
   const userId = String(formData.get("userId") ?? "");
-  if (!userId) throw new Error("userId fehlt");
+  if (!userId) redirect("/admin/users?err=action_failed&msg=" + encodeURIComponent("userId fehlt"));
 
   const sb = getSupabaseAdmin();
   const { data: before } = await sb
@@ -594,7 +594,7 @@ export async function clearManualPlanAction(formData: FormData): Promise<void> {
     if (isSchemaMissingError(error)) {
       redirect(`/admin/users/${userId}?err=migration`);
     }
-    throw new Error("supabase: " + error.message);
+    redirect(`/admin/users/${userId}?err=action_failed&msg=` + encodeURIComponent(error.message));
   }
 
   await writeAuditLog({
@@ -617,8 +617,8 @@ export async function setGiftLabelAction(formData: FormData): Promise<void> {
   const adminToken = await requireAdminToken();
   const userId = String(formData.get("userId") ?? "");
   const label = String(formData.get("label") ?? "").trim();
-  if (!userId) throw new Error("userId fehlt");
-  if (!label) throw new Error("label darf nicht leer sein");
+  if (!userId) redirect("/admin/users?err=action_failed&msg=" + encodeURIComponent("userId fehlt"));
+  if (!label) redirect(`/admin/users/${userId}?err=action_failed&msg=` + encodeURIComponent("label darf nicht leer sein"));
 
   const sb = getSupabaseAdmin();
   const { data: before } = await sb
@@ -636,7 +636,7 @@ export async function setGiftLabelAction(formData: FormData): Promise<void> {
     if (isSchemaMissingError(error)) {
       redirect(`/admin/users/${userId}?err=migration`);
     }
-    throw new Error("supabase: " + error.message);
+    redirect(`/admin/users/${userId}?err=action_failed&msg=` + encodeURIComponent(error.message));
   }
 
   await writeAuditLog({
@@ -657,7 +657,7 @@ export async function setGiftLabelAction(formData: FormData): Promise<void> {
 export async function clearGiftLabelAction(formData: FormData): Promise<void> {
   const adminToken = await requireAdminToken();
   const userId = String(formData.get("userId") ?? "");
-  if (!userId) throw new Error("userId fehlt");
+  if (!userId) redirect("/admin/users?err=action_failed&msg=" + encodeURIComponent("userId fehlt"));
 
   const sb = getSupabaseAdmin();
   const { data: before } = await sb
@@ -675,7 +675,7 @@ export async function clearGiftLabelAction(formData: FormData): Promise<void> {
     if (isSchemaMissingError(error)) {
       redirect(`/admin/users/${userId}?err=migration`);
     }
-    throw new Error("supabase: " + error.message);
+    redirect(`/admin/users/${userId}?err=action_failed&msg=` + encodeURIComponent(error.message));
   }
 
   await writeAuditLog({
@@ -756,14 +756,14 @@ export async function softDeleteAction(formData: FormData): Promise<void> {
   const adminToken = await requireAdminToken();
   const userId = String(formData.get("userId") ?? "");
   const confirmEmail = String(formData.get("confirmEmail") ?? "").trim().toLowerCase();
-  if (!userId) throw new Error("userId fehlt");
-  if (!confirmEmail) throw new Error("E-Mail-Bestätigung fehlt");
+  if (!userId) redirect("/admin/users?err=action_failed&msg=" + encodeURIComponent("userId fehlt"));
+  if (!confirmEmail) redirect(`/admin/users/${userId}?err=action_failed&msg=` + encodeURIComponent("E-Mail-Bestätigung fehlt"));
 
   const sb = getSupabaseAdmin();
   const { data: authData } = await sb.auth.admin.getUserById(userId);
   const realEmail = authData?.user?.email?.toLowerCase() ?? "";
   if (realEmail !== confirmEmail) {
-    throw new Error("E-Mail-Bestätigung passt nicht zur User-E-Mail");
+    redirect(`/admin/users/${userId}?err=action_failed&msg=` + encodeURIComponent("E-Mail-Bestätigung passt nicht zur User-E-Mail"));
   }
 
   // Long ban duration as a soft "blocked" marker — Supabase has no
@@ -772,7 +772,7 @@ export async function softDeleteAction(formData: FormData): Promise<void> {
   const { error: banErr } = await sb.auth.admin.updateUserById(userId, {
     ban_duration: "876000h",
   });
-  if (banErr) throw new Error("auth: " + banErr.message);
+  if (banErr) redirect(`/admin/users/${userId}?err=action_failed&msg=` + encodeURIComponent(banErr.message));
 
   const { error: softErr } = await sb
     .from("profiles")
@@ -821,14 +821,14 @@ export async function cancelAndBanAction(formData: FormData): Promise<void> {
   const adminToken = await requireAdminToken();
   const userId = String(formData.get("userId") ?? "");
   const confirmEmail = String(formData.get("confirmEmail") ?? "").trim().toLowerCase();
-  if (!userId) throw new Error("userId fehlt");
-  if (!confirmEmail) throw new Error("E-Mail-Bestätigung fehlt");
+  if (!userId) redirect("/admin/users?err=action_failed&msg=" + encodeURIComponent("userId fehlt"));
+  if (!confirmEmail) redirect(`/admin/users/${userId}?err=action_failed&msg=` + encodeURIComponent("E-Mail-Bestätigung fehlt"));
 
   const sb = getSupabaseAdmin();
   const { data: authData } = await sb.auth.admin.getUserById(userId);
   const realEmail = authData?.user?.email?.toLowerCase() ?? "";
   if (realEmail !== confirmEmail) {
-    throw new Error("E-Mail-Bestätigung passt nicht zur User-E-Mail");
+    redirect(`/admin/users/${userId}?err=action_failed&msg=` + encodeURIComponent("E-Mail-Bestätigung passt nicht zur User-E-Mail"));
   }
 
   // 1) Stripe-Sub kündigen (best-effort). Wir suchen die letzte
@@ -872,7 +872,7 @@ export async function cancelAndBanAction(formData: FormData): Promise<void> {
   const { error: banErr } = await sb.auth.admin.updateUserById(userId, {
     ban_duration: "876000h",
   });
-  if (banErr) throw new Error("auth: " + banErr.message);
+  if (banErr) redirect(`/admin/users/${userId}?err=action_failed&msg=` + encodeURIComponent(banErr.message));
 
   // 3) `deleted_at` setzen, damit Listen/UI den User als gesperrt
   //    rendern und der Restore-Button erscheint.
@@ -1088,14 +1088,14 @@ export async function hardDeleteAction(formData: FormData): Promise<void> {
   const adminToken = await requireAdminToken();
   const userId = String(formData.get("userId") ?? "");
   const confirmEmail = String(formData.get("confirmEmail") ?? "").trim().toLowerCase();
-  if (!userId) throw new Error("userId fehlt");
-  if (!confirmEmail) throw new Error("E-Mail-Bestätigung fehlt");
+  if (!userId) redirect("/admin/users?err=action_failed&msg=" + encodeURIComponent("userId fehlt"));
+  if (!confirmEmail) redirect(`/admin/users/${userId}?err=action_failed&msg=` + encodeURIComponent("E-Mail-Bestätigung fehlt"));
 
   const sb = getSupabaseAdmin();
   const { data: authData } = await sb.auth.admin.getUserById(userId);
   const realEmail = authData?.user?.email?.toLowerCase() ?? "";
   if (realEmail !== confirmEmail) {
-    throw new Error("E-Mail-Bestätigung passt nicht zur User-E-Mail");
+    redirect(`/admin/users/${userId}?err=action_failed&msg=` + encodeURIComponent("E-Mail-Bestätigung passt nicht zur User-E-Mail"));
   }
 
   await writeAuditLog({
@@ -1107,7 +1107,7 @@ export async function hardDeleteAction(formData: FormData): Promise<void> {
   });
 
   const { error } = await sb.auth.admin.deleteUser(userId);
-  if (error) throw new Error("auth.deleteUser: " + error.message);
+  if (error) redirect(`/admin/users/${userId}?err=action_failed&msg=` + encodeURIComponent(error.message));
 
   revalidatePath("/admin/users");
   redirect("/admin/users?deleted=" + encodeURIComponent(realEmail));
@@ -1117,8 +1117,8 @@ export async function setRoleAction(formData: FormData): Promise<void> {
   const adminToken = await requireAdminToken();
   const userId = String(formData.get("userId") ?? "");
   const role = String(formData.get("role") ?? "user");
-  if (!userId) throw new Error("userId fehlt");
-  if (!["user", "admin"].includes(role)) throw new Error("Ungültige Rolle");
+  if (!userId) redirect("/admin/users?err=action_failed&msg=" + encodeURIComponent("userId fehlt"));
+  if (!["user", "admin"].includes(role)) redirect(`/admin/users/${userId}?err=action_failed&msg=` + encodeURIComponent("Ungültige Rolle"));
 
   const sb = getSupabaseAdmin();
   const { data: before } = await sb
@@ -1131,7 +1131,7 @@ export async function setRoleAction(formData: FormData): Promise<void> {
     .from("profiles")
     .update({ role })
     .eq("user_id", userId);
-  if (error) throw new Error("supabase: " + error.message);
+  if (error) redirect(`/admin/users/${userId}?err=action_failed&msg=` + encodeURIComponent(error.message));
 
   await writeAuditLog({
     action: "set_role",

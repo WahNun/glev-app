@@ -21,6 +21,7 @@ export default async function AdminUserDetailPage({
   const giftOk  = Array.isArray(sp.gift_ok)  ? sp.gift_ok[0]  : sp.gift_ok;
   const planOk  = Array.isArray(sp.plan_ok)  ? sp.plan_ok[0]  : sp.plan_ok;
   const errParam = Array.isArray(sp.err) ? sp.err[0] : sp.err;
+  const msgParam = Array.isArray(sp.msg) ? sp.msg[0] : sp.msg;
   const authed = await isAdminAuthed();
   if (!authed) {
     return (
@@ -158,6 +159,12 @@ export default async function AdminUserDetailPage({
           <pre style={{ margin: "8px 0 0", background: "#fee2e2", padding: "8px 10px", borderRadius: 6, fontSize: 12, overflowX: "auto" }}>
             {`ALTER TABLE profiles ADD COLUMN IF NOT EXISTS gift_label text;`}
           </pre>
+        </div>
+      ) : null}
+      {errParam && errParam !== "migration" ? (
+        <div style={{ background: "#fef2f2", border: "1px solid #fca5a5", color: "#991b1b", padding: "12px 14px", borderRadius: 8, fontSize: 13, marginBottom: 20 }}>
+          <strong>⚠️ Fehler:</strong>{" "}
+          {msgParam ? decodeURIComponent(msgParam) : errParam}
         </div>
       ) : null}
       {giftOk ? (
