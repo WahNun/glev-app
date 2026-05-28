@@ -59,34 +59,6 @@ export type AppleHealthRow = {
  * Returns `{ inserted, skipped }` where `inserted` counts rows the upsert
  * actually wrote (via `.select("id")`) and `skipped` = rows.length − inserted.
  */
-export async function upsertAndFillAppleHealthRows(
-  sb: import("@supabase/supabase-js").SupabaseClient,
-  userId: string,
-  rows: AppleHealthRow[],
-  fillFn: typeof fillNearbyChecks = fillNearbyChecks,
-): Promise<{ ok: boolean; inserted: number; skipped: number; error?: string }> {
-  if (rows.length === 0) return { ok: true, inserted: 0, skipped: 0 };
-
-  const { data, error } = await sb
-    .from("apple_health_readings")
-    .upsert(
-      rows.map((r) => ({ ...r, user_id: userId })),
-      { onConflict: "user_id,source_uuid", ignoreDuplicates: true },
-    )
-    .select("id");
-
-  if (error) return { ok: false, inserted: 0, skipped: rows.length, error: error.message };
-
-  const inserted = Array.isArray(data) ? data.length : 0;
-  const skipped = rows.length - inserted;
-
-  for (const r of rows) {
-    fillFn(sb, userId, r.value_mg_dl, new Date(r.timestamp)).catch(() => {});
-  }
-
-  return { ok: true, inserted, skipped };
-}
-
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
@@ -113,19 +85,27 @@ export interface NormalisedRow {
   value_mg_dl: number;
 }
 
+/** @deprecated Use NormalisedRow instead — kept for backward compatibility with existing tests */
+export type AppleHealthRow = NormalisedRow;
+
 /**
  * Upserts pre-normalised Apple Health rows into `apple_health_readings` and,
  * on success, fires `fillFn` (default: `fillNearbyChecks`) for each row.
  *
  * Extracted so the upsert + fill behaviour can be unit-tested without
  * spinning up a real Supabase instance or a real HealthKit device.
+ *
+ * Returns `{ ok, inserted, skipped }` where `inserted` counts rows the upsert
+ * actually wrote (via `.select("id")`) and `skipped` = rows.length − inserted.
  */
 export async function upsertAndFillAppleHealthRows(
   admin: import("@supabase/supabase-js").SupabaseClient,
   userId: string,
   rows: NormalisedRow[],
   fillFn: typeof fillNearbyChecks = fillNearbyChecks,
-): Promise<{ ok: boolean; inserted?: number; error?: string }> {
+): Promise<{ ok: boolean; inserted: number; skipped: number; error?: string }> {
+  if (rows.length === 0) return { ok: true, inserted: 0, skipped: 0 };
+
   const { data, error: upsertErr } = await admin
     .from("apple_health_readings")
     .upsert(
@@ -135,16 +115,17 @@ export async function upsertAndFillAppleHealthRows(
     .select("id");
 
   if (upsertErr) {
-    return { ok: false, error: upsertErr.message };
+    return { ok: false, inserted: 0, skipped: rows.length, error: upsertErr.message };
   }
 
   const inserted = Array.isArray(data) ? data.length : 0;
+  const skipped = rows.length - inserted;
 
   for (const r of rows) {
     fillFn(admin, userId, r.value_mg_dl, new Date(r.timestamp)).catch(() => {});
   }
 
-  return { ok: true, inserted };
+  return { ok: true, inserted, skipped };
 }
 
 function normaliseSample(s: InboundSample): NormalisedRow | null {
