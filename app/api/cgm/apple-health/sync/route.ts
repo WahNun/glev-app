@@ -43,6 +43,50 @@ import { adminClient } from "@/lib/cgm/supabase";
 import { getSyncStatus } from "@/lib/cgm/appleHealth";
 import { fillNearbyChecks } from "@/lib/mealTimelineChecks";
 
+export type AppleHealthRow = {
+  source_uuid: string;
+  timestamp: string;
+  value_mg_dl: number;
+};
+
+/**
+ * Upserts pre-normalised Apple Health rows into `apple_health_readings` and,
+ * on success, fires `fillFn` (default: `fillNearbyChecks`) for each row.
+ *
+ * Extracted so the upsert + fill behaviour can be unit-tested without
+ * spinning up a real Supabase instance or a real HealthKit device.
+ *
+ * Returns `{ inserted, skipped }` where `inserted` counts rows the upsert
+ * actually wrote (via `.select("id")`) and `skipped` = rows.length − inserted.
+ */
+export async function upsertAndFillAppleHealthRows(
+  sb: import("@supabase/supabase-js").SupabaseClient,
+  userId: string,
+  rows: AppleHealthRow[],
+  fillFn: typeof fillNearbyChecks = fillNearbyChecks,
+): Promise<{ ok: boolean; inserted: number; skipped: number; error?: string }> {
+  if (rows.length === 0) return { ok: true, inserted: 0, skipped: 0 };
+
+  const { data, error } = await sb
+    .from("apple_health_readings")
+    .upsert(
+      rows.map((r) => ({ ...r, user_id: userId })),
+      { onConflict: "user_id,source_uuid", ignoreDuplicates: true },
+    )
+    .select("id");
+
+  if (error) return { ok: false, inserted: 0, skipped: rows.length, error: error.message };
+
+  const inserted = Array.isArray(data) ? data.length : 0;
+  const skipped = rows.length - inserted;
+
+  for (const r of rows) {
+    fillFn(sb, userId, r.value_mg_dl, new Date(r.timestamp)).catch(() => {});
+  }
+
+  return { ok: true, inserted, skipped };
+}
+
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
@@ -203,10 +247,8 @@ export async function POST(req: NextRequest) {
       throw e;
     }
 
-    const inserted = result.inserted ?? 0;
-    skipped += rows.length - inserted;
-
-    return NextResponse.json({ inserted, skipped });
+    skipped += result.skipped;
+    return NextResponse.json({ inserted: result.inserted, skipped });
   } catch (e) {
     return errResponse(e);
   }
