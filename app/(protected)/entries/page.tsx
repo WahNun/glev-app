@@ -43,6 +43,8 @@ import { fetchInsulinType, getInsulinSettings } from "@/lib/userSettings";
 import { parseDbDate, parseDbTs, parseLluTs } from "@/lib/time";
 import { useCarbUnit } from "@/hooks/useCarbUnit";
 import { useTimeFormat } from "@/hooks/useTimeFormat";
+import { usePlan } from "@/hooks/usePlan";
+import { getHistoryCutoffISO } from "@/lib/historyLimit";
 import { formatICR } from "@/lib/carbUnits";
 import {
   readEntriesCache,
@@ -349,6 +351,11 @@ export default function EntriesPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [locale],
   );
+  const { plan, trialActive } = usePlan();
+  // History cutoff derived from the user's plan. null = unlimited (Plus).
+  // Used as the lower-bound for paginated "Load more" fetches so Free
+  // users never scroll back more than 60 days, Pro ≤ 90 days.
+  const historyLimitISO = getHistoryCutoffISO(plan, trialActive);
   const [meals, setMeals]     = useState<Meal[]>([]);
   const [insulin, setInsulin] = useState<InsulinLog[]>([]);
   const [exercise, setExercise] = useState<ExerciseLog[]>([]);
@@ -657,7 +664,8 @@ export default function EntriesPage() {
     try {
       const more = await fetchMeals({
         before: oldestMealCreatedAt.current,
-        sinceDays: FETCH_MEALS_DEFAULT_SINCE_DAYS,
+        sinceDays: FETCH_MEALS_DEFAULT_SINCE_DAYS, // practical cap for Plus (365d)
+        sinceIso: historyLimitISO ?? undefined,    // plan cap wins when more restrictive
         limit: MEALS_PAGE_SIZE,
       });
       if (more.length === 0) {

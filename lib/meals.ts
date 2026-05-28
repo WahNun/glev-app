@@ -656,8 +656,19 @@ export interface FetchMealsOptions {
    * (`fetchMealsForEngine`) passes 90 explicitly. Pass `Infinity` to
    * skip the filter entirely (only used by tests / one-off exports
    * that explicitly opt out).
+   *
+   * When `sinceIso` is also set, the **later** (more restrictive) of the
+   * two cutoffs wins — this lets callers enforce a plan-based limit
+   * without recomputing days.
    */
   sinceDays?: number;
+  /**
+   * Optional ISO-8601 cutoff string (e.g. from `getHistoryCutoffISO()`).
+   * When set, takes precedence over `sinceDays` if it resolves to a
+   * **later** date — i.e. plan limits always win over time-window presets.
+   * Pass `undefined` to fall back to `sinceDays`.
+   */
+  sinceIso?: string;
   /**
    * Hard cap on number of rows. Defaults to
    * {@link FETCH_MEALS_DEFAULT_LIMIT} (50) so an unbounded `SELECT`
@@ -696,9 +707,16 @@ export async function fetchMeals(opts: FetchMealsOptions = {}): Promise<Meal[]> 
   // Cutoff is computed once per call and applied via PostgREST `gte`
   // on `created_at`. Using `Infinity` (or any non-finite value) skips
   // the filter so callers can intentionally pull everything.
-  const cutoffIso = Number.isFinite(sinceDays)
+  const daysCutoff = Number.isFinite(sinceDays)
     ? new Date(Date.now() - sinceDays * 86_400_000).toISOString()
     : null;
+  // Plan-based cutoff (sinceIso) wins if it is more restrictive (later date).
+  const cutoffIso = (() => {
+    if (!opts.sinceIso && !daysCutoff) return null;
+    if (!opts.sinceIso) return daysCutoff;
+    if (!daysCutoff)    return opts.sinceIso;
+    return opts.sinceIso > daysCutoff ? opts.sinceIso : daysCutoff;
+  })();
 
   const applyCutoff = <T extends { gte: (col: string, val: string) => T }>(q: T): T =>
     cutoffIso ? q.gte("created_at", cutoffIso) : q;
