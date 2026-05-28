@@ -63,10 +63,44 @@ interface InboundSample {
   unit?: unknown;
 }
 
-interface NormalisedRow {
+export interface NormalisedRow {
   source_uuid: string;
   timestamp: string;
   value_mg_dl: number;
+}
+
+/**
+ * Upserts pre-normalised Apple Health rows into `apple_health_readings` and,
+ * on success, fires `fillFn` (default: `fillNearbyChecks`) for each row.
+ *
+ * Extracted so the upsert + fill behaviour can be unit-tested without
+ * spinning up a real Supabase instance or a real HealthKit device.
+ */
+export async function upsertAndFillAppleHealthRows(
+  admin: import("@supabase/supabase-js").SupabaseClient,
+  userId: string,
+  rows: NormalisedRow[],
+  fillFn: typeof fillNearbyChecks = fillNearbyChecks,
+): Promise<{ ok: boolean; inserted?: number; error?: string }> {
+  const { data, error: upsertErr } = await admin
+    .from("apple_health_readings")
+    .upsert(
+      rows.map((r) => ({ ...r, user_id: userId })),
+      { onConflict: "user_id,source_uuid", ignoreDuplicates: true },
+    )
+    .select("id");
+
+  if (upsertErr) {
+    return { ok: false, error: upsertErr.message };
+  }
+
+  const inserted = Array.isArray(data) ? data.length : 0;
+
+  for (const r of rows) {
+    fillFn(admin, userId, r.value_mg_dl, new Date(r.timestamp)).catch(() => {});
+  }
+
+  return { ok: true, inserted };
 }
 
 function normaliseSample(s: InboundSample): NormalisedRow | null {
@@ -158,37 +192,19 @@ export async function POST(req: NextRequest) {
 
   try {
     const sb = adminClient();
-    // Upsert with ignoreDuplicates so re-pushed UUIDs do NOT update the
-    // existing row (the value never changes for a given HealthKit UUID;
-    // an UPDATE would just churn the row's mtime + waste WAL).
-    const { data, error } = await sb
-      .from("apple_health_readings")
-      .upsert(
-        rows.map((r) => ({ ...r, user_id: user.id })),
-        { onConflict: "user_id,source_uuid", ignoreDuplicates: true }
-      )
-      .select("id");
+    const result = await upsertAndFillAppleHealthRows(sb, user.id, rows);
 
-    if (error) {
+    if (!result.ok) {
       const e: Error & { upstream?: boolean; status?: number } = new Error(
-        "supabase: " + error.message
+        "supabase: " + result.error
       );
       e.upstream = true;
       e.status = 502;
       throw e;
     }
 
-    const inserted = Array.isArray(data) ? data.length : 0;
+    const inserted = result.inserted ?? 0;
     skipped += rows.length - inserted;
-
-    // Fire-and-forget: for each successfully processed row, try to fill
-    // any open meal_timeline_check whose planned_at is within ±15 minutes.
-    // Errors are swallowed so a failed fill can never break the sync response.
-    for (const r of rows) {
-      fillNearbyChecks(sb, user.id, r.value_mg_dl, new Date(r.timestamp)).catch(
-        () => {},
-      );
-    }
 
     return NextResponse.json({ inserted, skipped });
   } catch (e) {
