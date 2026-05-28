@@ -248,6 +248,17 @@ export default function SettingsPage() {
   // the fetched 15 land between the keystroke and the save handler
   // reading from state. See Task #40 e2e regression for details.
   const insulinTouchedRef = useRef(false);
+  // Same guard for the other DB-loaded sections (Task #137). A user who
+  // opens a sheet quickly after navigation and edits before the fetch
+  // resolves would see their typed/toggled value disappear once the slow
+  // fetch lands. Per-section refs mirror the insulinTouchedRef pattern.
+  const macrosTouchedRef = useRef(false);
+  const notifTouchedRef = useRef(false);
+  // Appointments use the same guard: the sheet open already marks
+  // interaction intent (any add/edit/delete commits synchronously to the
+  // DB and then applies an optimistic update, which the late fetch would
+  // otherwise overwrite with the stale list).
+  const apptsTouchedRef = useRef(false);
   const [saved, setSaved] = useState(false);
   const [reloading, setReloading] = useState(false);
   const [reloadMsg, setReloadMsg] = useState<{ kind: "ok" | "error"; text: string } | null>(null);
@@ -406,8 +417,14 @@ export default function SettingsPage() {
   useEffect(() => {
     setSettings(loadSettings());
     if (!supabase) return;
-    fetchMacroTargets().then(setMacroTargets).catch(() => {});
-    fetchNotificationPrefs().then(setNotifPrefs).catch(() => {});
+    fetchMacroTargets()
+      .then((m) => { if (!macrosTouchedRef.current) setMacroTargets(m); })
+      .catch(() => {})
+      .finally(() => { macrosTouchedRef.current = false; });
+    fetchNotificationPrefs()
+      .then((p) => { if (!notifTouchedRef.current) setNotifPrefs(p); })
+      .catch(() => {})
+      .finally(() => { notifTouchedRef.current = false; });
     fetchLowAlarmSettingsFromDb().then((s) => {
       setLowAlarmEnabled(s.enabled);
       setLowAlarmThreshold(s.thresholdMgdl);
@@ -474,7 +491,10 @@ export default function SettingsPage() {
     // Load the appointment list. Errors collapse to an empty list,
     // which is the same UI as "no appointments saved yet" — no need
     // to surface a separate error state on the row subtitle.
-    fetchAppointments().then(setAppointments).catch(() => {});
+    fetchAppointments()
+      .then((a) => { if (!apptsTouchedRef.current) setAppointments(a); })
+      .catch(() => {})
+      .finally(() => { apptsTouchedRef.current = false; });
     // Engine adjustment history — read-only audit trail surfaced under
     // the Insulin section. Newest-first, capped to ~10 for display.
     // `fetchAdjustmentHistory` already returns newest-first, so just
@@ -589,6 +609,11 @@ export default function SettingsPage() {
       });
       return curSettings;
     });
+    // Mark appointments as user-touched when the sheet opens so the
+    // in-flight fetchAppointments() can't overwrite an optimistic
+    // add/edit/delete the user triggers before the fetch resolves
+    // (Task #137 — same race as insulin/macros/notif sections).
+    if (id === "lastAppointment") apptsTouchedRef.current = true;
     // Reset the appointment-sheet's transient draft state every time a
     // sheet opens — even non-appointment sheets — so the user always
     // sees the "add" form pre-filled to today and any abandoned inline
@@ -943,6 +968,9 @@ export default function SettingsPage() {
   }, [notifPrefs, tSettings]);
 
   function updNotif<K extends keyof NotificationPrefs>(key: K, val: NotificationPrefs[K]) {
+    // Mark notif prefs as user-touched so in-flight fetchNotificationPrefs
+    // doesn't race in and overwrite a toggled value (Task #137).
+    notifTouchedRef.current = true;
     setNotifPrefs((prev) => ({ ...prev, [key]: val }));
   }
 
@@ -1003,6 +1031,9 @@ export default function SettingsPage() {
   }
 
   function updMacro<K extends keyof MacroTargets>(key: K, val: MacroTargets[K]) {
+    // Mark macros as user-touched so in-flight fetchMacroTargets doesn't
+    // race in and overwrite the typed value (Task #137 — mirrors insulinTouchedRef).
+    macrosTouchedRef.current = true;
     setMacroTargets((prev) => ({ ...prev, [key]: val }));
   }
 
