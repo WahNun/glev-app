@@ -1,0 +1,1 @@
+bash find_conflicts.sh > grep_output.txt && cat grep_output.txt

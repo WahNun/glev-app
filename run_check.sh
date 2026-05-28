@@ -1,0 +1,1 @@
+bash check_conflicts.sh > conflict_grep.txt && cat conflict_grep.txt

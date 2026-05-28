@@ -1,66 +1,82 @@
 name: Android release
 
 # Push-button Play Store release. Either:
-#   - click "Run workflow" in the GitHub Actions UI (pick a bump strategy)
-#   - or push a tag matching `android-v*` to ship automatically (always
-#     does a versionCode bump)
+#   - click "Run workflow" in the GitHub Actions UI (pick a bump strategy + lane)
+#   - or push a tag matching `android-v*` to ship automatically (versionCode bump,
+#     uploads to internal track)
 #
 # Prereqs — add these once under GitHub repo → Settings → Secrets and
 # variables → Actions → Repository secrets:
 #
-#   ANDROID_KEYSTORE_BASE64       base64 of ~/glev-release.keystore
-#                                 Generate: base64 -i ~/glev-release.keystore | pbcopy
-#   ANDROID_KEYSTORE_PASSWORD     keystore + key password (same value)
-#   ANDROID_KEY_ALIAS             "glev" (as created in SIGNING_SETUP.md §1)
-#   ANDROID_KEY_PASSWORD          same as ANDROID_KEYSTORE_PASSWORD
+#   ANDROID_KEYSTORE_BASE64         base64 of ~/glev-release.keystore
+#                                   Generate: base64 -i ~/glev-release.keystore | pbcopy
+#   ANDROID_KEYSTORE_PASSWORD       keystore password
+#   ANDROID_KEY_ALIAS               key alias (e.g. "glev" — see android/SIGNING_SETUP.md §1)
+#   ANDROID_KEY_PASSWORD            key password (often same as ANDROID_KEYSTORE_PASSWORD)
 #   ANDROID_GOOGLE_SERVICES_BASE64  base64 of android/app/google-services.json
-#                                 Generate: base64 -i android/app/google-services.json | pbcopy
+#                                   Generate: base64 -i android/app/google-services.json | pbcopy
+#   PLAY_STORE_JSON_KEY_DATA        base64 of the Play Store service-account JSON
+#                                   Google Play Console → Setup → API access → Service accounts
+#                                   Grant "Release manager" role, download JSON key, then:
+#                                   base64 -i service-account.json | pbcopy
 #
-# The workflow writes the keystore to /tmp/glev-release.keystore and
-# google-services.json to android/app/google-services.json so Gradle
-# finds both without them ever touching the repo.
+# The keystore and google-services.json are decoded to /tmp at runtime so
+# they never touch the repo.
 #
-# AAB output: android/app/build/outputs/bundle/release/app-release.aab
-# It is uploaded as a GitHub Actions artifact so you can download and
-# upload to Play Console manually (Internal Testing → Create new release).
+# AAB is also uploaded as a GitHub Actions artifact (30-day retention) for
+# manual inspection even when the Play Store upload succeeds.
 
 on:
   workflow_dispatch:
     inputs:
       bump:
-        description: "versionCode bump strategy"
+        description: "Version bump strategy"
         type: choice
         required: true
         default: "build"
         options:
-          - build      # increment versionCode by 1 (most common)
-          - patch      # bump versionName patch + reset versionCode to 1
-          - minor      # bump versionName minor + reset versionCode to 1
-          - major      # bump versionName major + reset versionCode to 1
-          - skip       # no version change (re-build same version; rare)
+          - build    # increment versionCode by 1 (most common)
+          - patch    # bump versionName patch + reset versionCode to 1
+          - minor    # bump versionName minor + reset versionCode to 1
+          - major    # bump versionName major + reset versionCode to 1
+          - skip     # no version change (re-build same version; rare)
+      lane:
+        description: "Fastlane lane to run"
+        type: choice
+        required: true
+        default: "beta"
+        options:
+          - beta     # build AAB + upload to internal track
+          - release  # promote internal → production (no rebuild)
   push:
     tags:
       - "android-v*"
 
 concurrency:
   group: android-release
-  cancel-in-progress: false   # never cancel a running release build
+  cancel-in-progress: false
 
 permissions:
-  contents: write   # needed to push version-bump commit back to branch
+  contents: write
 
 jobs:
   build:
-    name: Build signed AAB
+    name: Build & upload to Play Store
     runs-on: ubuntu-latest
     timeout-minutes: 40
 
     env:
-      # Gradle signingConfigs reads exactly these four names (see android/app/build.gradle)
+      # Gradle signingConfigs reads exactly these four names (android/app/build.gradle)
       KEYSTORE_PATH: /tmp/glev-release.keystore
       KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
       KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
       KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+      # Fastlane: Play Store auth via service-account JSON (base64-encoded)
+      PLAY_STORE_JSON_KEY_DATA: ${{ secrets.PLAY_STORE_JSON_KEY_DATA }}
+      FASTLANE_SKIP_UPDATE_CHECK: "1"
+      FASTLANE_HIDE_CHANGELOG: "1"
+      LC_ALL: en_US.UTF-8
+      LANG: en_US.UTF-8
 
     steps:
       - name: Checkout
@@ -77,6 +93,12 @@ jobs:
         with:
           node-version: "20"
 
+      - name: Set up Ruby + bundler cache
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "3.2"
+          bundler-cache: true
+
       - name: Cache pnpm store
         uses: actions/cache@v4
         with:
@@ -89,8 +111,11 @@ jobs:
         with:
           run_install: false
 
-      - name: Install Node deps
+      - name: Install Node deps (for @capacitor/cli + cap sync)
         run: pnpm install --frozen-lockfile
+
+      - name: Install fastlane plugins
+        run: bundle exec fastlane install_plugins
 
       - name: Decode keystore
         run: echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > /tmp/glev-release.keystore
@@ -98,7 +123,7 @@ jobs:
       - name: Decode google-services.json
         run: echo "${{ secrets.ANDROID_GOOGLE_SERVICES_BASE64 }}" | base64 -d > android/app/google-services.json
 
-      - name: Decide bump
+      - name: Decide bump arg
         id: bump
         run: |
           BUMP="${{ github.event.inputs.bump }}"
@@ -106,32 +131,19 @@ jobs:
           if [ -z "$BUMP" ]; then BUMP="build"; fi
           echo "value=$BUMP" >> "$GITHUB_OUTPUT"
 
-      - name: Bump versionCode / versionName
-        if: steps.bump.outputs.value != 'skip'
+      - name: Run fastlane lane
         run: |
+          LANE="${{ github.event.inputs.lane || 'beta' }}"
           BUMP="${{ steps.bump.outputs.value }}"
-          if [ "$BUMP" = "build" ]; then
-            node scripts/bump-android-version.mjs build
+          if [ "$LANE" = "release" ]; then
+            bundle exec fastlane android release
+          elif [ "$BUMP" = "skip" ]; then
+            bundle exec fastlane android beta skip_bump:true
+          elif [ "$BUMP" = "build" ]; then
+            bundle exec fastlane android beta
           else
-            # patch / minor / major: bumps versionName + resets versionCode to 1
-            node scripts/bump-android-version.mjs release "$BUMP"
+            bundle exec fastlane android beta bump:$BUMP
           fi
-          echo "New version:"
-          node scripts/bump-android-version.mjs show
-
-      - name: Cap sync (mirror www/ + capacitor.config into android/)
-        run: npm run android:sync
-
-      - name: Build release AAB
-        run: cd android && ./gradlew bundleRelease --no-daemon
-
-      - name: Upload AAB artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: android-release-aab
-          path: android/app/build/outputs/bundle/release/app-release.aab
-          if-no-files-found: error
-          retention-days: 30
 
       - name: Commit version bump back to branch
         # Only push back on workflow_dispatch from a branch.
@@ -140,7 +152,8 @@ jobs:
         if: |
           github.event_name == 'workflow_dispatch'
           && github.ref_type == 'branch'
-          && steps.bump.outputs.value != 'skip'
+          && github.event.inputs.lane != 'release'
+          && github.event.inputs.bump != 'skip'
         run: |
           if git diff --quiet android/app/build.gradle; then
             echo "No version changes to commit."
@@ -152,3 +165,12 @@ jobs:
           git add android/app/build.gradle
           git commit -m "chore(android): release $NEW_VERSION [skip ci]"
           git push origin "HEAD:${{ github.ref_name }}"
+
+      - name: Upload AAB artifact
+        if: always() && github.event.inputs.lane != 'release'
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-release-aab
+          path: android/app/build/outputs/bundle/release/app-release.aab
+          if-no-files-found: ignore
+          retention-days: 30

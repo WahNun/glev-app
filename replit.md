@@ -56,21 +56,29 @@ Glev ist aktuell **kein eingereichtes Medizinprodukt**. Primärzielgruppe: erwac
 - **Production logs:** Vercel Dashboard → Project → Logs (real-time) OR Deployments → individual deploy → Functions tab → per-route logs.
 - **Production database queries:** prod data lives in Supabase (not the Replit-attached Postgres which is dev-only with stale test rows). Use the Supabase Dashboard SQL Editor for live queries.
 
-## iOS release pipeline (push-button TestFlight)
+## iOS Release Pipeline
 
 Native iOS builds are automated via **fastlane** (`fastlane/Fastfile`) and triggered from GitHub Actions (`.github/workflows/ios-release.yml`) — either by clicking "Run workflow" in the GitHub UI or by pushing a tag like `ios-v1.2.3`.
 
-**Code signing:** handled by `fastlane match`. The Distribution certificate and App Store provisioning profile live in a private `glev-certificates` git repo, encrypted with `MATCH_PASSWORD`. On every CI run, match fetches and installs them before the archive step. Required GitHub Actions secrets:
+- **Quick command:** `bundle exec fastlane ios beta` — bumps `CURRENT_PROJECT_VERSION`, runs `npx cap sync ios`, archives, uploads to TestFlight.
+- **GitHub Actions:** `.github/workflows/ios-release.yml` — click "Run workflow" or push a tag `ios-v*`. Runs on `macos-14`.
+- **Version bumper:** `scripts/bump-ios-version.mjs` edits `ios/App/App.xcodeproj/project.pbxproj`.
+- **Auth:** App Store Connect API key (`APP_STORE_CONNECT_API_KEY_ID` + `APP_STORE_CONNECT_API_ISSUER_ID` + `APP_STORE_CONNECT_API_KEY_BASE64`).
+- **Code signing:** handled by `fastlane match`. The Distribution certificate and App Store provisioning profile live in a private `glev-certificates` git repo, encrypted with `MATCH_PASSWORD`. On every CI run, match fetches and installs them before the archive step. Required GitHub Actions secrets: `MATCH_GIT_URL`, `MATCH_PASSWORD`, `MATCH_GIT_PRIVATE_KEY` (SSH only). On a developer Mac **without** `MATCH_GIT_URL` set, the match step is skipped and Xcode automatic signing is used.
+- **Full docs:** `fastlane/README.md` → iOS section.
 
-| Secret | Description |
-| --- | --- |
-| `MATCH_GIT_URL` | SSH or HTTPS URL of the private certificates repo (e.g. `git@github.com:<org>/glev-certificates.git`) |
-| `MATCH_PASSWORD` | Passphrase used to encrypt/decrypt certs in that repo |
-| `MATCH_GIT_PRIVATE_KEY` | *(SSH only)* Deploy key private key for `glev-certificates`. Omit when using an HTTPS deploy-token URL. |
+## Android Release Pipeline
 
-On a developer Mac **without** `MATCH_GIT_URL` set, the match step is skipped and Xcode automatic signing is used. On a Mac **with** `MATCH_GIT_URL` (or on CI), match runs `readonly: true` and the build uses `CODE_SIGN_STYLE=Manual`.
+Single-command Play Store releases via Fastlane (mirrors the iOS pipeline above).
 
-See `fastlane/README.md` → "Code signing" for the full one-time setup, cert rotation, and new-team-member instructions.
+- **Quick command:** `bundle exec fastlane android beta` — bumps `versionCode`, runs `npx cap sync android`, builds a signed AAB, uploads to Play Store internal track.
+- **Promote to production:** `bundle exec fastlane android release` — promotes the current internal-track build (no rebuild).
+- **GitHub Actions:** `.github/workflows/android-release.yml` — click "Run workflow" (pick bump strategy + lane) or push a tag `android-v*`. Runs on `ubuntu-latest` with JDK 17 (Temurin).
+- **Version bumper:** `scripts/bump-android-version.mjs` edits `android/app/build.gradle` (`versionCode` + `versionName`). Run `node scripts/bump-android-version.mjs show` to inspect current values.
+- **Auth:** Google Play service account JSON key stored as `PLAY_STORE_JSON_KEY_DATA` (base64). See `fastlane/README.md` → Android Authentication for setup steps.
+- **Signing:** `android/app/build.gradle` `signingConfigs.release` reads `KEYSTORE_PATH`, `KEYSTORE_PASSWORD`, `KEY_ALIAS`, `KEY_PASSWORD` from env. CI decodes `ANDROID_KEYSTORE_BASE64` secret to `/tmp/glev-release.keystore` at runtime.
+- **Required GitHub secrets:** `ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`, `ANDROID_KEY_PASSWORD`, `ANDROID_GOOGLE_SERVICES_BASE64`, `PLAY_STORE_JSON_KEY_DATA`.
+- **Full docs:** `fastlane/README.md` → Android section.
 
 ## System Architecture
 

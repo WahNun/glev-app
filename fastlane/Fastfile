@@ -38,6 +38,38 @@
 
 default_platform(:ios)
 
+# ---------------------------------------------------------------------------
+# Android helpers (used by the platform :android block below)
+# ---------------------------------------------------------------------------
+
+ANDROID_DIR      = File.expand_path("../android", __dir__)
+BUILD_GRADLE     = File.expand_path("../android/app/build.gradle", __dir__)
+
+def bump_android_via_node(*args)
+  Dir.chdir(REPO_ROOT) do
+    sh("node", "scripts/bump-android-version.mjs", *args)
+  end
+end
+
+def current_android_versions
+  text = File.read(BUILD_GRADLE)
+  code = text[/\bversionCode\s+(\d+)\b/, 1]
+  name = text[/\bversionName\s+"([^"]+)"/, 1]
+  { version_name: name, version_code: code }
+end
+
+def play_store_json_key
+  if ENV["PLAY_STORE_JSON_KEY_DATA"].to_s.empty? &&
+     ENV["PLAY_STORE_JSON_KEY_PATH"].to_s.empty?
+    UI.user_error!(
+      "Play Store JSON key not configured. Set PLAY_STORE_JSON_KEY_DATA " \
+      "(base64 of service-account JSON) or PLAY_STORE_JSON_KEY_PATH " \
+      "(path to the JSON file). See fastlane/README.md.",
+    )
+  end
+  ENV["PLAY_STORE_JSON_KEY_DATA"] || ENV["PLAY_STORE_JSON_KEY_PATH"]
+end
+
 XCODEPROJ = File.expand_path("../ios/App/App.xcodeproj", __dir__)
 WORKSPACE = File.expand_path("../ios/App/App.xcworkspace", __dir__)
 SCHEME    = "App"
@@ -197,5 +229,140 @@ platform :ios do
       precheck_include_in_app_purchases: false,
     )
     UI.success("Promoted latest TestFlight build to App Store. Submit for review in App Store Connect.")
+  end
+end
+
+# ---------------------------------------------------------------------------
+# Android platform
+#
+# Usage (on any machine with JDK 17, Node 20, and Android SDK available):
+#
+#   bundle exec fastlane android beta            # bump versionCode, build AAB, upload to internal track
+#   bundle exec fastlane android beta bump:patch # also bump versionName patch + reset versionCode to 1
+#   bundle exec fastlane android beta skip_bump:true  # build + upload without touching versions
+#   bundle exec fastlane android release         # promote internal → production (no rebuild)
+#   bundle exec fastlane android bump            # just bump versionCode (no build)
+#   bundle exec fastlane android bump type:marketing kind:patch
+#
+# Required env vars (export or put in ~/.fastlane/.env — never commit):
+#
+#   PLAY_STORE_JSON_KEY_DATA    base64(`cat service-account.json`)
+#   KEYSTORE_PATH               absolute path to the release keystore
+#   KEYSTORE_PASSWORD           keystore + key password
+#   KEY_ALIAS                   key alias inside the keystore (e.g. "glev")
+#   KEY_PASSWORD                same as KEYSTORE_PASSWORD (unless different)
+#
+# The Gradle signingConfigs block in android/app/build.gradle reads those four
+# KEYSTORE_*/KEY_* env vars at build time, so no Fastfile edits are needed for
+# signing — just export the vars.
+# ---------------------------------------------------------------------------
+
+platform :android do
+  before_all do
+    unless File.exist?(BUILD_GRADLE)
+      UI.user_error!("Cannot find #{BUILD_GRADLE}. Run `npx cap sync android` first.")
+    end
+  end
+
+  desc "Print versionName + versionCode as currently committed"
+  lane :versions do
+    v = current_android_versions
+    UI.message("versionName  = #{v[:version_name]}")
+    UI.message("versionCode  = #{v[:version_code]}")
+  end
+
+  desc "Bump versions only. Examples: `fastlane android bump`, `fastlane android bump type:marketing kind:patch`"
+  lane :bump do |options|
+    case options[:type] || ARGV.last
+    when "marketing"
+      kind = options[:kind] || "patch"
+      bump_android_via_node("marketing", kind)
+    when "release"
+      kind = options[:kind] || "patch"
+      bump_android_via_node("release", kind)
+    else
+      bump_android_via_node("build")
+    end
+  end
+
+  desc "Build a signed release AAB and upload to Play Store internal track."
+  desc "Options:"
+  desc "  bump:patch|minor|major  — also bump versionName (resets versionCode to 1)"
+  desc "  bump:build (default)    — just increment versionCode"
+  desc "  skip_bump:true          — don't touch versions at all"
+  lane :beta do |options|
+    play_store_json_key  # validates env vars early, before long build
+
+    unless options[:skip_bump]
+      kind = options[:bump] || "build"
+      if %w[patch minor major].include?(kind)
+        bump_android_via_node("release", kind)
+      else
+        bump_android_via_node("build")
+      end
+    end
+
+    v = current_android_versions
+    UI.success("Building #{v[:version_name]} (#{v[:version_code]})")
+
+    # Capacitor copies webDir + plugin manifest into android/app/src/main/assets/public.
+    Dir.chdir(REPO_ROOT) { sh("npx", "cap", "sync", "android") }
+
+    gradle(
+      task: "bundle",
+      build_type: "Release",
+      project_dir: ANDROID_DIR,
+      print_command: true,
+    )
+
+    aab_path = File.join(
+      ANDROID_DIR,
+      "app", "build", "outputs", "bundle", "release", "app-release.aab",
+    )
+
+    json_key_data = ENV["PLAY_STORE_JSON_KEY_DATA"].to_s
+    upload_params = {
+      package_name: ENV.fetch("ANDROID_PACKAGE_NAME", "app.glev"),
+      aab: aab_path,
+      track: "internal",
+      release_status: "draft",
+      skip_upload_apk: true,
+      skip_upload_metadata: true,
+      skip_upload_changelogs: true,
+      skip_upload_images: true,
+      skip_upload_screenshots: true,
+    }
+    unless json_key_data.empty?
+      upload_params[:json_key_data] = json_key_data
+    else
+      upload_params[:json_key] = ENV.fetch("PLAY_STORE_JSON_KEY_PATH")
+    end
+
+    upload_to_play_store(**upload_params)
+
+    UI.success("Uploaded to Play Store (internal track): #{v[:version_name]} (#{v[:version_code]})")
+  end
+
+  desc "Promote the current internal-track build to production (no rebuild)."
+  lane :release do
+    json_key_data = ENV["PLAY_STORE_JSON_KEY_DATA"].to_s
+    promote_params = {
+      package_name: ENV.fetch("ANDROID_PACKAGE_NAME", "app.glev"),
+      track: "internal",
+      track_promote_to: "production",
+      skip_upload_apk: true,
+      skip_upload_metadata: true,
+      skip_upload_changelogs: true,
+      skip_upload_images: true,
+      skip_upload_screenshots: true,
+    }
+    unless json_key_data.empty?
+      promote_params[:json_key_data] = json_key_data
+    else
+      promote_params[:json_key] = ENV.fetch("PLAY_STORE_JSON_KEY_PATH")
+    end
+
+    upload_to_play_store(**promote_params)
+    UI.success("Promoted internal build to Play Store production. Review and publish in Play Console.")
   end
 end
