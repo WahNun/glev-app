@@ -42,16 +42,11 @@
 // dnd-kit drag → POST → next-load GET.
 
 import { expect, test, type Page, type Locator } from "@playwright/test";
-import fs from "node:fs";
 import { createClient } from "@supabase/supabase-js";
-import { TEST_USER_FIXTURE_PATH } from "../global-setup";
+import { loadTestUserByIndex } from "../support/testUser";
 
 interface TestUser { email: string; password: string; userId: string; }
 
-function loadTestUser(): TestUser {
-  const raw = fs.readFileSync(TEST_USER_FIXTURE_PATH, "utf8");
-  return JSON.parse(raw) as TestUser;
-}
 
 function getAdminClient() {
   const url = process.env.SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
@@ -165,8 +160,8 @@ async function dragClusterAbove(source: Locator, target: Locator) {
   await page.mouse.up();
 }
 
-async function loginAsTestUser(page: Page) {
-  const { email, password } = loadTestUser();
+async function loginAsTestUser(page: Page, workerIndex: number) {
+  const { email, password } = loadTestUserByIndex(workerIndex);
   await page.goto("/login");
   await page.locator('input[type="email"]').fill(email);
   await page.locator('input[type="password"]').fill(password);
@@ -180,7 +175,7 @@ test.describe("Dashboard cluster reorder", () => {
   let testUser: TestUser;
 
   test.beforeAll(() => {
-    testUser = loadTestUser();
+    testUser = loadTestUserByIndex(test.info().workerIndex);
   });
 
   test.beforeEach(async ({ context }) => {
@@ -195,7 +190,7 @@ test.describe("Dashboard cluster reorder", () => {
   });
 
   test("default order is spec'd and a drag persists across reload", async ({ page }) => {
-    await loginAsTestUser(page);
+    await loginAsTestUser(page, test.info().workerIndex);
 
     // Wait for at least one grip handle to render — that's the
     // signal the cluster list has mounted and useCardOrder has

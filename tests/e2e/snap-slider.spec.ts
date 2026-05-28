@@ -47,15 +47,10 @@
 //   120 s for the slider to become visible to absorb this cost without flaking.
 
 import { expect, test, type Page, type BrowserContext } from "@playwright/test";
-import fs from "node:fs";
-import { TEST_USER_FIXTURE_PATH } from "../global-setup";
+import { loadTestUserByIndex } from "../support/testUser";
 
 interface TestUser { email: string; password: string; userId: string; }
 
-function loadTestUser(): TestUser {
-  const raw = fs.readFileSync(TEST_USER_FIXTURE_PATH, "utf8");
-  return JSON.parse(raw) as TestUser;
-}
 
 async function pinGermanLocale(context: BrowserContext, baseURL: string) {
   await context.addCookies([{
@@ -66,8 +61,8 @@ async function pinGermanLocale(context: BrowserContext, baseURL: string) {
   }]);
 }
 
-async function loginAsTestUser(page: Page) {
-  const { email, password } = loadTestUser();
+async function loginAsTestUser(page: Page, workerIndex: number) {
+  const { email, password } = loadTestUserByIndex(workerIndex);
   await page.goto("/login");
   await page.locator('input[type="email"]').fill(email);
   await page.locator('input[type="password"]').fill(password);
@@ -100,7 +95,7 @@ test.describe("SnapSlider interaction", () => {
   test.beforeEach(async ({ page, context, baseURL }) => {
     await context.clearCookies();
     await pinGermanLocale(context, baseURL!);
-    await loginAsTestUser(page);
+    await loginAsTestUser(page, test.info().workerIndex);
   });
 
   // ── Test 1: Pointer drag with snap verification ────────────────────────

@@ -47,14 +47,10 @@
 import { expect, test, type Page } from "@playwright/test";
 import fs from "node:fs";
 import { createClient } from "@supabase/supabase-js";
-import { TEST_USER_FIXTURE_PATH } from "../global-setup";
+import { loadTestUserByIndex } from "../support/testUser";
 
 interface TestUser { email: string; password: string; userId: string; }
 
-function loadTestUser(): TestUser {
-  const raw = fs.readFileSync(TEST_USER_FIXTURE_PATH, "utf8");
-  return JSON.parse(raw) as TestUser;
-}
 
 /**
  * Service-role admin client. We can't go through the normal helpers
@@ -271,8 +267,8 @@ const PDF_BTN_NAME = /^(PDF Report|PDF-Report|Building PDF…|Erstelle PDF…)( 
 // row buttons reflect the real counts and `disabled` is settled.
 const COUNT_LOADING = /Counting entries|Zähle Einträge/;
 
-async function loginAsTestUser(page: Page) {
-  const { email, password } = loadTestUser();
+async function loginAsTestUser(page: Page, workerIndex: number) {
+  const { email, password } = loadTestUserByIndex(workerIndex);
   await page.goto("/login");
   await page.locator('input[type="email"]').fill(email);
   await page.locator('input[type="password"]').fill(password);
@@ -368,7 +364,7 @@ test.describe("ExportPanel wires user settings into the downloaded files", () =>
   let testUser: TestUser;
 
   test.beforeAll(() => {
-    testUser = loadTestUser();
+    testUser = loadTestUserByIndex(test.info().workerIndex);
   });
 
   test.beforeEach(async ({ context }) => {
@@ -401,7 +397,7 @@ test.describe("ExportPanel wires user settings into the downloaded files", () =>
   });
 
   test("Insulin CSV carries the BE-tagged ICR column AND the correction factor", async ({ page }) => {
-    await loginAsTestUser(page);
+    await loginAsTestUser(page, test.info().workerIndex);
     await openExportSheet(page);
 
     // The four per-kind rows render in fixed order [meals, insulin,
@@ -455,7 +451,7 @@ test.describe("ExportPanel wires user settings into the downloaded files", () =>
   });
 
   test("Meals CSV carries the BE-tagged carbs column with the converted value", async ({ page }) => {
-    await loginAsTestUser(page);
+    await loginAsTestUser(page, test.info().workerIndex);
     await openExportSheet(page);
 
     const csvButtons = page.getByRole("button", { name: CSV_BTN_LABEL });
@@ -514,7 +510,7 @@ test.describe("ExportPanel wires user settings into the downloaded files", () =>
       };
     });
 
-    await loginAsTestUser(page);
+    await loginAsTestUser(page, test.info().workerIndex);
     await openExportSheet(page);
 
     const pdfBtn = page.getByRole("button", { name: PDF_BTN_NAME });

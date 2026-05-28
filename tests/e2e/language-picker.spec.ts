@@ -35,16 +35,11 @@
 // language picker → cookie → next-intl server request config.
 
 import { expect, test, type Page, type BrowserContext } from "@playwright/test";
-import fs from "node:fs";
 import { createClient } from "@supabase/supabase-js";
-import { TEST_USER_FIXTURE_PATH } from "../global-setup";
+import { loadTestUserByIndex } from "../support/testUser";
 
 interface TestUser { email: string; password: string; userId: string; }
 
-function loadTestUser(): TestUser {
-  const raw = fs.readFileSync(TEST_USER_FIXTURE_PATH, "utf8");
-  return JSON.parse(raw) as TestUser;
-}
 
 /**
  * Same admin client shape `tests/support/testUser.ts` uses. We re-create
@@ -76,7 +71,7 @@ function getAdminClient() {
  * would then catch a divergence between cookie + DB.
  */
 async function resetProfileLanguage(language: "de" | "en") {
-  const { userId } = loadTestUser();
+  const { userId } = loadTestUserByIndex(test.info().workerIndex);
   const admin = getAdminClient();
   const { error } = await admin
     .from("profiles")
@@ -115,8 +110,8 @@ const SAVE_BUTTON = /^(Save|Speichern)$/i;
 const APPEARANCE_HEADER_EN = /^Appearance$/;
 const APPEARANCE_HEADER_DE = /^Erscheinungsbild$/;
 
-async function loginAsTestUser(page: Page) {
-  const { email, password } = loadTestUser();
+async function loginAsTestUser(page: Page, workerIndex: number) {
+  const { email, password } = loadTestUserByIndex(workerIndex);
   await page.goto("/login");
   // The login form has an email input, a password input, and a single
   // submit button — no labelled inputs, so target by type which is
@@ -258,7 +253,7 @@ test.describe("Settings → Language picker", () => {
     // and the picker's currentLocale matches what the server renders.
     await context.clearCookies();
     await pinStartingLocale(context, baseURL!, "de");
-    await loginAsTestUser(page);
+    await loginAsTestUser(page, test.info().workerIndex);
 
     await page.goto("/settings");
 
@@ -295,7 +290,7 @@ test.describe("Settings → Language picker", () => {
     // verify the choice is sticky across a real network reload.
     await context.clearCookies();
     await pinStartingLocale(context, baseURL!, "de");
-    await loginAsTestUser(page);
+    await loginAsTestUser(page, test.info().workerIndex);
 
     await page.goto("/settings");
     await expect(page.getByRole("heading", { name: APPEARANCE_HEADER_DE })).toBeVisible();

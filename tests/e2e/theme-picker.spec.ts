@@ -21,16 +21,11 @@
 // between login → middleware → settings page → theme picker.
 
 import { expect, test, type Page } from "@playwright/test";
-import fs from "node:fs";
-import { TEST_USER_FIXTURE_PATH } from "../global-setup";
 import { THEME_COOKIE, THEME_STORAGE_KEY } from "@/lib/theme";
+import { loadTestUserByIndex } from "../support/testUser";
 
 interface TestUser { email: string; password: string; userId: string; }
 
-function loadTestUser(): TestUser {
-  const raw = fs.readFileSync(TEST_USER_FIXTURE_PATH, "utf8");
-  return JSON.parse(raw) as TestUser;
-}
 
 /**
  * The /settings page is a flat list of SettingsSection / SettingsRow
@@ -45,8 +40,8 @@ const DARK_LABEL = /^(Dark|Dunkel)$/i;
 const LIGHT_LABEL = /^(Light|Hell)$/i;
 const SYSTEM_LABEL = /^System$/i;
 
-async function loginAsTestUser(page: Page) {
-  const { email, password } = loadTestUser();
+async function loginAsTestUser(page: Page, workerIndex: number) {
+  const { email, password } = loadTestUserByIndex(workerIndex);
   await page.goto("/login");
   // The login form is a <form> with a single submit button — no
   // labelled inputs, so target by placeholder/type which is stable.
@@ -78,7 +73,7 @@ test.describe("Settings → Appearance theme picker", () => {
     // localStorage entry from a previous case. Otherwise the "system"
     // assertion could pass for the wrong reason.
     await context.clearCookies();
-    await loginAsTestUser(page);
+    await loginAsTestUser(page, test.info().workerIndex);
     await page.evaluate(() => {
       try { window.localStorage.removeItem("glev_theme"); } catch { /* ignore */ }
     });

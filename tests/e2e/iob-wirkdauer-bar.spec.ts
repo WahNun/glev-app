@@ -49,9 +49,8 @@
 // so we actually wait for delayed appearance, not just instant DOM presence.
 
 import { expect, test, type BrowserContext, type Page } from "@playwright/test";
-import fs from "node:fs";
 import { createClient } from "@supabase/supabase-js";
-import { TEST_USER_FIXTURE_PATH } from "../global-setup";
+import { loadTestUserByIndex } from "../support/testUser";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -59,10 +58,6 @@ interface TestUser { email: string; password: string; userId: string; }
 
 // ── Shared helpers ────────────────────────────────────────────────────────────
 
-function loadTestUser(): TestUser {
-  const raw = fs.readFileSync(TEST_USER_FIXTURE_PATH, "utf8");
-  return JSON.parse(raw) as TestUser;
-}
 
 function getAdminClient() {
   const url = process.env.SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
@@ -163,8 +158,8 @@ async function suppressBzModal(context: BrowserContext) {
   });
 }
 
-async function loginAsTestUser(page: Page) {
-  const { email, password } = loadTestUser();
+async function loginAsTestUser(page: Page, workerIndex: number) {
+  const { email, password } = loadTestUserByIndex(workerIndex);
   await page.goto("/login");
   await page.locator('input[type="email"]').fill(email);
   await page.locator('input[type="password"]').fill(password);
@@ -265,12 +260,12 @@ async function expandBolusSection(page: Page) {
 
 test.describe("IOBCard Wirkdauer bar — no-dose / cleared state", () => {
   test.beforeAll(async () => {
-    const { userId } = loadTestUser();
+    const { userId } = loadTestUserByIndex(test.info().workerIndex);
     await cleanAllMeals(userId);
   });
 
   test.afterAll(async () => {
-    const { userId } = loadTestUser();
+    const { userId } = loadTestUserByIndex(test.info().workerIndex);
     await cleanAllMeals(userId);
   });
 
@@ -280,7 +275,7 @@ test.describe("IOBCard Wirkdauer bar — no-dose / cleared state", () => {
   });
 
   test("cleared state: iob-wirkdauer-cleared is shown and iob-wirkdauer-bar is absent", async ({ page }) => {
-    await loginAsTestUser(page);
+    await loginAsTestUser(page, test.info().workerIndex);
     await expandBolusSection(page);
 
     const clearedEl = page.getByTestId("iob-wirkdauer-cleared");
@@ -298,7 +293,7 @@ test.describe("IOBCard Wirkdauer bar — active dose (30 min ago)", () => {
   let mealId: string;
 
   test.beforeAll(async () => {
-    testUser = loadTestUser();
+    testUser = loadTestUserByIndex(test.info().workerIndex);
     await cleanAllMeals(testUser.userId);
     mealId = await seedMealWithInsulin(testUser.userId, 30);
   });
@@ -314,7 +309,7 @@ test.describe("IOBCard Wirkdauer bar — active dose (30 min ago)", () => {
   });
 
   test("active dose: iob-wirkdauer-bar is visible and has non-zero bounding-box height", async ({ page }) => {
-    await loginAsTestUser(page);
+    await loginAsTestUser(page, test.info().workerIndex);
     await expandBolusSection(page);
 
     const barEl     = page.getByTestId("iob-wirkdauer-bar");
@@ -338,7 +333,7 @@ test.describe("IOBCard Wirkdauer bar — expired dose (400 min ago, > max DIA 36
   let mealId: string;
 
   test.beforeAll(async () => {
-    testUser = loadTestUser();
+    testUser = loadTestUserByIndex(test.info().workerIndex);
     await cleanAllMeals(testUser.userId);
     // 400 min exceeds the maximum user-configurable DIA (360 min), so the dose
     // is guaranteed expired regardless of the test user's personal DIA setting.
@@ -356,7 +351,7 @@ test.describe("IOBCard Wirkdauer bar — expired dose (400 min ago, > max DIA 36
   });
 
   test("expired doses: iob-wirkdauer-cleared is shown and iob-wirkdauer-bar is absent", async ({ page }) => {
-    await loginAsTestUser(page);
+    await loginAsTestUser(page, test.info().workerIndex);
     await expandBolusSection(page);
 
     const clearedEl = page.getByTestId("iob-wirkdauer-cleared");

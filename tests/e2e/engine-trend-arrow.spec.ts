@@ -37,18 +37,13 @@
 // macros card where the TrendArrow lives.
 
 import { expect, test, type Page, type BrowserContext } from "@playwright/test";
-import fs from "node:fs";
-import { TEST_USER_FIXTURE_PATH } from "../global-setup";
+import { loadTestUserByIndex } from "../support/testUser";
 
 interface TestUser { email: string; password: string; userId: string; }
 
-function loadTestUser(): TestUser {
-  const raw = fs.readFileSync(TEST_USER_FIXTURE_PATH, "utf8");
-  return JSON.parse(raw) as TestUser;
-}
 
-async function loginAsTestUser(page: Page) {
-  const { email, password } = loadTestUser();
+async function loginAsTestUser(page: Page, workerIndex: number) {
+  const { email, password } = loadTestUserByIndex(workerIndex);
   await page.goto("/login");
   await page.locator('input[type="email"]').fill(email);
   await page.locator('input[type="password"]').fill(password);
@@ -197,7 +192,7 @@ test.describe("Engine TrendArrow render path", () => {
       // threshold (lib/engine/trend.ts:34) so the classifier returns
       // "rising_fast" without flapping at the boundary.
       await installEngineMocks(page, rampSamples(110, 2));
-      await loginAsTestUser(page);
+      await loginAsTestUser(page, test.info().workerIndex);
       await page.goto("/engine");
 
       await advanceToMacrosStep(page);
@@ -223,7 +218,7 @@ test.describe("Engine TrendArrow render path", () => {
     // Empty history → currentTrend === undefined → conditional in
     // page.tsx:2130 short-circuits and TrendArrow is not mounted.
     await installEngineMocks(page, []);
-    await loginAsTestUser(page);
+    await loginAsTestUser(page, test.info().workerIndex);
     await page.goto("/engine");
 
     await advanceToMacrosStep(page);

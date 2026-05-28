@@ -35,16 +35,11 @@
 // LanguageSync reconciles on every navigation).
 
 import { expect, test, type BrowserContext, type Page } from "@playwright/test";
-import fs from "node:fs";
 import { createClient } from "@supabase/supabase-js";
-import { TEST_USER_FIXTURE_PATH } from "../global-setup";
+import { loadTestUserByIndex } from "../support/testUser";
 
 interface TestUser { email: string; password: string; userId: string; }
 
-function loadTestUser(): TestUser {
-  const raw = fs.readFileSync(TEST_USER_FIXTURE_PATH, "utf8");
-  return JSON.parse(raw) as TestUser;
-}
 
 function getAdminClient() {
   const url = process.env.SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
@@ -80,8 +75,8 @@ async function setProfileLanguage(userId: string, language: "de" | "en") {
   if (error) throw new Error(`profiles.language set failed: ${error.message}`);
 }
 
-async function loginAsTestUser(page: Page) {
-  const { email, password } = loadTestUser();
+async function loginAsTestUser(page: Page, workerIndex: number) {
+  const { email, password } = loadTestUserByIndex(workerIndex);
   await page.goto("/login");
   await page.locator('input[type="email"]').fill(email);
   await page.locator('input[type="password"]').fill(password);
@@ -95,7 +90,7 @@ test.describe("Entries → filter-sheet translations render in German (Task #617
   let testUser: TestUser;
 
   test.beforeAll(() => {
-    testUser = loadTestUser();
+    testUser = loadTestUserByIndex(test.info().workerIndex);
   });
 
   test.beforeEach(async ({ context, baseURL }) => {
@@ -110,7 +105,7 @@ test.describe("Entries → filter-sheet translations render in German (Task #617
   });
 
   test("filter dialog section headings render in German and English headings do not leak", async ({ page }) => {
-    await loginAsTestUser(page);
+    await loginAsTestUser(page, test.info().workerIndex);
 
     // Sanity: locale cookie must survive the login navigation.
     const cookies = await page.context().cookies();
@@ -165,7 +160,7 @@ test.describe("Entries → filter-sheet translations render in German (Task #617
   });
 
   test("active date-range chip shows 'Letzte 7 Tage' instead of 'Last 7 days' in German locale", async ({ page }) => {
-    await loginAsTestUser(page);
+    await loginAsTestUser(page, test.info().workerIndex);
     await page.goto("/entries");
     await page.evaluate(() => sessionStorage.removeItem("glev:entries-filters"));
     await page.reload();

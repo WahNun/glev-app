@@ -26,16 +26,11 @@
 // PostgREST → row subtitle re-render.
 
 import { expect, test, type Page } from "@playwright/test";
-import fs from "node:fs";
 import { createClient } from "@supabase/supabase-js";
-import { TEST_USER_FIXTURE_PATH } from "../global-setup";
+import { loadTestUserByIndex } from "../support/testUser";
 
 interface TestUser { email: string; password: string; userId: string; }
 
-function loadTestUser(): TestUser {
-  const raw = fs.readFileSync(TEST_USER_FIXTURE_PATH, "utf8");
-  return JSON.parse(raw) as TestUser;
-}
 
 function getAdminClient() {
   const url = process.env.SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
@@ -120,8 +115,8 @@ const SAVE_BUTTON = /^(Save|Speichern|Saving…|Speichere…|✓ Saved!|✓ Gesp
 // ICR / CF / target BG must expand it first.
 const INSULIN_EXPAND_ARIA = /(Expand insulin settings|Insulin-Einstellungen aufklappen)/i;
 
-async function loginAsTestUser(page: Page) {
-  const { email, password } = loadTestUser();
+async function loginAsTestUser(page: Page, workerIndex: number) {
+  const { email, password } = loadTestUserByIndex(workerIndex);
   await page.goto("/login");
   await page.locator('input[type="email"]').fill(email);
   await page.locator('input[type="password"]').fill(password);
@@ -178,7 +173,7 @@ test.describe("Settings → Insulin parameters round-trip", () => {
   let testUser: TestUser;
 
   test.beforeAll(() => {
-    testUser = loadTestUser();
+    testUser = loadTestUserByIndex(test.info().workerIndex);
   });
 
   test.beforeEach(async ({ context }) => {
@@ -194,7 +189,7 @@ test.describe("Settings → Insulin parameters round-trip", () => {
   });
 
   test("editing ICR / CF / Target BG persists to user_settings", async ({ page }) => {
-    await loginAsTestUser(page);
+    await loginAsTestUser(page, test.info().workerIndex);
 
     // ---- INITIAL STATE: no values saved -----------------------------
     expect(await readInsulinSettings(testUser.userId)).toEqual({
@@ -242,7 +237,7 @@ test.describe("Settings → Insulin parameters round-trip", () => {
   });
 
   test("out-of-range inputs are clamped and a notice is shown", async ({ page }) => {
-    await loginAsTestUser(page);
+    await loginAsTestUser(page, test.info().workerIndex);
     await goToSettingsAndExpandInsulin(page);
 
     // ── ICR clamp: SnapSlider max = 30. Typing 999 should store 30,

@@ -32,18 +32,13 @@
 //   (it shows a cleared/no-log state when no basal insulin has been recorded).
 
 import { expect, test, type Page } from "@playwright/test";
-import fs from "node:fs";
-import { TEST_USER_FIXTURE_PATH } from "../global-setup";
+import { loadTestUserByIndex } from "../support/testUser";
 
 interface TestUser { email: string; password: string; userId: string; }
 
-function loadTestUser(): TestUser {
-  const raw = fs.readFileSync(TEST_USER_FIXTURE_PATH, "utf8");
-  return JSON.parse(raw) as TestUser;
-}
 
-async function loginAsTestUser(page: Page) {
-  const { email, password } = loadTestUser();
+async function loginAsTestUser(page: Page, workerIndex: number) {
+  const { email, password } = loadTestUserByIndex(workerIndex);
   await page.goto("/login");
 
   // A "BZ-Wert eintragen — BZ-Check" modal can appear from stale
@@ -67,7 +62,7 @@ test.describe("IOB card — basal quick-log button", () => {
   });
 
   test("tapping 'Log Basal' opens an inline bottom sheet with basal InsulinForm", async ({ page }) => {
-    await loginAsTestUser(page);
+    await loginAsTestUser(page, test.info().workerIndex);
 
     // Record the current URL so we can verify no navigation happened.
     const dashboardUrl = page.url();

@@ -31,7 +31,7 @@ import { expect, test, type Page, type BrowserContext } from "@playwright/test";
 import fs from "node:fs";
 import path from "node:path";
 import { createClient } from "@supabase/supabase-js";
-import { TEST_USER_FIXTURE_PATH } from "../global-setup";
+import { loadTestUserByIndex } from "../support/testUser";
 
 // ---------------------------------------------------------------------------
 // Translation-key guard — fails immediately if de.json is missing any key
@@ -71,10 +71,6 @@ test("messages/de.json contains all adjustment round-trip translation keys", () 
 
 interface TestUser { email: string; password: string; userId: string; }
 
-function loadTestUser(): TestUser {
-  const raw = fs.readFileSync(TEST_USER_FIXTURE_PATH, "utf8");
-  return JSON.parse(raw) as TestUser;
-}
 
 function getAdminClient() {
   const url = process.env.SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
@@ -188,8 +184,8 @@ async function installCgmMocks(page: Page) {
   });
 }
 
-async function loginAsTestUser(page: Page) {
-  const { email, password } = loadTestUser();
+async function loginAsTestUser(page: Page, workerIndex: number) {
+  const { email, password } = loadTestUserByIndex(workerIndex);
   await page.goto("/login");
   await page.locator('input[type="email"]').fill(email);
   await page.locator('input[type="password"]').fill(password);
@@ -214,7 +210,7 @@ test.describe("Engine adjustment banner round-trip (Task #200)", () => {
   let testUser: TestUser;
 
   test.beforeAll(() => {
-    testUser = loadTestUser();
+    testUser = loadTestUserByIndex(test.info().workerIndex);
   });
 
   test.beforeEach(async ({ context }) => {
@@ -233,7 +229,7 @@ test.describe("Engine adjustment banner round-trip (Task #200)", () => {
   // -------------------------------------------------------------------------
   test("Übernehmen: updates user_settings and shows new entry in Engine-Verlauf", async ({ page }) => {
     await installCgmMocks(page);
-    await loginAsTestUser(page);
+    await loginAsTestUser(page, test.info().workerIndex);
 
     // Clear any stale dismiss cooldown so the banner is guaranteed to appear.
     await page.goto("/engine");
@@ -333,7 +329,7 @@ test.describe("Engine adjustment banner round-trip (Task #200)", () => {
   // -------------------------------------------------------------------------
   test("Verwerfen: hides banner immediately and cooldown persists across page reload", async ({ page }) => {
     await installCgmMocks(page);
-    await loginAsTestUser(page);
+    await loginAsTestUser(page, test.info().workerIndex);
 
     // Ensure no stale cooldown from a previous test run.
     await page.goto("/engine");

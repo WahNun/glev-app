@@ -35,7 +35,7 @@ import { expect, test, type Page, type BrowserContext } from "@playwright/test";
 import fs from "node:fs";
 import path from "node:path";
 import { createClient } from "@supabase/supabase-js";
-import { TEST_USER_FIXTURE_PATH } from "../global-setup";
+import { loadTestUserByIndex } from "../support/testUser";
 
 // ---------------------------------------------------------------------------
 // Translation-key guard — fails immediately if en.json is missing any of the
@@ -67,10 +67,6 @@ test("messages/en.json contains all ICR-chip translation keys", () => {
 
 interface TestUser { email: string; password: string; userId: string; }
 
-function loadTestUser(): TestUser {
-  const raw = fs.readFileSync(TEST_USER_FIXTURE_PATH, "utf8");
-  return JSON.parse(raw) as TestUser;
-}
 
 function getAdminClient() {
   const url = process.env.SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
@@ -223,8 +219,8 @@ async function installEngineNetworkMocks(page: Page) {
   });
 }
 
-async function loginAsTestUser(page: Page) {
-  const { email, password } = loadTestUser();
+async function loginAsTestUser(page: Page, workerIndex: number) {
+  const { email, password } = loadTestUserByIndex(workerIndex);
   await page.goto("/login");
   await page.locator('input[type="email"]').fill(email);
   await page.locator('input[type="password"]').fill(password);
@@ -266,7 +262,7 @@ test.describe("ICR-chip / Speichern-button consistency (Task #580 regression gua
   let testUser: TestUser;
 
   test.beforeAll(() => {
-    testUser = loadTestUser();
+    testUser = loadTestUserByIndex(test.info().workerIndex);
   });
 
   test.beforeEach(async ({ context }) => {
@@ -286,7 +282,7 @@ test.describe("ICR-chip / Speichern-button consistency (Task #580 regression gua
   test("switching from Adaptiv to Einstellungen chip updates the Speichern-button dose", async ({ page, context }) => {
     await setLocaleCookie(context, "de");
     await installEngineNetworkMocks(page);
-    await loginAsTestUser(page);
+    await loginAsTestUser(page, test.info().workerIndex);
     await page.goto("/engine");
 
     await runEngineWithBolusToggle(page);
@@ -340,7 +336,7 @@ test.describe("ICR-chip / Speichern-button consistency (Task #580 regression gua
     // but toggling back re-applies the stale result.dose.
     await setLocaleCookie(context, "de");
     await installEngineNetworkMocks(page);
-    await loginAsTestUser(page);
+    await loginAsTestUser(page, test.info().workerIndex);
     await page.goto("/engine");
 
     await runEngineWithBolusToggle(page);
@@ -379,7 +375,7 @@ test.describe("ICR-chip / Speichern-button consistency (Task #580 regression gua
   test("EN locale: switching from Adaptive to Settings chip updates the Save-button dose", async ({ page, context }) => {
     await setLocaleCookie(context, "en");
     await installEngineNetworkMocks(page);
-    await loginAsTestUser(page);
+    await loginAsTestUser(page, test.info().workerIndex);
     await page.goto("/engine");
 
     await runEngineWithBolusToggle(page);

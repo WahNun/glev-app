@@ -33,20 +33,15 @@
 //     tests in `tests/unit/`.
 
 import { expect, test, type Page } from "@playwright/test";
-import fs from "node:fs";
-import { TEST_USER_FIXTURE_PATH } from "../global-setup";
+import { loadTestUserByIndex } from "../support/testUser";
 
 const IOB_LS_KEY = "glev_iob_expanded";
 
 interface TestUser { email: string; password: string; userId: string; }
 
-function loadTestUser(): TestUser {
-  const raw = fs.readFileSync(TEST_USER_FIXTURE_PATH, "utf8");
-  return JSON.parse(raw) as TestUser;
-}
 
-async function loginAsTestUser(page: Page) {
-  const { email, password } = loadTestUser();
+async function loginAsTestUser(page: Page, workerIndex: number) {
+  const { email, password } = loadTestUserByIndex(workerIndex);
   await page.goto("/login");
   await page.locator('input[type="email"]').fill(email);
   await page.locator('input[type="password"]').fill(password);
@@ -96,7 +91,7 @@ async function clearLocalStorage(page: Page) {
 test.describe("IOB panel — localStorage persistence across page reload", () => {
   test.beforeEach(async ({ page, context }) => {
     await context.clearCookies();
-    await loginAsTestUser(page);
+    await loginAsTestUser(page, test.info().workerIndex);
     // Remove any leftover persistence key so each test begins from a
     // predictable (absent) state, independent of previous test runs.
     await clearLocalStorage(page);

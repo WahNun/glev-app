@@ -32,8 +32,7 @@
 // which is the exact condition under which the original bug fired.
 
 import { expect, test } from "@playwright/test";
-import fs from "node:fs";
-import { TEST_USER_FIXTURE_PATH } from "../global-setup";
+import { loadTestUserByIndex } from "../support/testUser";
 
 test.describe("Recovery confirm page", () => {
   test("with recovery params shows the confirm button, not the dashboard", async ({ page }) => {
@@ -53,7 +52,7 @@ test.describe("Recovery confirm page", () => {
     // sb-<ref>-auth-token cookie, then visit /auth/confirm with a
     // recovery token. The middleware must let the request through
     // instead of bouncing the authed user back to /dashboard.
-    const creds = JSON.parse(fs.readFileSync(TEST_USER_FIXTURE_PATH, "utf8"));
+    const creds = loadTestUserByIndex(test.info().workerIndex);
 
     await page.goto("/login");
     await page.getByLabel(/email|e-mail/i).first().fill(creds.email);

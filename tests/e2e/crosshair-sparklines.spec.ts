@@ -52,16 +52,11 @@
 //   Tests never commit edits so stored values remain unchanged across retries.
 
 import { expect, test, type Page } from "@playwright/test";
-import fs from "node:fs";
 import { createClient } from "@supabase/supabase-js";
-import { TEST_USER_FIXTURE_PATH } from "../global-setup";
+import { loadTestUserByIndex } from "../support/testUser";
 
 interface TestUser { email: string; password: string; userId: string; }
 
-function loadTestUser(): TestUser {
-  const raw = fs.readFileSync(TEST_USER_FIXTURE_PATH, "utf8");
-  return JSON.parse(raw) as TestUser;
-}
 
 function getAdminClient() {
   const url = process.env.SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
@@ -185,8 +180,8 @@ async function cleanup() {
 
 // ── Auth helper ──────────────────────────────────────────────────────────────
 
-async function loginAsTestUser(page: Page) {
-  const { email, password } = loadTestUser();
+async function loginAsTestUser(page: Page, workerIndex: number) {
+  const { email, password } = loadTestUserByIndex(workerIndex);
   await page.goto("/login");
   await page.locator('input[type="email"]').fill(email);
   await page.locator('input[type="password"]').fill(password);
@@ -213,7 +208,7 @@ test.describe("Entries → crosshair interactions on sparkline components (Task 
   let testUser: TestUser;
 
   test.beforeAll(async () => {
-    testUser = loadTestUser();
+    testUser = loadTestUserByIndex(test.info().workerIndex);
     const [basal, bolus, exercise] = await Promise.all([
       seedBasal(testUser.userId),
       seedBolus(testUser.userId),
@@ -249,7 +244,7 @@ test.describe("Entries → crosshair interactions on sparkline components (Task 
       });
     });
 
-    await loginAsTestUser(page);
+    await loginAsTestUser(page, test.info().workerIndex);
     await goToEntries(page);
 
     // Locate the basal row by its unique collapsed secondary value.
@@ -289,7 +284,7 @@ test.describe("Entries → crosshair interactions on sparkline components (Task 
   // ── Test 2: GlucoseMiniSparkline renders in bolus row (≥ 2 readings) ─────
 
   test("bolus expanded row — GlucoseMiniSparkline renders when ≥ 2 glucose readings are present", async ({ page }) => {
-    await loginAsTestUser(page);
+    await loginAsTestUser(page, test.info().workerIndex);
     await goToEntries(page);
 
     // The bolus row has a stable DOM id set by BolusRowCard.
@@ -314,7 +309,7 @@ test.describe("Entries → crosshair interactions on sparkline components (Task 
   // ── Test 3: GlucoseMiniSparkline crosshair in bolus row ──────────────────
 
   test("bolus expanded row — GlucoseMiniSparkline crosshair tooltip appears on hover", async ({ page }) => {
-    await loginAsTestUser(page);
+    await loginAsTestUser(page, test.info().workerIndex);
     await goToEntries(page);
 
     const card = page.locator(`#entry-insulin-${bolusLogId}`);
@@ -346,7 +341,7 @@ test.describe("Entries → crosshair interactions on sparkline components (Task 
   // ── Test 4: GlucoseMiniSparkline renders in exercise row (≥ 2 readings) ──
 
   test("exercise expanded row — GlucoseMiniSparkline renders when ≥ 2 glucose readings are present", async ({ page }) => {
-    await loginAsTestUser(page);
+    await loginAsTestUser(page, test.info().workerIndex);
     await goToEntries(page);
 
     // Exercise rows have no stable DOM id. Locate by the unique duration string
@@ -368,7 +363,7 @@ test.describe("Entries → crosshair interactions on sparkline components (Task 
   // ── Test 5: GlucoseMiniSparkline crosshair in exercise row ───────────────
 
   test("exercise expanded row — GlucoseMiniSparkline crosshair tooltip appears on hover", async ({ page }) => {
-    await loginAsTestUser(page);
+    await loginAsTestUser(page, test.info().workerIndex);
     await goToEntries(page);
 
     const durationText = `${EXERCISE_DURATION}m`;

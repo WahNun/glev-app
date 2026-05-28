@@ -33,16 +33,11 @@
 //   - lib/userSettings.ts                — saveInsulinSettings / dia_minutes column
 
 import { expect, test, type Page } from "@playwright/test";
-import fs from "node:fs";
 import { createClient } from "@supabase/supabase-js";
-import { TEST_USER_FIXTURE_PATH } from "../global-setup";
+import { loadTestUserByIndex } from "../support/testUser";
 
 interface TestUser { email: string; password: string; userId: string; }
 
-function loadTestUser(): TestUser {
-  const raw = fs.readFileSync(TEST_USER_FIXTURE_PATH, "utf8");
-  return JSON.parse(raw) as TestUser;
-}
 
 function getAdminClient() {
   const url = process.env.SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
@@ -101,8 +96,8 @@ const DIA_SLIDER_ARIA = /(Duration \(minutes\)|Wirkdauer \(Minuten\))/i;
 
 const SAVE_BUTTON = /^(Save|Speichern|Saving…|Speichere…|✓ Saved!|✓ Gespeichert!)$/;
 
-async function loginAsTestUser(page: Page) {
-  const { email, password } = loadTestUser();
+async function loginAsTestUser(page: Page, workerIndex: number) {
+  const { email, password } = loadTestUserByIndex(workerIndex);
   await page.goto("/login");
   await page.locator('input[type="email"]').fill(email);
   await page.locator('input[type="password"]').fill(password);
@@ -157,7 +152,7 @@ test.describe("Settings → DIA slider keyboard navigation", () => {
   let testUser: TestUser;
 
   test.beforeAll(() => {
-    testUser = loadTestUser();
+    testUser = loadTestUserByIndex(test.info().workerIndex);
   });
 
   test.beforeEach(async ({ context }) => {
@@ -170,7 +165,7 @@ test.describe("Settings → DIA slider keyboard navigation", () => {
   });
 
   test("ArrowRight twice from default (180) produces 240 min and persists", async ({ page }) => {
-    await loginAsTestUser(page);
+    await loginAsTestUser(page, test.info().workerIndex);
 
     // Baseline: no saved DIA (NULL → component default 180 min).
     expect(await readDiaMinutes(testUser.userId)).toBeNull();
@@ -210,7 +205,7 @@ test.describe("Settings → DIA slider keyboard navigation", () => {
   });
 
   test("ArrowLeft from default (180) produces 150 min and persists", async ({ page }) => {
-    await loginAsTestUser(page);
+    await loginAsTestUser(page, test.info().workerIndex);
 
     expect(await readDiaMinutes(testUser.userId)).toBeNull();
 
@@ -245,7 +240,7 @@ test.describe("Settings → DIA slider round-trip", () => {
   let testUser: TestUser;
 
   test.beforeAll(() => {
-    testUser = loadTestUser();
+    testUser = loadTestUserByIndex(test.info().workerIndex);
   });
 
   test.beforeEach(async ({ context }) => {
@@ -260,7 +255,7 @@ test.describe("Settings → DIA slider round-trip", () => {
   });
 
   test("editing DIA via slider persists to user_settings and reflects in subtitle", async ({ page }) => {
-    await loginAsTestUser(page);
+    await loginAsTestUser(page, test.info().workerIndex);
 
     // INITIAL STATE: dia_minutes should be NULL (just reset).
     expect(await readDiaMinutes(testUser.userId)).toBeNull();
@@ -289,7 +284,7 @@ test.describe("Settings → DIA slider round-trip", () => {
   });
 
   test("out-of-range DIA input is clamped to the allowed maximum (360 min)", async ({ page }) => {
-    await loginAsTestUser(page);
+    await loginAsTestUser(page, test.info().workerIndex);
     await page.goto("/settings");
 
     // Typing 999 should be clamped to 360 (max).
@@ -306,7 +301,7 @@ test.describe("Settings → DIA slider round-trip", () => {
   });
 
   test("out-of-range DIA input is clamped to the allowed minimum (60 min)", async ({ page }) => {
-    await loginAsTestUser(page);
+    await loginAsTestUser(page, test.info().workerIndex);
     await page.goto("/settings");
 
     // Typing 10 should be clamped to 60 (min).

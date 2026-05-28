@@ -26,16 +26,11 @@
 // document.fonts.ready and clears any leftover focus / hover state.
 
 import { expect, test, type Page, type Locator } from "@playwright/test";
-import fs from "node:fs";
 import { createClient } from "@supabase/supabase-js";
-import { TEST_USER_FIXTURE_PATH } from "../global-setup";
+import { loadTestUserByIndex } from "../support/testUser";
 
 interface TestUser { email: string; password: string; userId: string; }
 
-function loadTestUser(): TestUser {
-  const raw = fs.readFileSync(TEST_USER_FIXTURE_PATH, "utf8");
-  return JSON.parse(raw) as TestUser;
-}
 
 function getAdminClient() {
   const url = process.env.SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
@@ -116,8 +111,8 @@ async function clearMeals(userId: string) {
   if (error) throw new Error(`meals clear failed: ${error.message}`);
 }
 
-async function loginAsTestUser(page: Page) {
-  const { email, password } = loadTestUser();
+async function loginAsTestUser(page: Page, workerIndex: number) {
+  const { email, password } = loadTestUserByIndex(workerIndex);
   await page.goto("/login");
   await page.locator('input[type="email"]').fill(email);
   await page.locator('input[type="password"]').fill(password);
@@ -169,7 +164,7 @@ test.describe("Insights swipe pager — per-card pixel snapshots", () => {
   let testUser: TestUser;
 
   test.beforeAll(() => {
-    testUser = loadTestUser();
+    testUser = loadTestUserByIndex(test.info().workerIndex);
   });
 
   test.beforeEach(async ({ context }) => {
@@ -195,7 +190,7 @@ test.describe("Insights swipe pager — per-card pixel snapshots", () => {
     // time too.
     await page.clock.install({ time: new Date(FIXED_NOW_MS) });
 
-    await loginAsTestUser(page);
+    await loginAsTestUser(page, test.info().workerIndex);
     await page.goto("/insights");
 
     // The cockpit indicator only mounts once the pager has at least

@@ -35,16 +35,11 @@
 //     "Zyklus & Symptome" / "Symptome"  → Insights card title
 
 import { expect, test, type Page, type BrowserContext } from "@playwright/test";
-import fs from "node:fs";
 import { createClient } from "@supabase/supabase-js";
-import { TEST_USER_FIXTURE_PATH } from "../global-setup";
+import { loadTestUserByIndex } from "../support/testUser";
 
 interface TestUser { email: string; password: string; userId: string; }
 
-function loadTestUser(): TestUser {
-  const raw = fs.readFileSync(TEST_USER_FIXTURE_PATH, "utf8");
-  return JSON.parse(raw) as TestUser;
-}
 
 function getAdminClient() {
   const url = process.env.SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
@@ -68,8 +63,8 @@ async function pinGermanLocale(context: BrowserContext, baseURL: string) {
   }]);
 }
 
-async function loginAsTestUser(page: Page) {
-  const { email, password } = loadTestUser();
+async function loginAsTestUser(page: Page, workerIndex: number) {
+  const { email, password } = loadTestUserByIndex(workerIndex);
   await page.goto("/login");
   await page.locator('input[type="email"]').fill(email);
   await page.locator('input[type="password"]').fill(password);
@@ -102,7 +97,7 @@ test.describe("CycleForm — save a bleeding entry", () => {
   let testUser: TestUser;
 
   test.beforeAll(async () => {
-    testUser = loadTestUser();
+    testUser = loadTestUserByIndex(test.info().workerIndex);
     void testUser;
   });
 
@@ -119,7 +114,7 @@ test.describe("CycleForm — save a bleeding entry", () => {
   test.beforeEach(async ({ page, context, baseURL }) => {
     await context.clearCookies();
     await pinGermanLocale(context, baseURL!);
-    await loginAsTestUser(page);
+    await loginAsTestUser(page, test.info().workerIndex);
   });
 
   // ── Test 1: The cycle tab opens and the save button is visible ──────────
@@ -236,7 +231,7 @@ test.describe("SymptomForm — save a symptom entry", () => {
   test.beforeEach(async ({ page, context, baseURL }) => {
     await context.clearCookies();
     await pinGermanLocale(context, baseURL!);
-    await loginAsTestUser(page);
+    await loginAsTestUser(page, test.info().workerIndex);
   });
 
   // ── Test 4: Saving a symptom redirects to /entries ─────────────────────
@@ -330,7 +325,7 @@ test.describe("Insights — Zyklus & Symptome card renders", () => {
   test.beforeEach(async ({ page, context, baseURL }) => {
     await context.clearCookies();
     await pinGermanLocale(context, baseURL!);
-    await loginAsTestUser(page);
+    await loginAsTestUser(page, test.info().workerIndex);
   });
 
   // ── Test 6: The cycle/symptom Insights card is present and not empty ───

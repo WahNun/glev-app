@@ -39,15 +39,10 @@
 //     tap, not a cold cache.
 
 import { expect, test, type Page, type BrowserContext } from "@playwright/test";
-import fs from "node:fs";
-import { TEST_USER_FIXTURE_PATH } from "../global-setup";
+import { loadTestUserByIndex } from "../support/testUser";
 
 interface TestUser { email: string; password: string; userId: string; }
 
-function loadTestUser(): TestUser {
-  const raw = fs.readFileSync(TEST_USER_FIXTURE_PATH, "utf8");
-  return JSON.parse(raw) as TestUser;
-}
 
 const LOCALE_COOKIE = "NEXT_LOCALE";
 
@@ -64,8 +59,8 @@ async function pinLocale(context: BrowserContext, baseURL: string) {
   }]);
 }
 
-async function loginAsTestUser(page: Page) {
-  const { email, password } = loadTestUser();
+async function loginAsTestUser(page: Page, workerIndex: number) {
+  const { email, password } = loadTestUserByIndex(workerIndex);
   await page.goto("/login");
   await page.locator('input[type="email"]').fill(email);
   await page.locator('input[type="password"]').fill(password);
@@ -159,7 +154,7 @@ test.describe("Mobile bottom-nav tap reliability", () => {
   test("rapidly switching through all four tabs lands every route within budget", async ({ page, context, baseURL }) => {
     await context.clearCookies();
     await pinLocale(context, baseURL!);
-    await loginAsTestUser(page);
+    await loginAsTestUser(page, test.info().workerIndex);
 
     // Pay the dev-mode compile cost ONCE, up front, so the timed loop
     // below measures tap dispatch latency rather than `next build`.
@@ -253,7 +248,7 @@ test.describe("Mobile bottom-nav tap reliability", () => {
 
     await context.clearCookies();
     await pinLocale(context, baseURL!);
-    await loginAsTestUser(page);
+    await loginAsTestUser(page, test.info().workerIndex);
 
     // Pre-warm /engine + /insights + /dashboard so neither dev-compile
     // time nor first-paint of engine's heavy bundle can mask a real

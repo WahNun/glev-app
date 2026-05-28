@@ -31,16 +31,11 @@
 //     therefore no role="link" — confirmed by unit tests in iobPeaks.test.ts).
 
 import { expect, test, type Page } from "@playwright/test";
-import fs from "node:fs";
 import { createClient } from "@supabase/supabase-js";
-import { TEST_USER_FIXTURE_PATH } from "../global-setup";
+import { loadTestUserByIndex } from "../support/testUser";
 
 interface TestUser { email: string; password: string; userId: string; }
 
-function loadTestUser(): TestUser {
-  const raw = fs.readFileSync(TEST_USER_FIXTURE_PATH, "utf8");
-  return JSON.parse(raw) as TestUser;
-}
 
 function getAdminClient() {
   const url = process.env.SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
@@ -94,8 +89,8 @@ async function deleteMeal(mealId: string) {
 
 // ── login helper ───────────────────────────────────────────────────────────────
 
-async function loginAsTestUser(page: Page) {
-  const { email, password } = loadTestUser();
+async function loginAsTestUser(page: Page, workerIndex: number) {
+  const { email, password } = loadTestUserByIndex(workerIndex);
   await page.goto("/login");
   await page.locator('input[type="email"]').fill(email);
   await page.locator('input[type="password"]').fill(password);
@@ -112,7 +107,7 @@ test.describe("IOB peak popover → dose row → Entries deep-link", () => {
   let mealId: string;
 
   test.beforeAll(async () => {
-    testUser = loadTestUser();
+    testUser = loadTestUserByIndex(test.info().workerIndex);
     mealId = await seedMealWithInsulin(testUser.userId);
   });
 
@@ -125,7 +120,7 @@ test.describe("IOB peak popover → dose row → Entries deep-link", () => {
   });
 
   test("tapping a meal dose row opens the correct entry on the Entries page (24h window)", async ({ page }) => {
-    await loginAsTestUser(page);
+    await loginAsTestUser(page, test.info().workerIndex);
 
     // ── 1. Locate the IOB history chart peak pill ──────────────────────────
     //
@@ -204,7 +199,7 @@ test.describe("IOB peak popover → dose row → Entries deep-link", () => {
     //   4. Click the meal dose row.
     //   5. Assert URL → /entries#<mealId> and that the entry is expanded.
 
-    await loginAsTestUser(page);
+    await loginAsTestUser(page, test.info().workerIndex);
 
     // ── 1. Clear any stored window preference so state is deterministic ──────
     //

@@ -35,15 +35,8 @@
 // fixture infrastructure required.
 
 import { expect, test } from "@playwright/test";
-import fs from "node:fs";
 import { createClient } from "@supabase/supabase-js";
-import { TEST_USER_FIXTURE_PATH } from "../global-setup";
-
-interface FixtureCreds {
-  email: string;
-  password: string;
-  userId: string;
-}
+import { loadTestUserByIndex } from "../support/testUser";
 
 function getAdminClient() {
   const url = process.env.SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
@@ -61,9 +54,7 @@ function getAdminClient() {
 
 test.describe("Recovery confirm full flow", () => {
   test("admin recovery link → set new password → sign in with new password", async ({ page, context }) => {
-    const creds: FixtureCreds = JSON.parse(
-      fs.readFileSync(TEST_USER_FIXTURE_PATH, "utf8"),
-    );
+    const creds = loadTestUserByIndex(test.info().workerIndex);
     const admin = getAdminClient();
 
     // Pick a deterministic but per-run-unique new password so a flaky

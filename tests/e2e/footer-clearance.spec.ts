@@ -31,18 +31,13 @@
 //     + login) to avoid the 60 s login overhead per test.
 
 import { expect, test, type Page, type BrowserContext } from "@playwright/test";
-import fs from "node:fs";
-import { TEST_USER_FIXTURE_PATH } from "../global-setup";
+import { loadTestUserByIndex } from "../support/testUser";
 
 interface TestUser { email: string; password: string; userId: string; }
 
-function loadTestUser(): TestUser {
-  const raw = fs.readFileSync(TEST_USER_FIXTURE_PATH, "utf8");
-  return JSON.parse(raw) as TestUser;
-}
 
-async function loginAsTestUser(page: Page) {
-  const { email, password } = loadTestUser();
+async function loginAsTestUser(page: Page, workerIndex: number) {
+  const { email, password } = loadTestUserByIndex(workerIndex);
   await page.goto("/login");
   await page.locator('input[type="email"]').fill(email);
   await page.locator('input[type="password"]').fill(password);
@@ -149,7 +144,7 @@ test.describe("Footer clearance — content must not hide behind bottom nav", ()
   });
 
   test("each main screen scrolls to bottom without clipping content behind the nav", async ({ page }) => {
-    await loginAsTestUser(page);
+    await loginAsTestUser(page, test.info().workerIndex);
 
     // Pre-warm all five routes so Next.js dev-mode compilation happens
     // before the timed assertions below.
@@ -187,7 +182,7 @@ test.describe("Footer clearance — content must not hide behind bottom nav", ()
   });
 
   test(".glev-main padding-bottom meets the --nav-bottom-total + 8px floor on every screen", async ({ page }) => {
-    await loginAsTestUser(page);
+    await loginAsTestUser(page, test.info().workerIndex);
 
     for (const screen of SCREENS) {
       await page.goto(screen.path, { waitUntil: "domcontentloaded", timeout: 60_000 });
@@ -230,7 +225,7 @@ test.describe("Footer clearance — content must not hide behind bottom nav", ()
   });
 
   test("--nav-bottom-total CSS variable matches the rendered nav bar height", async ({ page }) => {
-    await loginAsTestUser(page);
+    await loginAsTestUser(page, test.info().workerIndex);
     await page.goto("/dashboard", { waitUntil: "domcontentloaded", timeout: 60_000 });
     await page.waitForURL(/\/dashboard/, { timeout: 60_000 });
     await expect(page.locator("nav.glev-mobile-nav")).toBeVisible({ timeout: 30_000 });

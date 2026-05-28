@@ -24,16 +24,11 @@
 //     touching manualIcr (still "Du 1:10").
 
 import { expect, test, type Page, type BrowserContext } from "@playwright/test";
-import fs from "node:fs";
 import { createClient } from "@supabase/supabase-js";
-import { TEST_USER_FIXTURE_PATH } from "../global-setup";
+import { loadTestUserByIndex } from "../support/testUser";
 
 interface TestUser { email: string; password: string; userId: string; }
 
-function loadTestUser(): TestUser {
-  const raw = fs.readFileSync(TEST_USER_FIXTURE_PATH, "utf8");
-  return JSON.parse(raw) as TestUser;
-}
 
 function getAdminClient() {
   const url = process.env.SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
@@ -156,8 +151,8 @@ async function setLocaleCookieDe(context: BrowserContext) {
   }]);
 }
 
-async function loginAsTestUser(page: Page) {
-  const { email, password } = loadTestUser();
+async function loginAsTestUser(page: Page, workerIndex: number) {
+  const { email, password } = loadTestUserByIndex(workerIndex);
   await page.goto("/login");
   await page.locator('input[type="email"]').fill(email);
   await page.locator('input[type="password"]').fill(password);
@@ -180,14 +175,14 @@ function engineFlipCardLocator(page: Page) {
 
 test.describe("Insights — per-window suggestion apply/keep does not flip the engine card", () => {
   test.beforeEach(async ({ context }) => {
-    const { userId } = loadTestUser();
+    const { userId } = loadTestUserByIndex(test.info().workerIndex);
     await resetUserData(userId);
     await seedTunedWindow(userId);
     await setLocaleCookieDe(context);
   });
 
   test("Übernehmen speichert (saveIcrSchedule) und dreht die FlipCard NICHT", async ({ page }) => {
-    await loginAsTestUser(page);
+    await loginAsTestUser(page, test.info().workerIndex);
     await page.goto("/insights");
 
     // Open the windows section. The "Alle Fenster ansehen ↓" toggle
@@ -238,7 +233,7 @@ test.describe("Insights — per-window suggestion apply/keep does not flip the e
   });
 
   test("Behalten versteckt die Pille und dreht die FlipCard NICHT", async ({ page }) => {
-    await loginAsTestUser(page);
+    await loginAsTestUser(page, test.info().workerIndex);
     await page.goto("/insights");
 
     const openWindowsBtn = page.getByRole("button", {

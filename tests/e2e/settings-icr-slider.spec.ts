@@ -36,16 +36,11 @@
 //   - lib/userSettings.ts                — saveInsulinSettings / icr_g_per_unit column
 
 import { expect, test, type Page } from "@playwright/test";
-import fs from "node:fs";
 import { createClient } from "@supabase/supabase-js";
-import { TEST_USER_FIXTURE_PATH } from "../global-setup";
+import { loadTestUserByIndex } from "../support/testUser";
 
 interface TestUser { email: string; password: string; userId: string; }
 
-function loadTestUser(): TestUser {
-  const raw = fs.readFileSync(TEST_USER_FIXTURE_PATH, "utf8");
-  return JSON.parse(raw) as TestUser;
-}
 
 function getAdminClient() {
   const url = process.env.SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
@@ -124,8 +119,8 @@ async function goToSettingsAndExpandInsulin(page: Page) {
   await expect(expandBtn).toHaveAttribute("aria-expanded", "true", { timeout: 5_000 });
 }
 
-async function loginAsTestUser(page: Page) {
-  const { email, password } = loadTestUser();
+async function loginAsTestUser(page: Page, workerIndex: number) {
+  const { email, password } = loadTestUserByIndex(workerIndex);
   await page.goto("/login");
   await page.locator('input[type="email"]').fill(email);
   await page.locator('input[type="password"]').fill(password);
@@ -176,7 +171,7 @@ test.describe("Settings → ICR slider keyboard navigation", () => {
   let testUser: TestUser;
 
   test.beforeAll(() => {
-    testUser = loadTestUser();
+    testUser = loadTestUserByIndex(test.info().workerIndex);
   });
 
   test.beforeEach(async ({ context }) => {
@@ -189,7 +184,7 @@ test.describe("Settings → ICR slider keyboard navigation", () => {
   });
 
   test("ArrowRight twice from default (10) produces 12 g/IE and persists", async ({ page }) => {
-    await loginAsTestUser(page);
+    await loginAsTestUser(page, test.info().workerIndex);
 
     // Baseline: no saved ICR (NULL → component default 10).
     expect(await readIcrValue(testUser.userId)).toBeNull();
@@ -232,7 +227,7 @@ test.describe("Settings → ICR slider keyboard navigation", () => {
   });
 
   test("ArrowLeft from default (10) produces 9 g/IE and persists", async ({ page }) => {
-    await loginAsTestUser(page);
+    await loginAsTestUser(page, test.info().workerIndex);
 
     expect(await readIcrValue(testUser.userId)).toBeNull();
 
@@ -269,7 +264,7 @@ test.describe("Settings → ICR slider round-trip", () => {
   let testUser: TestUser;
 
   test.beforeAll(() => {
-    testUser = loadTestUser();
+    testUser = loadTestUserByIndex(test.info().workerIndex);
   });
 
   test.beforeEach(async ({ context }) => {
@@ -284,7 +279,7 @@ test.describe("Settings → ICR slider round-trip", () => {
   });
 
   test("editing ICR via slider persists to user_settings and reflects in subtitle", async ({ page }) => {
-    await loginAsTestUser(page);
+    await loginAsTestUser(page, test.info().workerIndex);
 
     // INITIAL STATE: icr_g_per_unit should be NULL (just reset).
     expect(await readIcrValue(testUser.userId)).toBeNull();
@@ -313,7 +308,7 @@ test.describe("Settings → ICR slider round-trip", () => {
   });
 
   test("reopening ICR sheet shows the previously saved value", async ({ page }) => {
-    await loginAsTestUser(page);
+    await loginAsTestUser(page, test.info().workerIndex);
 
     await goToSettingsAndExpandInsulin(page);
 
@@ -336,7 +331,7 @@ test.describe("Settings → ICR slider round-trip", () => {
   });
 
   test("out-of-range ICR input is clamped to the allowed maximum (30)", async ({ page }) => {
-    await loginAsTestUser(page);
+    await loginAsTestUser(page, test.info().workerIndex);
     await goToSettingsAndExpandInsulin(page);
 
     // Typing 99 should be clamped to 30 (max).
@@ -353,7 +348,7 @@ test.describe("Settings → ICR slider round-trip", () => {
   });
 
   test("out-of-range ICR input is clamped to the allowed minimum (5)", async ({ page }) => {
-    await loginAsTestUser(page);
+    await loginAsTestUser(page, test.info().workerIndex);
     await goToSettingsAndExpandInsulin(page);
 
     // Typing 1 should be clamped to 5 (min).

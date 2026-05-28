@@ -24,16 +24,11 @@
 // everything") and reuses the count helpers' fast no-bounds query.
 
 import { expect, test, type Page } from "@playwright/test";
-import fs from "node:fs";
 import { createClient } from "@supabase/supabase-js";
-import { TEST_USER_FIXTURE_PATH } from "../global-setup";
+import { loadTestUserByIndex } from "../support/testUser";
 
 interface TestUser { email: string; password: string; userId: string; }
 
-function loadTestUser(): TestUser {
-  const raw = fs.readFileSync(TEST_USER_FIXTURE_PATH, "utf8");
-  return JSON.parse(raw) as TestUser;
-}
 
 /**
  * Service-role admin client used only by this spec to seed and clean up
@@ -73,8 +68,8 @@ const ALL_CHIP_NAME    = /^(All time|Alles)$/i;
 // drives both surfaces.
 const EMPTY_TEXT       = /No entries in the selected range\.|Keine Einträge im gewählten Zeitraum\./;
 
-async function loginAsTestUser(page: Page) {
-  const { email, password } = loadTestUser();
+async function loginAsTestUser(page: Page, workerIndex: number) {
+  const { email, password } = loadTestUserByIndex(workerIndex);
   await page.goto("/login");
   await page.locator('input[type="email"]').fill(email);
   await page.locator('input[type="password"]').fill(password);
@@ -107,7 +102,7 @@ test.describe("ExportPanel — bulk export buttons honour the empty-range guard"
   let seededFingerstickId: string | null = null;
 
   test.beforeAll(async () => {
-    const { userId } = loadTestUser();
+    const { userId } = loadTestUserByIndex(test.info().workerIndex);
     const admin = getAdminClient();
     const { data, error } = await admin
       .from("fingerstick_readings")
@@ -142,7 +137,7 @@ test.describe("ExportPanel — bulk export buttons honour the empty-range guard"
   });
 
   test("disables PDF + All-as-CSV when the chosen range has 0 entries, re-enables on All time", async ({ page }) => {
-    await loginAsTestUser(page);
+    await loginAsTestUser(page, test.info().workerIndex);
     await openExportSheet(page);
 
     const allBtn = page.getByRole("button", { name: ALL_BTN_NAME });

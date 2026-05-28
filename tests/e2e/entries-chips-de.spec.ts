@@ -50,16 +50,11 @@
 // task asked for.
 
 import { expect, test, type BrowserContext, type Page } from "@playwright/test";
-import fs from "node:fs";
 import { createClient } from "@supabase/supabase-js";
-import { TEST_USER_FIXTURE_PATH } from "../global-setup";
+import { loadTestUserByIndex } from "../support/testUser";
 
 interface TestUser { email: string; password: string; userId: string; }
 
-function loadTestUser(): TestUser {
-  const raw = fs.readFileSync(TEST_USER_FIXTURE_PATH, "utf8");
-  return JSON.parse(raw) as TestUser;
-}
 
 // Same admin-client shape the carb-unit-picker spec uses — env vars
 // are already required by the suite via global-setup, so re-creating
@@ -111,8 +106,8 @@ async function clearAllMeals(userId: string) {
   if (error) throw new Error(`meals cleanup failed: ${error.message}`);
 }
 
-async function loginAsTestUser(page: Page) {
-  const { email, password } = loadTestUser();
+async function loginAsTestUser(page: Page, workerIndex: number) {
+  const { email, password } = loadTestUserByIndex(workerIndex);
   await page.goto("/login");
   await page.locator('input[type="email"]').fill(email);
   await page.locator('input[type="password"]').fill(password);
@@ -252,7 +247,7 @@ test.describe("Entries → German chips render in the list (Task #282)", () => {
   let testUser: TestUser;
 
   test.beforeAll(() => {
-    testUser = loadTestUser();
+    testUser = loadTestUserByIndex(test.info().workerIndex);
   });
 
   test.beforeEach(async ({ context, baseURL }) => {
@@ -277,7 +272,7 @@ test.describe("Entries → German chips render in the list (Task #282)", () => {
   });
 
   test("each outcome chip renders its German label and each meal-type pill carries its German tooltip", async ({ page }) => {
-    await loginAsTestUser(page);
+    await loginAsTestUser(page, test.info().workerIndex);
 
     // Sanity that the cookie is still on "de" after login (the
     // profile-sync path could have flipped it). If this fails the rest

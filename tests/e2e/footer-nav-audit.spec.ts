@@ -25,15 +25,10 @@
 //   * Locale cookie is pinned to "de" so all nav labels are predictable.
 
 import { expect, test, type Page, type BrowserContext } from "@playwright/test";
-import fs from "node:fs";
-import { TEST_USER_FIXTURE_PATH } from "../global-setup";
+import { loadTestUserByIndex } from "../support/testUser";
 
 interface TestUser { email: string; password: string; userId: string; }
 
-function loadTestUser(): TestUser {
-  const raw = fs.readFileSync(TEST_USER_FIXTURE_PATH, "utf8");
-  return JSON.parse(raw) as TestUser;
-}
 
 const MOBILE_VIEWPORT  = { width: 393,  height: 852  };
 const DESKTOP_VIEWPORT = { width: 1280, height: 800  };
@@ -48,8 +43,8 @@ async function pinLocale(context: BrowserContext, baseURL: string) {
   }]);
 }
 
-async function loginAsTestUser(page: Page) {
-  const { email, password } = loadTestUser();
+async function loginAsTestUser(page: Page, workerIndex: number) {
+  const { email, password } = loadTestUserByIndex(workerIndex);
   await page.goto("/login", { waitUntil: "domcontentloaded", timeout: 60_000 });
   await page.locator('input[type="email"]').fill(email);
   await page.locator('input[type="password"]').fill(password);
@@ -212,7 +207,7 @@ test.describe("Mobile Bottom Nav", () => {
 
   test.beforeEach(async ({ context, baseURL, page }) => {
     await pinLocale(context, baseURL!);
-    await loginAsTestUser(page);
+    await loginAsTestUser(page, test.info().workerIndex);
     // Pre-warm the nav so the layout component is fully mounted.
     await expect(page.locator("nav.glev-mobile-nav")).toBeVisible({ timeout: 30_000 });
   });
@@ -267,7 +262,7 @@ test.describe("Desktop Sidebar", () => {
 
   test.beforeEach(async ({ context, baseURL, page }) => {
     await pinLocale(context, baseURL!);
-    await loginAsTestUser(page);
+    await loginAsTestUser(page, test.info().workerIndex);
     await expect(page.locator(".glev-sidebar")).toBeVisible({ timeout: 30_000 });
   });
 
@@ -349,7 +344,7 @@ test.describe("Mobile Header", () => {
 
   test.beforeEach(async ({ context, baseURL, page }) => {
     await pinLocale(context, baseURL!);
-    await loginAsTestUser(page);
+    await loginAsTestUser(page, test.info().workerIndex);
     // Start on /dashboard so the header is visible.
     await page.goto("/dashboard", { waitUntil: "domcontentloaded", timeout: 60_000 });
     await expect(page.locator(".glev-mobile-head")).toBeVisible({ timeout: 30_000 });

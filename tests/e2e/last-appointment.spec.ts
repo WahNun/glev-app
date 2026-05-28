@@ -46,16 +46,11 @@
 // PostgREST → Export panel fetch effect.
 
 import { expect, test, type Page } from "@playwright/test";
-import fs from "node:fs";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
-import { TEST_USER_FIXTURE_PATH } from "../global-setup";
+import { loadTestUserByIndex } from "../support/testUser";
 
 interface TestUser { email: string; password: string; userId: string; }
 
-function loadTestUser(): TestUser {
-  const raw = fs.readFileSync(TEST_USER_FIXTURE_PATH, "utf8");
-  return JSON.parse(raw) as TestUser;
-}
 
 /**
  * Same admin client shape `tests/support/testUser.ts` uses. We can't
@@ -238,8 +233,8 @@ const LAST_APPT_CHIP_DATE_US = /(Seit letztem Arzttermin|Since last appointment)
 // count the visible buttons that satisfy it.
 const ANY_CHIP_LABEL = /^(All time|Alles|Last 30 days|Letzte 30 Tage|Last 90 days|Letzte 90 Tage|Custom range|Eigener Zeitraum|Since last appointment.*|Seit letztem Arzttermin.*)$/;
 
-async function loginAsTestUser(page: Page) {
-  const { email, password } = loadTestUser();
+async function loginAsTestUser(page: Page, workerIndex: number) {
+  const { email, password } = loadTestUserByIndex(workerIndex);
   await page.goto("/login");
   await page.locator('input[type="email"]').fill(email);
   await page.locator('input[type="password"]').fill(password);
@@ -253,7 +248,7 @@ test.describe("Settings → Arzttermine → Export chip", () => {
   let testUser: TestUser;
 
   test.beforeAll(() => {
-    testUser = loadTestUser();
+    testUser = loadTestUserByIndex(test.info().workerIndex);
   });
 
   test.beforeEach(async ({ context }) => {
@@ -272,7 +267,7 @@ test.describe("Settings → Arzttermine → Export chip", () => {
   });
 
   test("adding an appointment renders the chip; deleting it hides it", async ({ page }) => {
-    await loginAsTestUser(page);
+    await loginAsTestUser(page, test.info().workerIndex);
 
     // ---- INITIAL STATE: no chip in the Export sheet ------------------
     // The chip is conditionally rendered only when the saved list is
@@ -397,7 +392,7 @@ test.describe("Settings → Arzttermine → Export chip", () => {
   //   → delete older appointment in Settings
   //   → Export chip falls back to newest (wipe-on-delete)
   test("two appointments: picker appears, pinning older entry updates chip label, deleting pinned entry falls back to latest", async ({ page }) => {
-    await loginAsTestUser(page);
+    await loginAsTestUser(page, test.info().workerIndex);
 
     // ---- ADD TWO APPOINTMENTS IN SETTINGS ----------------------------
     await page.goto("/settings");
@@ -598,7 +593,7 @@ test.describe("Settings → Arzttermine note round-trip", () => {
   let testUser: TestUser;
 
   test.beforeAll(() => {
-    testUser = loadTestUser();
+    testUser = loadTestUserByIndex(test.info().workerIndex);
   });
 
   test.beforeEach(async ({ context }) => {
@@ -612,7 +607,7 @@ test.describe("Settings → Arzttermine note round-trip", () => {
 
   // --- 1. Note persists through reload -----------------------------------
   test("note typed in the add-form is persisted to the DB and visible after reload", async ({ page }) => {
-    await loginAsTestUser(page);
+    await loginAsTestUser(page, test.info().workerIndex);
     await page.goto("/settings");
 
     const apptsRow = page.getByRole("button", { name: APPTS_ROW_ARIA });
@@ -675,7 +670,7 @@ test.describe("Settings → Arzttermine note round-trip", () => {
     const admin = getAdminClient();
     await seedAppointmentWithNote(admin, testUser.userId, "2026-02-10", "Dr. Muster A1c 7.1");
 
-    await loginAsTestUser(page);
+    await loginAsTestUser(page, test.info().workerIndex);
     await page.goto("/settings");
 
     // Open the export sheet.
@@ -717,7 +712,7 @@ test.describe("Settings → Arzttermine note round-trip", () => {
     // Confirm it's in the DB before we touch the UI.
     expect(await readLatestAppointmentNote(testUser.userId)).toBe("Delete-me note");
 
-    await loginAsTestUser(page);
+    await loginAsTestUser(page, test.info().workerIndex);
     await page.goto("/settings");
 
     const apptsRow = page.getByRole("button", { name: APPTS_ROW_ARIA });
@@ -747,7 +742,7 @@ test.describe("Settings → Arzttermine note round-trip", () => {
 
   // --- 4. Note input disabled when date is cleared ----------------------
   test("note input is disabled when the date field is cleared", async ({ page }) => {
-    await loginAsTestUser(page);
+    await loginAsTestUser(page, test.info().workerIndex);
     await page.goto("/settings");
 
     const apptsRow = page.getByRole("button", { name: APPTS_ROW_ARIA });
@@ -778,7 +773,7 @@ test.describe("Settings → Arzttermine note round-trip", () => {
   // (Tests are numbered 1-7 in this block; test #6 and #7 appear further
   // below after the cap check.)
   test("note input carries maxLength=200 so the browser enforces the cap", async ({ page }) => {
-    await loginAsTestUser(page);
+    await loginAsTestUser(page, test.info().workerIndex);
     await page.goto("/settings");
 
     const apptsRow = page.getByRole("button", { name: APPTS_ROW_ARIA });
@@ -929,7 +924,7 @@ test.describe("Settings → Arzttermine note round-trip", () => {
       };
     });
 
-    await loginAsTestUser(page);
+    await loginAsTestUser(page, test.info().workerIndex);
     await page.goto("/settings");
 
     // (c) Delete the appointment via the Settings sheet — this is the

@@ -36,16 +36,11 @@
 // → Supabase row.
 
 import { expect, test, type Page } from "@playwright/test";
-import fs from "node:fs";
 import { createClient } from "@supabase/supabase-js";
-import { TEST_USER_FIXTURE_PATH } from "../global-setup";
+import { loadTestUserByIndex } from "../support/testUser";
 
 interface TestUser { email: string; password: string; userId: string; }
 
-function loadTestUser(): TestUser {
-  const raw = fs.readFileSync(TEST_USER_FIXTURE_PATH, "utf8");
-  return JSON.parse(raw) as TestUser;
-}
 
 /**
  * Same admin client shape `tests/support/testUser.ts` uses. We can't
@@ -163,8 +158,8 @@ const BE_LABEL_TEXT = /BE$/;
 const ENTRIES_60G_TEXT = /^60 (?:g KH|g carbs)$/i;
 const ENTRIES_5BE_TEXT = /^5 BE$/;
 
-async function loginAsTestUser(page: Page) {
-  const { email, password } = loadTestUser();
+async function loginAsTestUser(page: Page, workerIndex: number) {
+  const { email, password } = loadTestUserByIndex(workerIndex);
   await page.goto("/login");
   await page.locator('input[type="email"]').fill(email);
   await page.locator('input[type="password"]').fill(password);
@@ -179,7 +174,7 @@ test.describe("Settings → Carb unit picker", () => {
   let seededMealId: string | null = null;
 
   test.beforeAll(() => {
-    testUser = loadTestUser();
+    testUser = loadTestUserByIndex(test.info().workerIndex);
   });
 
   test.beforeEach(async ({ page, context }) => {
@@ -190,7 +185,7 @@ test.describe("Settings → Carb unit picker", () => {
     await context.clearCookies();
     await resetCarbUnit(testUser.userId);
     seededMealId = await seedMeal(testUser.userId, 60);
-    await loginAsTestUser(page);
+    await loginAsTestUser(page, test.info().workerIndex);
   });
 
   test.afterEach(async () => {

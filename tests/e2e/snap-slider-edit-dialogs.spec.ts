@@ -45,16 +45,11 @@
 //   in both locales.
 
 import { expect, test, type Page, type BrowserContext } from "@playwright/test";
-import fs from "node:fs";
 import { createClient } from "@supabase/supabase-js";
-import { TEST_USER_FIXTURE_PATH } from "../global-setup";
+import { loadTestUserByIndex } from "../support/testUser";
 
 interface TestUser { email: string; password: string; userId: string; }
 
-function loadTestUser(): TestUser {
-  const raw = fs.readFileSync(TEST_USER_FIXTURE_PATH, "utf8");
-  return JSON.parse(raw) as TestUser;
-}
 
 function getAdminClient() {
   const url = process.env.SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
@@ -69,8 +64,8 @@ function getAdminClient() {
   });
 }
 
-async function loginAsTestUser(page: Page) {
-  const { email, password } = loadTestUser();
+async function loginAsTestUser(page: Page, workerIndex: number) {
+  const { email, password } = loadTestUserByIndex(workerIndex);
   await page.goto("/login");
   await page.locator('input[type="email"]').fill(email);
   await page.locator('input[type="password"]').fill(password);
@@ -195,7 +190,7 @@ test.describe("SnapSlider — exercise and insulin edit dialogs", () => {
   let testUser: TestUser;
 
   test.beforeAll(async () => {
-    testUser = loadTestUser();
+    testUser = loadTestUserByIndex(test.info().workerIndex);
     await createTestRows(testUser.userId);
   });
 
@@ -224,7 +219,7 @@ test.describe("SnapSlider — exercise and insulin edit dialogs", () => {
   // the Dauer slider in the dialog due to a stale pointer-capture reference).
   test("Dauer slider — drag changes value within 1–600 range", async ({ page }) => {
     test.setTimeout(180_000);
-    await loginAsTestUser(page);
+    await loginAsTestUser(page, test.info().workerIndex);
 
     const slider = await openEditSlider(page, `${EXERCISE_DURATION}m`, "Dauer");
     await expect(slider).toHaveAttribute(
@@ -263,7 +258,7 @@ test.describe("SnapSlider — exercise and insulin edit dialogs", () => {
   // path inside the edit-dialog context.
   test("Dauer slider — ArrowRight/Left adjust by exactly 1 min (step=1)", async ({ page }) => {
     test.setTimeout(180_000);
-    await loginAsTestUser(page);
+    await loginAsTestUser(page, test.info().workerIndex);
 
     const slider = await openEditSlider(page, `${EXERCISE_DURATION}m`, "Dauer");
     await expect(slider).toHaveAttribute(
@@ -298,7 +293,7 @@ test.describe("SnapSlider — exercise and insulin edit dialogs", () => {
   // dismissal fires onBlur before any button tap.
   test("Dauer slider — tap-to-edit: click read-out, type 120, Tab commits it", async ({ page }) => {
     test.setTimeout(180_000);
-    await loginAsTestUser(page);
+    await loginAsTestUser(page, test.info().workerIndex);
 
     await openEditSlider(page, `${EXERCISE_DURATION}m`, "Dauer");
 
@@ -333,7 +328,7 @@ test.describe("SnapSlider — exercise and insulin edit dialogs", () => {
   // jump would be 1.0 U instead of 0.5 U — directly observable here.
   test("Dosis slider — ArrowRight increments by 0.5 U; ArrowLeft decrements by 0.5 U", async ({ page }) => {
     test.setTimeout(180_000);
-    await loginAsTestUser(page);
+    await loginAsTestUser(page, test.info().workerIndex);
 
     const slider = await openEditSlider(page, INSULIN_NAME, "Dosis");
     await expect(slider).toHaveAttribute(
@@ -366,7 +361,7 @@ test.describe("SnapSlider — exercise and insulin edit dialogs", () => {
   // would fail for any value that lands between 0.5-step boundaries.
   test("Dosis slider — drag result is always on a 0.5 U boundary", async ({ page }) => {
     test.setTimeout(180_000);
-    await loginAsTestUser(page);
+    await loginAsTestUser(page, test.info().workerIndex);
 
     const slider = await openEditSlider(page, INSULIN_NAME, "Dosis");
     await expect(slider).toHaveAttribute(
@@ -423,7 +418,7 @@ test.describe("SnapSlider — exercise and insulin edit dialogs", () => {
   // aria-valuenow must become "12.5".
   test("Dosis slider — tap-to-edit: type 12.5 then Enter commits it", async ({ page }) => {
     test.setTimeout(180_000);
-    await loginAsTestUser(page);
+    await loginAsTestUser(page, test.info().workerIndex);
 
     await openEditSlider(page, INSULIN_NAME, "Dosis");
 

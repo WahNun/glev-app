@@ -34,17 +34,12 @@
 // `authedClient(req)` and returns 401 without a valid session cookie.
 
 import { expect, test, type Page } from "@playwright/test";
-import fs from "node:fs";
 import { randomUUID } from "node:crypto";
 import { createClient, SupabaseClient } from "@supabase/supabase-js";
-import { TEST_USER_FIXTURE_PATH } from "../global-setup";
+import { loadTestUserByIndex } from "../support/testUser";
 
 interface TestUser { email: string; password: string; userId: string; }
 
-function loadTestUser(): TestUser {
-  const raw = fs.readFileSync(TEST_USER_FIXTURE_PATH, "utf8");
-  return JSON.parse(raw) as TestUser;
-}
 
 function getAdminClient(): SupabaseClient {
   const url = process.env.SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
@@ -178,8 +173,8 @@ async function cleanup(admin: SupabaseClient, userId: string, mealId: string, to
     .like("meal_id", "00000000-%"); // narrow to clearly-test-only ids
 }
 
-async function loginAsTestUser(page: Page) {
-  const { email, password } = loadTestUser();
+async function loginAsTestUser(page: Page, workerIndex: number) {
+  const { email, password } = loadTestUserByIndex(workerIndex);
   await page.goto("/login");
   await page.locator('input[type="email"]').fill(email);
   await page.locator('input[type="password"]').fill(password);
@@ -205,7 +200,7 @@ test.describe("POST /api/ai/confirm-action — kind=add_timeline_check (e2e)", (
   const PLANNED_AT = new Date(Date.now() + 90 * 60_000).toISOString();
 
   test.beforeAll(async () => {
-    testUser = loadTestUser();
+    testUser = loadTestUserByIndex(test.info().workerIndex);
     admin = getAdminClient();
     // Seed the test meal once for all tests in this suite.
     mealId = await seedMeal(admin, testUser.userId);
@@ -231,7 +226,7 @@ test.describe("POST /api/ai/confirm-action — kind=add_timeline_check (e2e)", (
   test("happy path: HTTP 200, ok=true, UUID insertedId, scheduleReminder with correct mealId", async ({
     page,
   }) => {
-    await loginAsTestUser(page);
+    await loginAsTestUser(page, test.info().workerIndex);
 
     // Make the authenticated API call using the browser session's cookies.
     const res = await page.request.post("/api/ai/confirm-action", {
@@ -275,7 +270,7 @@ test.describe("POST /api/ai/confirm-action — kind=add_timeline_check (e2e)", (
   test("DB persistence: meal_timeline_checks row has correct meal_id, check_type, planned_at, confirmed_at, user_id", async ({
     page,
   }) => {
-    await loginAsTestUser(page);
+    await loginAsTestUser(page, test.info().workerIndex);
 
     const before = new Date().toISOString();
     const res = await page.request.post("/api/ai/confirm-action", {
@@ -321,7 +316,7 @@ test.describe("POST /api/ai/confirm-action — kind=add_timeline_check (e2e)", (
   test("idempotency: re-sending the same token returns 409 and no duplicate row", async ({
     page,
   }) => {
-    await loginAsTestUser(page);
+    await loginAsTestUser(page, test.info().workerIndex);
 
     // First call — must succeed
     const first = await page.request.post("/api/ai/confirm-action", {
@@ -356,7 +351,7 @@ test.describe("POST /api/ai/confirm-action — kind=add_timeline_check (e2e)", (
   test("missing token returns 400 without creating any DB row", async ({
     page,
   }) => {
-    await loginAsTestUser(page);
+    await loginAsTestUser(page, test.info().workerIndex);
 
     const res = await page.request.post("/api/ai/confirm-action", {
       data: {},
@@ -374,7 +369,7 @@ test.describe("POST /api/ai/confirm-action — kind=add_timeline_check (e2e)", (
   // ── 5. Unknown token → 404 ─────────────────────────────────────────────
 
   test("unknown token returns 404", async ({ page }) => {
-    await loginAsTestUser(page);
+    await loginAsTestUser(page, test.info().workerIndex);
 
     const res = await page.request.post("/api/ai/confirm-action", {
       data: { token: "does-not-exist-at-all" },

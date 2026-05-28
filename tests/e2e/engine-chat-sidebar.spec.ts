@@ -38,18 +38,13 @@
 // render → isMobile breakpoint → wrapper styling.
 
 import { expect, test, type Page } from "@playwright/test";
-import fs from "node:fs";
-import { TEST_USER_FIXTURE_PATH } from "../global-setup";
+import { loadTestUserByIndex } from "../support/testUser";
 
 interface TestUser { email: string; password: string; userId: string; }
 
-function loadTestUser(): TestUser {
-  const raw = fs.readFileSync(TEST_USER_FIXTURE_PATH, "utf8");
-  return JSON.parse(raw) as TestUser;
-}
 
-async function loginAsTestUser(page: Page) {
-  const { email, password } = loadTestUser();
+async function loginAsTestUser(page: Page, workerIndex: number) {
+  const { email, password } = loadTestUserByIndex(workerIndex);
   await page.goto("/login");
   await page.locator('input[type="email"]').fill(email);
   await page.locator('input[type="password"]').fill(password);
@@ -74,7 +69,7 @@ const SPEAK_BTN = /(Start (recording|voice input)|Sprach-Eingabe starten|Aufnahm
 test.describe("Engine wizard chat-panel layout", () => {
   test("desktop (>768px) renders the chat panel as a sticky right sidebar", async ({ page }) => {
     await page.setViewportSize({ width: 1280, height: 800 });
-    await loginAsTestUser(page);
+    await loginAsTestUser(page, test.info().workerIndex);
 
     await page.goto("/engine");
     // Wait for the Sprechen voice button — that's the canonical first
@@ -114,7 +109,7 @@ test.describe("Engine wizard chat-panel layout", () => {
 
   test("mobile (<=768px) keeps the chat panel stacked inside Step 1", async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
-    await loginAsTestUser(page);
+    await loginAsTestUser(page, test.info().workerIndex);
 
     await page.goto("/engine");
     const sprechenBtn = page.getByRole("button", { name: SPEAK_BTN }).first();

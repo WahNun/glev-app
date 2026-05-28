@@ -31,16 +31,11 @@
 //   - lib/userSettings.ts                — saveInsulinSettings, cf_mgdl_per_unit, target_bg_mgdl
 
 import { expect, test, type Page } from "@playwright/test";
-import fs from "node:fs";
 import { createClient } from "@supabase/supabase-js";
-import { TEST_USER_FIXTURE_PATH } from "../global-setup";
+import { loadTestUserByIndex } from "../support/testUser";
 
 interface TestUser { email: string; password: string; userId: string; }
 
-function loadTestUser(): TestUser {
-  const raw = fs.readFileSync(TEST_USER_FIXTURE_PATH, "utf8");
-  return JSON.parse(raw) as TestUser;
-}
 
 function getAdminClient() {
   const url = process.env.SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
@@ -110,8 +105,8 @@ const TARGET_BG_SLIDER_READOUT = /(^Target BG$|^Ziel-BG$)/i;
 
 const SAVE_BUTTON = /^(Save|Speichern|Saving…|Speichere…|✓ Saved!|✓ Gespeichert!)$/;
 
-async function loginAsTestUser(page: Page) {
-  const { email, password } = loadTestUser();
+async function loginAsTestUser(page: Page, workerIndex: number) {
+  const { email, password } = loadTestUserByIndex(workerIndex);
   await page.goto("/login");
   await page.locator('input[type="email"]').fill(email);
   await page.locator('input[type="password"]').fill(password);
@@ -169,7 +164,7 @@ async function editViaSnapSlider(
 test.describe("Settings → CF slider round-trip", () => {
   let testUser: TestUser;
 
-  test.beforeAll(() => { testUser = loadTestUser(); });
+  test.beforeAll(() => { testUser = loadTestUserByIndex(test.info().workerIndex); });
 
   test.beforeEach(async ({ context }) => {
     await context.clearCookies();
@@ -181,7 +176,7 @@ test.describe("Settings → CF slider round-trip", () => {
   });
 
   test("CF SnapSlider renders, edits persist to user_settings, subtitle reflects saved value", async ({ page }) => {
-    await loginAsTestUser(page);
+    await loginAsTestUser(page, test.info().workerIndex);
 
     // Confirm starting state: no value saved yet.
     expect((await readSliderSettings(testUser.userId)).cf_mgdl_per_unit).toBeNull();
@@ -204,7 +199,7 @@ test.describe("Settings → CF slider round-trip", () => {
   });
 
   test("CF value above slider maximum is clamped to 100 before saving", async ({ page }) => {
-    await loginAsTestUser(page);
+    await loginAsTestUser(page, test.info().workerIndex);
     await page.goto("/settings");
 
     // The CF slider max is 100. The tap-to-edit input clamps to the
@@ -224,7 +219,7 @@ test.describe("Settings → CF slider round-trip", () => {
 test.describe("Settings → Target BG slider round-trip", () => {
   let testUser: TestUser;
 
-  test.beforeAll(() => { testUser = loadTestUser(); });
+  test.beforeAll(() => { testUser = loadTestUserByIndex(test.info().workerIndex); });
 
   test.beforeEach(async ({ context }) => {
     await context.clearCookies();
@@ -236,7 +231,7 @@ test.describe("Settings → Target BG slider round-trip", () => {
   });
 
   test("Target BG SnapSlider renders and persists 80 mg/dL (first tick position)", async ({ page }) => {
-    await loginAsTestUser(page);
+    await loginAsTestUser(page, test.info().workerIndex);
 
     expect((await readSliderSettings(testUser.userId)).target_bg_mgdl).toBeNull();
 
@@ -256,7 +251,7 @@ test.describe("Settings → Target BG slider round-trip", () => {
   });
 
   test("Target BG SnapSlider persists 140 mg/dL (second tick position)", async ({ page }) => {
-    await loginAsTestUser(page);
+    await loginAsTestUser(page, test.info().workerIndex);
     await page.goto("/settings");
 
     // ---- EDIT: set Target BG to 140 (mid-range labelled tick) ------
@@ -272,7 +267,7 @@ test.describe("Settings → Target BG slider round-trip", () => {
   });
 
   test("Target BG value below slider minimum is clamped to 60 before saving", async ({ page }) => {
-    await loginAsTestUser(page);
+    await loginAsTestUser(page, test.info().workerIndex);
     await page.goto("/settings");
 
     // The Target BG slider min is 60. Typing 30 is clamped by the

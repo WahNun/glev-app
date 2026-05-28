@@ -24,16 +24,11 @@
 // `confirm-action-timeline-check.spec.ts`) and is cleaned up in afterAll.
 
 import { expect, test, type Page } from "@playwright/test";
-import fs from "node:fs";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
-import { TEST_USER_FIXTURE_PATH } from "../global-setup";
+import { loadTestUserByIndex } from "../support/testUser";
 
 interface TestUser { email: string; password: string; userId: string; }
 
-function loadTestUser(): TestUser {
-  const raw = fs.readFileSync(TEST_USER_FIXTURE_PATH, "utf8");
-  return JSON.parse(raw) as TestUser;
-}
 
 function getAdminClient(): SupabaseClient {
   const url = process.env.SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
@@ -149,11 +144,11 @@ async function cleanup(
 async function mockMealTimelineChecks(
   page: Page,
   checks: ReadonlyArray<{ mealId: string; bgAtCheck: number }>,
+  userId: string,
 ): Promise<void> {
   const supabaseUrl =
     process.env.SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
   if (!supabaseUrl) return;
-  const { userId } = loadTestUser();
   const now = new Date().toISOString();
 
   // Use a regex rather than a glob pattern — Playwright's glob treats `*` as
@@ -200,7 +195,7 @@ function buildCgmMock() {
   };
 }
 
-async function loginAsTestUser(page: Page) {
+async function loginAsTestUser(page: Page, workerIndex: number) {
   // Force showMealNodes=true on CurrentDayGlucoseCard via the test escape hatch.
   // The component checks this localStorage key to bypass the engineHdr.visible
   // gate, which only becomes true after visiting /engine in a real session.
@@ -220,7 +215,7 @@ async function loginAsTestUser(page: Page) {
     }),
   );
 
-  const { email, password } = loadTestUser();
+  const { email, password } = loadTestUserByIndex(workerIndex);
   await page.goto("/login");
   await page.locator('input[type="email"]').fill(email);
   await page.locator('input[type="password"]').fill(password);
@@ -238,7 +233,7 @@ test.describe("MealNodeCluster — bg_at_check badge and sensor dot (e2e)", () =
   let mealId: string;
 
   test.beforeAll(async () => {
-    testUser = loadTestUser();
+    testUser = loadTestUserByIndex(test.info().workerIndex);
     admin = getAdminClient();
     mealId = await seedMeal(admin, testUser.userId);
     await seedCheckWithBg(admin, testUser.userId, mealId);
@@ -256,8 +251,8 @@ test.describe("MealNodeCluster — bg_at_check badge and sensor dot (e2e)", () =
     // Intercept the Supabase REST call for meal_timeline_checks so the
     // bg_at_check value reaches the component even when auth-lock contention
     // in the dev environment causes the real Supabase call to fail silently.
-    await mockMealTimelineChecks(page, [{ mealId, bgAtCheck: 112 }]);
-    await loginAsTestUser(page);
+    await mockMealTimelineChecks(page, [{ mealId, bgAtCheck: 112 }], testUser.userId);
+    await loginAsTestUser(page, test.info().workerIndex);
 
     // Wait for the cluster to appear. The cluster renders inside the SVG
     // overlay on the 12h glucose chart only after the chart has measured

@@ -31,18 +31,13 @@
 // state is caught here too.
 
 import { expect, test, type Page } from "@playwright/test";
-import fs from "node:fs";
-import { TEST_USER_FIXTURE_PATH } from "../global-setup";
+import { loadTestUserByIndex } from "../support/testUser";
 
 interface TestUser { email: string; password: string; userId: string; }
 
-function loadTestUser(): TestUser {
-  const raw = fs.readFileSync(TEST_USER_FIXTURE_PATH, "utf8");
-  return JSON.parse(raw) as TestUser;
-}
 
-async function loginAsTestUser(page: Page) {
-  const { email, password } = loadTestUser();
+async function loginAsTestUser(page: Page, workerIndex: number) {
+  const { email, password } = loadTestUserByIndex(workerIndex);
   await page.goto("/login");
   await page.locator('input[type="email"]').fill(email);
   await page.locator('input[type="password"]').fill(password);
@@ -55,7 +50,7 @@ async function loginAsTestUser(page: Page) {
 test.describe("Entries → active filter chips", () => {
   test.beforeEach(async ({ page, context }) => {
     await context.clearCookies();
-    await loginAsTestUser(page);
+    await loginAsTestUser(page, test.info().workerIndex);
     await page.goto("/entries");
     // Filters persist in sessionStorage across navigations, so wipe
     // the per-tab state to guarantee a clean baseline.

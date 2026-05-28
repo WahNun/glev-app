@@ -28,16 +28,11 @@
 // the InsulinForm that lives in the desktop /engine?tab=log layout.
 
 import { expect, test, type Page } from "@playwright/test";
-import fs from "node:fs";
 import { createClient } from "@supabase/supabase-js";
-import { TEST_USER_FIXTURE_PATH } from "../global-setup";
+import { loadTestUserByIndex } from "../support/testUser";
 
 interface TestUser { email: string; password: string; userId: string; }
 
-function loadTestUser(): TestUser {
-  const raw = fs.readFileSync(TEST_USER_FIXTURE_PATH, "utf8");
-  return JSON.parse(raw) as TestUser;
-}
 
 function getAdminClient() {
   const url = process.env.SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
@@ -66,8 +61,8 @@ async function fetchExerciseTypes(userId: string): Promise<string[]> {
   return (data ?? []).map(r => r.exercise_type as string);
 }
 
-async function loginAsTestUser(page: Page) {
-  const { email, password } = loadTestUser();
+async function loginAsTestUser(page: Page, workerIndex: number) {
+  const { email, password } = loadTestUserByIndex(workerIndex);
   await page.goto("/login");
   await page.locator('input[type="email"]').fill(email);
   await page.locator('input[type="password"]').fill(password);
@@ -118,7 +113,7 @@ test.describe("Engine → Exercise form taxonomy", () => {
   let testUser: TestUser;
 
   test.beforeAll(() => {
-    testUser = loadTestUser();
+    testUser = loadTestUserByIndex(test.info().workerIndex);
   });
 
   test.beforeEach(async ({ context }) => {
@@ -131,7 +126,7 @@ test.describe("Engine → Exercise form taxonomy", () => {
   });
 
   test("saves a log for each of the ten exercise types without a check-constraint error", async ({ page }) => {
-    await loginAsTestUser(page);
+    await loginAsTestUser(page, test.info().workerIndex);
     // The "exercise" sub-tab renders only the ExerciseForm — no
     // adjacent InsulinForm to fight for the "Type" / "Duration" labels.
     await page.goto("/engine?tab=exercise");
@@ -182,7 +177,7 @@ test.describe("Engine → Exercise form taxonomy", () => {
   });
 
   test("renders German labels (incl. Fußball) when the locale cookie is 'de'", async ({ page, context }) => {
-    await loginAsTestUser(page);
+    await loginAsTestUser(page, test.info().workerIndex);
     // Force German locale the same way the language picker does:
     // by writing the NEXT_LOCALE cookie that i18n/request.ts reads on
     // every server render. Using a path-scoped + matching baseURL host
