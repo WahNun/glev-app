@@ -4,7 +4,7 @@ import React, { useState, useEffect, useMemo, useRef, useCallback } from "react"
 import RefreshingBar from "@/components/RefreshingBar";
 import { useTranslations, useLocale } from "next-intl";
 import { fetchMeals, deleteMeal, updateMeal, type Meal } from "@/lib/meals";
-import { MEALS_INITIAL_DAYS, MEALS_PAGE_SIZE, executeInitialMealFetch, executeLoadMoreFetch } from "./constants";
+import { MEALS_INITIAL_DAYS, MEALS_PAGE_SIZE, FETCH_MEALS_DEFAULT_SINCE_DAYS, executeInitialMealFetch, executeLoadMoreFetch } from "./constants";
 import { supabase } from "@/lib/supabase";
 import { fetchRecentInsulinLogs, deleteInsulinLog, updateInsulinReadings, updateInsulinLogLink, updateInsulinEntry, type InsulinLog } from "@/lib/insulin";
 import { fetchRecentExerciseLogs, deleteExerciseLog, updateExerciseLog, type ExerciseLog, type ExerciseType, type ExerciseIntensity } from "@/lib/exercise";
