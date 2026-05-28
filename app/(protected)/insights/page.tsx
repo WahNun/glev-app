@@ -51,6 +51,7 @@ import { fetchRecentExerciseLogs, type ExerciseLog, type ExerciseType } from "@/
 import { evaluateExercise, aggregateExerciseTypeStats, PATTERN_MIN_SESSIONS, type ExerciseOutcome, type ExerciseTypeStats } from "@/lib/exerciseEval";
 import { fetchRecentMenstrualLogs, type MenstrualLog } from "@/lib/menstrual";
 import { fetchRecentSymptomLogs, type SymptomLog, type SymptomType } from "@/lib/symptoms";
+import { computeSymStats } from "@/lib/insights/symStats";
 import {
   fetchRecentActivityClient,
   type ClientActivityResponse,
@@ -3214,55 +3215,15 @@ export default function InsightsPage() {
       }
 
       // Symptom ranking: count occurrences and track running severity sum.
-      const symStats: Record<string, { count: number; sevSum: number; glucoseSum: number; glucoseCount: number; glucoseEntries: { value: number; occurredAt: string }[] }> = {};
+      // Pure accumulation logic lives in lib/insights/symStats.ts so it can
+      // be unit-tested independently (tests/unit/symStatsGlucose.test.ts).
       let totalSymptomEntries = 0;
       for (const s of symptomLogs) {
         const occ = new Date(s.occurred_at).getTime();
         if (occ < windowStartMs || occ >= windowEndMs) continue;
         totalSymptomEntries += 1;
-        for (const sym of s.symptom_types || []) {
-          const cur = symStats[sym] ||= { count: 0, sevSum: 0, glucoseSum: 0, glucoseCount: 0, glucoseEntries: [] };
-          cur.count += 1;
-          // Per-symptom severity from the severities map. Fall back to
-          // the row average when a legacy / mis-keyed entry is missing
-          // its per-symptom value so we still produce a sensible avg.
-          const perSym = (s.severities ?? {})[sym];
-          if (typeof perSym === "number") {
-            cur.sevSum += perSym;
-          } else {
-            const fallbackVals: number[] = [];
-            for (const v of Object.values(s.severities ?? {})) {
-              if (typeof v === "number") fallbackVals.push(v);
-            }
-            const fallback = fallbackVals.length > 0
-              ? fallbackVals.reduce((a, b) => a + b, 0) / fallbackVals.length
-              : 3;
-            cur.sevSum += fallback;
-          }
-          // Accumulate glucose snapshot when present.
-          if (typeof s.cgm_glucose_at_log === "number" && s.cgm_glucose_at_log !== null) {
-            cur.glucoseSum += s.cgm_glucose_at_log;
-            cur.glucoseCount += 1;
-            cur.glucoseEntries.push({ value: s.cgm_glucose_at_log, occurredAt: s.occurred_at });
-          }
-        }
       }
-      const topSymptoms = Object.entries(symStats)
-        .map(([k, v]) => {
-          const entries = [...v.glucoseEntries].sort((a, b) => a.occurredAt.localeCompare(b.occurredAt));
-          const values = entries.map(e => e.value);
-          return {
-            key: k as SymptomType,
-            count: v.count,
-            avgSev: v.sevSum / v.count,
-            avgGlucose: v.glucoseCount > 0 ? Math.round(v.glucoseSum / v.glucoseCount) : null,
-            minGlucose: values.length > 0 ? Math.min(...values) : null,
-            maxGlucose: values.length > 0 ? Math.max(...values) : null,
-            glucoseEntries: entries,
-          };
-        })
-        .sort((a, b) => b.count - a.count)
-        .slice(0, 3);
+      const topSymptoms = computeSymStats(symptomLogs, windowStartMs, windowEndMs, 3);
 
       // ── Longer-range cycle trend ──────────────────────────────────────────
       // Uses the FULL fetched menstrualLogs / symptomLogs arrays (up to 760 d
