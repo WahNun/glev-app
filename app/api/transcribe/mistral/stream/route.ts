@@ -6,6 +6,38 @@ export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 /**
+ * Pure accumulation logic for the Mistral transcription event stream.
+ * Exported for unit-test access — no I/O, no auth, no Mistral client.
+ *
+ * Rules:
+ *   transcription.text.delta → accumulate text, call sendEvent({ type:"partial", text: accumulated })
+ *   transcription.done        → call sendEvent({ type:"final", text: data.text ?? accumulated })
+ *   After the loop, if nothing was accumulated → sendEvent({ type:"final", text:"" })
+ */
+export async function processTranscriptionStream(
+  eventStream: AsyncIterable<{ data: { type: string; text?: string } }>,
+  sendEvent: (data: Record<string, unknown>) => void,
+): Promise<void> {
+  let accumulated = "";
+
+  for await (const chunk of eventStream) {
+    const { data } = chunk;
+
+    if (data.type === "transcription.text.delta") {
+      accumulated += data.text;
+      sendEvent({ type: "partial", text: accumulated });
+    } else if (data.type === "transcription.done") {
+      const finalText = data.text ?? accumulated;
+      sendEvent({ type: "final", text: finalText });
+    }
+  }
+
+  if (!accumulated) {
+    sendEvent({ type: "final", text: "" });
+  }
+}
+
+/**
  * POST /api/transcribe/mistral/stream
  *
  * SSE streaming speech-to-text via Mistral voxtral-mini.
@@ -93,25 +125,9 @@ export async function POST(req: NextRequest) {
           file: file as Blob,
         });
 
-        let accumulated = "";
-
-        for await (const chunk of eventStream) {
-          const { data } = chunk;
-
-          if (data.type === "transcription.text.delta") {
-            accumulated += data.text;
-            sendEvent({ type: "partial", text: accumulated });
-          } else if (data.type === "transcription.done") {
-            const finalText = data.text ?? accumulated;
-            // eslint-disable-next-line no-console
-            console.log("[STT stream] done in", Date.now() - t1, "ms · total:", Date.now() - t0, "ms");
-            sendEvent({ type: "final", text: finalText });
-          }
-        }
-
-        if (!accumulated) {
-          sendEvent({ type: "final", text: "" });
-        }
+        await processTranscriptionStream(eventStream, sendEvent);
+        // eslint-disable-next-line no-console
+        console.log("[STT stream] done · total:", Date.now() - t0, "ms");
       } catch (e) {
         const error = e instanceof Error ? e.message : "Transcription failed";
         // eslint-disable-next-line no-console
