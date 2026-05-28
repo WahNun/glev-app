@@ -1758,7 +1758,8 @@
     "log_influences": "Einflussfaktoren loggen",
     "add_meal_manual": "Mahlzeit manuell eintragen",
     "cta_add_entry": "Eintrag",
-    "trigger_label": "Neuer Eintrag"
+    "trigger_label": "Neuer Eintrag",
+    "basal_log_sheet_title": "Basal loggen"
   },
   "postMeal": {
     "title": "BG nach {label}",

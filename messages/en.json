@@ -1758,7 +1758,8 @@
     "log_influences": "Log influences",
     "add_meal_manual": "Add meal manually",
     "cta_add_entry": "Entry",
-    "trigger_label": "New entry"
+    "trigger_label": "New entry",
+    "basal_log_sheet_title": "Log basal"
   },
   "postMeal": {
     "title": "BG after {label}",

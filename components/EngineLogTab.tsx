@@ -378,6 +378,10 @@ export function InsulinForm({ initialType = "bolus" }: { initialType?: "bolus" |
           ? t("logged_with_cgm", { units: u, type: typeLabel, name: trimmedName, when: whenLabel, cgm: Math.round(cgm) })
           : t("logged_no_cgm", { units: u, type: typeLabel, name: trimmedName, when: whenLabel }),
       });
+      // Notify the dashboard (and any other listener) that insulin data has
+      // changed. The dashboard's SWR cache revalidates on this event, and
+      // the basal quick-log sheet listens to close itself automatically.
+      window.dispatchEvent(new CustomEvent("glev:insulin-updated"));
       setUnits(type === "bolus" ? "5" : "20");
       setNotes("");
       setRelatedMealId("");

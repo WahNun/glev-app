@@ -16,6 +16,8 @@ import { fetchMacroTargets, DEFAULT_MACRO_TARGETS, type MacroTargets, getTargetR
 import { fetchCgmSamples } from "@/lib/cgmSamplesClient";
 import { TYPE_COLORS, getEvalColor, chipLabelsFrom } from "@/lib/mealTypes";
 import DashboardQuickAddSheet from "@/components/DashboardQuickAddSheet";
+import BottomSheet from "@/components/BottomSheet";
+import { InsulinForm } from "@/components/EngineLogTab";
 import MealEntryCardCollapsed from "@/components/MealEntryCardCollapsed";
 import MealEntryLightExpand from "@/components/MealEntryLightExpand";
 import PendingGlucoseStrip from "@/components/PendingGlucoseStrip";
@@ -555,6 +557,18 @@ export default function DashboardPage() {
   // header "+" QuickAddMenu). Opened by the dashboard hero "+" button.
   const [quickAddOpen, setQuickAddOpen] = useState(false);
 
+  // Inline basal-log sheet — opened by the "Log Basal" button on the
+  // IOB card. Closes automatically after InsulinForm fires the
+  // glev:insulin-updated event (same event the SWR cache listens to).
+  const [basalSheetOpen, setBasalSheetOpen] = useState(false);
+
+  useEffect(() => {
+    if (!basalSheetOpen) return;
+    function onInsulinSaved() { setBasalSheetOpen(false); }
+    window.addEventListener("glev:insulin-updated", onInsulinSaved);
+    return () => window.removeEventListener("glev:insulin-updated", onInsulinSaved);
+  }, [basalSheetOpen]);
+
   useEffect(() => {
     fetchMacroTargets().then(setMacroTargets).catch(() => {});
     fetchInsulinType().then(setInsulinType).catch(() => {});
@@ -696,7 +710,7 @@ export default function DashboardPage() {
       id: "insulin",
       title: t("cluster_insulin"),
       cards: [
-        { id: "iob",         node: <IOBCard insulin={insulin} insulinType={insulinType} meals={meals} currentBg={latestCgmBg} onLogBasal={() => router.push("/engine?tab=log&startType=basal")} /> },
+        { id: "iob",         node: <IOBCard insulin={insulin} insulinType={insulinType} meals={meals} currentBg={latestCgmBg} onLogBasal={() => setBasalSheetOpen(true)} /> },
         { id: "iob-history", node: <IOBHistoryChart insulin={insulin} insulinType={insulinType} meals={meals} /> },
       ],
     },
@@ -796,6 +810,16 @@ export default function DashboardPage() {
       </div>
       <RefreshingBar visible={dashValidating} />
       <DashboardQuickAddSheet open={quickAddOpen} onClose={() => setQuickAddOpen(false)} />
+      <BottomSheet
+        open={basalSheetOpen}
+        onClose={() => setBasalSheetOpen(false)}
+        title={tQuick("basal_log_sheet_title")}
+        maxWidth={480}
+      >
+        <div style={{ padding: "4px 0 8px" }}>
+          <InsulinForm initialType="basal" />
+        </div>
+      </BottomSheet>
 
       <ReorderableClusters
         clusters={clusters}
