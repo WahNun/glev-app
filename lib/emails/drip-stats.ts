@@ -144,6 +144,74 @@ export function formatRate(sent: number, unsubscribed: number): string {
   return `${pct.toFixed(1)}%`;
 }
 
+// ---- Spike detection -------------------------------------------------------
+
+/**
+ * Minimum number of sends in the last 7 days before a drip can be flagged
+ * as spiking. Below this volume the rate is too noisy to be actionable.
+ */
+export const MIN_SPIKE_VOLUME = 5;
+
+/**
+ * The 7-day opt-out rate must be at least this many times the 30-day
+ * baseline rate to trigger an alert. Default: 2× ("doubled").
+ */
+export const SPIKE_RATIO_THRESHOLD = 2.0;
+
+export interface AlertableSpike {
+  type: DripEmailType;
+  /** Opt-out rate in the last 7 days (0–1). */
+  rate7d: number;
+  /** Opt-out rate in the last 30 days (0–1). Used as baseline. */
+  rate30d: number;
+  /** rate7d / rate30d (Infinity when rate30d === 0 and rate7d > 0). */
+  ratio: number;
+  /** Number of emails sent in the last 7 days. */
+  sent7d: number;
+  /** Number of opt-outs in the last 7 days. */
+  unsub7d: number;
+}
+
+/**
+ * Return every drip type whose recent opt-out rate looks like a spike.
+ *
+ * A drip is flagged when **all** of the following hold:
+ *   1. At least `minVolume` emails were sent in the last 7 days (low
+ *      volume produces noisy rates that would fire false alarms).
+ *   2. The 7-day opt-out rate is at least `ratioThreshold` times the
+ *      30-day baseline rate.
+ *      - When the 30-day rate is 0 but the 7-day rate is > 0 the ratio
+ *        is treated as Infinity, which always passes the threshold —
+ *        a sudden emergence of opt-outs from a previously clean drip is
+ *        always worth noticing.
+ *
+ * Pass the output of `aggregateDripStats()` directly so the alert math
+ * is guaranteed to match what the admin page shows.
+ */
+export function findAlertableSpikes(
+  stats: ReadonlyArray<DripTypeStats>,
+  minVolume: number = MIN_SPIKE_VOLUME,
+  ratioThreshold: number = SPIKE_RATIO_THRESHOLD,
+): AlertableSpike[] {
+  const alerts: AlertableSpike[] = [];
+
+  for (const s of stats) {
+    const { sent: sent7d, unsubscribed: unsub7d } = s.last7d;
+    if (sent7d < minVolume) continue;
+
+    const rate7d = unsub7d / sent7d;
+    const rate30d = s.last30d.sent > 0 ? s.last30d.unsubscribed / s.last30d.sent : 0;
+
+    const ratio = rate30d === 0 ? (rate7d > 0 ? Infinity : 0) : rate7d / rate30d;
+
+    if (ratio >= ratioThreshold) {
+      alerts.push({ type: s.type, rate7d, rate30d, ratio, sent7d, unsub7d });
+    }
+  }
+
+  return alerts;
+}
+
 /** German labels for the drip types — matches the template subjects. */
 export const DRIP_TYPE_LABEL: Record<DripEmailType, string> = {
   day7_insights: "Tag 7 — Insights",

@@ -6,6 +6,10 @@
       "schedule": "0 9 * * *"
     },
     {
+      "path": "/api/cron/drip-spike-check",
+      "schedule": "30 9 * * *"
+    },
+    {
       "path": "/api/cron/cgm-poll",
       "schedule": "*/2 * * * *"
     },
