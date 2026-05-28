@@ -1,22 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { PATHNAME_HEADER } from "@/lib/appRoutes";
+import { geoLocale } from "@/lib/geoLocale";
 
 const PROTECTED = ["/dashboard", "/log", "/entries", "/insights", "/import", "/engine", "/onboarding"];
 const MAX_CHUNKS = 16;
 const COUNTRY_HEADER = "x-glev-country";
-
-// Mirrors i18n/request.ts so the cookie we set on the geo path matches
-// exactly what the request config would have resolved on its own. Keep
-// these two lists in sync.
-const DACH_COUNTRIES = new Set(["DE", "AT", "CH", "LU", "LI"]);
 const LOCALE_COOKIE = "NEXT_LOCALE";
 // One year — same as the in-app language picker in lib/locale.ts.
 const LOCALE_COOKIE_MAX_AGE = 60 * 60 * 24 * 365;
-
-function geoLocale(country: string | null | undefined): "de" | "en" | null {
-  if (!country) return null;
-  return DACH_COUNTRIES.has(country.toUpperCase()) ? "de" : "en";
-}
 
 // Persist the geo-resolved locale to a NEXT_LOCALE cookie so subsequent
 // visits stay on the same language even when the geo header is missing

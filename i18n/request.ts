@@ -1,20 +1,13 @@
 import { getRequestConfig } from "next-intl/server";
 import { cookies, headers } from "next/headers";
+import { geoLocale } from "@/lib/geoLocale";
 
 const SUPPORTED = ["de", "en"] as const;
 type Locale = (typeof SUPPORTED)[number];
 const DEFAULT: Locale = "de";
 
-const DACH_COUNTRIES = new Set(["DE", "AT", "CH", "LU", "LI"]);
-
 function isSupported(value: string | undefined | null): value is Locale {
   return !!value && (SUPPORTED as readonly string[]).includes(value);
-}
-
-function geoLocale(country: string | null): Locale | null {
-  if (!country) return null;
-  const code = country.toUpperCase();
-  return DACH_COUNTRIES.has(code) ? "de" : "en";
 }
 
 function parseAcceptLanguage(header: string | null): Locale | null {
