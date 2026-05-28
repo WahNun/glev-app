@@ -58,6 +58,7 @@ type RangePreset = "all" | "30d" | "90d" | "lastAppointment" | "custom";
 // devtools. Bumping the schema (e.g. adding a new preset that should
 // invalidate older saves) means renaming this key.
 const RANGE_STORAGE_KEY = "glev_export_range";
+const KINDS_STORAGE_KEY = "glev_export_kinds";
 
 // Shape of the persisted picker state. Kept as a plain object instead
 // of three separate keys so a single read/write atomically captures
@@ -117,6 +118,43 @@ function writeStoredRange(value: StoredRange) {
   if (typeof window === "undefined") return;
   try {
     window.localStorage.setItem(RANGE_STORAGE_KEY, JSON.stringify(value));
+  } catch {
+    // Ignore — persistence is best-effort.
+  }
+}
+
+const ALL_KINDS: ExportRowKind[] = ["meals", "insulin", "exercise", "fingersticks"];
+
+/**
+ * Read the persisted kind selection from localStorage. Returns all four
+ * kinds on the very first visit (no stored value), or any valid subset
+ * of the four recognised kind strings. Unknown strings are silently
+ * dropped so a stale value never breaks the type constraint. SSR-safe.
+ */
+function readStoredKinds(): Set<ExportRowKind> {
+  if (typeof window === "undefined") return new Set(ALL_KINDS);
+  try {
+    const raw = window.localStorage.getItem(KINDS_STORAGE_KEY);
+    if (!raw) return new Set(ALL_KINDS);
+    const parsed = JSON.parse(raw) as unknown;
+    if (!Array.isArray(parsed)) return new Set(ALL_KINDS);
+    const valid = (parsed as unknown[]).filter(
+      (v): v is ExportRowKind => ALL_KINDS.includes(v as ExportRowKind),
+    );
+    return new Set(valid);
+  } catch {
+    return new Set(ALL_KINDS);
+  }
+}
+
+/**
+ * Write the current kind selection to localStorage. Soft-fail so a
+ * storage error never breaks the export — we just lose the preference.
+ */
+function writeStoredKinds(kinds: Set<ExportRowKind>) {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(KINDS_STORAGE_KEY, JSON.stringify([...kinds]));
   } catch {
     // Ignore — persistence is best-effort.
   }
@@ -284,12 +322,13 @@ export default function ExportPanel() {
   const { unit: carbUnit, label: carbUnitLabel } = useCarbUnit();
   const [busy, setBusy] = useState<Kind | null>(null);
   const [msg, setMsg]   = useState<{ kind: "ok" | "err"; text: string } | null>(null);
-  // Which data kinds to include in the bulk CSV zip. All four on by
-  // default so a fresh visit produces the same full bundle as before.
+  // Which data kinds to include in the bulk CSV zip. Restored from
+  // localStorage so the clinician's last selection survives page reloads
+  // and fresh panel opens. All four on only on the very first visit.
   // Toggling a chip removes/restores that kind from the zip without
   // affecting the per-kind download buttons.
   const [selectedKinds, setSelectedKinds] = useState<Set<ExportRowKind>>(
-    () => new Set<ExportRowKind>(["meals", "insulin", "exercise", "fingersticks"]),
+    () => readStoredKinds(),
   );
 
   function toggleKind(kind: ExportRowKind) {
@@ -300,6 +339,7 @@ export default function ExportPanel() {
       } else {
         next.add(kind);
       }
+      writeStoredKinds(next);
       return next;
     });
   }
