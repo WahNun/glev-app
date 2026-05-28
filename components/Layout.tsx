@@ -1030,7 +1030,7 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
           speaking={aiVoiceEnabled ? ttsSpeaking : false}
           sheetOpen={aiVoiceEnabled ? glevAi.sheetOpen : false}
           hasConversation={aiVoiceEnabled ? glevAi.messages.length > 0 && !glevAi.sheetOpen : false}
-          showArrow={aiVoiceEnabled}
+          showArrow={aiVoiceEnabled === true}
         />
         <MobileTab
           label={tNav("insights")}

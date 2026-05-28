@@ -189,8 +189,12 @@ export default function AiSettingsPage() {
     }
   }, [aiConsentBusy, aiScopeBusy, aiConsentGranted, aiScopeGlucose, aiScopeIob, aiScopeHistory, t]);
 
-  if (!aiVoiceEnabled) {
+  if (aiVoiceEnabled === false) {
     router.replace("/settings");
+    return null;
+  }
+
+  if (aiVoiceEnabled === null) {
     return null;
   }
 
