@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { authedClient, isMissingTable } from "../insulin/_helpers";
 
 export const runtime = "nodejs";
@@ -20,6 +21,119 @@ const CYCLE_PHASE = new Set([
   "menstruation",
 ]);
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+export type ParsedMenstrualBody = {
+  start_date: string;
+  end_date: string | null;
+  flow_intensity: string | null;
+  phase_marker: string | null;
+  cycle_phase: string | null;
+  notes: string | null;
+};
+
+/**
+ * Pure body-parser + validator for `POST /api/menstrual`. Extracted so
+ * unit tests can drive the validation contracts in isolation without
+ * spinning up the Next runtime or a Supabase client.
+ */
+export function parseMenstrualBody(
+  body: Record<string, unknown>,
+): { ok: true; row: ParsedMenstrualBody } | { ok: false; error: string } {
+  const start_date = String(body.start_date ?? "");
+  const end_date = body.end_date != null && body.end_date !== "" ? String(body.end_date) : null;
+  const flow = body.flow_intensity != null && body.flow_intensity !== ""
+    ? String(body.flow_intensity).toLowerCase() : null;
+  const phase = body.phase_marker != null && body.phase_marker !== ""
+    ? String(body.phase_marker).toLowerCase() : null;
+  const cyclePhase = body.cycle_phase != null && body.cycle_phase !== ""
+    ? String(body.cycle_phase).toLowerCase() : null;
+  const notes = body.notes != null ? String(body.notes).trim() : null;
+
+  if (!DATE_RE.test(start_date)) {
+    return { ok: false, error: "start_date must be YYYY-MM-DD" };
+  }
+  if (end_date && !DATE_RE.test(end_date)) {
+    return { ok: false, error: "end_date must be YYYY-MM-DD or null" };
+  }
+  if (end_date && end_date < start_date) {
+    return { ok: false, error: "end_date must be on or after start_date" };
+  }
+  if (flow && !FLOW.has(flow)) {
+    return { ok: false, error: "flow_intensity must be 'light', 'medium' or 'heavy'" };
+  }
+  // Legacy phase_marker is accepted only for `'ovulation'` going forward —
+  // PMS migrated to symptom_logs.category and "Andere" was removed by spec.
+  if (phase && !PHASE_LEGACY.has(phase)) {
+    return {
+      ok: false,
+      error: "phase_marker must be 'ovulation' (legacy 'pms'/'other' are no longer accepted — use cycle_phase or symptom_logs.category='pms')",
+    };
+  }
+  if (phase === "pms" || phase === "other") {
+    return {
+      ok: false,
+      error: `phase_marker '${phase}' is no longer supported — use cycle_phase, or log PMS as a symptom_log with category='pms'`,
+    };
+  }
+  if (cyclePhase && !CYCLE_PHASE.has(cyclePhase)) {
+    return {
+      ok: false,
+      error: `cycle_phase must be one of: ${Array.from(CYCLE_PHASE).join(", ")}`,
+    };
+  }
+  if (!flow && !phase && !cyclePhase) {
+    return {
+      ok: false,
+      error: "Either flow_intensity, phase_marker (legacy) or cycle_phase must be provided",
+    };
+  }
+
+  return {
+    ok: true,
+    row: {
+      start_date,
+      end_date,
+      flow_intensity: flow,
+      phase_marker: phase,
+      cycle_phase: cyclePhase,
+      notes: notes || null,
+    },
+  };
+}
+
+/**
+ * Core POST handler — takes already-resolved auth + sb so unit tests
+ * can drive it without standing up the Next runtime or Supabase.
+ */
+export async function handleMenstrualPost(
+  sb: SupabaseClient,
+  userId: string,
+  body: Record<string, unknown>,
+): Promise<NextResponse> {
+  const parsed = parseMenstrualBody(body);
+  if (!parsed.ok) {
+    return NextResponse.json({ error: parsed.error }, { status: 400 });
+  }
+
+  const row = { user_id: userId, ...parsed.row };
+
+  const { data, error } = await sb
+    .from("menstrual_logs")
+    .insert(row)
+    .select(COLS)
+    .single();
+
+  if (error) {
+    if (isMissingTable(error)) {
+      return NextResponse.json(
+        { error: "menstrual_logs table is missing — run the migration in Supabase first" },
+        { status: 503 },
+      );
+    }
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+  return NextResponse.json({ log: data }, { status: 201 });
+}
 
 /** GET /api/menstrual — caller's menstrual_logs, newest first. */
 export async function GET(req: NextRequest) {
@@ -60,84 +174,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
   }
 
-  const start_date = String(body.start_date ?? "");
-  const end_date = body.end_date != null && body.end_date !== "" ? String(body.end_date) : null;
-  const flow = body.flow_intensity != null && body.flow_intensity !== ""
-    ? String(body.flow_intensity).toLowerCase() : null;
-  const phase = body.phase_marker != null && body.phase_marker !== ""
-    ? String(body.phase_marker).toLowerCase() : null;
-  const cyclePhase = body.cycle_phase != null && body.cycle_phase !== ""
-    ? String(body.cycle_phase).toLowerCase() : null;
-  const notes = body.notes != null ? String(body.notes).trim() : null;
-
-  if (!DATE_RE.test(start_date)) {
-    return NextResponse.json({ error: "start_date must be YYYY-MM-DD" }, { status: 400 });
-  }
-  if (end_date && !DATE_RE.test(end_date)) {
-    return NextResponse.json({ error: "end_date must be YYYY-MM-DD or null" }, { status: 400 });
-  }
-  if (end_date && end_date < start_date) {
-    return NextResponse.json({ error: "end_date must be on or after start_date" }, { status: 400 });
-  }
-  if (flow && !FLOW.has(flow)) {
-    return NextResponse.json({ error: "flow_intensity must be 'light', 'medium' or 'heavy'" }, { status: 400 });
-  }
-  // Legacy phase_marker is accepted only for `'ovulation'` going forward —
-  // PMS migrated to symptom_logs.category and "Andere" was removed by spec.
-  // The shape check still recognises the legacy 'pms'/'other' tokens so we
-  // can reject them with a more specific 400 message below (instead of an
-  // opaque "unknown enum value" reply).
-  if (phase && !PHASE_LEGACY.has(phase)) {
-    return NextResponse.json(
-      { error: "phase_marker must be 'ovulation' (legacy 'pms'/'other' are no longer accepted — use cycle_phase or symptom_logs.category='pms')" },
-      { status: 400 },
-    );
-  }
-  if (phase === "pms" || phase === "other") {
-    return NextResponse.json(
-      { error: `phase_marker '${phase}' is no longer supported — use cycle_phase, or log PMS as a symptom_log with category='pms'` },
-      { status: 400 },
-    );
-  }
-  if (cyclePhase && !CYCLE_PHASE.has(cyclePhase)) {
-    return NextResponse.json(
-      { error: `cycle_phase must be one of: ${Array.from(CYCLE_PHASE).join(", ")}` },
-      { status: 400 },
-    );
-  }
-  if (!flow && !phase && !cyclePhase) {
-    return NextResponse.json(
-      { error: "Either flow_intensity, phase_marker (legacy) or cycle_phase must be provided" },
-      { status: 400 },
-    );
-  }
-
-  const row = {
-    user_id: auth.user.id,
-    start_date,
-    end_date,
-    flow_intensity: flow,
-    phase_marker: phase,
-    cycle_phase: cyclePhase,
-    notes: notes || null,
-  };
-
-  const { data, error } = await auth.sb
-    .from("menstrual_logs")
-    .insert(row)
-    .select(COLS)
-    .single();
-
-  if (error) {
-    if (isMissingTable(error)) {
-      return NextResponse.json(
-        { error: "menstrual_logs table is missing — run the migration in Supabase first" },
-        { status: 503 },
-      );
-    }
-    return NextResponse.json({ error: error.message }, { status: 500 });
-  }
-  return NextResponse.json({ log: data }, { status: 201 });
+  return handleMenstrualPost(auth.sb, auth.user.id, body);
 }
 
 /** DELETE /api/menstrual?id=… — RLS still scopes to caller. */
