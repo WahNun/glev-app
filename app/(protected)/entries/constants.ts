@@ -1,5 +1,5 @@
+export { FETCH_MEALS_DEFAULT_SINCE_DAYS } from "@/lib/meals";
 import {
-  FETCH_MEALS_DEFAULT_SINCE_DAYS,
   type FetchMealsOptions,
   type Meal,
 } from "@/lib/meals";
