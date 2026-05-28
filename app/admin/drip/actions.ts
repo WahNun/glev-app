@@ -142,6 +142,34 @@ export async function sendNowAction(formData: FormData): Promise<void> {
   const attemptAt = new Date().toISOString();
 
   try {
+    // ── Playwright-Test-Seam ──────────────────────────────────────────────
+    // When PLAYWRIGHT_DRIP_SKIP_RESEND=1 is set (only in the Playwright
+    // dev environment — never in production or staging), skip the actual
+    // Resend HTTP call and write `sent_at` directly. This lets the E2E
+    // suite verify the full action flow (auth guard, idempotency, DB write,
+    // revalidation) without sending real emails or requiring a live Resend
+    // API key in the test environment.
+    if (process.env.PLAYWRIGHT_DRIP_SKIP_RESEND === "1") {
+      const sentAt = new Date().toISOString();
+      const { error: updErr } = await admin
+        .from("email_drip_schedule")
+        .update({ sent_at: sentAt })
+        .eq("id", row.id)
+        .is("sent_at", null);
+      if (updErr) {
+        // eslint-disable-next-line no-console
+        console.error("[admin/drip] sendNow (test skip) mark-sent failed:", {
+          id: row.id,
+          err: updErr.message,
+        });
+      } else {
+        // eslint-disable-next-line no-console
+        console.log("[admin/drip] sendNow (test skip) ok:", { id: row.id });
+      }
+      revalidatePath("/admin/drip");
+      return;
+    }
+    // ── Normal (production) path ─────────────────────────────────────────
     // Locale defaults to 'de' for legacy rows scheduled before the column
     // existed (NULL in DB). Same fallback as the cron worker — see
     // app/api/cron/drip/route.ts.
