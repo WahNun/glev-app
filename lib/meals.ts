@@ -669,6 +669,17 @@ export interface FetchMealsOptions {
    */
   limit?: number;
   /**
+   * Keyset pagination cursor — when set, only rows with
+   * `created_at < before` are returned. Combine with `sinceDays` to
+   * page backwards through the history window without loading
+   * everything at once.
+   *
+   * Used by the entries page "Load more" button: the cursor is the
+   * `created_at` of the oldest row already in the list, so each
+   * subsequent page is non-overlapping with the previous one.
+   */
+  before?: string;
+  /**
    * Test seam — lets unit tests inject a stub Supabase client
    * (`tests/unit/meals.test.ts`) without going through the module
    * singleton. Production callers should never pass this.
@@ -692,6 +703,13 @@ export async function fetchMeals(opts: FetchMealsOptions = {}): Promise<Meal[]> 
   const applyCutoff = <T extends { gte: (col: string, val: string) => T }>(q: T): T =>
     cutoffIso ? q.gte("created_at", cutoffIso) : q;
 
+  // Keyset pagination cursor — only return rows OLDER than `before`.
+  // Applied after the `gte` cutoff so the two filters combine as
+  // `cutoff <= created_at < before`, which gives a non-overlapping
+  // backwards page through the history window.
+  const applyBefore = <T extends { lt: (col: string, val: string) => T }>(q: T): T =>
+    opts.before ? q.lt("created_at", opts.before) : q;
+
   // Row cap applied AFTER cutoff + ordering so we always get the
   // newest N within the window, not a random first-N. `Infinity`
   // and `0` are the documented opt-out values for callers that need
@@ -700,11 +718,11 @@ export async function fetchMeals(opts: FetchMealsOptions = {}): Promise<Meal[]> 
   const applyLimit = <T extends { limit: (n: number) => T }>(q: T): T =>
     Number.isFinite(limit) && limit > 0 ? q.limit(limit) : q;
 
-  let { data, error } = await applyLimit(applyCutoff(
+  let { data, error } = await applyLimit(applyBefore(applyCutoff(
     client
       .from("meals")
       .select(FULL_COLS)
-  ).order("created_at", { ascending: false }));
+  )).order("created_at", { ascending: false }));
 
   // Fall back when the new bg_1h/bg_2h/outcome_state columns are missing.
   // Supabase / PostgREST returns several phrasings for missing columns —
@@ -715,13 +733,13 @@ export async function fetchMeals(opts: FetchMealsOptions = {}): Promise<Meal[]> 
       || /could not find (the )?column/i.test(e.message ?? "")
       || /column .* does not exist/i.test(e.message ?? ""));
   if (isMissingCol(error)) {
-    const mid = await applyLimit(applyCutoff(
+    const mid = await applyLimit(applyBefore(applyCutoff(
       client.from("meals").select(MID_COLS)
-    ).order("created_at", { ascending: false }));
+    )).order("created_at", { ascending: false }));
     if (mid.error && mid.error.message?.toLowerCase().includes("does not exist")) {
-      const core = await applyLimit(applyCutoff(
+      const core = await applyLimit(applyBefore(applyCutoff(
         client.from("meals").select(CORE_COLS)
-      ).order("created_at", { ascending: false }));
+      )).order("created_at", { ascending: false }));
       if (core.error) throw new Error(core.error.message);
       data = (core.data ?? []).map((r: Record<string, unknown>) => ({
         ...r, glucose_after: null, protein_grams: null, fat_grams: null, fiber_grams: null, calories: null,

@@ -623,7 +623,10 @@
     "insights": "Insights",
     "entries": "Entries",
     "entries_subline": "{shown} of {total} entries. Tap a row to expand.",
-    "no_entries": "No entries yet"
+    "no_entries": "No entries yet",
+    "load_more_btn": "Load more",
+    "load_more_loading": "Loading…",
+    "no_more_entries": "All entries loaded"
   },
   "insights": {
     "tile_raw_icr_label": "Raw ICR",

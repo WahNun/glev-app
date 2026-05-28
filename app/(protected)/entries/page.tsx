@@ -357,6 +357,14 @@ export default function EntriesPage() {
   const [influences, setInfluences] = useState<InfluenceLog[]>([]);
   const [loading, setLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  // Pagination state for the meals list. We initially load only
+  // MEALS_INITIAL_DAYS days of meals; older entries are fetched on
+  // demand via the "Weitere laden" / "Load more" button.
+  const [hasMoreMeals, setHasMoreMeals] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const oldestMealCreatedAt = useRef<string | null>(null);
+  const MEALS_INITIAL_DAYS = 30;
+  const MEALS_PAGE_SIZE = 50;
   const [filters, setFilters] = useState<FilterState>(EMPTY_FILTERS);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [search, setSearch]   = useState("");
@@ -569,10 +577,10 @@ export default function EntriesPage() {
     async function loadFull(initial: boolean) {
       setIsRefreshing(true);
       try {
-        // Initial fetch covers the last 90 days — fast enough to
-        // unblock the list. Older rows are pulled in background below.
+        // Initial fetch covers the last MEALS_INITIAL_DAYS (30) days.
+        // Older rows are loaded on demand via the "Weitere laden" button.
         const [m, ins, ex, cy, sy, inf] = await Promise.all([
-          fetchMeals({ sinceDays: 90, limit: Infinity }),
+          fetchMeals({ sinceDays: MEALS_INITIAL_DAYS, limit: Infinity }),
           fetchRecentInsulinLogs(60).catch(() => []),
           fetchRecentExerciseLogs(60).catch(() => []),
           fetchRecentMenstrualLogs(120).catch(() => [] as MenstrualLog[]),
@@ -586,6 +594,14 @@ export default function EntriesPage() {
           setCycle(cy);
           setSymptoms(sy);
           setInfluences(inf);
+          // Track the oldest loaded meal for keyset pagination.
+          oldestMealCreatedAt.current = m.length > 0 ? m[m.length - 1].created_at : null;
+          // Show the "Load more" button whenever there's a chance of
+          // older rows within the 365-day window. We can't know for
+          // sure without a COUNT query, so we always show it on
+          // initial load and hide it only after a load-more page
+          // returns empty.
+          setHasMoreMeals(m.length > 0);
         }
         // Persist to localStorage (with TTL) so the next visit is instant,
         // including after a native-app restart or TestFlight force-quit.
@@ -603,15 +619,9 @@ export default function EntriesPage() {
             });
           });
         }
-        // Background: pull older meals (90–FETCH_MEALS_DEFAULT_SINCE_DAYS
-        // days) so historical filters & counts are complete.
-        if (!cancelled && FETCH_MEALS_DEFAULT_SINCE_DAYS > 90) {
-          fetchMeals({ sinceDays: FETCH_MEALS_DEFAULT_SINCE_DAYS, limit: Infinity }).then(all => {
-            if (!cancelled && all.length > m.length) {
-              setMeals(all);
-            }
-          }).catch(() => { /* best-effort */ });
-        }
+        // NOTE: We intentionally do NOT background-fetch the full 365-day
+        // window anymore. Older data is pulled on demand via "Weitere laden"
+        // (Task #197 — server-side pagination replaces the one-shot pull).
       } catch (e) { console.error(e); }
       finally {
         if (!cancelled && initial) setLoading(false);
@@ -640,6 +650,31 @@ export default function EntriesPage() {
       window.removeEventListener("glev:influence-updated", onUpdated);
     };
   }, []);
+
+  async function loadMoreMeals() {
+    if (!oldestMealCreatedAt.current || loadingMore || !hasMoreMeals) return;
+    setLoadingMore(true);
+    try {
+      const more = await fetchMeals({
+        before: oldestMealCreatedAt.current,
+        sinceDays: FETCH_MEALS_DEFAULT_SINCE_DAYS,
+        limit: MEALS_PAGE_SIZE,
+      });
+      if (more.length === 0) {
+        setHasMoreMeals(false);
+      } else {
+        setMeals(prev => {
+          const ids = new Set(prev.map(m => m.id));
+          return [...prev, ...more.filter(m => !ids.has(m.id))];
+        });
+        if (more.length < MEALS_PAGE_SIZE) {
+          setHasMoreMeals(false);
+        }
+        oldestMealCreatedAt.current = more[more.length - 1].created_at;
+      }
+    } catch (e) { console.error(e); }
+    finally { setLoadingMore(false); }
+  }
 
   async function handleDelete(id: string) {
     if (!confirm("Delete this entry? This cannot be undone.")) return;
@@ -1562,6 +1597,56 @@ export default function EntriesPage() {
               </div>
             );
           })}
+        </div>
+      )}
+
+      {/* LOAD MORE — appears when the server likely has older meals
+          within the 365-day window that weren't part of the initial
+          30-day fetch. Hidden once a page returns empty (hasMoreMeals
+          flips to false). */}
+      {!loading && hasMoreMeals && (
+        <div style={{ display:"flex", justifyContent:"center", marginTop:12, marginBottom:4 }}>
+          <button
+            onClick={loadMoreMeals}
+            disabled={loadingMore}
+            style={{
+              padding:"10px 28px",
+              borderRadius:99,
+              border:`1px solid ${BORDER}`,
+              background:"transparent",
+              color: loadingMore ? "var(--text-ghost)" : "var(--text-muted)",
+              fontSize:14,
+              fontWeight:600,
+              cursor: loadingMore ? "wait" : "pointer",
+              display:"inline-flex",
+              alignItems:"center",
+              gap:8,
+              letterSpacing:"0.02em",
+              transition:"color 0.15s, border-color 0.15s",
+            }}
+          >
+            {loadingMore ? (
+              <>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ animation:"glevSpin 0.8s linear infinite" }}>
+                  <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
+                </svg>
+                <style>{`@keyframes glevSpin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}`}</style>
+                {tHistory("load_more_loading")}
+              </>
+            ) : (
+              <>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <polyline points="6 9 12 15 18 9"/>
+                </svg>
+                {tHistory("load_more_btn")}
+              </>
+            )}
+          </button>
+        </div>
+      )}
+      {!loading && !hasMoreMeals && meals.length > 0 && (
+        <div style={{ textAlign:"center", color:"var(--text-ghost)", fontSize:12, padding:"12px 0 4px", letterSpacing:"0.02em" }}>
+          {tHistory("no_more_entries")}
         </div>
       )}
 

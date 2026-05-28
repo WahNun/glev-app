@@ -623,7 +623,10 @@
     "insights": "Insights",
     "entries": "Einträge",
     "entries_subline": "{shown} von {total} Einträgen. Klicke eine Zeile zum Aufklappen.",
-    "no_entries": "Noch keine Einträge"
+    "no_entries": "Noch keine Einträge",
+    "load_more_btn": "Weitere laden",
+    "load_more_loading": "Wird geladen…",
+    "no_more_entries": "Alle Einträge geladen"
   },
   "insights": {
     "pattern_balanced_label": "Ausgewogene Dosierung",
