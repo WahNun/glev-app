@@ -243,6 +243,12 @@ export default function SettingsPage() {
   const aiVoiceEnabled = useFeatureFlag("ai_voice");
   const { canAccess } = usePlan();
   const [settings, setSettings] = useState<Settings>(DEFAULTS);
+  const [activeTab, setActiveTab] = useState<"konto"|"glukose"|"insulin"|"cgm"|"app"|"mehr">(() => {
+    if (typeof window !== "undefined") {
+      return (sessionStorage.getItem("settings_tab") as "konto"|"glukose"|"insulin"|"cgm"|"app"|"mehr") || "konto";
+    }
+    return "konto";
+  });
   // Tracks whether the user has manually touched any insulin field
   // (icr / cf / targetBg) before the async `fetchInsulinSettings` round
   // trip resolves. Without this gate the late DB-load callback would
@@ -2981,17 +2987,70 @@ export default function SettingsPage() {
     ? tSettings("subtitle_adjustment_history_empty")
     : tSettings("subtitle_adjustment_history_count", { n: adjustmentHistory.length });
 
+  const switchTab = (tab: typeof activeTab) => {
+    setActiveTab(tab);
+    sessionStorage.setItem("settings_tab", tab);
+  };
+
+  const SETTINGS_TABS: { id: typeof activeTab; label: string }[] = [
+    { id: "konto",   label: tSettings("section_account") },
+    { id: "glukose", label: tSettings("section_glucose") },
+    { id: "insulin", label: tSettings("section_insulin") },
+    { id: "cgm",     label: "CGM" },
+    { id: "app",     label: tSettings("section_app") },
+    { id: "mehr",    label: "Mehr" },
+  ];
+
   return (
     <div style={{ maxWidth: 720, margin: "0 auto" }}>
       {/* 2026-05-17 round 7: page-title bottom margin trimmed 24 → 16
           to match the new equal-on-all-sides rhythm (see comment in
           components/SettingsRow.tsx → SettingsSection). */}
-      <div style={{ marginBottom: 16 }}>
+      <div style={{ marginBottom: 12 }}>
         <h1 style={{ fontSize: 22, fontWeight: 800, letterSpacing: "-0.03em", marginBottom: 4 }}>
           {tSettings("page_title")}
         </h1>
         <p style={{ color: "var(--text-faint)", fontSize: 14 }}>{tSettings("page_subtitle")}</p>
       </div>
+
+      {/* ── Cluster Meta Tabs ───────────────────────────────────────── */}
+      <div style={{
+        display: "flex",
+        gap: 4,
+        overflowX: "auto",
+        marginBottom: 20,
+        paddingBottom: 2,
+        scrollbarWidth: "none",
+        WebkitOverflowScrolling: "touch",
+      }}>
+        {SETTINGS_TABS.map(({ id, label }) => {
+          const active = activeTab === id;
+          return (
+            <button
+              key={id}
+              type="button"
+              onClick={() => switchTab(id)}
+              style={{
+                flexShrink: 0,
+                padding: "6px 14px",
+                borderRadius: 20,
+                border: "none",
+                cursor: "pointer",
+                fontSize: 13,
+                fontWeight: active ? 600 : 400,
+                background: active ? ACCENT : "var(--surface-raised, var(--border))",
+                color: active ? "#fff" : "var(--text-dim)",
+                transition: "background 0.15s, color 0.15s",
+              }}
+            >
+              {label}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* ── Tab: Konto ──────────────────────────────────────────────── */}
+      {activeTab === "konto" && <>
 
       <SettingsSection title={tSettings("section_account")}>
         <SettingsRow
@@ -3004,6 +3063,39 @@ export default function SettingsPage() {
           onClick={() => setAccountSheetOpen(true)}
         />
       </SettingsSection>
+
+      {/* Glev AI & Glev+ im Konto-Tab (nur wenn sichtbar) */}
+      {aiVoiceEnabled && (
+        <SettingsSection title={tSettings("section_glev_ai")}>
+          <SettingsRow
+            first
+            iconColor={ACCENT}
+            icon={ICON.sparkle}
+            label={tSettings("section_glev_ai")}
+            subtitle={tSettings("ai_settings_row_subtitle")}
+            ariaLabel={tSettings("section_glev_ai")}
+            onClick={() => router.push("/settings/ai")}
+          />
+        </SettingsSection>
+      )}
+
+      {plan === "plus" && (
+        <SettingsSection title={tSettings("section_glev_plus")}>
+          <SettingsRow
+            first
+            iconColor={PURPLE}
+            icon={ICON.sparkle}
+            label={tSettings("row_founder_contact")}
+            subtitle={tSettings("subtitle_founder_contact")}
+            ariaLabel={tSettings("row_open_aria", { label: tSettings("row_founder_contact") })}
+            onClick={() => window.open("mailto:lucas@glev.app", "_blank", "noopener,noreferrer")}
+          />
+        </SettingsSection>
+      )}
+      </>}
+
+      {/* ── Tab: Glukose ────────────────────────────────────────────── */}
+      {activeTab === "glukose" && <>
 
       <SettingsSection title={tSettings("section_glucose")}>
         <SettingsRow
@@ -3044,6 +3136,24 @@ export default function SettingsPage() {
           onClick={() => openSheetWith("units")}
         />
       </SettingsSection>
+
+      {/* Termine gehört thematisch zu Glukose/Gesundheit */}
+      <SettingsSection title={tSettings("section_appointments")}>
+        <SettingsRow
+          first
+          iconColor={ACCENT}
+          icon={ICON.calendar}
+          label={tSettings("appointments_title")}
+          subtitle={lastAppointmentSub}
+          ariaLabel={tSettings("row_open_aria", { label: tSettings("appointments_title") })}
+          onClick={canAccess("doctor_appointment_tracker") ? () => openSheetWith("lastAppointment") : () => {}}
+          rightAdornment={<UpgradeGate feature="doctor_appointment_tracker" variant="row" />}
+        />
+      </SettingsSection>
+      </>}
+
+      {/* ── Tab: Insulin ────────────────────────────────────────────── */}
+      {activeTab === "insulin" && <>
 
       <SettingsSection title={tSettings("section_insulin")}>
         {/* Übergeordnete „Insulin-Einstellungen"-Row — klappt die 9
@@ -3198,39 +3308,10 @@ export default function SettingsPage() {
           </>
         )}
       </SettingsSection>
+      </>}
 
-      {aiVoiceEnabled && (
-        <SettingsSection title={tSettings("section_glev_ai")}>
-          <SettingsRow
-            first
-            iconColor={ACCENT}
-            icon={ICON.sparkle}
-            label={tSettings("section_glev_ai")}
-            subtitle={tSettings("ai_settings_row_subtitle")}
-            ariaLabel={tSettings("section_glev_ai")}
-            onClick={() => router.push("/settings/ai")}
-          />
-        </SettingsSection>
-      )}
-
-      {/* Arzttermine wandern aus der Insulin-Sektion in eine eigene
-          „Termine"-Sektion — gehören thematisch nicht zu Insulin und
-          standen vorher nur historisch dort.
-          Lock-UX: Sektion ist immer sichtbar; fehlt der Plan, sitzt nur
-          ein kleines Schloss-Icon am rechten Rand der Zeile (kein Blur,
-          kein Overlay). */}
-      <SettingsSection title={tSettings("section_appointments")}>
-        <SettingsRow
-          first
-          iconColor={ACCENT}
-          icon={ICON.calendar}
-          label={tSettings("appointments_title")}
-          subtitle={lastAppointmentSub}
-          ariaLabel={tSettings("row_open_aria", { label: tSettings("appointments_title") })}
-          onClick={canAccess("doctor_appointment_tracker") ? () => openSheetWith("lastAppointment") : () => {}}
-          rightAdornment={<UpgradeGate feature="doctor_appointment_tracker" variant="row" />}
-        />
-      </SettingsSection>
+      {/* ── Tab: CGM ────────────────────────────────────────────────── */}
+      {activeTab === "cgm" && <>
 
       <SettingsSection title={tSettings("section_cgm")}>
         <SettingsRow
@@ -3259,6 +3340,10 @@ export default function SettingsPage() {
           onClick={() => openSheetWith("dexcom")}
         />
       </SettingsSection>
+      </>}
+
+      {/* ── Tab: App ────────────────────────────────────────────────── */}
+      {activeTab === "app" && <>
 
       <SettingsSection title={tSettings("section_app")}>
         <SettingsRow
@@ -3400,6 +3485,10 @@ export default function SettingsPage() {
           onClick={() => openSheetWith("macros")}
         />
       </SettingsSection>
+      </>}
+
+      {/* ── Tab: Mehr ───────────────────────────────────────────────── */}
+      {activeTab === "mehr" && <>
 
       <SettingsSection title={tSettings("section_data")}>
         <SettingsRow
@@ -3431,20 +3520,6 @@ export default function SettingsPage() {
         />
       </SettingsSection>
 
-      {plan === "plus" && (
-        <SettingsSection title={tSettings("section_glev_plus")}>
-          <SettingsRow
-            first
-            iconColor={PURPLE}
-            icon={ICON.sparkle}
-            label={tSettings("row_founder_contact")}
-            subtitle={tSettings("subtitle_founder_contact")}
-            ariaLabel={tSettings("row_open_aria", { label: tSettings("row_founder_contact") })}
-            onClick={() => window.open("mailto:lucas@glev.app", "_blank", "noopener,noreferrer")}
-          />
-        </SettingsSection>
-      )}
-
       <SettingsSection title={tSettings("section_support")}>
         <SettingsRow
           first
@@ -3470,8 +3545,9 @@ export default function SettingsPage() {
           onClick={() => router.push("/settings/help/cgm-quellen")}
         />
       </SettingsSection>
+      </>}
 
-      {/* Plan-Simulator — nur für Admin-Account sichtbar (NEXT_PUBLIC_ADMIN_EMAIL) */}
+      {/* Plan-Simulator — immer sichtbar (nur für Admin-Account) */}
       <div style={{ marginTop: 32, marginBottom: 8 }}>
         <PlanSimulator />
       </div>
