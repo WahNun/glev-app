@@ -25,6 +25,7 @@ import AppMockupPhone from "@/components/AppMockupPhone";
 import FeatureTrio from "@/components/landing/FeatureTrio";
 import CGMCompatibility from "@/components/landing/CGMCompatibility";
 import LocaleSwitcher from "@/components/LocaleSwitcher";
+import ThemeToggle from "@/components/ThemeToggle";
 
 const ACCENT  = "#4F6EF7";
 const HOVER   = "#6B8BFF";
@@ -179,6 +180,7 @@ export default function PreviewHome() {
             >
               {t("nav_blog")}
             </Link>
+            <ThemeToggle />
             <Link
               href="/#pricing"
               style={{

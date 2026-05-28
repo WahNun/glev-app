@@ -3,14 +3,13 @@ import { Inter, JetBrains_Mono } from "next/font/google";
 import Script from "next/script";
 import { NextIntlClientProvider } from "next-intl";
 import { getLocale, getMessages } from "next-intl/server";
-import { cookies, headers } from "next/headers";
+import { cookies } from "next/headers";
 import "./globals.css";
 import { PreventZoom } from "@/components/PreventZoom";
 import PushNotificationsProvider from "@/components/PushNotificationsProvider";
 import MealCheckReminderProvider from "@/components/MealCheckReminderProvider";
 import LandscapeGlucoseOverlay from "@/components/LandscapeGlucoseOverlay";
 import { ThemeProvider } from "@/components/ThemeProvider";
-import { APP_ROUTE_REGEX_SOURCE, isAppRoute, PATHNAME_HEADER } from "@/lib/appRoutes";
 import CookieBanner from "@/components/CookieBanner";
 import GoogleAnalytics from "@/components/GoogleAnalytics";
 
@@ -29,8 +28,9 @@ const META_PIXEL_ID = "960780236789931";
 //
 // Part 1: Theme bootstrap — reads THEME cookie / localStorage /
 // OS-preference, sets data-theme on <html> so the first painted frame
-// already has the right CSS variables (no FOUC). Marketing / public
-// routes always get dark; in-app routes honour the persisted choice.
+// already has the right CSS variables (no FOUC). Theme is now honoured
+// on ALL routes (marketing + app alike) — Task #134 wired up Light Mode
+// across all public pages so the old "marketing always dark" rule is gone.
 //
 // Part 2: Safe-area measurement — measures env(safe-area-inset-bottom)
 // via a sentinel element and writes --safe-bottom onto <html> so the
@@ -39,20 +39,15 @@ const META_PIXEL_ID = "960780236789931";
 const BOOTSTRAP_SCRIPT = `
 (function(){
   try{
-    var APP_RE=${JSON.stringify(APP_ROUTE_REGEX_SOURCE)};
-    var isApp=new RegExp(APP_RE).test(location.pathname);
-    var resolved='dark';
-    if(isApp){
-      var c=document.cookie.match(/(?:^|;\\s*)THEME=([^;]+)/);
-      var v=c?decodeURIComponent(c[1]):null;
-      if(v!=='dark'&&v!=='light'&&v!=='system'){
-        try{var ls=localStorage.getItem('glev_theme');if(ls==='dark'||ls==='light'||ls==='system')v=ls;}catch(e){}
-      }
-      if(!v)v='system';
-      resolved=v;
-      if(v==='system'){
-        resolved=(window.matchMedia&&window.matchMedia('(prefers-color-scheme: light)').matches)?'light':'dark';
-      }
+    var c=document.cookie.match(/(?:^|;\\s*)THEME=([^;]+)/);
+    var v=c?decodeURIComponent(c[1]):null;
+    if(v!=='dark'&&v!=='light'&&v!=='system'){
+      try{var ls=localStorage.getItem('glev_theme');if(ls==='dark'||ls==='light'||ls==='system')v=ls;}catch(e){}
+    }
+    if(!v)v='system';
+    var resolved=v;
+    if(v==='system'){
+      resolved=(window.matchMedia&&window.matchMedia('(prefers-color-scheme: light)').matches)?'light':'dark';
     }
     document.documentElement.setAttribute('data-theme',resolved);
     var m=document.querySelector('meta[name="theme-color"]');
@@ -128,20 +123,13 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   const locale = await getLocale();
   const messages = await getMessages();
 
-  // Theme: marketing / public routes are always dark (their components
-  // hardcode dark hex values, so flipping them to light produces
-  // white-on-white text). Only in-app routes honour the THEME cookie
-  // for SSR. The pre-hydration inline script applies the same rule on
-  // the client, then takes care of the `system` choice (matchMedia is
-  // only available client-side). The pathname is forwarded by
-  // middleware via PATHNAME_HEADER so this server component can branch
-  // on it without reading the URL directly.
-  const headerStore = await headers();
-  const reqPath = headerStore.get(PATHNAME_HEADER) ?? "";
+  // Theme is honoured on all routes (Task #134 — Light Mode is wired up
+  // across all public pages). SSR default is dark unless the cookie says
+  // "light"; "system" is resolved client-side in the bootstrap script
+  // because matchMedia is unavailable on the server.
   const cookieStore = await cookies();
   const themeCookie = cookieStore.get("THEME")?.value;
-  const initialTheme: "dark" | "light" =
-    isAppRoute(reqPath) && themeCookie === "light" ? "light" : "dark";
+  const initialTheme: "dark" | "light" = themeCookie === "light" ? "light" : "dark";
 
   return (
     <html
