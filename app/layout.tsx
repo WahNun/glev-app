@@ -12,6 +12,7 @@ import LandscapeGlucoseOverlay from "@/components/LandscapeGlucoseOverlay";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { APP_ROUTE_REGEX_SOURCE, isAppRoute, PATHNAME_HEADER } from "@/lib/appRoutes";
 import CookieBanner from "@/components/CookieBanner";
+import GoogleAnalytics from "@/components/GoogleAnalytics";
 
 const META_PIXEL_ID = "960780236789931";
 
@@ -204,23 +205,29 @@ export default async function RootLayout({ children }: { children: React.ReactNo
             on the closing brace and `window.fbq` ends up undefined in
             production). `dangerouslySetInnerHTML` ships the script
             body verbatim. */}
-        {/* Google Analytics — loads after hydration, never blocks paint */}
-        <Script
-          src="https://www.googletagmanager.com/gtag/js?id=G-8E5V490XP9"
-          strategy="afterInteractive"
-        />
-        <Script
-          id="google-analytics"
-          strategy="afterInteractive"
-          dangerouslySetInnerHTML={{
-            __html: `
-              window.dataLayer = window.dataLayer || [];
-              function gtag(){dataLayer.push(arguments);}
-              gtag('js', new Date());
-              gtag('config', 'G-8E5V490XP9');
-            `,
-          }}
-        />
+        {/* Google Analytics — loads after hydration, never blocks paint.
+            ID comes from NEXT_PUBLIC_GA_MEASUREMENT_ID (set in Vercel env vars).
+            Route-change page_view events are fired by <GoogleAnalytics> below. */}
+        {process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID && (
+          <>
+            <Script
+              src={`https://www.googletagmanager.com/gtag/js?id=${process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID}`}
+              strategy="afterInteractive"
+            />
+            <Script
+              id="google-analytics"
+              strategy="afterInteractive"
+              dangerouslySetInnerHTML={{
+                __html: `
+                  window.dataLayer = window.dataLayer || [];
+                  function gtag(){dataLayer.push(arguments);}
+                  gtag('js', new Date());
+                  gtag('config', '${process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID}', { send_page_view: false });
+                `,
+              }}
+            />
+          </>
+        )}
         <Script
           id="meta-pixel"
           strategy="afterInteractive"
@@ -248,6 +255,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
             src={`https://www.facebook.com/tr?id=${META_PIXEL_ID}&ev=PageView&noscript=1`}
           />
         </noscript>
+        <GoogleAnalytics />
         <NextIntlClientProvider locale={locale} messages={messages}>
           <ThemeProvider>
             <PreventZoom />
