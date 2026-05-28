@@ -25,6 +25,7 @@ import EngineStep from "./engine";
 import InsightsStep from "./insights";
 import CgmStep from "./cgm";
 import InstallStep from "./install";
+import GlevButtonStep from "./glev-button";
 import type { Step } from "./_shared";
 
 export default function OnboardingPage() {
@@ -40,7 +41,7 @@ function OnboardingFlow() {
   const params = useSearchParams();
   const [submitting, setSubmitting] = useState(false);
   const raw = parseInt(params.get("step") ?? "0", 10);
-  const step = (Number.isFinite(raw) ? Math.min(6, Math.max(0, raw)) : 0) as Step;
+  const step = (Number.isFinite(raw) ? Math.min(7, Math.max(0, raw)) : 0) as Step;
 
   function goTo(n: number) {
     router.push(`/onboarding?step=${n}`);
@@ -67,10 +68,9 @@ function OnboardingFlow() {
   }
 
   function next() {
-    if (step >= 6) {
-      // Step 6 (Install) is the final step. Hitting Continue or
-      // either Skip surface completes onboarding and lands the
-      // user on /dashboard.
+    if (step >= 7) {
+      // Step 7 (Glev-Button) is the final step. Hitting Continue
+      // completes onboarding and lands the user on /dashboard.
       void complete();
       return;
     }
@@ -90,5 +90,6 @@ function OnboardingFlow() {
   if (step === 3) return <EngineStep onNext={next} onBack={back} onSkip={skip} />;
   if (step === 4) return <InsightsStep onNext={next} onBack={back} />;
   if (step === 5) return <CgmStep onSkip={() => goTo(6)} onBack={back} primaryDisabled={submitting} />;
-  return <InstallStep onNext={next} onBack={back} onSkip={skip} />;
+  if (step === 6) return <InstallStep onNext={next} onBack={back} onSkip={skip} />;
+  return <GlevButtonStep onNext={next} onBack={back} />;
 }

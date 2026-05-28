@@ -2803,6 +2803,15 @@
       "method_other_apple_health_body": "Funktioniert mit jedem CGM, das nach Apple Health synct (iOS).",
       "method_other_nightscout_body": "Wenn dein CGM Werte in eine Nightscout-Instanz schreibt."
     },
+    "glevButton": {
+      "headline": "Dein zentraler Button",
+      "sub": "Der Glev-Button in der Mitte der Navigation hat zwei Gesten — lern sie einmal, nutze sie täglich.",
+      "short_title": "Kurz tippen — Spracheingabe & KI-Chat",
+      "short_body": "Einmal kurz tippen öffnet den Sprach-Modus: sprich einfach, was du gegessen hast. Du kannst auch tippen oder nachfragen.",
+      "long_title": "Lang drücken — Schnell-Menü",
+      "long_body": "Halte den Button gedrückt, um das Schnell-Menü zu öffnen: Insulin loggen, Fingertest, Training oder Symptome — ohne in die Navigation zu wechseln.",
+      "done": "Los geht's"
+    },
     "install": {
       "headline": "Glev zum Homescreen hinzufügen",
       "sub": "So fühlt sich Glev wie eine native App an — kein App-Store nötig.",
