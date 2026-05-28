@@ -333,6 +333,12 @@ export default function SettingsPage() {
   const bcp47 = localeToBcp47(uiLocale);
   const [saveError, setSaveError] = useState("");
   const [saving, setSaving] = useState(false);
+  const [clampNotice, setClampNotice] = useState<string | null>(null);
+  // Tracks whether the user typed a value outside a SnapSlider's [min, max]
+  // during the current sheet session. Set by each slider's onRawChange
+  // callback; consumed (and cleared) by saveInsulinAction. Stored as a ref
+  // so it survives renders without triggering re-renders on every keystroke.
+  const pendingClampRef = useRef<{ notice: string } | null>(null);
 
   // Account info for the new "Account" row + sheet (Task #54). Lives on the
   // settings page itself rather than in a separate component because the spec
@@ -628,6 +634,8 @@ export default function SettingsPage() {
     setApptEdits({});
     setPendingLocale(null);
     setSaveError("");
+    setClampNotice(null);
+    pendingClampRef.current = null;
     setOpenSheet(null);
   }, [draftSnapshot]);
 
@@ -678,6 +686,7 @@ export default function SettingsPage() {
           ? { diaMinutes: Math.min(360, Math.max(60, Math.round(settings.diaMinutes))) }
           : {}),
       };
+
       await saveInsulinSettings(clamped);
       // Persist the TIR target range alongside the insulin params so
       // every TIR card across the app (Insights, Today's Summary,
@@ -705,7 +714,14 @@ export default function SettingsPage() {
       setSaved(true);
       setTimeout(() => setSaved(false), 1800);
       setDraftSnapshot(null);
-      return true;
+      // Surface the clamp notice (set by onRawChange callbacks in each
+      // SnapSlider when the user types a value outside [min, max]).
+      // Keep the sheet open so the user can read the notice before
+      // dismissing manually. Return true (close) only when in-range.
+      const clamp = pendingClampRef.current;
+      pendingClampRef.current = null;
+      setClampNotice(clamp ? clamp.notice : null);
+      return !clamp;
     } catch (e) {
       setSaveError(e instanceof Error ? e.message : tSettings("save_failed"));
       return false;
@@ -1196,6 +1212,23 @@ export default function SettingsPage() {
   function SaveFooter({ onSave }: { onSave: () => Promise<boolean> }) {
     return (
       <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+        {clampNotice && (
+          <div
+            data-testid="clamp-notice"
+            style={{
+              fontSize: 13,
+              color: "var(--text-dim)",
+              lineHeight: 1.45,
+              textAlign: "center",
+              padding: "8px 12px",
+              background: "var(--surface-soft)",
+              border: "1px solid var(--border)",
+              borderRadius: 8,
+            }}
+          >
+            {clampNotice}
+          </div>
+        )}
         {saveError && (
           <div style={{ fontSize: 13, color: PINK, lineHeight: 1.4, textAlign: "center" }}>{saveError}</div>
         )}
@@ -1333,6 +1366,12 @@ export default function SettingsPage() {
           <SnapSlider
             value={settings.icr ?? 10}
             onChange={(v) => upd("icr", v)}
+            onRawChange={(raw) => {
+              const clamped = Math.max(5, Math.min(30, raw));
+              pendingClampRef.current = Math.abs(clamped - raw) > 0.001
+                ? { notice: tSettings("clamp_notice", { value: `${clamped} g/IE`, min: 5, max: 30 }) }
+                : null;
+            }}
             min={5}
             max={30}
             step={1}
@@ -1485,6 +1524,12 @@ export default function SettingsPage() {
           <SnapSlider
             value={settings.cf ?? 50}
             onChange={(v) => upd("cf", v)}
+            onRawChange={(raw) => {
+              const clamped = Math.max(10, Math.min(100, raw));
+              pendingClampRef.current = clamped !== raw
+                ? { notice: tSettings("clamp_notice", { value: `${clamped} mg/dL/IE`, min: 10, max: 100 }) }
+                : null;
+            }}
             min={10}
             max={100}
             step={1}
@@ -1525,6 +1570,12 @@ export default function SettingsPage() {
           <SnapSlider
             value={settings.targetBg ?? 100}
             onChange={(v) => upd("targetBg", v)}
+            onRawChange={(raw) => {
+              const clamped = Math.max(60, Math.min(200, raw));
+              pendingClampRef.current = clamped !== raw
+                ? { notice: tSettings("clamp_notice", { value: `${clamped} mg/dL`, min: 60, max: 200 }) }
+                : null;
+            }}
             min={60}
             max={200}
             step={5}
@@ -1565,6 +1616,12 @@ export default function SettingsPage() {
           <SnapSlider
             value={settings.diaMinutes ?? 180}
             onChange={(v) => upd("diaMinutes", v)}
+            onRawChange={(raw) => {
+              const clamped = Math.max(60, Math.min(360, raw));
+              pendingClampRef.current = clamped !== raw
+                ? { notice: tSettings("clamp_notice", { value: `${clamped} min`, min: 60, max: 360 }) }
+                : null;
+            }}
             min={60}
             max={360}
             step={30}

@@ -1462,7 +1462,8 @@
     "ai_page_title": "Glev AI",
     "ai_page_subtitle": "Datenzugriff, Sprache und Verhalten deines KI-Assistenten.",
     "ai_settings_row_subtitle": "Datenzugriff & Verhalten",
-    "ai_settings_back": "Einstellungen"
+    "ai_settings_back": "Einstellungen",
+    "clamp_notice": "Auf {value} korrigiert — erlaubter Bereich {min}–{max}"
   },
   "cgmSettings": {
     "appleHealth": {

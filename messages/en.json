@@ -1462,7 +1462,8 @@
     "ai_page_title": "Glev AI",
     "ai_page_subtitle": "Data access, voice, and chat assistant behaviour.",
     "ai_settings_row_subtitle": "Data access & behaviour",
-    "ai_settings_back": "Settings"
+    "ai_settings_back": "Settings",
+    "clamp_notice": "Adjusted to {value} — allowed range {min}–{max}"
   },
   "cgmSettings": {
     "appleHealth": {

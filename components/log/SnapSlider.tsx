@@ -33,10 +33,16 @@ interface SnapSliderProps {
   decimals?: number;
   /** aria-label for the range input. */
   ariaLabel?: string;
+  /**
+   * Called with the raw parsed value the user typed BEFORE it is clamped
+   * to [min, max]. Only fires in tap-to-edit mode. Use this to detect when
+   * the user typed an out-of-range value so you can show a notice.
+   */
+  onRawChange?: (raw: number) => void;
 }
 
 export default function SnapSlider({
-  value, onChange, min, max, step, unit, accent, decimals, ariaLabel,
+  value, onChange, min, max, step, unit, accent, decimals, ariaLabel, onRawChange,
 }: SnapSliderProps) {
   const lastValueRef = useRef<number>(value);
   const [editing, setEditing] = useState(false);
@@ -97,6 +103,9 @@ export default function SnapSlider({
   function commitDraft() {
     const parsed = Number((draft ?? "").replace(",", "."));
     if (Number.isFinite(parsed)) {
+      // Notify parent of the raw (un-clamped) typed value so it can detect
+      // when the user typed something outside [min, max] and show a notice.
+      onRawChange?.(parsed);
       // Tap-to-edit: keep the user's exact typed value (clamped + rounded
       // to the slider's decimals). Snapping the typed input to the step
       // grid would silently rewrite "127" → "130" for a step=10 slider,
@@ -254,6 +263,10 @@ export default function SnapSlider({
               // 2026-05-18 ("Dauer ändern klappt manchmal nicht").
               const parsed = Number((v ?? "").replace(",", "."));
               if (Number.isFinite(parsed)) {
+                // Notify parent of the raw value on every keystroke —
+                // same as in commitDraft but handles the iOS race where
+                // Save fires before blur/commitDraft runs.
+                onRawChange?.(parsed);
                 const clamped = Math.max(min, Math.min(max, parsed));
                 const rounded = Number(clamped.toFixed(dec));
                 if (rounded !== lastValueRef.current) {

@@ -15,6 +15,10 @@
 //     3. Reloading the page re-fetches from the DB and surfaces the
 //        saved values in the row subtitles (proves the read path,
 //        not just an in-memory state update).
+//   Task #138 adds:
+//     4. When an out-of-range value is typed, a clamp notice appears
+//        in the sheet footer and the sheet stays open so the user can
+//        read it before dismissing.
 //
 // We deliberately drive the picker through the real login flow rather
 // than seeding cookies, so the test catches regressions in any layer
@@ -104,7 +108,17 @@ const ICR_ROW_ARIA = /(Open Insulin-to-Carb Ratio|Insulin-to-Carb Ratio öffnen|
 const CF_ROW_ARIA = /(Open Correction Factor|Correction Factor öffnen|Open Korrekturfaktor|Korrekturfaktor öffnen)/i;
 const TARGET_BG_ROW_ARIA = /(Open Target BG|Target BG öffnen|Open Ziel-BG|Ziel-BG öffnen)/i;
 
+// SnapSlider tap-to-edit readout button: aria-label matches the slider's
+// ariaLabel prop (just the plain label, without "Open"/"öffnen" prefix).
+const ICR_SLIDER_ARIA = /(^Insulin-to-Carb Ratio$|^Insulin-Carb-Verhältnis$)/i;
+const CF_SLIDER_ARIA = /(^Correction Factor$|^Korrekturfaktor$)/i;
+const TARGET_BG_SLIDER_ARIA = /(^Target BG$|^Ziel-BG$)/i;
+
 const SAVE_BUTTON = /^(Save|Speichern|Saving…|Speichere…|✓ Saved!|✓ Gespeichert!)$/;
+
+// The Insulin section is collapsed by default; every test that touches
+// ICR / CF / target BG must expand it first.
+const INSULIN_EXPAND_ARIA = /(Expand insulin settings|Insulin-Einstellungen aufklappen)/i;
 
 async function loginAsTestUser(page: Page) {
   const { email, password } = loadTestUser();
@@ -118,26 +132,46 @@ async function loginAsTestUser(page: Page) {
 }
 
 /**
- * Open a settings row by its aria regex, type the given value into
- * the first numeric input in the bottom sheet, click Save, and wait
- * for the sheet to close. The sheet dismisses on a successful save
- * (the SaveFooter calls setOpenSheet(null) when onSave returns true),
- * so we wait for the row button to be visible again as the signal
- * the sheet has closed.
+ * Navigate to /settings and expand the Insulin section.
+ * The section is collapsed by default; ICR / CF / target BG rows are
+ * only rendered once it is open.
  */
-async function editNumericRow(page: Page, rowAria: RegExp, value: number) {
+async function goToSettingsAndExpandInsulin(page: Page) {
+  await page.goto("/settings");
+  const expandBtn = page.getByRole("button", { name: INSULIN_EXPAND_ARIA });
+  await expect(expandBtn).toBeVisible({ timeout: 15_000 });
+  await expandBtn.click();
+  await expect(expandBtn).toHaveAttribute("aria-expanded", "true", { timeout: 5_000 });
+}
+
+/**
+ * Open a settings row that uses a SnapSlider, edit the value via the
+ * tap-to-edit readout, save, and wait for the sheet to close.
+ *
+ * Use for in-range values only — no clamp notice is expected and the
+ * sheet must close before the function returns.
+ */
+async function editSliderRow(
+  page: Page,
+  rowAria: RegExp,
+  sliderAria: RegExp,
+  value: number,
+) {
   const row = page.getByRole("button", { name: rowAria });
-  await expect(row).toBeVisible();
+  await expect(row).toBeVisible({ timeout: 15_000 });
   await row.click();
-  // The sheet body's only number input is the one we're editing.
+
+  const readout = page.getByRole("button", { name: sliderAria });
+  await expect(readout).toBeVisible({ timeout: 10_000 });
+  await readout.click();
+
   const input = page.locator('input[type="number"]').first();
   await expect(input).toBeVisible();
   await input.fill(String(value));
+  await input.press("Enter");
+
   await page.getByRole("button", { name: SAVE_BUTTON }).first().click();
-  // The sheet closes on success — wait for the input to disappear so
-  // the next row open doesn't race with the previous sheet's
-  // unmount animation.
-  await expect(input).toBeHidden({ timeout: 10_000 });
+  await expect(readout).toBeHidden({ timeout: 10_000 });
 }
 
 test.describe("Settings → Insulin parameters round-trip", () => {
@@ -169,17 +203,17 @@ test.describe("Settings → Insulin parameters round-trip", () => {
       target_bg_mgdl: null,
     });
 
-    await page.goto("/settings");
+    await goToSettingsAndExpandInsulin(page);
 
     // The three rows should exist in the Insulin section.
     await expect(page.getByRole("button", { name: ICR_ROW_ARIA })).toBeVisible();
     await expect(page.getByRole("button", { name: CF_ROW_ARIA })).toBeVisible();
     await expect(page.getByRole("button", { name: TARGET_BG_ROW_ARIA })).toBeVisible();
 
-    // ---- EDIT EACH ROW ----------------------------------------------
-    await editNumericRow(page, ICR_ROW_ARIA, 12);
-    await editNumericRow(page, CF_ROW_ARIA, 60);
-    await editNumericRow(page, TARGET_BG_ROW_ARIA, 105);
+    // ---- EDIT EACH ROW (all values within allowed range) ------------
+    await editSliderRow(page, ICR_ROW_ARIA, ICR_SLIDER_ARIA, 12);
+    await editSliderRow(page, CF_ROW_ARIA, CF_SLIDER_ARIA, 60);
+    await editSliderRow(page, TARGET_BG_ROW_ARIA, TARGET_BG_SLIDER_ARIA, 105);
 
     // ---- DB PERSISTENCE ---------------------------------------------
     // Poll defensively in case the optimistic UI update runs ahead of
@@ -207,23 +241,64 @@ test.describe("Settings → Insulin parameters round-trip", () => {
     await expect(page.getByText("105 mg/dL")).toBeVisible();
   });
 
-  test("out-of-range inputs are clamped before being persisted", async ({ page }) => {
+  test("out-of-range inputs are clamped and a notice is shown", async ({ page }) => {
     await loginAsTestUser(page);
-    await page.goto("/settings");
+    await goToSettingsAndExpandInsulin(page);
 
-    // ICR clamp: max 100 (migration CHECK 1..100). Typing 999 should
-    // store 100 and surface "1:100 g/U" in the subtitle after save.
-    await editNumericRow(page, ICR_ROW_ARIA, 999);
-    // Target BG clamp: min 60 (migration CHECK 60..200). Typing 30
-    // should store 60.
-    await editNumericRow(page, TARGET_BG_ROW_ARIA, 30);
+    // ── ICR clamp: SnapSlider max = 30. Typing 999 should store 30,
+    //   keep the sheet open, and surface a [data-testid="clamp-notice"].
+    const icrRow = page.getByRole("button", { name: ICR_ROW_ARIA });
+    await expect(icrRow).toBeVisible({ timeout: 10_000 });
+    await icrRow.click();
 
+    const icrReadout = page.getByRole("button", { name: ICR_SLIDER_ARIA });
+    await expect(icrReadout).toBeVisible({ timeout: 10_000 });
+    await icrReadout.click();
+
+    const icrInput = page.locator('input[type="number"]').first();
+    await expect(icrInput).toBeVisible();
+    await icrInput.fill("999");
+    await icrInput.press("Enter");
+
+    await page.getByRole("button", { name: SAVE_BUTTON }).first().click();
+
+    // The sheet must stay open and show the clamp notice.
+    await expect(page.getByTestId("clamp-notice")).toBeVisible({ timeout: 5_000 });
+
+    // Close the sheet manually before moving on.
+    await page.getByRole("button", { name: "Close" }).click();
+    await expect(icrReadout).toBeHidden({ timeout: 10_000 });
+
+    // ── Target BG clamp: SnapSlider min = 60. Typing 30 should store 60,
+    //   keep the sheet open, and surface the clamp notice.
+    const targetBgRow = page.getByRole("button", { name: TARGET_BG_ROW_ARIA });
+    await expect(targetBgRow).toBeVisible({ timeout: 10_000 });
+    await targetBgRow.click();
+
+    const targetBgReadout = page.getByRole("button", { name: TARGET_BG_SLIDER_ARIA });
+    await expect(targetBgReadout).toBeVisible({ timeout: 10_000 });
+    await targetBgReadout.click();
+
+    const targetBgInput = page.locator('input[type="number"]').first();
+    await expect(targetBgInput).toBeVisible();
+    await targetBgInput.fill("30");
+    await targetBgInput.press("Enter");
+
+    await page.getByRole("button", { name: SAVE_BUTTON }).first().click();
+
+    // Clamp notice must appear again (sheet stays open).
+    await expect(page.getByTestId("clamp-notice")).toBeVisible({ timeout: 5_000 });
+
+    await page.getByRole("button", { name: "Close" }).click();
+    await expect(targetBgReadout).toBeHidden({ timeout: 10_000 });
+
+    // ── DB should contain the clamped values --------------------------
     await expect.poll(
       () => readInsulinSettings(testUser.userId),
       { timeout: 10_000 },
     ).toMatchObject({
-      icr_g_per_unit: 100,
-      target_bg_mgdl: 60,
+      icr_g_per_unit: 30,   // clamped from 999 to slider max 30
+      target_bg_mgdl: 60,   // clamped from 30 to slider min 60
     });
   });
 });
