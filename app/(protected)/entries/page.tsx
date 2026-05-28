@@ -4427,6 +4427,7 @@ function SymptomRowCard({ log, isOpen, onToggle, onDelete, deleting, onUpdated }
       primaryMono
       secondaryLabel={tx("row_symptoms")}
       secondaryValue={typesValue}
+      secondarySubtitle={log.cgm_glucose_at_log != null ? `${log.cgm_glucose_at_log} mg/dL` : undefined}
       expandedDetails={editing ? (
         <SymptomEditor
           log={log}
@@ -4479,6 +4480,20 @@ function SymptomRowCard({ log, isOpen, onToggle, onDelete, deleting, onUpdated }
               </div>
             )}
           </ExPanel>
+          {log.cgm_glucose_at_log != null && (
+            <div style={{
+              display:"flex", alignItems:"center", justifyContent:"space-between",
+              background:"var(--surface-soft)", border:`1px solid ${BORDER}`,
+              borderRadius:10, padding:"10px 12px",
+            }}>
+              <div style={{ fontSize:11, color:"var(--text-faint)", letterSpacing:"0.08em", fontWeight:600, textTransform:"uppercase" }}>
+                {t("stat_cgm_at_log")}
+              </div>
+              <div style={{ fontSize:14, fontWeight:700, color:SYMPTOM_ACCENT, fontFamily:"var(--font-mono)" }}>
+                {log.cgm_glucose_at_log} mg/dL
+              </div>
+            </div>
+          )}
           {log.notes && (
             <div style={{ background:"var(--surface-soft)", border:`1px solid ${BORDER}`, borderRadius:10, padding:"10px 12px" }}>
               <div style={{ fontSize:11, color:"var(--text-faint)", letterSpacing:"0.08em", fontWeight:600, marginBottom:4 }}>{tx("ex_notes_label")}</div>
