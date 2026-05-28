@@ -22,6 +22,7 @@
 //   `tests/unit/*.test.ts` alongside the existing e2e specs.
 
 import { test, expect } from "@playwright/test";
+import { readFileSync } from "node:fs";
 
 import { lifecycleFor } from "@/lib/engine/lifecycle";
 import { resolveDisplayedOutcome } from "@/lib/engine/resolveDisplayedOutcome";
@@ -352,12 +353,12 @@ test("cache-drift: had_hypo_window=true overrides cached evaluation='GOOD' → H
 });
 
 test("cache-drift: entries-page reconcile pattern uses live outcome, not cached evaluation", () => {
-  // Imports and calls the ACTUAL production helper used by
-  // app/(protected)/entries/page.tsx:
-  //   import { resolveDisplayedOutcome } from "@/lib/engine/resolveDisplayedOutcome";
-  //   const ev = resolveDisplayedOutcome(m);
-  // This test FAILS if resolveDisplayedOutcome is changed to return
-  // meal.evaluation directly instead of preferring the live lifecycleFor result.
+  // Calls the ACTUAL production helper used by app/(protected)/entries/page.tsx:
+  //   const mLc = lifecycleFor(m);
+  //   const ev  = resolveDisplayedOutcome(mLc, m);
+  // The helper accepts the already-computed LifecycleResult to avoid a
+  // double lifecycleFor call. This test FAILS if resolveDisplayedOutcome
+  // is changed to return meal.evaluation directly.
   const meal = makeMeal({
     evaluation: "GOOD",
     had_hypo_window: true,
@@ -366,8 +367,9 @@ test("cache-drift: entries-page reconcile pattern uses live outcome, not cached 
     bg_2h_at: atOffset(120),
   });
 
-  // resolveDisplayedOutcome IS the production code path — not a re-implementation.
-  const displayedOutcome = resolveDisplayedOutcome(meal);
+  const lc = lifecycleFor(meal, NOW, SETTINGS);
+  // resolveDisplayedOutcome(lc, meal) IS the production code path.
+  const displayedOutcome = resolveDisplayedOutcome(lc, meal);
 
   expect(displayedOutcome).toBe("HYPO_DURING");
   expect(displayedOutcome).not.toBe(meal.evaluation); // "GOOD" must lose
@@ -415,7 +417,53 @@ test("cache-drift: min_bg_180 < 70 also triggers HYPO_DURING without had_hypo_wi
   expect(lc.state).toBe("final");
   expect(lc.outcome).toBe("HYPO_DURING");
   // resolveDisplayedOutcome (the actual entries-page helper) still returns live outcome:
-  const displayedOutcome = resolveDisplayedOutcome(meal);
+  const displayedOutcome = resolveDisplayedOutcome(lc, meal);
   expect(displayedOutcome).toBe("HYPO_DURING");
   expect(displayedOutcome).not.toBe(meal.evaluation);
+});
+
+/* ──────────────────────────────────────────────────────────────────
+   Source-wiring guards (Task #261).
+
+   These tests read the real production source files and assert that
+   the helpers extracted above are actually *imported and called* at
+   the correct sites.  If someone reverts a production file to use
+   `m.evaluation` or removes the `shouldWrite` guard, THESE tests
+   catch the regression — even if the helper unit tests still pass.
+   ────────────────────────────────────────────────────────────────── */
+
+test("cache-drift wiring: entries/page.tsx imports resolveDisplayedOutcome and calls it with (mLc, m)", () => {
+  // Read the actual entries page source — not a mock.
+  const src = readFileSync("app/(protected)/entries/page.tsx", "utf-8");
+
+  // The helper MUST be imported (line 36).
+  expect(src).toContain("resolveDisplayedOutcome");
+  expect(src).toContain("from \"@/lib/engine/resolveDisplayedOutcome\"");
+
+  // The page MUST call it with the already-computed lifecycle result and the
+  // meal object — not call `lifecycleFor` a second time or read `m.evaluation`.
+  // Pattern: resolveDisplayedOutcome(mLc, m)
+  expect(src).toMatch(/resolveDisplayedOutcome\s*\(\s*mLc\s*,\s*m\s*\)/);
+
+  // The assignment `const ev = m.evaluation` must NOT appear anywhere
+  // (that would be the bare-cache regression).
+  expect(src).not.toMatch(/const\s+ev\s*=\s*m\.evaluation\b/);
+});
+
+test("cache-drift wiring: cgm-jobs/process/route.ts imports reconcileEvaluation and gates DB write on shouldWrite", () => {
+  // Read the actual cgm-jobs route — not a mock.
+  const src = readFileSync("app/api/cgm-jobs/process/route.ts", "utf-8");
+
+  // The helper MUST be imported (dynamic import on the hot path).
+  expect(src).toContain("reconcileEvaluation");
+  expect(src).toContain("reconcileEvaluation");
+
+  // The route MUST destructure shouldWrite from the helper call.
+  expect(src).toMatch(/reconcileEvaluation\s*\(/);
+  expect(src).toContain("shouldWrite");
+
+  // The DB update MUST be conditional on shouldWrite — not always fire.
+  // Pattern: if (shouldWrite) { ... admin.from("meals").update( ...
+  expect(src).toMatch(/if\s*\(\s*shouldWrite\s*\)/);
+  expect(src).toContain("admin.from(\"meals\").update(");
 });

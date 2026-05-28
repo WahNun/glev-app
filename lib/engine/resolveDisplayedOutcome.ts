@@ -10,18 +10,21 @@
  * Using `meal.evaluation` directly would cause the chip and the OUTCOME
  * card to disagree (the bug fixed by Task #253).
  *
+ * Signature accepts the ALREADY-COMPUTED LifecycleResult so the caller
+ * (entries/page.tsx) can reuse the same object for both the chip and the
+ * displayed outcome without running `lifecycleFor` twice.
+ *
  * Contract:
- *   - Returns the live `lifecycleFor` outcome when the engine has a
- *     definitive verdict (curve present OR bg_2h inside window).
+ *   - Returns `lc.outcome` when the engine has a definitive verdict
+ *     (curve present OR bg_2h inside window).
  *   - Falls back to `meal.evaluation` only when the lifecycle is pending /
  *     outside-window / pre-curve (i.e. `lc.outcome === null`).
  *   - Returns `null` when neither source has an outcome yet.
  */
 
+import type { LifecycleResult } from "./lifecycle";
 import type { Meal } from "@/lib/meals";
-import { lifecycleFor } from "./lifecycle";
 
-export function resolveDisplayedOutcome(meal: Meal): string | null {
-  const lc = lifecycleFor(meal);
+export function resolveDisplayedOutcome(lc: LifecycleResult, meal: Meal): string | null {
   return lc.outcome ?? meal.evaluation;
 }

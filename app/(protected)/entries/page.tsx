@@ -1204,7 +1204,7 @@ export default function EntriesPage() {
             // outcome and fall back to the cache only when the lifecycle
             // has nothing to say (pending / outside-window / pre-curve).
             const mLc = lifecycleFor(m);
-            const ev = resolveDisplayedOutcome(m);
+            const ev = resolveDisplayedOutcome(mLc, m);
             const date = parseDbDate(m.meal_time ?? m.created_at);
             const dateStr = date.toLocaleDateString(locale, { month:"short", day:"numeric" });
             const totalProt = m.protein_grams ?? (Array.isArray(m.parsed_json) ? m.parsed_json.reduce((s,f)=>s+(f.protein||0),0) : 0);
