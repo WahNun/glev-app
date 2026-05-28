@@ -21,7 +21,13 @@ import {
   day7InsightsEmail,
   day14FeedbackEmail,
   day30TrustpilotEmail,
+  trialDay6ReminderEmail,
+  trialExpiredEmail,
 } from "@/lib/emails/drip-templates";
+import {
+  trialWelcomeHtml,
+  trialWelcomeSubject,
+} from "@/lib/emails/trial-welcome";
 import { isAdminAuthed, loginAction } from "./actions";
 import EmailPreview, { type TemplateOption } from "./EmailPreview";
 
@@ -181,6 +187,44 @@ function buildTemplates(
         locale,
       ),
     },
+    {
+      key: "trial-welcome",
+      label: isEn ? "Free Trial — Welcome (Day 0, Outbox)" : "Free Trial — Welcome (Tag 0, Outbox)",
+      whenSent: isEn
+        ? "Day 0 via reliable outbox queue — sent when POST /api/auth/free-trial is called"
+        : "Tag 0 über zuverlässige Outbox-Queue — wird bei POST /api/auth/free-trial verschickt",
+      subject: trialWelcomeSubject(name, locale),
+      html: trialWelcomeHtml(
+        name,
+        new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+        appUrl,
+        locale,
+      ),
+    },
+    (() => {
+      const r = trialDay6ReminderEmail(name, email, locale);
+      return {
+        key: "trial-day6",
+        label: isEn ? "Free Trial — Day 6 (Reminder)" : "Free Trial — Tag 6 (Erinnerung)",
+        whenSent: isEn
+          ? "6 days after trial start — drip cron at 09:00 UTC"
+          : "6 Tage nach Trial-Start — Drip-Cron um 09:00 UTC",
+        subject: r.subject,
+        html: r.html,
+      };
+    })(),
+    (() => {
+      const r = trialExpiredEmail(name, email, locale);
+      return {
+        key: "trial-expired",
+        label: isEn ? "Free Trial — Day 7 (Expired)" : "Free Trial — Tag 7 (Abgelaufen)",
+        whenSent: isEn
+          ? "7 days after trial start — drip cron at 09:00 UTC"
+          : "7 Tage nach Trial-Start — Drip-Cron um 09:00 UTC",
+        subject: r.subject,
+        html: r.html,
+      };
+    })(),
     {
       key: "drip-day7",
       label: isEn ? "Drip — Day 7 (Insights)" : "Drip — Tag 7 (Insights)",

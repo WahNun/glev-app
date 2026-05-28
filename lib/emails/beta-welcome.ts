@@ -47,8 +47,8 @@ function betaWelcomeHtmlDe(
 ): string {
   const greeting = first ? `Hallo ${first}` : 'Hallo';
   const congratsLine = first
-    ? `herzlichen Glückwunsch, ${first} — du bist jetzt offiziell ein Beta-Tester von Glev!`
-    : 'herzlichen Glückwunsch — du bist jetzt offiziell ein Beta-Tester von Glev!';
+    ? `herzlichen Glückwunsch, ${first} — du hast jetzt Zugang zu Glev Smart!`
+    : 'herzlichen Glückwunsch — du hast jetzt Zugang zu Glev Smart!';
   const ctaCaption = first
     ? `${first}, der Link funktioniert auch, wenn du den ursprünglichen Tab geschlossen hast.`
     : 'Der Link funktioniert auch, wenn du den ursprünglichen Tab geschlossen hast.';
@@ -84,7 +84,7 @@ function betaWelcomeHtmlDe(
 
               <p style="margin:0 0 16px;font-size:15px;line-height:1.7;color:#374151;">
                 ${congratsLine}
-                Deine Zahlung wurde erfolgreich verarbeitet und dein Beta-Zugang ist
+                Deine Zahlung wurde erfolgreich verarbeitet und dein Glev Smart-Zugang ist
                 <strong>aktiviert</strong>.
               </p>
 
@@ -132,7 +132,7 @@ function betaWelcomeHtmlDe(
           <tr>
             <td style="padding:20px 40px;border-top:1px solid #f1f5f9;">
               <p style="margin:0;font-size:12px;color:#9ca3af;text-align:center;">
-                Glev · <a href="mailto:hello@glev.app" style="color:#9ca3af;">hello@glev.app</a> · Diese E-Mail wurde an dich geschickt, weil du dich als Beta-Tester angemeldet hast.
+                Glev · <a href="mailto:hello@glev.app" style="color:#9ca3af;">hello@glev.app</a> · Diese E-Mail wurde an dich geschickt, weil du dich bei Glev Smart registriert hast.
               </p>
             </td>
           </tr>
@@ -152,8 +152,8 @@ function betaWelcomeHtmlEn(
 ): string {
   const greeting = first ? `Hi ${first}` : 'Hi there';
   const congratsLine = first
-    ? `congratulations, ${first} — you're officially a Glev beta tester!`
-    : "congratulations — you're officially a Glev beta tester!";
+    ? `congratulations, ${first} — you now have access to Glev Smart!`
+    : "congratulations — you now have access to Glev Smart!";
   const ctaCaption = first
     ? `${first}, this link still works even if you closed the original tab.`
     : 'This link still works even if you closed the original tab.';
@@ -187,7 +187,7 @@ function betaWelcomeHtmlEn(
 
               <p style="margin:0 0 16px;font-size:15px;line-height:1.7;color:#374151;">
                 ${congratsLine}
-                Your payment went through and your beta access is
+                Your payment went through and your Glev Smart access is
                 <strong>active</strong>.
               </p>
 
@@ -235,7 +235,7 @@ function betaWelcomeHtmlEn(
           <tr>
             <td style="padding:20px 40px;border-top:1px solid #f1f5f9;">
               <p style="margin:0;font-size:12px;color:#9ca3af;text-align:center;">
-                Glev · <a href="mailto:hello@glev.app" style="color:#9ca3af;">hello@glev.app</a> · You're receiving this email because you signed up as a Glev beta tester.
+                Glev · <a href="mailto:hello@glev.app" style="color:#9ca3af;">hello@glev.app</a> · You're receiving this email because you signed up for Glev Smart.
               </p>
             </td>
           </tr>

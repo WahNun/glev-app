@@ -1,38 +1,21 @@
 import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
-import { isAdminAuthed, loginAction } from "./actions";
+import { isAdminAuthed, loginAction, createMetaLeadAction } from "./actions";
 import BuyersTables, { type BetaRow, type ProRow } from "./BuyersTables";
 import DuplicateSignups from "./DuplicateSignups";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-/**
- * Internal admin / support lookup view for the two buyer tables
- * (`beta_reservations` + `pro_subscriptions`).
- *
- * Built so support staff can resolve refund / onboarding questions without
- * SSH'ing into the DB. Surfaces both the `email` and the `full_name` that
- * task #70 added (collected via the mandatory Stripe Checkout custom field
- * from task #68 and persisted by the webhooks).
- *
- * Auth: we reuse the existing `ADMIN_API_SECRET` Bearer-token pattern from
- * `/api/admin/invite` — the operator pastes the secret once into a login
- * form, we constant-time-compare and stash it in an httpOnly cookie scoped
- * to `/admin`. No Supabase user session involved on purpose: this view uses
- * the service role to read both tables (RLS is intentionally disabled on
- * them) so we cannot piggy-back on the user-facing auth.
- *
- * Paging & search (task #156):
- * - When `?q=` is non-empty the server runs a full-table ilike search against
- *   email OR full_name and returns all matching rows (no cap).
- * - When `?q=` is absent/empty the server returns PAGE_LIMIT rows at a time,
- *   ordered newest-first, with exact total counts for prev/next navigation via
- *   `?page=N`.
- * - The section headings always make it clear how many rows are shown and
- *   whether that is a page slice or a full search result.
- */
-
 const PAGE_LIMIT = 200;
+
+export type TrialRow = {
+  userId: string;
+  email: string;
+  fullName: string | null;
+  trialEndAt: string | null;
+  signupSource: string | null;
+  createdAt: string | null;
+};
 
 export default async function AdminBuyersPage({
   searchParams,
@@ -82,9 +65,12 @@ export default async function AdminBuyersPage({
   const page = Math.max(1, parseInt(rawPage ?? "1", 10) || 1);
   const offset = (page - 1) * PAGE_LIMIT;
 
+  const createdParam = Array.isArray(sp.created) ? sp.created[0] : sp.created;
+  const leadErrParam = Array.isArray(sp.lead_err) ? sp.lead_err[0] : sp.lead_err;
+
   const sb = getSupabaseAdmin();
 
-  const [betaRes, proRes] = await Promise.all([
+  const [betaRes, proRes, trialProfilesRes, authUsersRes] = await Promise.all([
     (() => {
       let query = sb
         .from("beta_reservations")
@@ -115,6 +101,13 @@ export default async function AdminBuyersPage({
       }
       return query;
     })(),
+    sb
+      .from("profiles")
+      .select("user_id, trial_end_at, signup_source, created_at")
+      .not("trial_end_at", "is", null)
+      .order("created_at", { ascending: false })
+      .limit(200),
+    sb.auth.admin.listUsers({ perPage: 1000 }),
   ]);
 
   const betaErr = betaRes.error?.message ?? null;
@@ -124,11 +117,137 @@ export default async function AdminBuyersPage({
   const betaTotal = betaRes.count ?? beta.length;
   const proTotal = proRes.count ?? pro.length;
 
+  const authUserMap = new Map(
+    (authUsersRes.data?.users ?? []).map((u) => [u.id, u]),
+  );
+  const trialUsers: TrialRow[] = (trialProfilesRes.data ?? []).map((p) => {
+    const u = authUserMap.get(p.user_id);
+    return {
+      userId: p.user_id,
+      email: u?.email ?? "—",
+      fullName: (u?.user_metadata?.full_name as string | null) ?? null,
+      trialEndAt: p.trial_end_at as string | null,
+      signupSource: p.signup_source as string | null,
+      createdAt: (u?.created_at ?? p.created_at) as string | null,
+    };
+  });
+
+  const now = new Date();
+
   return (
     <main style={pageStyle}>
       <h1 style={{ fontSize: 22, margin: "0 0 16px" }}>
         Glev Support — Käuferübersicht
       </h1>
+
+      {/* ── Meta-Lead anlegen ─────────────────────────────────── */}
+      <section style={cardStyle}>
+        <h2 style={{ fontSize: 16, fontWeight: 700, margin: "0 0 12px" }}>
+          Meta-Lead anlegen — 7-Tage Trial
+        </h2>
+        {createdParam === "1" && (
+          <p style={{ color: "#166534", background: "#dcfce7", padding: "8px 12px", borderRadius: 6, fontSize: 14, marginBottom: 12 }}>
+            ✓ Account angelegt. Supabase hat einen Setup-Link an die E-Mail-Adresse geschickt. Drip-Mails (Tag 6 + 7) sind scheduliert.
+          </p>
+        )}
+        {leadErrParam && (
+          <p style={{ color: "#c00", fontSize: 14, marginBottom: 12 }}>
+            Fehler: {leadErrParam === "invalid_email" ? "Ungültige E-Mail-Adresse." : leadErrParam === "create_failed" ? "Account konnte nicht angelegt werden." : leadErrParam}
+          </p>
+        )}
+        <form action={createMetaLeadAction} style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "flex-end" }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+            <label style={{ fontSize: 12, color: "#666" }}>Name (optional)</label>
+            <input
+              name="name"
+              type="text"
+              placeholder="Lena Müller"
+              style={inputStyle}
+            />
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+            <label style={{ fontSize: 12, color: "#666" }}>E-Mail *</label>
+            <input
+              name="email"
+              type="email"
+              required
+              placeholder="lead@beispiel.de"
+              style={inputStyle}
+            />
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+            <label style={{ fontSize: 12, color: "#666" }}>Sprache</label>
+            <select name="locale" style={inputStyle}>
+              <option value="de">DE</option>
+              <option value="en">EN</option>
+            </select>
+          </div>
+          <button type="submit" style={btnStyle}>
+            Trial starten →
+          </button>
+        </form>
+      </section>
+
+      {/* ── 7-Tage-Trial — CRM ───────────────────────────────── */}
+      <section style={{ marginBottom: 40 }}>
+        <h2 style={{ fontSize: 17, fontWeight: 700, margin: "0 0 10px" }}>
+          7-Tage Trial{" "}
+          <span style={{ fontSize: 13, fontWeight: 400, color: "#666" }}>
+            ({trialUsers.length} Einträge)
+          </span>
+        </h2>
+        {trialUsers.length === 0 ? (
+          <p style={{ color: "#888", fontSize: 14 }}>Noch keine Trial-User.</p>
+        ) : (
+          <div style={{ overflowX: "auto" }}>
+            <table style={tableStyle}>
+              <thead>
+                <tr style={{ background: "#f9fafb" }}>
+                  <Th>E-Mail</Th>
+                  <Th>Name</Th>
+                  <Th>Quelle</Th>
+                  <Th>Trial endet</Th>
+                  <Th>Status</Th>
+                  <Th>Angelegt</Th>
+                </tr>
+              </thead>
+              <tbody>
+                {trialUsers.map((u) => {
+                  const end = u.trialEndAt ? new Date(u.trialEndAt) : null;
+                  const expired = end ? end < now : false;
+                  const daysLeft = end
+                    ? Math.ceil((end.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
+                    : null;
+                  return (
+                    <tr key={u.userId} style={{ borderBottom: "1px solid #f1f5f9" }}>
+                      <Td>{u.email}</Td>
+                      <Td>{u.fullName ?? "—"}</Td>
+                      <Td>
+                        {u.signupSource === "meta_lead" ? (
+                          <span style={badgeMeta}>Meta Lead</span>
+                        ) : (
+                          <span style={badgeDefault}>{u.signupSource ?? "Direktanmeldung"}</span>
+                        )}
+                      </Td>
+                      <Td>{end ? fmtDate(u.trialEndAt) : "—"}</Td>
+                      <Td>
+                        {expired ? (
+                          <span style={badgeExpired}>Abgelaufen</span>
+                        ) : daysLeft !== null ? (
+                          <span style={badgeActive}>Aktiv · noch {daysLeft}d</span>
+                        ) : (
+                          "—"
+                        )}
+                      </Td>
+                      <Td>{fmtDate(u.createdAt)}</Td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
 
       {betaErr ? <p style={errStyle}>Beta DB-Fehler: {betaErr}</p> : null}
       {proErr ? <p style={errStyle}>Pro DB-Fehler: {proErr}</p> : null}
@@ -148,6 +267,29 @@ export default async function AdminBuyersPage({
   );
 }
 
+function Th({ children }: { children: React.ReactNode }) {
+  return (
+    <th style={{ padding: "8px 12px", fontSize: 12, fontWeight: 600, color: "#6b7280", textAlign: "left", whiteSpace: "nowrap" }}>
+      {children}
+    </th>
+  );
+}
+
+function Td({ children }: { children: React.ReactNode }) {
+  return (
+    <td style={{ padding: "8px 12px", fontSize: 13, color: "#111", verticalAlign: "middle" }}>
+      {children}
+    </td>
+  );
+}
+
+function fmtDate(v: string | null | undefined): string {
+  if (!v) return "—";
+  const d = new Date(v);
+  if (Number.isNaN(d.getTime())) return "—";
+  return d.toISOString().slice(0, 16).replace("T", " ");
+}
+
 const pageStyle: React.CSSProperties = {
   fontFamily: "system-ui, -apple-system, sans-serif",
   padding: 24,
@@ -158,16 +300,34 @@ const pageStyle: React.CSSProperties = {
   minHeight: "100vh",
 };
 
+const cardStyle: React.CSSProperties = {
+  border: "1px solid #e5e7eb",
+  borderRadius: 10,
+  padding: "18px 20px",
+  marginBottom: 32,
+  background: "#fafafa",
+};
+
+const tableStyle: React.CSSProperties = {
+  width: "100%",
+  borderCollapse: "collapse",
+  fontSize: 13,
+  border: "1px solid #e5e7eb",
+  borderRadius: 8,
+  overflow: "hidden",
+};
+
 const inputStyle: React.CSSProperties = {
-  padding: "10px 12px",
+  padding: "8px 12px",
   border: "1px solid #ccc",
   borderRadius: 6,
   fontSize: 14,
   fontFamily: "inherit",
+  minWidth: 200,
 };
 
 const btnStyle: React.CSSProperties = {
-  padding: "10px 16px",
+  padding: "9px 18px",
   background: "#111",
   color: "#fff",
   border: "none",
@@ -181,4 +341,39 @@ const errStyle: React.CSSProperties = {
   color: "#c00",
   fontSize: 14,
   margin: "0 0 8px",
+};
+
+const badgeMeta: React.CSSProperties = {
+  background: "#eff6ff",
+  color: "#1d4ed8",
+  border: "1px solid #bfdbfe",
+  borderRadius: 4,
+  padding: "2px 7px",
+  fontSize: 11,
+  fontWeight: 600,
+};
+
+const badgeDefault: React.CSSProperties = {
+  background: "#f3f4f6",
+  color: "#6b7280",
+  borderRadius: 4,
+  padding: "2px 7px",
+  fontSize: 11,
+};
+
+const badgeActive: React.CSSProperties = {
+  background: "#dcfce7",
+  color: "#166534",
+  borderRadius: 4,
+  padding: "2px 7px",
+  fontSize: 11,
+  fontWeight: 600,
+};
+
+const badgeExpired: React.CSSProperties = {
+  background: "#fef2f2",
+  color: "#991b1b",
+  borderRadius: 4,
+  padding: "2px 7px",
+  fontSize: 11,
 };
