@@ -204,6 +204,23 @@ export default async function RootLayout({ children }: { children: React.ReactNo
             on the closing brace and `window.fbq` ends up undefined in
             production). `dangerouslySetInnerHTML` ships the script
             body verbatim. */}
+        {/* Google Analytics — loads after hydration, never blocks paint */}
+        <Script
+          src="https://www.googletagmanager.com/gtag/js?id=G-8E5V490XP9"
+          strategy="afterInteractive"
+        />
+        <Script
+          id="google-analytics"
+          strategy="afterInteractive"
+          dangerouslySetInnerHTML={{
+            __html: `
+              window.dataLayer = window.dataLayer || [];
+              function gtag(){dataLayer.push(arguments);}
+              gtag('js', new Date());
+              gtag('config', 'G-8E5V490XP9');
+            `,
+          }}
+        />
         <Script
           id="meta-pixel"
           strategy="afterInteractive"
