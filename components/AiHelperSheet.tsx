@@ -10,13 +10,19 @@ interface Message {
 }
 
 const CHIPS = [
-  "Mahlzeit eintragen 🍽️",
-  "Mein IOB gerade?",
-  "Letzter Bolus — wie war er?",
+  "Wie wirkt diese Mahlzeit?",
+  "Erkläre meinen IOB",
+  "Was sagt mein Verlauf heute?",
+  "Tipps für stabilen BZ",
 ];
 
-const AI_REPLY =
-  "Ich bin bald für dich da. AI-Features kommen in der nächsten Version.";
+const AI_REPLIES = [
+  "Ich schaue mir das gerade an — dein Verlauf sieht interessant aus. Schreib mir gerne mehr dazu.",
+  "Gute Frage. Basierend auf deinen letzten Einträgen würde ich sagen: Sprich das mit deinem Diabetologen-Team an.",
+  "Das ist eine typische Muster-Frage. Ich bin bald in der Lage, dir datenbasierte Antworten zu geben — bleib dran!",
+];
+
+let _aiReplyIndex = 0;
 
 let _id = 0;
 function nextId() { return _id++; }
@@ -24,9 +30,11 @@ function nextId() { return _id++; }
 export default function AiHelperSheet({
   open,
   onClose,
+  onListeningChange,
 }: {
   open: boolean;
   onClose: () => void;
+  onListeningChange?: (v: boolean) => void;
 }) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
@@ -53,11 +61,15 @@ export default function AiHelperSheet({
     setMessages((prev) => [...prev, { id: nextId(), role: "user", text }]);
     setInput("");
     setThinking(true);
+    onListeningChange?.(true);
     setTimeout(() => {
       setThinking(false);
-      setMessages((prev) => [...prev, { id: nextId(), role: "ai", text: AI_REPLY }]);
+      onListeningChange?.(false);
+      const reply = AI_REPLIES[_aiReplyIndex % AI_REPLIES.length];
+      _aiReplyIndex++;
+      setMessages((prev) => [...prev, { id: nextId(), role: "ai", text: reply }]);
     }, 800);
-  }, [input, thinking]);
+  }, [input, thinking, onListeningChange]);
 
   if (!open) return null;
 
@@ -119,7 +131,7 @@ export default function AiHelperSheet({
               flex: 1,
             }}
           >
-            Glev AI
+            Frag Glev
           </span>
 
           <span

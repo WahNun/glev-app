@@ -1,7 +1,6 @@
 "use client";
 
 import styles from "./GlevAIButton.module.css";
-import GlevLogo from "./GlevLogo";
 
 interface GlevAIButtonProps {
   onPress: () => void;
@@ -33,7 +32,11 @@ export default function GlevAIButton({ onPress, isListening = false, isSpeaking 
         <span className={`${styles.dot} ${styles.dot3}`} />
       </span>
       <span className={styles.icon} aria-hidden="true">
-        <GlevLogo size={30} color="#4F6EF7" bg="transparent" />
+        <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
+          <circle cx="14" cy="14" r="14" fill="rgba(79,110,247,0.12)" />
+          <path d="M7 14h3.5l2-5.5 3 11 2-8 1.5 2.5H21" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+          <circle cx="14" cy="14" r="2.5" fill="white" />
+        </svg>
       </span>
     </div>
   );

@@ -10,6 +10,26 @@
 
 /* ── Keyframes ───────────────────────────────────────────────────── */
 
+@keyframes glevBreath {
+  0%, 100% { opacity: 0.85; transform: scale(0.98); }
+  50%       { opacity: 1;    transform: scale(1.03); }
+}
+
+@keyframes glevBtnGlow {
+  0%, 100% { box-shadow: inset 0 0 12px rgba(79,110,247,0.08), 0 0 14px rgba(79,110,247,0.20), 0 0 28px rgba(79,110,247,0.08); }
+  50%       { box-shadow: inset 0 0 16px rgba(79,110,247,0.14), 0 0 22px rgba(79,110,247,0.35), 0 0 40px rgba(79,110,247,0.16); }
+}
+
+@keyframes glevBtnGlowFast {
+  0%, 100% { box-shadow: inset 0 0 18px rgba(79,110,247,0.12), 0 0 20px rgba(79,110,247,0.40), 0 0 38px rgba(79,110,247,0.20); }
+  50%       { box-shadow: inset 0 0 24px rgba(79,110,247,0.22), 0 0 32px rgba(79,110,247,0.65), 0 0 56px rgba(79,110,247,0.32); }
+}
+
+@keyframes glevIconPulse {
+  0%, 100% { opacity: 0.80; transform: scale(0.97); filter: drop-shadow(0 0 2px rgba(255,255,255,0.08)); }
+  50%       { opacity: 1;    transform: scale(1.04); filter: drop-shadow(0 0 6px rgba(255,255,255,0.35)) drop-shadow(0 0 12px rgba(79,110,247,0.45)); }
+}
+
 @keyframes glevBreathFast {
   0%, 100% { opacity: 0.7;  transform: scale(0.97); }
   50%       { opacity: 1;    transform: scale(1.05); }
@@ -71,19 +91,18 @@
   height: 64px;
   border-radius: 50%;
   background: linear-gradient(145deg, rgba(10, 18, 40, 0.96), rgba(4, 10, 22, 0.98));
-  /* Idle: permanent soft blue glow so the button always looks "blue" */
-  border: 1px solid rgba(79, 110, 247, 0.45);
+  border: 1px solid rgba(79, 110, 247, 0.35);
   box-shadow:
     inset 0 0 12px rgba(79, 110, 247, 0.08),
-    0 0 14px rgba(79, 110, 247, 0.28),
-    0 0 28px rgba(79, 110, 247, 0.12);
+    0 0 14px rgba(79, 110, 247, 0.20),
+    0 0 28px rgba(79, 110, 247, 0.08);
   isolation: isolate;
   overflow: hidden;
   cursor: pointer;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  transition: border-color 0.25s ease, box-shadow 0.25s ease;
+  animation: glevBtnGlow 3.8s ease-in-out infinite;
   -webkit-tap-highlight-color: transparent;
   pointer-events: none;
 }
@@ -91,10 +110,7 @@
 /* Blue glow — user is actively speaking (listening) */
 .btn.listening {
   border-color: rgba(79, 110, 247, 0.80);
-  box-shadow:
-    inset 0 0 20px rgba(79, 110, 247, 0.18),
-    0 0 22px rgba(79, 110, 247, 0.60),
-    0 0 46px rgba(79, 110, 247, 0.30);
+  animation: glevBtnGlowFast 0.9s ease-in-out infinite;
 }
 
 /* Violet blink — AI is speaking via TTS */
@@ -108,6 +124,7 @@
   position: absolute;
   inset: 0;
   border-radius: 50%;
+  animation: glevBreath 3.8s ease-in-out infinite;
 }
 
 .frame::before,
@@ -126,7 +143,7 @@
 .frame::after  { bottom: 8px; left:  10px; }
 
 .listening .frame {
-  animation: glevBreathFast 0.9s ease-in-out infinite;
+  animation: glevBreathFast 0.9s ease-in-out infinite !important;
 }
 
 .listening .frame::before,
@@ -156,14 +173,14 @@
     rgba(140, 160, 255, 0.26) 60%,
     transparent 100%
   );
-  opacity: 0;
+  opacity: 0.35;
   pointer-events: none;
-  transition: opacity 0.25s ease;
+  animation: glevSweep 5.2s ease-in-out infinite;
 }
 
 .listening .sweep {
   opacity: 1;
-  animation: glevSweep 2.4s ease-in-out infinite;
+  animation: glevSweep 2.4s ease-in-out infinite !important;
 }
 
 /* ── Orbital dots ────────────────────────────────────────────────── */
@@ -221,10 +238,11 @@
   align-items: center;
   justify-content: center;
   pointer-events: none;
+  animation: glevIconPulse 3.8s ease-in-out infinite;
 }
 
 .listening .icon {
-  animation: glevIconPulseFast 0.9s ease-in-out infinite;
+  animation: glevIconPulseFast 0.9s ease-in-out infinite !important;
 }
 
 .speaking .icon {
@@ -234,6 +252,8 @@
 /* ── Reduced motion ──────────────────────────────────────────────── */
 
 @media (prefers-reduced-motion: reduce) {
+  .btn,
+  .btn.listening,
   .btn.speaking { animation: none !important; }
   .frame,
   .sweep,
