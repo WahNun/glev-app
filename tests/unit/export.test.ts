@@ -14,11 +14,11 @@
 //        in column order, serialization (null → empty, JSON for
 //        objects, CSV-escaping for commas/quotes), and CRLF row
 //        separators.
-//     2. `insulinToCSV`'s independent emit/suppress rules for the
-//        ICR and CF columns across the full input matrix
-//        (carbUnit undefined / set; icrGperIE null / 0 / negative /
-//        finite-positive; cfMgdlPerIE null / 0 / negative /
-//        finite-positive — and all four combinations of icr × cf).
+//     2. `insulinToCSV`'s per-row ICR snapshot behaviour and CF column
+//        emit/suppress rules: column appears when carbUnit is set
+//        (regardless of icrGperIE); each cell uses the row's own
+//        `icr_g_per_ie_at_log` snapshot (null → "—"); CF suppression
+//        follows the legacy finite-positive guard.
 //     3. The `<GlevReport>` cover meta block: the "ICR (aktuell)"
 //        and "Korrekturfaktor" lines must render only when a finite
 //        positive value is supplied, never on null / 0 / negative.
@@ -333,74 +333,112 @@ test.describe("`*ToCSV` default output is byte-for-byte stable", () => {
 });
 
 /* ──────────────────────────────────────────────────────────────────
-   2. `insulinToCSV` — ICR / CF column independence
+   2. `insulinToCSV` — ICR / CF column independence (per-row ICR)
    ──────────────────────────────────────────────────────────────────
-   The two annotation columns are gated by independent finite-positive
-   checks. The matrix below pins each branch:
+   The ICR column now emits the per-row historic snapshot from
+   `l.icr_g_per_ie_at_log` instead of a single current setting. The
+   gate is: carbUnit present → column appears; no carbUnit → suppressed.
+   The `icrGperIE` opt is no longer consulted for column inclusion or
+   cell values (it still threads through to the PDF cover meta block).
 
-     ┌─────────────────────────┬──────────┬──────────┐
-     │ input                   │ has ICR  │ has CF   │
-     ├─────────────────────────┼──────────┼──────────┤
-     │ {}                      │   no     │   no     │
-     │ icr=null                │   no     │   no     │
-     │ icr=0                   │   no     │   no     │
-     │ icr=-12                 │   no     │   no     │
-     │ icr=12, no carbUnit     │   no     │   no     │
-     │ icr=12, carbUnit=BE     │   yes    │   no     │
-     │ cf=null                 │   no     │   no     │
-     │ cf=0                    │   no     │   no     │
-     │ cf=-50                  │   no     │   no     │
-     │ cf=50                   │   no     │   yes    │
-     │ icr=12, BE + cf=50      │   yes    │   yes    │
-     └─────────────────────────┴──────────┴──────────┘
+     ┌─────────────────────────────────────────┬──────────┬──────────┐
+     │ input                                   │ has ICR  │ has CF   │
+     ├─────────────────────────────────────────┼──────────┼──────────┤
+     │ {}                                      │   no     │   no     │
+     │ icrGperIE=12, no carbUnit               │   no     │   no     │
+     │ carbUnit=BE (icr_at_log = null)         │   yes→ — │   no     │
+     │ carbUnit=BE + icr_at_log=12             │  yes→1   │   no     │
+     │ cf=null                                 │   no     │   no     │
+     │ cf=0                                    │   no     │   no     │
+     │ cf=-50                                  │   no     │   no     │
+     │ cf=50                                   │   no     │   yes    │
+     │ carbUnit=BE + icr_at_log=12 + cf=50     │  yes→1   │   yes    │
+     └─────────────────────────────────────────┴──────────┴──────────┘
    ────────────────────────────────────────────────────────────────── */
 
 test.describe("insulinToCSV — ICR/CF columns appear/disappear independently", () => {
-  // Single shared row so every assertion below operates on a known
-  // value layout. The actual numeric values aren't relevant — only
-  // whether the conditional columns appear / are populated correctly.
+  // Base fixture — no icr_g_per_ie_at_log (simulates a legacy row).
   const logs: InsulinLog[] = [
     makeInsulin({ id: "i1", units: 5 }),
   ];
+  // Fixture with a snapshot — simulates a modern bolus row.
+  const logsWithSnapshot: InsulinLog[] = [
+    makeInsulin({ id: "i2", units: 5, icr_g_per_ie_at_log: 12 }),
+  ];
 
-  // ── ICR suppression ──────────────────────────────────────────────
+  // ── ICR suppression — only when carbUnit is absent ───────────────
   for (const { name, opts } of [
-    { name: "no opts at all",            opts: {} },
-    { name: "icrGperIE = null",          opts: { carbUnit: "BE" as const, icrGperIE: null } },
-    { name: "icrGperIE = 0",             opts: { carbUnit: "BE" as const, icrGperIE: 0 } },
-    { name: "icrGperIE = -12 (negative)", opts: { carbUnit: "BE" as const, icrGperIE: -12 } },
-    { name: "icrGperIE = NaN",           opts: { carbUnit: "BE" as const, icrGperIE: Number.NaN } },
-    { name: "icrGperIE set but carbUnit undefined", opts: { icrGperIE: 12 } },
+    { name: "no opts at all",                          opts: {} },
+    { name: "icrGperIE set but carbUnit undefined",    opts: { icrGperIE: 12 } },
   ]) {
     test(`hides the ICR column when ${name}`, () => {
       const csv = insulinToCSV(logs, opts);
       const headers = headerCells(csv);
-      // No header should mention "icr_" — guards against future
-      // header-key tweaks that still slip the column in.
+      // No header should mention "icr_".
       expect(headers.some((h) => h.startsWith("icr_"))).toBe(false);
-      // And the bare row trailer should match the legacy width
-      // (12 cells for the default insulin layout).
+      // Row width matches the legacy 12-cell layout.
       expect(csv.split("\r\n")[1].split(",").length).toBe(12);
     });
   }
 
-  // ── ICR emission + per-unit header key ──────────────────────────
-  for (const { unit, headerKey } of [
-    { unit: "g"  as const, headerKey: "icr_g_per_ie (g/IE)"  },
-    { unit: "BE" as const, headerKey: "icr_be_per_ie (BE/IE)" },
-    { unit: "KE" as const, headerKey: "icr_ke_per_ie (KE/IE)" },
+  // ── ICR column appears whenever carbUnit is set ──────────────────
+  // `icrGperIE` being null/0/NaN/negative no longer suppresses it —
+  // the cell value comes from the row's own snapshot, not from opts.
+  for (const { name, opts } of [
+    { name: "carbUnit=BE, icrGperIE=null",    opts: { carbUnit: "BE" as const, icrGperIE: null } },
+    { name: "carbUnit=BE, icrGperIE=0",       opts: { carbUnit: "BE" as const, icrGperIE: 0 } },
+    { name: "carbUnit=BE, icrGperIE=-12",     opts: { carbUnit: "BE" as const, icrGperIE: -12 } },
+    { name: "carbUnit=BE, icrGperIE=NaN",     opts: { carbUnit: "BE" as const, icrGperIE: Number.NaN } },
+    { name: "carbUnit=BE only (no icrGperIE)", opts: { carbUnit: "BE" as const } },
   ]) {
-    test(`shows the ICR column with key "${headerKey}" for unit=${unit}`, () => {
-      const csv = insulinToCSV(logs, { carbUnit: unit, icrGperIE: 12 });
+    test(`shows ICR column (with '—' for null snapshot) when ${name}`, () => {
+      const csv = insulinToCSV(logs, opts);
       const headers = headerCells(csv);
-      expect(headers).toContain(headerKey);
-      // The value column tracks `icrToUnit` so a regression in
-      // either side is caught here, not just in carbUnits.test.
-      const idx = headers.indexOf(headerKey);
-      const cell = csv.split("\r\n")[1].split(",")[idx];
-      expect(cell).toBe(String(icrToUnit(12, unit)));
+      expect(headers.some((h) => h.startsWith("icr_"))).toBe(true);
+      // The base fixture has no icr_g_per_ie_at_log → cell shows "—".
+      const icrIdx = headers.findIndex((h) => h.startsWith("icr_"));
+      expect(csv.split("\r\n")[1].split(",")[icrIdx]).toBe("—");
     });
   }
+
+  // ── ICR emission + per-unit header key + per-row snapshot value ──
+  for (const { unit, headerKey, expected } of [
+    { unit: "g"  as const, headerKey: "icr_g_per_ie (g/IE)",   expected: String(icrToUnit(12, "g"))  },
+    { unit: "BE" as const, headerKey: "icr_be_per_ie (BE/IE)", expected: String(icrToUnit(12, "BE")) },
+    { unit: "KE" as const, headerKey: "icr_ke_per_ie (KE/IE)", expected: String(icrToUnit(12, "KE")) },
+  ]) {
+    test(`shows "${headerKey}" header and per-row converted value for unit=${unit}`, () => {
+      // Use the fixture that HAS a snapshot (icr_g_per_ie_at_log=12).
+      const csv = insulinToCSV(logsWithSnapshot, { carbUnit: unit });
+      const headers = headerCells(csv);
+      expect(headers).toContain(headerKey);
+      const idx = headers.indexOf(headerKey);
+      // Cell must be the row's own snapshot converted to the display unit,
+      // not any value from opts (opts carries no icrGperIE here at all).
+      expect(csv.split("\r\n")[1].split(",")[idx]).toBe(expected);
+    });
+  }
+
+  // ── opts.icrGperIE does NOT influence the cell value ────────────
+  test("opts.icrGperIE is ignored for CSV cell values — only icr_g_per_ie_at_log is used", () => {
+    // Row snapshot = 12 g/IE; opts.icrGperIE = 999 (different current setting).
+    const csv = insulinToCSV(logsWithSnapshot, { carbUnit: "BE", icrGperIE: 999 });
+    const headers = headerCells(csv);
+    const idx = headers.findIndex((h) => h.startsWith("icr_"));
+    // Must reflect the row's snapshot (12 g/IE → 1 BE/IE), never opts.icrGperIE (999).
+    expect(csv.split("\r\n")[1].split(",")[idx]).toBe(String(icrToUnit(12, "BE")));
+  });
+
+  // ── Legacy row with snapshot=null still shows "—" ───────────────
+  test("legacy row (icr_g_per_ie_at_log = null) renders '—', not the current ICR", () => {
+    const csv = insulinToCSV(
+      [makeInsulin({ id: "i_legacy", units: 3, icr_g_per_ie_at_log: null })],
+      { carbUnit: "BE", icrGperIE: 12 },
+    );
+    const headers = headerCells(csv);
+    const idx = headers.findIndex((h) => h.startsWith("icr_"));
+    expect(csv.split("\r\n")[1].split(",")[idx]).toBe("—");
+  });
 
   // ── CF suppression ──────────────────────────────────────────────
   for (const { name, opts } of [
@@ -430,10 +468,10 @@ test.describe("insulinToCSV — ICR/CF columns appear/disappear independently", 
     expect(csv.split("\r\n")[1].split(",")[idx]).toBe("50");
   });
 
-  test("emits both ICR and CF when both are configured", () => {
-    const csv = insulinToCSV(logs, {
+  test("emits both ICR (per-row) and CF when both carbUnit and CF are configured", () => {
+    // Use a fixture with a snapshot so both columns have real values.
+    const csv = insulinToCSV(logsWithSnapshot, {
       carbUnit: "BE",
-      icrGperIE: 12,
       cfMgdlPerIE: 50,
     });
     const headers = headerCells(csv);
@@ -445,6 +483,7 @@ test.describe("insulinToCSV — ICR/CF columns appear/disappear independently", 
     expect(headers.indexOf("icr_be_per_ie (BE/IE)"))
       .toBeLessThan(headers.indexOf("cf_mgdl_per_ie (mg/dL/IE)"));
     const row = csv.split("\r\n")[1].split(",");
+    // ICR cell = row snapshot (12 g/IE → 1 BE/IE), CF cell = opts value.
     expect(row[headers.indexOf("icr_be_per_ie (BE/IE)")]).toBe("1");
     expect(row[headers.indexOf("cf_mgdl_per_ie (mg/dL/IE)")]).toBe("50");
   });

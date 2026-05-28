@@ -194,6 +194,12 @@ async function seedFixtures(userId: string): Promise<void> {
       insulin_name: "Humalog",
       units: 4,
       notes: FIXTURE_MARKER,
+      // Snapshot the ICR at log time (mirrors what `insertInsulinLog`
+      // does via `lib/insulin.ts`). The CSV now emits `icr_g_per_ie_at_log`
+      // per row instead of the current setting — so without this value
+      // the cell would render "—" (legacy-row behaviour) rather than
+      // the expected 12 g/IE → 1 BE/IE conversion.
+      icr_g_per_ie_at_log: 12,
     })
     .select("id")
     .single();
@@ -433,10 +439,11 @@ test.describe("ExportPanel wires user settings into the downloaded files", () =>
     // factor at all" would silently drop this column.
     expect(headers).toContain("cf_mgdl_per_ie (mg/dL/IE)");
 
-    // ICR cell value: 12 g/IE through icrToUnit(_, "BE") = 1.
-    // Asserts the conversion happened inside `insulinToCSV` (i.e.
-    // the carb unit was actually threaded), not just that some ICR
-    // value made it through.
+    // ICR cell value: the per-row snapshot (icr_g_per_ie_at_log=12)
+    // converted through icrToUnit(12, "BE") = 1. Asserts both that
+    // the carb unit is threaded AND that the per-row snapshot is used
+    // (not the current ICR setting from opts, which is no longer the
+    // source of truth for individual cells).
     expect(readColumn(csv, "icr_be_per_ie (BE/IE)")).toBe("1");
     // CF cell value: configured 60 mg/dL/IE survives to the cell.
     expect(readColumn(csv, "cf_mgdl_per_ie (mg/dL/IE)")).toBe("60");

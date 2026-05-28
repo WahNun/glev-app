@@ -795,6 +795,14 @@ export function GlevReport({ email, meals, insulin, exercise, fingersticks, carb
     Number.isFinite(icrGperIE) &&
     icrGperIE > 0;
   const icrLabel = hasICR ? formatICR(icrGperIE as number, carbUnit) : null;
+  // Per-row ICR snapshot for the insulin table — converts the historic
+  // ratio captured at log time to the display unit, or "—" for legacy
+  // rows that pre-date the `icr_g_per_ie_at_log` column.
+  const fmtICRAtLog = (v: number | null | undefined): string => {
+    if (typeof v !== "number" || !Number.isFinite(v) || v <= 0) return "—";
+    return String(icrToUnit(v, carbUnit));
+  };
+  const icrAtLogColHeader = `ICR bei Log (${carbLabel}/IE)`;
   // CF uses the same finite-positive guard as ICR so a never-configured
   // user (null/0) never sees a misleading "0 mg/dL/IE" line. The unit
   // is fixed at mg/dL/IE — see ReportProps comment for rationale.
@@ -1136,7 +1144,8 @@ export function GlevReport({ email, meals, insulin, exercise, fingersticks, carb
         <Text style={styles.sectionHeading}>Insulin-Einträge</Text>
         <Text style={styles.sectionSub}>
           {insulin.length} erfasste Einträge — die {showInsulin.length} jüngsten werden aufgeführt.
-          {icrLabel !== null && ` · Aktueller ICR: ${icrLabel}`}
+          {icrLabel !== null && ` · Aktueller ICR (Einstellung heute): ${icrLabel}`}
+          {" · ICR bei Log = historischer ICR zum Zeitpunkt der Injektion (— = älterer Eintrag)."}
         </Text>
 
         {showInsulin.length === 0 ? (
@@ -1144,32 +1153,36 @@ export function GlevReport({ email, meals, insulin, exercise, fingersticks, carb
         ) : (
           <View style={styles.table}>
             <View style={styles.th}>
-              <Text style={[styles.thCell, { width: "20%" }]}>Datum/Zeit</Text>
-              <Text style={[styles.thCell, { width: "12%" }]}>Typ</Text>
-              <Text style={[styles.thCell, { width: "20%" }]}>Präparat</Text>
-              <Text style={[styles.thCell, { width: "10%", textAlign: "right" }]}>Dosis (U)</Text>
+              <Text style={[styles.thCell, { width: "17%" }]}>Datum/Zeit</Text>
+              <Text style={[styles.thCell, { width: "10%" }]}>Typ</Text>
+              <Text style={[styles.thCell, { width: "16%" }]}>Präparat</Text>
+              <Text style={[styles.thCell, { width: "9%", textAlign: "right" }]}>Dosis (U)</Text>
               <Text style={[styles.thCell, { width: "12%", textAlign: "right" }]}>BG vorher</Text>
-              <Text style={[styles.thCell, { width: "13%", textAlign: "right" }]}>BG +1h</Text>
-              <Text style={[styles.thCell, { width: "13%", textAlign: "right" }]}>BG +2h</Text>
+              <Text style={[styles.thCell, { width: "12%", textAlign: "right" }]}>BG +1h</Text>
+              <Text style={[styles.thCell, { width: "12%", textAlign: "right" }]}>BG +2h</Text>
+              <Text style={[styles.thCell, { width: "12%", textAlign: "right" }]}>{icrAtLogColHeader}</Text>
             </View>
             {showInsulin.map((l, i) => (
               <View key={l.id} style={[styles.tr, ...(i % 2 === 1 ? [styles.trAlt] : [])]} wrap={false}>
-                <Text style={[styles.tdMuted, { width: "20%" }]}>{fmtDateTime(l.created_at)}</Text>
-                <View style={{ width: "12%" }}>
+                <Text style={[styles.tdMuted, { width: "17%" }]}>{fmtDateTime(l.created_at)}</Text>
+                <View style={{ width: "10%" }}>
                   <Text style={[styles.pill, { backgroundColor: pillColorForInsulin(l.insulin_type), alignSelf: "flex-start" }]}>
                     {l.insulin_type}
                   </Text>
                 </View>
-                <Text style={[styles.td, { width: "20%" }]}>{l.insulin_name || "—"}</Text>
-                <Text style={[styles.td, { width: "10%", textAlign: "right" }]}>{fmtNum(l.units, 1)}</Text>
+                <Text style={[styles.td, { width: "16%" }]}>{l.insulin_name || "—"}</Text>
+                <Text style={[styles.td, { width: "9%", textAlign: "right" }]}>{fmtNum(l.units, 1)}</Text>
                 <Text style={[styles.td, { width: "12%", textAlign: "right", color: colorForGlucose(l.cgm_glucose_at_log, targetRange) }]}>
                   {fmtNum(l.cgm_glucose_at_log, 0)}
                 </Text>
-                <Text style={[styles.td, { width: "13%", textAlign: "right", color: colorForGlucose(l.glucose_after_1h ?? null, targetRange) }]}>
+                <Text style={[styles.td, { width: "12%", textAlign: "right", color: colorForGlucose(l.glucose_after_1h ?? null, targetRange) }]}>
                   {fmtNum(l.glucose_after_1h ?? null, 0)}
                 </Text>
-                <Text style={[styles.td, { width: "13%", textAlign: "right", color: colorForGlucose(l.glucose_after_2h ?? null, targetRange) }]}>
+                <Text style={[styles.td, { width: "12%", textAlign: "right", color: colorForGlucose(l.glucose_after_2h ?? null, targetRange) }]}>
                   {fmtNum(l.glucose_after_2h ?? null, 0)}
+                </Text>
+                <Text style={[styles.td, { width: "12%", textAlign: "right", color: MUTED }]}>
+                  {fmtICRAtLog(l.icr_g_per_ie_at_log)}
                 </Text>
               </View>
             ))}
