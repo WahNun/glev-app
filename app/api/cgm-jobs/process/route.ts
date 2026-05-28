@@ -613,12 +613,31 @@ async function processCurveJob(
         .single();
       if (full) {
         const { lifecycleFor } = await import("@/lib/engine/lifecycle");
+        // Pre-meal trend (Task #205): extract the 15 min of CGM history
+        // that ended at meal_time from the already-fetched `history`
+        // array. `anchorMs` is meal_time in ms; history covers the
+        // full LLU depth (~8–12 h). We use the same parseLluTs helper
+        // that the main sample-loop above uses — so the filter is
+        // consistent with how the post-meal window is sliced.
+        const PRE_MEAL_WINDOW_MS = 15 * 60_000;
+        const preMealSamples = history
+          .filter((r) => {
+            if (!r.timestamp || r.value == null) return false;
+            const t = parseLluTs(r.timestamp);
+            if (t == null) return false;
+            const off = t - anchorMs;
+            return off >= -PRE_MEAL_WINDOW_MS && off < 0;
+          })
+          .map((r) => ({
+            value: r.value as number,
+            timestamp: new Date(parseLluTs(r.timestamp)!).toISOString(),
+          }));
         // Use defaults — server-side reconciliation should not depend on
         // the user's localStorage ICR/CF mirror, and the curve-aware
         // pathways (HYPO_DURING / peak SPIKE / Δ-2h) don't read
         // `settings`. The ICR fallback only fires when bgAfter is null,
         // which doesn't apply here (we just back-filled curve data).
-        const lc = lifecycleFor(full as never);
+        const lc = lifecycleFor(full as never, undefined, undefined, preMealSamples);
         const nextEval = lc.state === "final" ? lc.outcome : null;
         const cachedEval = (full as unknown as { evaluation: string | null }).evaluation;
         if (nextEval !== cachedEval) {

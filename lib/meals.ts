@@ -476,7 +476,29 @@ export async function updateMeal(id: string, patch: UpdateMealInput): Promise<Me
     // computed against the pre-edit timestamp.
     meal_time:      patch.meal_time !== undefined ? patch.meal_time : cur.meal_time,
   };
-  const lc = lifecycleFor(mergedMeal, new Date(), settings);
+  // Pre-meal trend (Task #205): query meal_glucose_samples for CGM
+  // readings in the 15 min window before meal_time. These rows exist
+  // when the curve job (processCurveJob) stored pre-meal samples with
+  // negative t_offset_min values. On meals that pre-date that job, or
+  // where no CGM was connected, this query returns an empty array and
+  // lifecycleFor silently falls back to the no-trend path.
+  const mealTimeMs = Date.parse(mergedMeal.meal_time ?? mergedMeal.created_at);
+  const preMealWindowStart = new Date(mealTimeMs - 15 * 60_000).toISOString();
+  const preMealWindowEnd   = new Date(mealTimeMs).toISOString();
+  const { data: preMealRows } = await supabase
+    .from("meal_glucose_samples")
+    .select("value_mgdl, captured_at")
+    .eq("meal_id", id)
+    .gte("captured_at", preMealWindowStart)
+    .lt("captured_at",  preMealWindowEnd);
+  const preMealSamples = (preMealRows ?? []).map(
+    (r: { value_mgdl: number; captured_at: string }) => ({
+      value: r.value_mgdl,
+      timestamp: r.captured_at,
+    }),
+  );
+
+  const lc = lifecycleFor(mergedMeal, new Date(), settings, preMealSamples);
   const finalEvaluation = lc.state === "final" ? lc.outcome : null;
 
   // 4) Build the DB patch — only include fields the caller actually sent,

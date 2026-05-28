@@ -3,6 +3,7 @@ import { evaluateEntry, type Outcome } from "./evaluation";
 import type { AdjustmentMessage } from "./adjustment";
 import { parseDbDate } from "@/lib/time";
 import type { InsulinSettings } from "@/lib/userSettings";
+import { classifyPreReferenceTrend, type TrendSample } from "./trend";
 
 export type OutcomeState = "pending" | "provisional" | "final";
 
@@ -45,9 +46,24 @@ function gapParam(gap: number): string {
   return `${gap >= 0 ? "+" : ""}${gap}`;
 }
 
-export function lifecycleFor(m: Meal, now: Date = new Date(), settings?: InsulinSettings): LifecycleResult {
+export function lifecycleFor(
+  m: Meal,
+  now: Date = new Date(),
+  settings?: InsulinSettings,
+  /** CGM samples from the 15-minute pre-meal window. When provided,
+   *  `classifyPreReferenceTrend` computes a regression-based TrendClass
+   *  that is forwarded into `evaluateEntry({ preTrend })` so the
+   *  reasoning bullet appears on finalized meals in Insights / Entry-Log.
+   *  Pass `undefined` (or omit) when no CGM history is available — the
+   *  evaluation path is identical to before this parameter existed. */
+  preMealSamples?: readonly TrendSample[],
+): LifecycleResult {
   const created = parseDbDate(m.meal_time ?? m.created_at);
   const mealMs = created.getTime();
+
+  const preTrend = preMealSamples
+    ? classifyPreReferenceTrend(preMealSamples, mealMs)?.trend
+    : undefined;
   const ageMinutes = Math.max(0, (now.getTime() - mealMs) / 60000);
   const bgBefore = m.glucose_before;
   // Post-Meal Granularität fix: cascade to new glucose_* columns written by
@@ -99,6 +115,11 @@ export function lifecycleFor(m: Meal, now: Date = new Date(), settings?: Insulin
     maxBg180:      m.max_bg_180,
     timeToPeakMin: m.time_to_peak_min,
     hadHypoWindow: m.had_hypo_window,
+    // Pre-meal CGM trend (Task #205) — regression-derived from the 15 min
+    // of samples before meal_time. Undefined when no CGM history was
+    // passed in (all existing callers that omit preMealSamples stay on
+    // the old path; no behaviour change for them).
+    preTrend,
   });
 
   // Curve-finality (Task #187): if the +3h backfill job has populated
