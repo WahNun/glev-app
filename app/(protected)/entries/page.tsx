@@ -4,6 +4,7 @@ import React, { useState, useEffect, useMemo, useRef, useCallback } from "react"
 import RefreshingBar from "@/components/RefreshingBar";
 import { useTranslations, useLocale } from "next-intl";
 import { fetchMeals, deleteMeal, updateMeal, FETCH_MEALS_DEFAULT_SINCE_DAYS, type Meal } from "@/lib/meals";
+import { MEALS_INITIAL_DAYS, executeInitialMealFetch } from "./constants";
 import { supabase } from "@/lib/supabase";
 import { fetchRecentInsulinLogs, deleteInsulinLog, updateInsulinReadings, updateInsulinLogLink, updateInsulinEntry, type InsulinLog } from "@/lib/insulin";
 import { fetchRecentExerciseLogs, deleteExerciseLog, updateExerciseLog, type ExerciseLog, type ExerciseType, type ExerciseIntensity } from "@/lib/exercise";
@@ -372,7 +373,6 @@ export default function EntriesPage() {
   const oldestMealCreatedAt = useRef<string | null>(null);
   // Sentinel element watched by the IntersectionObserver for infinite scroll.
   const sentinelRef = useRef<HTMLDivElement>(null);
-  const MEALS_INITIAL_DAYS = 30;
   const MEALS_PAGE_SIZE = 50;
   const [filters, setFilters] = useState<FilterState>(EMPTY_FILTERS);
   const [filtersOpen, setFiltersOpen] = useState(false);
@@ -589,7 +589,7 @@ export default function EntriesPage() {
         // Initial fetch covers the last MEALS_INITIAL_DAYS (30) days.
         // Older rows are loaded on demand via the "Weitere laden" button.
         const [m, ins, ex, cy, sy, inf] = await Promise.all([
-          fetchMeals({ sinceDays: MEALS_INITIAL_DAYS, limit: Infinity }),
+          executeInitialMealFetch(fetchMeals),
           fetchRecentInsulinLogs(60).catch(() => []),
           fetchRecentExerciseLogs(60).catch(() => []),
           fetchRecentMenstrualLogs(120).catch(() => [] as MenstrualLog[]),
