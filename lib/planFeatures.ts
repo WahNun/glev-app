@@ -61,7 +61,7 @@ export const FEATURE_TIERS: Record<string, FeatureTier> = {
   settings_tips:           "pro",
   auto_apply_icr:          "pro",
   icr_by_daytime:          "pro",
-  custom_target_range:     "free",
+  custom_target_range:     "all",
   google_sheets_import:    "pro",
   history_90d:             "pro",
   founder_direct_line:     "pro",
