@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef, useMemo } from "react";
-import { useSearchParams } from "next/navigation";
+import { useSearchParams, useRouter } from "next/navigation";
 import { useTranslations, useLocale } from "next-intl";
 import { localeToBcp47 } from "@/lib/time";
 import { fetchMealsForEngine, classifyMeal, computeCalories, saveMeal, deleteMeal, updateMeal, type Meal } from "@/lib/meals";
@@ -449,6 +449,7 @@ export default function EnginePage() {
   // on /engine still switches tabs — Next.js does NOT remount the
   // page when only the query string changes.
   const { canAccess } = usePlan();
+  const router = useRouter();
   const searchParams = useSearchParams();
   useEffect(() => {
     if (!searchParams) return;
@@ -3178,39 +3179,53 @@ export default function EnginePage() {
             </div>
 
             {/* ── Bolus-berechnen Toggle ─────────────────────────── */}
-            <UpgradeGate feature="engine_bolus_suggestion">
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: bolusEnabled ? 12 : 0, padding: "2px 0" }}>
-                <span style={{ fontSize: 13, fontWeight: 600, color: "var(--text-dim)", letterSpacing: "-0.01em" }}>
-                  {tEngine("bolus_toggle_label")}
-                </span>
-                <button
-                  type="button"
-                  role="switch"
-                  aria-checked={bolusEnabled}
-                  onClick={() => setBolusEnabled(v => !v)}
-                  style={{
-                    width: 44, height: 26, borderRadius: 13, border: "none",
-                    background: bolusEnabled ? ACCENT : "var(--border)",
-                    position: "relative", cursor: "pointer", flexShrink: 0,
-                    transition: "background 200ms ease",
-                    WebkitTapHighlightColor: "transparent",
-                  }}
-                >
-                  <span style={{
-                    position: "absolute", top: 3, borderRadius: "50%",
-                    width: 20, height: 20, background: "var(--text)",
-                    left: bolusEnabled ? 21 : 3,
-                    transition: "left 200ms ease",
-                    boxShadow: "0 1px 3px rgba(0,0,0,0.3)",
-                  }} />
-                </button>
-              </div>
+            {/* Toggle is always visible so users can discover the feature */}
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: bolusEnabled ? 12 : 0, padding: "2px 0" }}>
+              <span style={{ fontSize: 13, fontWeight: 600, color: "var(--text-dim)", letterSpacing: "-0.01em" }}>
+                {tEngine("bolus_toggle_label")}
+              </span>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={bolusEnabled}
+                onClick={() => {
+                  if (!canAccess("engine_bolus_suggestion")) {
+                    router.push("/pro");
+                    return;
+                  }
+                  setBolusEnabled(v => !v);
+                }}
+                style={{
+                  width: 44, height: 26, borderRadius: 13, border: "none",
+                  background: bolusEnabled ? ACCENT : "var(--border)",
+                  position: "relative", cursor: "pointer", flexShrink: 0,
+                  transition: "background 200ms ease",
+                  WebkitTapHighlightColor: "transparent",
+                }}
+              >
+                <span style={{
+                  position: "absolute", top: 3, borderRadius: "50%",
+                  width: 20, height: 20, background: "var(--text)",
+                  left: bolusEnabled ? 21 : 3,
+                  transition: "left 200ms ease",
+                  boxShadow: "0 1px 3px rgba(0,0,0,0.3)",
+                }} />
+              </button>
+            </div>
 
+            {/* ── Expanded bolus section — gated; only shown once the
+                toggle is on so the lock appears in context, not over
+                the toggle itself. blurPx/opacity kept at default
+                (2.5 / 0.6) — the larger content area already makes
+                the lock card clearly visible. ─────────────────────── */}
+            {bolusEnabled && (
+            <UpgradeGate feature="engine_bolus_suggestion">
+              <div>
               {/* ── Combined ICR+dose chips ──────────────────────────
                   Each chip shows label + ratio + dose in one block,
                   replacing the previous 4-element layout (2 ICR cards
                   + 2 separate dose chips). Manual override row below. */}
-              {bolusEnabled && (() => {
+              {(() => {
                 const showBoth = shouldShowBothChips({
                   icrSampleSize,
                   adaptedICR,
@@ -3329,9 +3344,11 @@ export default function EnginePage() {
                   </div>
                 );
               })()}
+              </div>
             </UpgradeGate>
+            )}
 
-              {/* ── Action row ─────────────────────────────────────────
+            {/* ── Action row ─────────────────────────────────────────
                   bolusEnabled=false → single "ohne Bolus" button.
                   bolusEnabled=true  → "Speichern — X IE" + Explainer link. */}
               <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>

@@ -10,10 +10,14 @@ export default function UpgradeGate({
   feature,
   children,
   variant = "overlay",
+  blurPx = 2.5,
+  opacity = 0.6,
 }: {
   feature: string;
   children?: React.ReactNode;
   variant?: "overlay" | "row";
+  blurPx?: number;
+  opacity?: number;
 }) {
   const { canAccess, loading } = usePlan();
 
@@ -55,8 +59,8 @@ export default function UpgradeGate({
         <div
           aria-hidden="true"
           style={{
-            filter: "blur(2.5px)",
-            opacity: 0.6,
+            filter: `blur(${blurPx}px)`,
+            opacity,
             pointerEvents: "none",
             userSelect: "none",
           }}
