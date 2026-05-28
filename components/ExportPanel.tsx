@@ -957,6 +957,7 @@ export default function ExportPanel() {
                   type="button"
                   onClick={() => setRangePreset("lastAppointment")}
                   disabled={busy !== null}
+                  title={lastAppointmentNote ?? undefined}
                   style={{
                     padding: "7px 13px",
                     borderRadius: 999,
@@ -967,9 +968,32 @@ export default function ExportPanel() {
                     fontWeight: 600,
                     cursor: busy !== null ? "not-allowed" : "pointer",
                     opacity: busy !== null ? 0.6 : 1,
+                    display: "flex",
+                    flexDirection: "column",
+                    alignItems: "flex-start",
+                    gap: 1,
+                    textAlign: "left",
                   }}
                 >
-                  {t("range_last_appointment", { date: formatted })}
+                  <span>{t("range_last_appointment", { date: formatted })}</span>
+                  {lastAppointmentNote && (
+                    <span
+                      data-testid="appt-chip-note"
+                      style={{
+                        fontSize: 11,
+                        fontWeight: 400,
+                        opacity: 0.72,
+                        maxWidth: 240,
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      {lastAppointmentNote.length > 40
+                        ? `${lastAppointmentNote.slice(0, 40)}…`
+                        : lastAppointmentNote}
+                    </span>
+                  )}
                 </button>
                 {appointments.length > 1 && (
                   <button

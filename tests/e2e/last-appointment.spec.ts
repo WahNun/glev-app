@@ -821,7 +821,7 @@ test.describe("Settings → Arzttermine note round-trip", () => {
     // Sanity-check: the seeded note is in the DB before we touch the UI.
     expect(await readLatestAppointmentNote(testUser.userId)).toBe("Original note");
 
-    await loginAsTestUser(page);
+    await loginAsTestUser(page, test.info().workerIndex);
     await page.goto("/settings");
 
     const apptsRow = page.getByRole("button", { name: APPTS_ROW_ARIA });
@@ -870,7 +870,65 @@ test.describe("Settings → Arzttermine note round-trip", () => {
     await expect(page.getByText("Original note")).toHaveCount(0);
   });
 
-  // --- 7. Clearing the date (deleting the appointment) wipes the note ----
+  // --- 7. Chip subtitle shows note preview; absent when no note set --------
+  // Why this is a distinct test:
+  //   The chip subtitle (data-testid="appt-chip-note") is the primary
+  //   user-facing payoff of Task #886. This test:
+  //     (a) Confirms the subtitle appears and contains the note text (≤40
+  //         chars) when the active appointment has a note.
+  //     (b) Confirms the subtitle is absent when the active appointment has
+  //         no note — so a user who never typed a note sees an unchanged chip.
+  //   We drive (a) via the admin-seed path (no UI form dependency) and (b)
+  //   via a second row seeded without a note.
+  test("chip shows a note subtitle when the active appointment has a note; absent when there is no note", async ({ page }) => {
+    const admin = getAdminClient();
+
+    // (a) Seed an appointment WITH a note.
+    const NOTE = "Dr. Müller Endo Q1 2026";
+    await seedAppointmentWithNote(admin, testUser.userId, "2026-02-10", NOTE);
+
+    await loginAsTestUser(page, test.info().workerIndex);
+    await page.goto("/settings");
+
+    const exportRow = page.getByRole("button", { name: EXPORT_ROW_ARIA });
+    await expect(exportRow).toBeVisible();
+    await exportRow.click();
+
+    // Wait for the panel to settle (All time chip visible).
+    await expect(page.getByRole("button", { name: /^(All time|Alles)$/ })).toBeVisible();
+
+    // The note subtitle must be present inside the chip.
+    const noteSubtitle = page.locator('[data-testid="appt-chip-note"]');
+    await expect(noteSubtitle).toBeVisible({ timeout: 10_000 });
+
+    // Its text must start with the note value (first 40 chars; our
+    // note is 23 chars so no truncation here).
+    await expect(noteSubtitle).toHaveText(NOTE.slice(0, 40));
+
+    // The chip button must also carry a title attribute with the full note
+    // (used as a native tooltip for mouse users).
+    const apptChip = page
+      .getByRole("button", { name: LAST_APPT_CHIP_DATE_DE })
+      .or(page.getByRole("button", { name: LAST_APPT_CHIP_DATE_US }));
+    await expect(apptChip).toBeVisible({ timeout: 10_000 });
+    await expect(apptChip).toHaveAttribute("title", NOTE);
+
+    // (b) Replace with an appointment that has NO note.
+    await page.keyboard.press("Escape");
+    await resetAppointments(testUser.userId);
+
+    const { error: insErr } = await admin
+      .from("appointments")
+      .insert({ user_id: testUser.userId, appointment_at: "2026-02-10", tags: [] });
+    if (insErr) throw new Error(`seed no-note appointment failed: ${insErr.message}`);
+
+    // Re-open the export panel so it re-fetches the updated list.
+    await exportRow.click();
+    await expect(page.getByRole("button", { name: /^(All time|Alles)$/ })).toBeVisible();
+    await expect(page.locator('[data-testid="appt-chip-note"]')).toHaveCount(0);
+  });
+
+  // --- 8. Clearing the date (deleting the appointment) wipes the note ----
   // Why this is a distinct test from #3 (deletion):
   //   The schema retains a legacy `user_settings.last_appointment_note`
   //   column from before Task #93 moved appointments into a dedicated
