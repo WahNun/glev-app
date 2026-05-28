@@ -1990,6 +1990,7 @@
     "ex_1h_outcome": "1-STD. ERGEBNIS",
     "ex_1h_check": "1-STD. CHECK",
     "ex_2h_outcome": "2-STD. ERGEBNIS",
+    "ex_cgm_at_log": "CGM BEIM LOGGEN",
     "ex_notes_label": "NOTIZEN",
     "ex_hypo_risk_share": "HYPO-RISIKO-ANTEIL",
     "ex_disclaimer": "Nur zur Orientierung — bitte stets mit deinem Behandlungsteam besprechen.",

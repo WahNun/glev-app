@@ -1990,6 +1990,7 @@
     "ex_1h_outcome": "1H OUTCOME",
     "ex_1h_check": "1H CHECK",
     "ex_2h_outcome": "2H OUTCOME",
+    "ex_cgm_at_log": "CGM AT LOG",
     "ex_notes_label": "NOTES",
     "ex_hypo_risk_share": "HYPO RISK SHARE",
     "ex_disclaimer": "For reference only — always consult your care team.",

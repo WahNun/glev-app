@@ -4487,7 +4487,7 @@ function SymptomRowCard({ log, isOpen, onToggle, onDelete, deleting, onUpdated }
               borderRadius:10, padding:"10px 12px",
             }}>
               <div style={{ fontSize:11, color:"var(--text-faint)", letterSpacing:"0.08em", fontWeight:600, textTransform:"uppercase" }}>
-                {t("stat_cgm_at_log")}
+                {tx("ex_cgm_at_log")}
               </div>
               <div style={{ fontSize:14, fontWeight:700, color:SYMPTOM_ACCENT, fontFamily:"var(--font-mono)" }}>
                 {log.cgm_glucose_at_log} mg/dL
