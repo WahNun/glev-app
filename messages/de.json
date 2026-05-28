@@ -823,6 +823,7 @@
     "engine_icr_relink_hint": "Wenn du bestätigst, lernt Glev für die Zukunft.",
     "engine_icr_relink_busy": "Speichert…",
     "engine_icr_relink_failed": "Konnte nicht gespeichert werden — bitte erneut versuchen.",
+    "engine_icr_relink_success": "✓ Verknüpfung gespeichert",
     "engine_suggested_adjustment": "Empfohlene Anpassung",
     "engine_advisory": "Hinweis",
     "engine_back_heading": "Wie wird dieser Wert berechnet?",

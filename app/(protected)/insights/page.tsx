@@ -4668,6 +4668,7 @@ function RelinkSourceLine({
     onToggle(typeof next === "function" ? next(open) : next);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [errorId, setErrorId] = useState<string | null>(null);
+  const [successToast, setSuccessToast] = useState<string | null>(null);
   // "Nein, war anders" persists to the `rejected_pairs` table (added
   // 2026-05-15) keyed on (meal_id, bolus_id) so a dismissal sticks
   // across reloads. We hold the set in component state and seed it
@@ -4728,6 +4729,15 @@ function RelinkSourceLine({
           </span>
         )}
       </button>
+      {successToast && (
+        <div style={{
+          marginTop: 8, padding: "8px 12px", borderRadius: 8,
+          background: `${GREEN}15`, border: `1px solid ${GREEN}40`,
+          color: GREEN, fontSize: 13, fontWeight: 500,
+        }}>
+          {successToast}
+        </div>
+      )}
       {open && hasTimeWindow && (
         <div style={{
           marginTop: 8, padding: "10px 12px", borderRadius: 10,
@@ -4788,6 +4798,8 @@ function RelinkSourceLine({
                       try {
                         await updateInsulinLogLink(p.bolus.id, p.meal.id);
                         onLinked(p.bolus.id, p.meal.id);
+                        setSuccessToast(tInsights("engine_icr_relink_success"));
+                        setTimeout(() => setSuccessToast(null), 2500);
                       } catch {
                         setErrorId(p.bolus.id);
                       } finally {

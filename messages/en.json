@@ -823,6 +823,7 @@
     "engine_icr_relink_hint": "Confirming helps Glev learn for next time.",
     "engine_icr_relink_busy": "Saving…",
     "engine_icr_relink_failed": "Could not save — please try again.",
+    "engine_icr_relink_success": "✓ Link saved",
     "engine_suggested_adjustment": "Suggested adjustment",
     "engine_advisory": "Advisory",
     "engine_back_heading": "How is this number calculated?",
