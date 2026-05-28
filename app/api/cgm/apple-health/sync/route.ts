@@ -43,22 +43,6 @@ import { adminClient } from "@/lib/cgm/supabase";
 import { getSyncStatus } from "@/lib/cgm/appleHealth";
 import { fillNearbyChecks } from "@/lib/mealTimelineChecks";
 
-export type AppleHealthRow = {
-  source_uuid: string;
-  timestamp: string;
-  value_mg_dl: number;
-};
-
-/**
- * Upserts pre-normalised Apple Health rows into `apple_health_readings` and,
- * on success, fires `fillFn` (default: `fillNearbyChecks`) for each row.
- *
- * Extracted so the upsert + fill behaviour can be unit-tested without
- * spinning up a real Supabase instance or a real HealthKit device.
- *
- * Returns `{ inserted, skipped }` where `inserted` counts rows the upsert
- * actually wrote (via `.select("id")`) and `skipped` = rows.length − inserted.
- */
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
