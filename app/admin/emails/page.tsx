@@ -96,10 +96,10 @@ function buildTemplates(
   return [
     {
       key: "beta-welcome",
-      label: "Beta — Welcome",
+      label: isEn ? "Glev Smart — Welcome" : "Glev Smart — Welcome",
       whenSent: isEn
-        ? "Immediately after Stripe Checkout success ($19 Beta setup fee)"
-        : "Sofort nach erfolgreicher Stripe-Checkout (€19 Beta-Setup-Fee)",
+        ? "Immediately after Stripe Checkout success (€19 setup fee)"
+        : "Sofort nach erfolgreicher Stripe-Checkout (€19 Setup-Fee)",
       subject: betaWelcomeSubject(name, locale),
       html: betaWelcomeHtml(name, DEFAULT_SESSION_ID, appUrl, locale),
     },
@@ -124,22 +124,22 @@ function buildTemplates(
     {
       key: "beta-free-year-welcome-existing",
       label: isEn
-        ? "Beta-Free-Year — Welcome (existing user)"
-        : "Beta-Free-Year — Welcome (bestehender User)",
+        ? "Glev Smart — 1 Year Free (existing user)"
+        : "Glev Smart — 1 Jahr gratis (bestehender User)",
       whenSent: isEn
-        ? "Admin grants 1 free Beta year via /admin/users — recipient already has an account"
-        : "Admin schaltet 1 Jahr Beta via /admin/users frei — Empfänger:in hat bereits einen Account",
+        ? "Admin grants 1 free Glev Smart year via /admin/users — recipient already has an account"
+        : "Admin schaltet 1 Jahr Glev Smart via /admin/users frei — Empfänger:in hat bereits einen Account",
       subject: betaFreeYearWelcomeSubject(name, locale, "beta"),
       html: betaFreeYearWelcomeHtml(name, appUrl, bfyExpiresAt, locale, null, "beta"),
     },
     {
       key: "beta-free-year-welcome-invite",
       label: isEn
-        ? "Beta-Free-Year — Welcome (new user invite)"
-        : "Beta-Free-Year — Welcome (neuer User, Invite)",
+        ? "Glev Smart — 1 Year Free (new user invite)"
+        : "Glev Smart — 1 Jahr gratis (neuer User, Invite)",
       whenSent: isEn
-        ? "Admin grants 1 free Beta year via /admin/users — recipient is brand-new, gets login link to /welcome/beta"
-        : "Admin schaltet 1 Jahr Beta via /admin/users frei — neuer User, kriegt Login-Link auf /welcome/beta",
+        ? "Admin grants 1 free Glev Smart year via /admin/users — recipient is brand-new, gets login link"
+        : "Admin schaltet 1 Jahr Glev Smart via /admin/users frei — neuer User, kriegt Login-Link",
       subject: betaFreeYearWelcomeSubject(name, locale, "beta"),
       html: betaFreeYearWelcomeHtml(name, appUrl, bfyExpiresAt, locale, bfySignupUrl, "beta"),
     },
