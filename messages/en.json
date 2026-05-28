@@ -2964,7 +2964,14 @@
     "filter_section_exercise_kind": "Exercise kind",
     "filter_section_outcome": "Outcome",
     "filter_section_date_range": "Date range",
-    "entries_empty_date": "Showing {range} · no entries match."
+    "entries_empty_date": "Showing {range} · no entries match.",
+    "filter_btn": "Filters",
+    "filter_aria": "Filter entries",
+    "filter_clear": "Clear filters",
+    "filter_reset_date": "Switch to All time",
+    "entries_empty_search": "No entries match \"{search}\".",
+    "entries_clear_search": "Clear search",
+    "entries_empty_filter": "No entries match this filter."
   },
   "pricing_beta_title": "Glev Smart — Early Access",
   "pricing_beta_cta": "Secure Early Access",

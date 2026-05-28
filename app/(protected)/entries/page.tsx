@@ -914,7 +914,7 @@ export default function EntriesPage() {
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
               <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/>
             </svg>
-            <span>Filters</span>
+            <span>{tChips("filter_btn")}</span>
             <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ transform: filtersOpen ? "rotate(180deg)" : "rotate(0deg)", transition:"transform 0.15s" }}>
               <polyline points="6 9 12 15 18 9"/>
             </svg>
@@ -923,7 +923,7 @@ export default function EntriesPage() {
           {filtersOpen && (
             <div
               role="dialog"
-              aria-label="Filter entries"
+              aria-label={tChips("filter_aria")}
               style={{
                 position:"absolute",
                 top:"calc(100% + 8px)",
@@ -992,7 +992,7 @@ export default function EntriesPage() {
                     <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                       <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
                     </svg>
-                    Clear filters
+                    {tChips("filter_clear")}
                   </button>
                 </div>
               )}
@@ -1054,14 +1054,14 @@ export default function EntriesPage() {
                       display:"inline-flex", alignItems:"center", gap:6,
                     }}
                   >
-                    Switch to All time
+                    {tChips("filter_reset_date")}
                   </button>
                 </div>
               )}
               {search !== "" && (
                 <div style={{ display:"flex", flexDirection:"column", gap:10, alignItems:"center" }}>
                   <div style={{ color:"var(--text-muted)", fontSize:14, maxWidth:480, overflowWrap:"anywhere" }}>
-                    No entries match <span style={{ color:"var(--text-strong)", fontWeight:600 }}>&ldquo;{search}&rdquo;</span>.
+                    {tChips("entries_empty_search", { search })}
                   </div>
                   <button
                     onClick={() => setSearch("")}
@@ -1075,13 +1075,13 @@ export default function EntriesPage() {
                       display:"inline-flex", alignItems:"center", gap:6,
                     }}
                   >
-                    Clear search
+                    {tChips("entries_clear_search")}
                   </button>
                 </div>
               )}
             </div>
           ) : (
-            "No entries match this filter."
+            tChips("entries_empty_filter")
           )}
         </div>
       ) : (

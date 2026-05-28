@@ -2964,7 +2964,14 @@
     "filter_section_exercise_kind": "Trainingsart",
     "filter_section_outcome": "Ergebnis",
     "filter_section_date_range": "Zeitraum",
-    "entries_empty_date": "Zeitraum {range} · keine passenden Einträge."
+    "entries_empty_date": "Zeitraum {range} · keine passenden Einträge.",
+    "filter_btn": "Filter",
+    "filter_aria": "Einträge filtern",
+    "filter_clear": "Filter zurücksetzen",
+    "filter_reset_date": "Alle Zeiten anzeigen",
+    "entries_empty_search": "Keine Einträge für \"{search}\".",
+    "entries_clear_search": "Suche löschen",
+    "entries_empty_filter": "Keine Einträge für diesen Filter."
   },
   "pricing_beta_title": "Glev Smart — Early Access",
   "pricing_beta_cta": "Early Access sichern",
