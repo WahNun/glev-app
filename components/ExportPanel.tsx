@@ -284,6 +284,25 @@ export default function ExportPanel() {
   const { unit: carbUnit, label: carbUnitLabel } = useCarbUnit();
   const [busy, setBusy] = useState<Kind | null>(null);
   const [msg, setMsg]   = useState<{ kind: "ok" | "err"; text: string } | null>(null);
+  // Which data kinds to include in the bulk CSV zip. All four on by
+  // default so a fresh visit produces the same full bundle as before.
+  // Toggling a chip removes/restores that kind from the zip without
+  // affecting the per-kind download buttons.
+  const [selectedKinds, setSelectedKinds] = useState<Set<ExportRowKind>>(
+    () => new Set<ExportRowKind>(["meals", "insulin", "exercise", "fingersticks"]),
+  );
+
+  function toggleKind(kind: ExportRowKind) {
+    setSelectedKinds((prev) => {
+      const next = new Set(prev);
+      if (next.has(kind)) {
+        next.delete(kind);
+      } else {
+        next.add(kind);
+      }
+      return next;
+    });
+  }
   const [email, setEmail] = useState<string>("");
   // Date-range picker state. Defaults to "all" so the panel still
   // produces a full-history export on a fresh visit (no behavioural
@@ -637,32 +656,34 @@ export default function ExportPanel() {
       const stamp = todayStamp();
       const { window } = resolveRange(rangePreset, customFrom, customTo, lastAppointment);
       const suffix = rangeFilenameSuffix(window);
+      // Fetch only the kinds the user has opted into. Skipped kinds
+      // resolve to an empty array without touching the database — no
+      // round-trip cost for data we won't bundle.
       const [meals, insulin, exercise, fs] = await Promise.all([
-        fetchAllMeals(window),
-        fetchAllInsulinLogs(window),
-        fetchAllExerciseLogs(window),
-        fetchAllFingersticks(window),
+        selectedKinds.has("meals")        ? fetchAllMeals(window)        : Promise.resolve([]),
+        selectedKinds.has("insulin")      ? fetchAllInsulinLogs(window)  : Promise.resolve([]),
+        selectedKinds.has("exercise")     ? fetchAllExerciseLogs(window) : Promise.resolve([]),
+        selectedKinds.has("fingersticks") ? fetchAllFingersticks(window) : Promise.resolve([]),
       ]);
-      // Defense-in-depth against the race window between the picker
-      // changing and the count preview re-resolving: the disabled
-      // attribute on the button blocks the common case, but a
-      // programmatic trigger (test, devtools, screen-reader shortcut
-      // bypassing visual state) could still slip through and produce
-      // four empty CSVs. Re-check using the actual fetched data and
-      // bail with a friendly message in that case.
+      // Defense-in-depth: re-check with actual fetched data. Also
+      // fires when the user deselected all kinds and somehow bypassed
+      // the disabled button (programmatic trigger, screen-reader, etc.).
       if (meals.length + insulin.length + exercise.length + fs.length === 0) {
         flash("err", t("count_empty"));
         return;
       }
-      // Bundle all four CSVs into a single .zip so the user gets one
-      // save-as prompt instead of four. Empty kinds get a header-only
-      // CSV inside the zip — same as the per-kind button behaviour.
-      const files: Array<[string, string]> = [
-        [`glev-mahlzeiten_${stamp}${suffix}.csv`,   mealsToCSV(meals, carbUnit)],
-        [`glev-insulin_${stamp}${suffix}.csv`,      insulinToCSV(insulin, { carbUnit, icrGperIE, cfMgdlPerIE })],
-        [`glev-sport_${stamp}${suffix}.csv`,        exerciseToCSV(exercise)],
-        [`glev-fingersticks_${stamp}${suffix}.csv`, fingersticksToCSV(fs)],
-      ];
+      // Only include selected kinds in the zip. Each kind is only
+      // added when it was actually selected — deselected kinds are
+      // absent from the archive entirely (not a header-only CSV).
+      const files: Array<[string, string]> = [];
+      if (selectedKinds.has("meals"))
+        files.push([`glev-mahlzeiten_${stamp}${suffix}.csv`, mealsToCSV(meals, carbUnit)]);
+      if (selectedKinds.has("insulin"))
+        files.push([`glev-insulin_${stamp}${suffix}.csv`, insulinToCSV(insulin, { carbUnit, icrGperIE, cfMgdlPerIE })]);
+      if (selectedKinds.has("exercise"))
+        files.push([`glev-sport_${stamp}${suffix}.csv`, exerciseToCSV(exercise)]);
+      if (selectedKinds.has("fingersticks"))
+        files.push([`glev-fingersticks_${stamp}${suffix}.csv`, fingersticksToCSV(fs)]);
       await downloadZipOfCSVs(`glev-export_${stamp}${suffix}.zip`, files);
       const total = meals.length + insulin.length + exercise.length + fs.length;
       flash("ok", t("exported_all", { n: total }));
@@ -1279,58 +1300,106 @@ export default function ExportPanel() {
         })}
       </div>
 
-      {/* Bulk actions: CSV-all + PDF report side by side.
-          Both buttons surface the *combined* total across all four
-          kinds in parens (same `counts` snapshot the per-kind rows
-          use), so the user can confirm bundle size before triggering
-          four save-as prompts or building a multi-page PDF. We mirror
-          the per-row behaviour: while a fresh count is in flight we
-          drop the suffix instead of showing a stale number, and a
-          known-zero total locks both buttons + dims them so an empty
-          export can't be requested. The busy label keeps replacing
-          the count during an in-flight export, same as the per-kind
-          rows.
+      {/* Kind-filter chips — let the user opt specific data types out of
+          the bulk CSV zip. All four are active by default. Per-kind
+          download buttons are unaffected. Only shown when the user has
+          CSV access so free-tier users don't see controls for a locked
+          feature. */}
+      {canAccess("csv_export") && (
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
+          <span style={{
+            fontSize: 11, fontWeight: 700,
+            color: "var(--text-faint)",
+            textTransform: "uppercase", letterSpacing: "0.07em",
+            flexShrink: 0,
+          }}>
+            {t("bulk_kinds_label")}
+          </span>
+          {ROWS.map((row) => {
+            const on = selectedKinds.has(row.kind);
+            return (
+              <button
+                key={row.kind}
+                type="button"
+                onClick={() => toggleKind(row.kind)}
+                disabled={busy !== null}
+                aria-pressed={on}
+                style={{
+                  display: "flex", alignItems: "center", gap: 5,
+                  padding: "5px 11px",
+                  borderRadius: 999,
+                  border: `1px solid ${on ? row.color : BORDER}`,
+                  background: on ? `${row.color}18` : "var(--surface-soft)",
+                  color: on ? row.color : "var(--text-dim)",
+                  fontSize: 12, fontWeight: 600,
+                  cursor: busy !== null ? "not-allowed" : "pointer",
+                  opacity: busy !== null ? 0.6 : 1,
+                }}
+              >
+                <span style={{ display: "flex", opacity: on ? 1 : 0.5 }}>{row.icon}</span>
+                {t(row.labelKey)}
+              </button>
+            );
+          })}
+        </div>
+      )}
 
-          The empty-range protection (disabled + tooltip + neutral
-          styling) reuses the existing `isEmptyRange` / `emptyRangeTooltip`
-          from above so wording and behaviour stay in sync with the
-          count line. `isEmptyRange` already accounts for the loading
-          state, so it serves the same role as a local `bulkEmpty`
-          would. */}
+      {/* Bulk actions: CSV-all (filtered by selected kinds) + PDF report
+          side by side.
+          The CSV button shows and guards against the *selected-kinds*
+          total so deselecting all chips locks it the same way an empty
+          range does. The PDF button always covers all four kinds and
+          uses the unchanged isEmptyRange guard. Both buttons mirror the
+          per-row behaviour: while a fresh count is in flight the count
+          suffix is dropped instead of showing a stale number; the busy
+          label replaces the count during an in-flight export. */}
       {(() => {
-        const bulkTotal = countsLoading || !counts
+        // CSV-all: total and guard reflect selected kinds only.
+        const csvTotal = countsLoading || !counts
+          ? null
+          : (["meals", "insulin", "exercise", "fingersticks"] as ExportRowKind[])
+              .filter((k) => selectedKinds.has(k))
+              .reduce((sum, k) => sum + counts[k], 0);
+        const csvEmpty = selectedKinds.size === 0 || (csvTotal !== null && csvTotal === 0);
+        const csvDisabled = busy !== null || csvEmpty;
+        const csvDim   = csvEmpty && busy === null;
+        const csvTitle = csvEmpty ? emptyRangeTooltip : undefined;
+
+        // PDF: always covers all four kinds (unchanged).
+        const pdfTotal = countsLoading || !counts
           ? null
           : counts.meals + counts.insulin + counts.exercise + counts.fingersticks;
-        const bulkDisabled = busy !== null || isEmptyRange;
-        const bulkDim      = isEmptyRange && busy === null;
-        const bulkTitle    = isEmptyRange ? emptyRangeTooltip : undefined;
+        const pdfDisabled = busy !== null || isEmptyRange;
+        const pdfDim   = isEmptyRange && busy === null;
+        const pdfTitle = isEmptyRange ? emptyRangeTooltip : undefined;
+
         const allLabel = busy === "all"
           ? t("all_btn_busy")
-          : bulkTotal !== null
-            ? `${t("all_btn_idle")} (${bulkTotal})`
+          : csvTotal !== null
+            ? `${t("all_btn_idle")} (${csvTotal})`
             : t("all_btn_idle");
         const pdfLabel = busy === "pdf"
           ? t("pdf_btn_busy")
-          : bulkTotal !== null
-            ? `${t("pdf_btn_idle")} (${bulkTotal})`
+          : pdfTotal !== null
+            ? `${t("pdf_btn_idle")} (${pdfTotal})`
             : t("pdf_btn_idle");
         return (
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
             {canAccess("csv_export") ? (
               <button
                 onClick={exportAll}
-                disabled={bulkDisabled}
-                title={bulkTitle}
-                aria-disabled={bulkDisabled}
+                disabled={csvDisabled}
+                title={csvTitle}
+                aria-disabled={csvDisabled}
                 style={{
                   flex: "1 1 200px",
                   padding: "14px", borderRadius: 12,
                   border: `1px solid ${BORDER}`,
                   background: "var(--surface-soft)",
-                  color: busy === "all" || isEmptyRange ? "var(--text-dim)" : "var(--text-strong)",
+                  color: busy === "all" || csvEmpty ? "var(--text-dim)" : "var(--text-strong)",
                   fontSize: 14, fontWeight: 600,
-                  cursor: bulkDisabled ? "not-allowed" : "pointer",
-                  opacity: bulkDim ? 0.55 : (busy !== null && busy !== "all" ? 0.5 : 1),
+                  cursor: csvDisabled ? "not-allowed" : "pointer",
+                  opacity: csvDim ? 0.55 : (busy !== null && busy !== "all" ? 0.5 : 1),
                 }}
               >
                 {allLabel}
@@ -1365,9 +1434,9 @@ export default function ExportPanel() {
             {canAccess("pdf_report") ? (
               <button
                 onClick={exportPdf}
-                disabled={bulkDisabled}
-                title={bulkTitle}
-                aria-disabled={bulkDisabled}
+                disabled={pdfDisabled}
+                title={pdfTitle}
+                aria-disabled={pdfDisabled}
                 style={{
                   flex: "1 1 200px",
                   padding: "14px", borderRadius: 12,
@@ -1379,9 +1448,9 @@ export default function ExportPanel() {
                       : `linear-gradient(135deg, ${ACCENT}, #3B5BE0)`,
                   color: isEmptyRange ? "var(--text-dim)" : "var(--text)",
                   fontSize: 14, fontWeight: 700,
-                  cursor: bulkDisabled ? "not-allowed" : "pointer",
+                  cursor: pdfDisabled ? "not-allowed" : "pointer",
                   boxShadow: busy === null && !isEmptyRange ? `0 4px 18px ${ACCENT}30` : "none",
-                  opacity: bulkDim ? 0.55 : (busy !== null && busy !== "pdf" ? 0.5 : 1),
+                  opacity: pdfDim ? 0.55 : (busy !== null && busy !== "pdf" ? 0.5 : 1),
                   display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
                 }}
               >

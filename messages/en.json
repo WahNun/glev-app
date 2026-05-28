@@ -1701,7 +1701,8 @@
     "count_meals": "{n, plural, one {# meal} other {# meals}}",
     "count_insulin": "{n, plural, one {# insulin entry} other {# insulin entries}}",
     "count_exercise": "{n, plural, one {# exercise entry} other {# exercise entries}}",
-    "count_fingersticks": "{n, plural, one {# fingerstick} other {# fingersticks}}"
+    "count_fingersticks": "{n, plural, one {# fingerstick} other {# fingersticks}}",
+    "bulk_kinds_label": "Include in ZIP"
   },
   "fingerstick": {
     "card_eyebrow": "Fingerstick glucose",
