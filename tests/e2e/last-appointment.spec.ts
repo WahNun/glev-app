@@ -774,6 +774,9 @@ test.describe("Settings → Arzttermine note round-trip", () => {
   });
 
   // --- 5. 200-character cap enforced via maxLength attribute -------------
+  //
+  // (Tests are numbered 1-7 in this block; test #6 and #7 appear further
+  // below after the cap check.)
   test("note input carries maxLength=200 so the browser enforces the cap", async ({ page }) => {
     await loginAsTestUser(page);
     await page.goto("/settings");
@@ -799,7 +802,80 @@ test.describe("Settings → Arzttermine note round-trip", () => {
     await expect(noteInput).toHaveAttribute("maxlength", "200");
   });
 
-  // --- 6. Clearing the date (deleting the appointment) wipes the note ----
+  // --- 6. Edit-flow: changing the note on an existing row persists -------
+  // Why this is distinct from the other note tests:
+  //   Tests 1–5 only cover the *add* path (note typed in the add-form)
+  //   and the *delete* path.  The *edit* path — opening an existing row
+  //   in the inline-edit form, changing its note, and saving — is a
+  //   separate code branch (updateAppointmentAction / updateAppointment).
+  //   A regression there (e.g. `updateAppointment` dropping the note
+  //   field entirely, or the edit-form pre-populating it incorrectly)
+  //   would go undetected by every other test in this describe block.
+  //
+  // Flow:
+  //   seed row with "Original note"
+  //   → open Settings sheet → click Edit → change note → click Save
+  //   → assert DB has "Updated note from edit flow"
+  //   → reload, re-open sheet → assert updated note visible in list
+  //   → assert old note is no longer visible
+  test("editing an existing appointment's note persists to the DB and is visible after reload", async ({ page }) => {
+    // Seed via admin so we have a known row to edit.
+    const admin = getAdminClient();
+    await seedAppointmentWithNote(admin, testUser.userId, "2026-03-20", "Original note");
+
+    // Sanity-check: the seeded note is in the DB before we touch the UI.
+    expect(await readLatestAppointmentNote(testUser.userId)).toBe("Original note");
+
+    await loginAsTestUser(page);
+    await page.goto("/settings");
+
+    const apptsRow = page.getByRole("button", { name: APPTS_ROW_ARIA });
+    await expect(apptsRow).toBeVisible();
+    await apptsRow.click();
+
+    // Read-only row must display the existing note before we edit.
+    await expect(page.getByText("Original note")).toBeVisible({ timeout: 10_000 });
+
+    // Click the Edit button to activate the inline-edit form for this row.
+    // The aria-label / button text is "Edit" (EN) or "Bearbeiten" (DE).
+    await page.getByRole("button", { name: /^(Edit|Bearbeiten)$/ }).click();
+
+    // The edit form renders a note textbox with the same aria-label as
+    // the add-form's note input (appointments_note_label → "Note" / "Notiz").
+    // The add-form's textbox is index 0; the edit-form's is index 1.
+    const NOTE_LABEL = /^(Note|Notiz)$/;
+    const editNoteInput = page.getByRole("textbox", { name: NOTE_LABEL }).nth(1);
+    await expect(editNoteInput).toBeVisible();
+    // Must be pre-filled with the existing note value.
+    await expect(editNoteInput).toHaveValue("Original note");
+
+    // Type the new note.
+    await editNoteInput.fill("Updated note from edit flow");
+
+    // Click Save. The save button text is "Save" (EN) or "Speichern" (DE).
+    // Only one Save button is visible (inside the active edit row).
+    await page.getByRole("button", { name: /^(Save|Speichern)$/ }).first().click();
+
+    // DB assertion: poll until the note column reflects the new value.
+    await expect.poll(
+      () => readLatestAppointmentNote(testUser.userId),
+      { timeout: 10_000 },
+    ).toBe("Updated note from edit flow");
+
+    // UI assertion: reload and re-open the sheet — the updated note must
+    // appear in the row's read-only display and the old note must be gone.
+    await page.reload();
+    await page.goto("/settings");
+    await expect(apptsRow).toBeVisible();
+    await apptsRow.click();
+
+    await expect(
+      page.getByText("Updated note from edit flow"),
+    ).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText("Original note")).toHaveCount(0);
+  });
+
+  // --- 7. Clearing the date (deleting the appointment) wipes the note ----
   // Why this is a distinct test from #3 (deletion):
   //   The schema retains a legacy `user_settings.last_appointment_note`
   //   column from before Task #93 moved appointments into a dedicated
