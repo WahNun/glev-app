@@ -40,7 +40,7 @@ export interface Pattern {
 }
 
 const WINDOW = 20;
-const WINDOW_DAYS = 30;
+export const WINDOW_DAYS = 30;
 const WINDOW_MS = WINDOW_DAYS * 24 * 60 * 60 * 1000;
 
 export function detectPattern(meals: Meal[], now: Date = new Date()): Pattern {

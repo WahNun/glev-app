@@ -2583,6 +2583,13 @@ export default function InsightsPage() {
                       <div style={{ fontSize:13, color:"var(--text-muted)", lineHeight:1.5 }}>
                         {explanation}
                       </div>
+                      {/* 30-day window attribution — always shown so users know
+                          exactly which meals drive the verdict, and so the
+                          "insufficient_data" state prompts logging *recently*
+                          rather than just "more". */}
+                      <div style={{ fontSize:11, color:"var(--text-faint)", marginTop:6, opacity:0.75 }}>
+                        {tInsights("pattern_window_subline")}
+                      </div>
                     </>
                   );
                 })()}
