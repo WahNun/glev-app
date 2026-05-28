@@ -87,6 +87,7 @@ import SnapSlider from "@/components/log/SnapSlider";
 import { BASAL_WINDOW_PRESETS, DEFAULT_BASAL_WINDOW_H } from "@/lib/engine/constants";
 import { useFeatureFlag } from "@/lib/featureFlags";
 import UpgradeGate from "@/components/UpgradeGate";
+import { usePlan } from "@/hooks/usePlan";
 
 const ACCENT = "#4F6EF7", GREEN = "#22D3A0", PINK = "#FF2D78", PURPLE = "#A78BFA";
 const BORDER = "var(--border)";
@@ -240,6 +241,7 @@ export default function SettingsPage() {
   const tFoodHistory = useTranslations("foodHistory");
   const router = useRouter();
   const aiVoiceEnabled = useFeatureFlag("ai_voice");
+  const { canAccess } = usePlan();
   const [settings, setSettings] = useState<Settings>(DEFAULTS);
   // Tracks whether the user has manually touched any insulin field
   // (icr / cf / targetBg) before the async `fetchInsulinSettings` round
@@ -3213,20 +3215,22 @@ export default function SettingsPage() {
 
       {/* Arzttermine wandern aus der Insulin-Sektion in eine eigene
           „Termine"-Sektion — gehören thematisch nicht zu Insulin und
-          standen vorher nur historisch dort. */}
-      <UpgradeGate feature="doctor_appointment_tracker">
-        <SettingsSection title={tSettings("section_appointments")}>
-          <SettingsRow
-            first
-            iconColor={ACCENT}
-            icon={ICON.calendar}
-            label={tSettings("appointments_title")}
-            subtitle={lastAppointmentSub}
-            ariaLabel={tSettings("row_open_aria", { label: tSettings("appointments_title") })}
-            onClick={() => openSheetWith("lastAppointment")}
-          />
-        </SettingsSection>
-      </UpgradeGate>
+          standen vorher nur historisch dort.
+          Lock-UX: Sektion ist immer sichtbar; fehlt der Plan, sitzt nur
+          ein kleines Schloss-Icon am rechten Rand der Zeile (kein Blur,
+          kein Overlay). */}
+      <SettingsSection title={tSettings("section_appointments")}>
+        <SettingsRow
+          first
+          iconColor={ACCENT}
+          icon={ICON.calendar}
+          label={tSettings("appointments_title")}
+          subtitle={lastAppointmentSub}
+          ariaLabel={tSettings("row_open_aria", { label: tSettings("appointments_title") })}
+          onClick={canAccess("doctor_appointment_tracker") ? () => openSheetWith("lastAppointment") : () => {}}
+          rightAdornment={<UpgradeGate feature="doctor_appointment_tracker" variant="row" />}
+        />
+      </SettingsSection>
 
       <SettingsSection title={tSettings("section_cgm")}>
         <SettingsRow

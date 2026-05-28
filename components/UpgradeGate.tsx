@@ -9,9 +9,11 @@ const ACCENT = "#4F6EF7";
 export default function UpgradeGate({
   feature,
   children,
+  variant = "overlay",
 }: {
   feature: string;
   children?: React.ReactNode;
+  variant?: "overlay" | "row";
 }) {
   const { canAccess, loading } = usePlan();
 
@@ -22,14 +24,39 @@ export default function UpgradeGate({
   const tier = FEATURE_TIERS[feature] ?? "pro";
   const planName = requiredPlanLabel(tier);
 
+  if (variant === "row") {
+    return (
+      <Link
+        href="/pro"
+        aria-label={`${planName} erforderlich`}
+        style={{
+          display: "inline-flex",
+          alignItems: "center",
+          justifyContent: "center",
+          width: 28,
+          height: 28,
+          borderRadius: 8,
+          background: `${ACCENT}14`,
+          color: ACCENT,
+          textDecoration: "none",
+          flexShrink: 0,
+          fontSize: 14,
+          lineHeight: 1,
+        }}
+      >
+        🔒
+      </Link>
+    );
+  }
+
   return (
     <div style={{ position: "relative" }}>
       {children && (
         <div
           aria-hidden="true"
           style={{
-            filter: "blur(5px)",
-            opacity: 0.35,
+            filter: "blur(2.5px)",
+            opacity: 0.6,
             pointerEvents: "none",
             userSelect: "none",
           }}
