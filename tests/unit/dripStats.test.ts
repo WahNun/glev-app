@@ -4,7 +4,8 @@
 // The page itself is just a presentation layer over
 // aggregateDripStats() — these tests pin the parts that are easy to
 // get subtly wrong: the "unsubscribed AFTER sent_at" rule, the 7d/30d
-// window cutoffs, and the rate formatter's empty-denominator behavior.
+// window cutoffs, the click-through counter, and the rate formatter's
+// empty-denominator behavior.
 
 import { test, expect } from "@playwright/test";
 
@@ -13,6 +14,7 @@ import {
   aggregateDailyDripSeries,
   DAILY_SERIES_DEFAULT_DAYS,
   formatRate,
+  formatCtr,
   DRIP_TYPES,
   DRIP_TYPE_LABEL,
   type SentRow,
@@ -29,38 +31,50 @@ function iso(offsetDays: number): string {
 test("aggregator returns one row per drip type, in canonical order", () => {
   const stats = aggregateDripStats([], [], NOW);
   expect(stats.map((s) => s.type)).toEqual([
+    "re_engagement",
+    "trial_day6_reminder",
+    "trial_expired",
     "day7_insights",
     "day14_feedback",
     "day30_trustpilot",
-    "trial_day6_reminder",
-    "trial_expired",
   ]);
   for (const s of stats) {
-    expect(s.total).toEqual({ sent: 0, unsubscribed: 0 });
-    expect(s.last7d).toEqual({ sent: 0, unsubscribed: 0 });
-    expect(s.last30d).toEqual({ sent: 0, unsubscribed: 0 });
+    expect(s.total).toEqual({ sent: 0, clicked: 0, unsubscribed: 0 });
+    expect(s.last7d).toEqual({ sent: 0, clicked: 0, unsubscribed: 0 });
+    expect(s.last30d).toEqual({ sent: 0, clicked: 0, unsubscribed: 0 });
   }
 });
 
-test("counts a sent mail, with no unsubscribe", () => {
+test("counts a sent mail, with no unsubscribe and no click", () => {
   const sent: SentRow[] = [
-    { email: "a@x.de", email_type: "day7_insights", sent_at: iso(2) },
+    { email: "a@x.de", email_type: "day7_insights", sent_at: iso(2), clicked_at: null },
   ];
   const stats = aggregateDripStats(sent, [], NOW);
   const day7 = stats.find((s) => s.type === "day7_insights")!;
-  expect(day7.total).toEqual({ sent: 1, unsubscribed: 0 });
-  expect(day7.last7d).toEqual({ sent: 1, unsubscribed: 0 });
-  expect(day7.last30d).toEqual({ sent: 1, unsubscribed: 0 });
+  expect(day7.total).toEqual({ sent: 1, clicked: 0, unsubscribed: 0 });
+  expect(day7.last7d).toEqual({ sent: 1, clicked: 0, unsubscribed: 0 });
+  expect(day7.last30d).toEqual({ sent: 1, clicked: 0, unsubscribed: 0 });
+});
+
+test("counts clicked_at when present", () => {
+  const sent: SentRow[] = [
+    { email: "a@x.de", email_type: "day7_insights", sent_at: iso(2), clicked_at: iso(1) },
+    { email: "b@x.de", email_type: "day7_insights", sent_at: iso(5), clicked_at: null },
+  ];
+  const stats = aggregateDripStats(sent, [], NOW);
+  const day7 = stats.find((s) => s.type === "day7_insights")!;
+  expect(day7.total.clicked).toBe(1);
+  expect(day7.last7d.clicked).toBe(1);
 });
 
 test("only counts unsubscribes that happened on or after sent_at", () => {
   const sent: SentRow[] = [
     // mail sent 2 days ago
-    { email: "after@x.de", email_type: "day14_feedback", sent_at: iso(2) },
+    { email: "after@x.de", email_type: "day14_feedback", sent_at: iso(2), clicked_at: null },
     // mail sent 5 days ago to someone who unsubscribed BEFORE — should not
     // be attributed to this drip. (In practice the cron skips them, this
     // is the defensive guard.)
-    { email: "before@x.de", email_type: "day14_feedback", sent_at: iso(5) },
+    { email: "before@x.de", email_type: "day14_feedback", sent_at: iso(5), clicked_at: null },
   ];
   const unsubs: UnsubRow[] = [
     { email: "after@x.de", unsubscribed_at: iso(1) }, // after the send
@@ -74,9 +88,9 @@ test("only counts unsubscribes that happened on or after sent_at", () => {
 
 test("buckets respect the 7-day and 30-day windows independently", () => {
   const sent: SentRow[] = [
-    { email: "fresh@x.de", email_type: "day30_trustpilot", sent_at: iso(3) }, // in 7d
-    { email: "midweek@x.de", email_type: "day30_trustpilot", sent_at: iso(15) }, // in 30d only
-    { email: "oldie@x.de", email_type: "day30_trustpilot", sent_at: iso(60) }, // outside both
+    { email: "fresh@x.de", email_type: "day30_trustpilot", sent_at: iso(3), clicked_at: null }, // in 7d
+    { email: "midweek@x.de", email_type: "day30_trustpilot", sent_at: iso(15), clicked_at: null }, // in 30d only
+    { email: "oldie@x.de", email_type: "day30_trustpilot", sent_at: iso(60), clicked_at: null }, // outside both
   ];
   const unsubs: UnsubRow[] = [
     { email: "fresh@x.de", unsubscribed_at: iso(2) }, // counts in 7d & 30d
@@ -85,19 +99,19 @@ test("buckets respect the 7-day and 30-day windows independently", () => {
   ];
   const stats = aggregateDripStats(sent, unsubs, NOW);
   const d30 = stats.find((s) => s.type === "day30_trustpilot")!;
-  expect(d30.total).toEqual({ sent: 3, unsubscribed: 3 });
-  expect(d30.last30d).toEqual({ sent: 2, unsubscribed: 2 });
-  expect(d30.last7d).toEqual({ sent: 1, unsubscribed: 1 });
+  expect(d30.total).toEqual({ sent: 3, clicked: 0, unsubscribed: 3 });
+  expect(d30.last30d).toEqual({ sent: 2, clicked: 0, unsubscribed: 2 });
+  expect(d30.last7d).toEqual({ sent: 1, clicked: 0, unsubscribed: 1 });
 });
 
 test("ignores rows with null/invalid sent_at and unknown email types", () => {
   const sent = [
-    { email: "ok@x.de", email_type: "day7_insights", sent_at: iso(1) },
+    { email: "ok@x.de", email_type: "day7_insights", sent_at: iso(1), clicked_at: null },
     // null sent_at — defensively tolerated even though the page filters
     // these out at the SQL layer
-    { email: "skip@x.de", email_type: "day7_insights", sent_at: null as unknown as string },
+    { email: "skip@x.de", email_type: "day7_insights", sent_at: null as unknown as string, clicked_at: null },
     // unknown drip type — drop silently rather than crash
-    { email: "weird@x.de", email_type: "day99_madeup" as never, sent_at: iso(1) },
+    { email: "weird@x.de", email_type: "day99_madeup" as never, sent_at: iso(1), clicked_at: null },
   ] as SentRow[];
   const stats = aggregateDripStats(sent, [], NOW);
   const day7 = stats.find((s) => s.type === "day7_insights")!;
@@ -110,6 +124,13 @@ test("formatRate returns dash for zero sent, one decimal otherwise", () => {
   expect(formatRate(100, 1)).toBe("1.0%");
   expect(formatRate(1000, 14)).toBe("1.4%");
   expect(formatRate(3, 1)).toBe("33.3%");
+});
+
+test("formatCtr returns dash for zero sent, one decimal otherwise", () => {
+  expect(formatCtr(0, 0)).toBe("—");
+  expect(formatCtr(0, 3)).toBe("—");
+  expect(formatCtr(100, 12)).toBe("12.0%");
+  expect(formatCtr(1000, 143)).toBe("14.3%");
 });
 
 test("DRIP_TYPE_LABEL covers every DRIP_TYPES entry", () => {
@@ -153,6 +174,7 @@ test("daily series buckets a sent mail on the UTC day of sent_at", () => {
       email_type: "day7_insights",
       // 14:30 UTC → still 2026-04-29 in UTC, regardless of host TZ.
       sent_at: "2026-04-29T14:30:00Z",
+      clicked_at: null,
     },
   ];
   const series = aggregateDailyDripSeries(sent, [], NOW, 7);
@@ -181,6 +203,7 @@ test("daily series buckets opt-outs on the day they happened, not the send day",
       email: "spike@x.de",
       email_type: "day14_feedback",
       sent_at: "2026-04-24T08:00:00Z", // Friday
+      clicked_at: null,
     },
   ];
   const unsubs: UnsubRow[] = [
@@ -205,6 +228,7 @@ test("daily series ignores unsubscribes that happened before sent_at", () => {
       email: "before@x.de",
       email_type: "day30_trustpilot",
       sent_at: "2026-04-20T10:00:00Z",
+      clicked_at: null,
     },
   ];
   const unsubs: UnsubRow[] = [
@@ -223,9 +247,9 @@ test("daily series ignores unsubscribes that happened before sent_at", () => {
 test("daily series drops events outside the trailing window", () => {
   const sent: SentRow[] = [
     // Inside the default 30-day window (~10 days ago).
-    { email: "fresh@x.de", email_type: "day7_insights", sent_at: iso(10) },
+    { email: "fresh@x.de", email_type: "day7_insights", sent_at: iso(10), clicked_at: null },
     // 60 days ago — well outside the window.
-    { email: "ancient@x.de", email_type: "day7_insights", sent_at: iso(60) },
+    { email: "ancient@x.de", email_type: "day7_insights", sent_at: iso(60), clicked_at: null },
   ];
   const series = aggregateDailyDripSeries(sent, [], NOW);
   const totalSent = series.day7_insights.reduce((acc, b) => acc + b.sent, 0);
@@ -238,12 +262,12 @@ test("daily series sent totals reconcile with aggregateDripStats.last30d", () =>
   // invariant: summing the chart's `sent` over the 30-day window must
   // equal the table's `last30d.sent` for every drip type.
   const sent: SentRow[] = [
-    { email: "a@x.de", email_type: "day7_insights", sent_at: iso(2) },
-    { email: "b@x.de", email_type: "day7_insights", sent_at: iso(20) },
-    { email: "c@x.de", email_type: "day14_feedback", sent_at: iso(5) },
-    { email: "d@x.de", email_type: "day30_trustpilot", sent_at: iso(15) },
+    { email: "a@x.de", email_type: "day7_insights", sent_at: iso(2), clicked_at: iso(1) },
+    { email: "b@x.de", email_type: "day7_insights", sent_at: iso(20), clicked_at: null },
+    { email: "c@x.de", email_type: "day14_feedback", sent_at: iso(5), clicked_at: null },
+    { email: "d@x.de", email_type: "day30_trustpilot", sent_at: iso(15), clicked_at: null },
     // outside window — neither side should count this
-    { email: "e@x.de", email_type: "day30_trustpilot", sent_at: iso(60) },
+    { email: "e@x.de", email_type: "day30_trustpilot", sent_at: iso(60), clicked_at: null },
   ];
   const unsubs: UnsubRow[] = [
     { email: "b@x.de", unsubscribed_at: iso(10) }, // after b's send → counts

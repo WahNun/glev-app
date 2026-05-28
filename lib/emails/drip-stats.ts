@@ -22,11 +22,12 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 
 /** All drip types, in the order we present them in the UI. */
 export const DRIP_TYPES: ReadonlyArray<DripEmailType> = [
+  "re_engagement",
+  "trial_day6_reminder",
+  "trial_expired",
   "day7_insights",
   "day14_feedback",
   "day30_trustpilot",
-  "trial_day6_reminder",
-  "trial_expired",
 ];
 
 export interface SentRow {
@@ -34,6 +35,8 @@ export interface SentRow {
   email_type: DripEmailType;
   /** ISO timestamp; rows with `sent_at IS NULL` must be filtered before. */
   sent_at: string;
+  /** ISO timestamp; null when recipient has not yet clicked any CTA. */
+  clicked_at: string | null;
 }
 
 export interface UnsubRow {
@@ -44,6 +47,7 @@ export interface UnsubRow {
 
 export interface WindowStats {
   sent: number;
+  clicked: number;
   unsubscribed: number;
 }
 
@@ -90,9 +94,9 @@ export function aggregateDripStats(
   for (const t of DRIP_TYPES) {
     stats.set(t, {
       type: t,
-      total: { sent: 0, unsubscribed: 0 },
-      last7d: { sent: 0, unsubscribed: 0 },
-      last30d: { sent: 0, unsubscribed: 0 },
+      total: { sent: 0, clicked: 0, unsubscribed: 0 },
+      last7d: { sent: 0, clicked: 0, unsubscribed: 0 },
+      last30d: { sent: 0, clicked: 0, unsubscribed: 0 },
     });
   }
 
@@ -105,23 +109,25 @@ export function aggregateDripStats(
     if (!Number.isFinite(sentAt)) continue;
 
     const unsubAt = unsubByEmail.get(row.email);
-    // Counts as "after this drip" only if the opt-out happened on or
-    // after the send timestamp. Pre-existing unsubs are ignored — the
-    // cron skips those before sending, so they should not even appear
-    // here, but the guard keeps the math honest if they ever do.
     const wasUnsubAfter = unsubAt !== undefined && unsubAt >= sentAt;
 
+    const clickedAt = row.clicked_at ? Date.parse(row.clicked_at) : undefined;
+    const wasClicked = clickedAt !== undefined && Number.isFinite(clickedAt);
+
     bucket.total.sent += 1;
+    if (wasClicked) bucket.total.clicked += 1;
     if (wasUnsubAfter) bucket.total.unsubscribed += 1;
 
     if (sentAt >= cutoff30) {
       bucket.last30d.sent += 1;
+      if (wasClicked) bucket.last30d.clicked += 1;
       if (wasUnsubAfter && unsubAt! >= cutoff30) {
         bucket.last30d.unsubscribed += 1;
       }
     }
     if (sentAt >= cutoff7) {
       bucket.last7d.sent += 1;
+      if (wasClicked) bucket.last7d.clicked += 1;
       if (wasUnsubAfter && unsubAt! >= cutoff7) {
         bucket.last7d.unsubscribed += 1;
       }
@@ -214,12 +220,22 @@ export function findAlertableSpikes(
 
 /** German labels for the drip types — matches the template subjects. */
 export const DRIP_TYPE_LABEL: Record<DripEmailType, string> = {
+  re_engagement: "Re-Engagement (48h inaktiv)",
+  trial_day6_reminder: "Trial Tag 6 — Erinnerung",
+  trial_expired: "Trial Tag 7 — Abgelaufen",
   day7_insights: "Tag 7 — Insights",
   day14_feedback: "Tag 14 — Feedback",
   day30_trustpilot: "Tag 30 — Trustpilot",
-  trial_day6_reminder: "Trial Tag 6 — Erinnerung",
-  trial_expired: "Trial Tag 7 — Abgelaufen",
 };
+
+/**
+ * Format a click-through rate ("12.3%"). Returns "—" when no mails
+ * were sent so the table never shows "NaN%" or division by zero.
+ */
+export function formatCtr(sent: number, clicked: number): string {
+  if (!sent) return "—";
+  return `${((clicked / sent) * 100).toFixed(1)}%`;
+}
 
 /** A single calendar day's bucket of sent + opt-out counts. */
 export interface DailyBucket {

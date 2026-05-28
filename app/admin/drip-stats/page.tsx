@@ -6,6 +6,7 @@ import {
   aggregateDailyDripSeries,
   DAILY_SERIES_DEFAULT_DAYS,
   formatRate,
+  formatCtr,
   DRIP_TYPE_LABEL,
   type SentRow,
   type UnsubRow,
@@ -95,10 +96,12 @@ export default async function AdminDripStatsPage({
   // matches the partial index on email_drip_schedule and keeps the
   // payload focused on "actually sent" mail. The aggregator tolerates
   // null sent_at defensively if the filter ever changes.
+  // clicked_at is fetched alongside so the aggregator can compute CTR
+  // without a second round-trip.
   const [sentRes, unsubRes] = await Promise.all([
     sb
       .from("email_drip_schedule")
-      .select("email, email_type, sent_at")
+      .select("email, email_type, sent_at, clicked_at")
       .not("sent_at", "is", null)
       .order("sent_at", { ascending: false })
       .limit(ROW_LIMIT),
@@ -148,13 +151,15 @@ export default async function AdminDripStatsPage({
             <thead>
               <tr>
                 <th style={thStyle}>Drip-Mail</th>
-                <th style={thNumStyle}>Versendet (gesamt)</th>
-                <th style={thNumStyle}>Abgemeldet (gesamt)</th>
-                <th style={thNumStyle}>Quote</th>
-                <th style={thNumStyle}>Versendet (7T)</th>
-                <th style={thNumStyle}>Abgemeldet (7T)</th>
-                <th style={thNumStyle}>Versendet (30T)</th>
-                <th style={thNumStyle}>Abgemeldet (30T)</th>
+                <th style={thNumStyle}>Versendet</th>
+                <th style={{...thNumStyle, color: "#1a73e8"}}>Geklickt</th>
+                <th style={{...thNumStyle, color: "#1a73e8"}}>CTR</th>
+                <th style={thNumStyle}>Abgemeldet</th>
+                <th style={thNumStyle}>Abmeld.-Quote</th>
+                <th style={thNumStyle}>7T versendet</th>
+                <th style={{...thNumStyle, color: "#1a73e8"}}>7T CTR</th>
+                <th style={thNumStyle}>30T versendet</th>
+                <th style={{...thNumStyle, color: "#1a73e8"}}>30T CTR</th>
                 <th style={thChartStyle}>
                   Verlauf ({DAILY_SERIES_DEFAULT_DAYS}T)
                   <SparkLegend />
@@ -166,6 +171,12 @@ export default async function AdminDripStatsPage({
                 <tr key={s.type}>
                   <td style={tdStyle}>{DRIP_TYPE_LABEL[s.type]}</td>
                   <td style={tdNumStyle}>{s.total.sent.toLocaleString("de-DE")}</td>
+                  <td style={{...tdNumStyle, color: s.total.clicked > 0 ? "#1a73e8" : "#999"}}>
+                    {s.total.clicked.toLocaleString("de-DE")}
+                  </td>
+                  <td style={{...tdNumStyle, fontWeight: 600, color: s.total.clicked > 0 ? "#1a73e8" : "#999"}}>
+                    {formatCtr(s.total.sent, s.total.clicked)}
+                  </td>
                   <td style={tdNumStyle}>
                     {s.total.unsubscribed.toLocaleString("de-DE")}
                   </td>
@@ -173,12 +184,12 @@ export default async function AdminDripStatsPage({
                     {formatRate(s.total.sent, s.total.unsubscribed)}
                   </td>
                   <td style={tdNumStyle}>{s.last7d.sent.toLocaleString("de-DE")}</td>
-                  <td style={tdNumStyle}>
-                    {s.last7d.unsubscribed.toLocaleString("de-DE")}
+                  <td style={{...tdNumStyle, color: s.last7d.clicked > 0 ? "#1a73e8" : "#999"}}>
+                    {formatCtr(s.last7d.sent, s.last7d.clicked)}
                   </td>
                   <td style={tdNumStyle}>{s.last30d.sent.toLocaleString("de-DE")}</td>
-                  <td style={tdNumStyle}>
-                    {s.last30d.unsubscribed.toLocaleString("de-DE")}
+                  <td style={{...tdNumStyle, color: s.last30d.clicked > 0 ? "#1a73e8" : "#999"}}>
+                    {formatCtr(s.last30d.sent, s.last30d.clicked)}
                   </td>
                   <td style={tdChartStyle}>
                     <DailySparkClient
