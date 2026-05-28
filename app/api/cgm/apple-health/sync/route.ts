@@ -149,12 +149,17 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  let body: { samples?: unknown };
+  let body: { samples?: unknown; source?: unknown };
   try {
-    body = (await req.json()) as { samples?: unknown };
+    body = (await req.json()) as { samples?: unknown; source?: unknown };
   } catch {
     return NextResponse.json({ error: "invalid json body" }, { status: 400 });
   }
+
+  // Optional top-level field that AppDelegate.swift sets to "background"
+  // for observer-query deliveries. The value is recorded server-side so
+  // the Settings card can distinguish background vs foreground sync.
+  const isBackground = body.source === "background";
 
   const samples = Array.isArray(body.samples) ? body.samples : null;
   if (!samples) {
@@ -212,6 +217,19 @@ export async function POST(req: NextRequest) {
       throw e;
     }
 
+    // Record the server-side timestamp of this background delivery so
+    // the Settings card can surface "last background sync N min ago" and
+    // warn when background delivery has been silent for > 6 h.
+    // Fire-and-forget — a failure here must not abort the 201 response
+    // because the samples were already committed.
+    if (isBackground && result.inserted > 0) {
+      void Promise.resolve(
+        sb.from("profiles")
+          .update({ apple_health_bg_last_delivery: new Date().toISOString() })
+          .eq("user_id", user.id)
+      ).catch(() => {});
+    }
+
     skipped += result.skipped;
     return NextResponse.json({ inserted: result.inserted, skipped });
   } catch (e) {
@@ -244,6 +262,7 @@ export async function GET(req: NextRequest) {
       lastTimestamp: status.lastTimestamp,
       lastValueMgDl: status.lastValueMgDl,
       lastTrend: status.lastTrend,
+      lastBackgroundTimestamp: status.lastBackgroundTimestamp,
     });
   } catch (e) {
     return errResponse(e);

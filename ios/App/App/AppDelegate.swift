@@ -191,7 +191,10 @@ final class HealthKitGlucoseBackgroundSync {
             ]
         }
 
-        guard let bodyData = try? JSONSerialization.data(withJSONObject: ["samples": payload]) else {
+        // Tag this request as a background delivery so the server can
+        // record `profiles.apple_health_bg_last_delivery` and the
+        // Settings card can distinguish background vs foreground sync.
+        guard let bodyData = try? JSONSerialization.data(withJSONObject: ["samples": payload, "source": "background"]) else {
             completion()
             return
         }

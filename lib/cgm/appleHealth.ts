@@ -173,10 +173,11 @@ export async function getSyncStatus(
   lastTimestamp: string | null;
   lastValueMgDl: number | null;
   lastTrend: string | null;
+  lastBackgroundTimestamp: string | null;
 }> {
   const sb = adminClient();
 
-  const [countRes, latestRes] = await Promise.all([
+  const [countRes, latestRes, profileRes] = await Promise.all([
     sb
       .from("apple_health_readings")
       .select("id", { count: "exact", head: true })
@@ -191,6 +192,15 @@ export async function getSyncStatus(
       .eq("user_id", userId)
       .order("timestamp", { ascending: false })
       .limit(LATEST_LOOKBACK_ROWS),
+    // Background delivery timestamp: updated by POST /api/cgm/apple-health/sync
+    // whenever AppDelegate.swift delivers samples with source='background'.
+    // NULL means the observer has never successfully fired since the column
+    // was added (new install, or first version with this feature).
+    sb
+      .from("profiles")
+      .select("apple_health_bg_last_delivery")
+      .eq("user_id", userId)
+      .maybeSingle(),
   ]);
 
   // Surface DB errors instead of silently returning a "0 readings"
@@ -213,14 +223,24 @@ export async function getSyncStatus(
     e.status = 502;
     throw e;
   }
+  // profileRes errors are non-fatal — a missing profiles row or a DB hiccup
+  // should not break the entire status response; we just show "never" for bg.
 
   const rows = (latestRes.data ?? []) as DbRow[];
   const row = rows[0] ?? null;
   const lastTrend = rows.length > 0 ? deriveTrend(rows, 0) : null;
+  const bgTs =
+    profileRes.data &&
+    typeof (profileRes.data as { apple_health_bg_last_delivery?: unknown })
+      .apple_health_bg_last_delivery === "string"
+      ? ((profileRes.data as { apple_health_bg_last_delivery: string })
+          .apple_health_bg_last_delivery ?? null)
+      : null;
   return {
     count: countRes.count ?? 0,
     lastTimestamp: row?.timestamp ?? null,
     lastValueMgDl: row?.value_mg_dl ?? null,
     lastTrend,
+    lastBackgroundTimestamp: bgTs,
   };
 }

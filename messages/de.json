@@ -1512,7 +1512,14 @@
       "permission_revoked": "Apple Health Zugriff fehlt — bitte in iOS Einstellungen aktivieren",
       "freshness_fresh": "vor weniger als 5 Min",
       "freshness_stale": "vor {n} Min",
-      "freshness_old": "vor mehr als 15 Min"
+      "freshness_old": "vor mehr als 15 Min",
+      "fg_sync_label": "Vordergrund-Sync",
+      "bg_delivery_label": "Hintergrund-Lieferung:",
+      "bg_delivery_never": "noch nie empfangen",
+      "bg_warn_title": "Hintergrund-Sync hat gestoppt",
+      "bg_warn_body": "Seit mehr als 6 Stunden kam keine Lieferung vom Hintergrund-Observer. Das kann passieren, wenn iOS die Berechtigung widerrufen hat, deine Session abgelaufen ist oder die App neu gestartet werden muss. Tippe „Neu einrichten", um die Berechtigung zu erneuern, und öffne die App danach erneut.",
+      "bg_rearm_btn": "Neu einrichten",
+      "bg_rearm_success": "Berechtigung aktualisiert — schließe die App einmal und öffne sie wieder, damit der Hintergrund-Observer sich neu registriert."
     },
     "status": {
       "title": "CGM-Verbindung",

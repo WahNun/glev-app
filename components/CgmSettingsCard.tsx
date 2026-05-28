@@ -154,6 +154,7 @@ export default function CgmSettingsCard() {
     lastTimestamp: string | null;
     lastValueMgDl: number | null;
     lastTrend: string | null;
+    lastBackgroundTimestamp: string | null;
   } | null>(null);
   const [appleHealthPermissionRevoked, setAppleHealthPermissionRevoked] =
     useState(false);
@@ -263,12 +264,14 @@ export default function CgmSettingsCard() {
           lastTimestamp?: string | null;
           lastValueMgDl?: number | null;
           lastTrend?: string | null;
+          lastBackgroundTimestamp?: string | null;
         };
         setAppleHealthStatus({
           count: j?.count ?? 0,
           lastTimestamp: j?.lastTimestamp ?? null,
           lastValueMgDl: j?.lastValueMgDl ?? null,
           lastTrend: j?.lastTrend ?? null,
+          lastBackgroundTimestamp: j?.lastBackgroundTimestamp ?? null,
         });
       }
       if (rangeRes.ok) {
@@ -1576,7 +1579,7 @@ export default function CgmSettingsCard() {
                 )}
 
                 {appleHealthSelected && appleHealthStatus && !appleHealthPermissionRevoked && (() => {
-                  const { lastTimestamp, lastValueMgDl, lastTrend, count } = appleHealthStatus;
+                  const { lastTimestamp, lastValueMgDl, lastTrend, count, lastBackgroundTimestamp } = appleHealthStatus;
                   const ageMs = lastTimestamp ? Date.now() - Date.parse(lastTimestamp) : null;
                   const ageMin = ageMs != null ? Math.floor(ageMs / 60_000) : null;
                   const dotColor =
@@ -1597,76 +1600,167 @@ export default function CgmSettingsCard() {
                     : ageMin < 5  ? tAh("freshness_fresh")
                     : ageMin < 15 ? tAh("freshness_stale", { n: ageMin })
                     : tAh("freshness_old");
+
+                  // Background delivery staleness check (> 6 h = warning)
+                  const BG_WARN_MS = 6 * 60 * 60 * 1000;
+                  const bgAgeMs = lastBackgroundTimestamp
+                    ? Date.now() - Date.parse(lastBackgroundTimestamp)
+                    : null;
+                  const bgStale = bgAgeMs == null || bgAgeMs > BG_WARN_MS;
+                  const bgLabel = lastBackgroundTimestamp
+                    ? formatRelativeAge(lastBackgroundTimestamp, tAh)
+                    : tAh("bg_delivery_never");
+
                   return (
-                    <div
-                      style={{
-                        background: "var(--card-bg, var(--surface))",
-                        border: "1px solid var(--border)",
-                        borderRadius: 12,
-                        padding: "12px 14px",
-                      }}
-                    >
-                      {lastValueMgDl != null ? (
-                        <div
-                          style={{
-                            display: "flex",
-                            alignItems: "center",
-                            gap: 8,
-                            marginBottom: 6,
-                          }}
-                        >
-                          <span
+                    <>
+                      <div
+                        style={{
+                          background: "var(--card-bg, var(--surface))",
+                          border: "1px solid var(--border)",
+                          borderRadius: 12,
+                          padding: "12px 14px",
+                        }}
+                      >
+                        {lastValueMgDl != null ? (
+                          <div
                             style={{
-                              width: 10,
-                              height: 10,
-                              borderRadius: "50%",
-                              background: dotColor,
-                              flexShrink: 0,
-                              boxShadow: `0 0 6px ${dotColor}80`,
-                            }}
-                          />
-                          <span
-                            style={{
-                              fontFamily: "var(--font-mono, monospace)",
-                              fontSize: 22,
-                              fontWeight: 600,
-                              letterSpacing: "-0.5px",
-                              color: "var(--text)",
-                              lineHeight: 1,
+                              display: "flex",
+                              alignItems: "center",
+                              gap: 8,
+                              marginBottom: 6,
                             }}
                           >
-                            {glucoseUnit === "mmol/L"
-                              ? `${mgdlToMmol(lastValueMgDl)} mmol/L`
-                              : `${lastValueMgDl} mg/dL`}
-                          </span>
-                          {arrow && (
                             <span
                               style={{
-                                fontSize: 20,
-                                color: "var(--text-dim)",
+                                width: 10,
+                                height: 10,
+                                borderRadius: "50%",
+                                background: dotColor,
+                                flexShrink: 0,
+                                boxShadow: `0 0 6px ${dotColor}80`,
+                              }}
+                            />
+                            <span
+                              style={{
+                                fontFamily: "var(--font-mono, monospace)",
+                                fontSize: 22,
+                                fontWeight: 600,
+                                letterSpacing: "-0.5px",
+                                color: "var(--text)",
                                 lineHeight: 1,
                               }}
                             >
-                              {arrow}
+                              {glucoseUnit === "mmol/L"
+                                ? `${mgdlToMmol(lastValueMgDl)} mmol/L`
+                                : `${lastValueMgDl} mg/dL`}
                             </span>
-                          )}
+                            {arrow && (
+                              <span
+                                style={{
+                                  fontSize: 20,
+                                  color: "var(--text-dim)",
+                                  lineHeight: 1,
+                                }}
+                              >
+                                {arrow}
+                              </span>
+                            )}
+                          </div>
+                        ) : (
+                          <div
+                            style={{
+                              fontSize: 13,
+                              color: "var(--text-dim)",
+                              marginBottom: 4,
+                            }}
+                          >
+                            {tAh("status_connected_no_values")}
+                          </div>
+                        )}
+                        <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 4 }}>
+                          {tAh("status_count", { count })}
+                          {freshnessLabel ? ` · ${tAh("fg_sync_label")} ${freshnessLabel}` : ""}
                         </div>
-                      ) : (
                         <div
                           style={{
-                            fontSize: 13,
-                            color: "var(--text-dim)",
-                            marginBottom: 4,
+                            fontSize: 12,
+                            color: bgStale ? "#F5A623" : "var(--text-dim)",
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 4,
                           }}
                         >
-                          {tAh("status_connected_no_values")}
+                          <span>{bgStale ? "⚠️" : "✓"}</span>
+                          <span>{tAh("bg_delivery_label")} {bgLabel}</span>
+                        </div>
+                      </div>
+
+                      {bgStale && (
+                        <div
+                          style={{
+                            marginTop: 8,
+                            padding: "10px 14px",
+                            borderRadius: 10,
+                            background: "#F5A62318",
+                            border: "1px solid #F5A62350",
+                            fontSize: 13,
+                            color: "#F5A623",
+                            lineHeight: 1.5,
+                          }}
+                        >
+                          <div style={{ fontWeight: 600, marginBottom: 4 }}>
+                            {tAh("bg_warn_title")}
+                          </div>
+                          <div style={{ color: "var(--text-muted, var(--text-dim))" }}>
+                            {tAh("bg_warn_body")}
+                          </div>
+                          <button
+                            type="button"
+                            style={{
+                              marginTop: 8,
+                              padding: "8px 14px",
+                              borderRadius: 8,
+                              border: "1px solid #F5A62370",
+                              background: "transparent",
+                              color: "#F5A623",
+                              fontSize: 13,
+                              fontWeight: 600,
+                              cursor: appleHealthSubmitting ? "wait" : "pointer",
+                              opacity: appleHealthSubmitting ? 0.6 : 1,
+                            }}
+                            disabled={appleHealthSubmitting}
+                            onClick={async () => {
+                              if (!isNativePlatform) return;
+                              setAppleHealthSubmitting(true);
+                              try {
+                                const { requestAuthorization } = await import(
+                                  "@/lib/cgm/appleHealthClient"
+                                );
+                                const auth = await requestAuthorization();
+                                if (auth.ok) {
+                                  setAppleHealthMessage({
+                                    kind: "success",
+                                    text: tAh("bg_rearm_success"),
+                                  });
+                                } else {
+                                  setAppleHealthMessage({
+                                    kind: "error",
+                                    text: tAh("permission_denied"),
+                                  });
+                                }
+                                await loadAppleHealthState();
+                              } catch {
+                                /* silent */
+                              } finally {
+                                setAppleHealthSubmitting(false);
+                              }
+                            }}
+                          >
+                            {tAh("bg_rearm_btn")}
+                          </button>
                         </div>
                       )}
-                      <div style={{ fontSize: 12, color: "var(--text-dim)" }}>
-                        {tAh("status_count", { count })}
-                        {freshnessLabel ? ` · ${freshnessLabel}` : ""}
-                      </div>
-                    </div>
+                    </>
                   );
                 })()}
 

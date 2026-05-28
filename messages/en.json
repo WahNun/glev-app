@@ -1512,7 +1512,14 @@
       "freshness_old": "more than 15 min ago",
       "source_toggle_label": "Use Apple Health as BG source",
       "open_ios_settings": "Open iOS Settings",
-      "status_connected_with_value_mmol": "✓ Connected — last value: {value} mmol/L"
+      "status_connected_with_value_mmol": "✓ Connected — last value: {value} mmol/L",
+      "fg_sync_label": "Foreground sync",
+      "bg_delivery_label": "Background delivery:",
+      "bg_delivery_never": "never received",
+      "bg_warn_title": "Background sync has stopped",
+      "bg_warn_body": "No background delivery has been received for more than 6 hours. This can happen if iOS revoked HealthKit permission, your session expired, or the app needs to be restarted. Tap \"Re-arm\" to renew the permission, then close and reopen the app.",
+      "bg_rearm_btn": "Re-arm",
+      "bg_rearm_success": "Permission refreshed — close the app once and reopen it so the background observer re-registers."
     },
     "status": {
       "title": "CGM connection",
