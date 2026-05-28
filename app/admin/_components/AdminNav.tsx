@@ -31,6 +31,7 @@ const ITEMS: ReadonlyArray<{ href: string; label: string }> = [
   { href: "/admin/drip", label: "Drip-Pipeline" },
   { href: "/admin/drip-stats", label: "Drip-Statistik" },
   { href: "/admin/emails", label: "Mail-Preview" },
+  { href: "/admin/outbox", label: "Mail-Outbox" },
   { href: "/admin/praxis", label: "Praxen" },
   { href: "/admin/settings", label: "Einstellungen" },
 ];
