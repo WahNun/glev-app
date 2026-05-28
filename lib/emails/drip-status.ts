@@ -9,16 +9,10 @@
 //      genau dieselbe Klassifikation. Doppelt implementieren wäre eine
 //      perfekte Quelle für "Counter sagt 3 failed, Tabelle zeigt 4".
 //
-// Wichtig: das Schema in 20260501_add_email_drip_schedule.sql trackt
-// keinen expliziten Failure-Zustand — der Drip-Cron lässt fehlgeschlagene
-// Rows einfach mit `sent_at IS NULL` stehen und versucht es täglich
-// erneut. Wir leiten "failed" daher aus der Heuristik ab: alles, was
-// merklich überfällig ist (scheduled_at < now - FAILED_GRACE_HOURS)
-// und immer noch nicht versendet, hat höchstwahrscheinlich beim
-// letzten Cron-Lauf einen Resend-Fehler gezogen. Diese Heuristik
-// reicht für Triage ("welche Rows muss ich anschauen?"), und der
-// Operator kann via "jetzt sofort senden" die echte Resend-Antwort
-// erzwingen, falls die Ursache extern behoben ist.
+// Ab Task #166: "failed" leitet sich aus `last_error IS NOT NULL` ab,
+// nicht mehr aus einer Zeit-Heuristik. Der Cron und die manuelle
+// sendNow-Action persistieren den Resend-Fehlertext jetzt direkt in
+// der DB — kein Log-Durchsuchen mehr nötig.
 
 export type DripStatus =
   | "sent"
@@ -27,15 +21,6 @@ export type DripStatus =
   | "due_this_week"
   | "scheduled_later"
   | "failed";
-
-/**
- * Karenzzeit nach `scheduled_at`, bevor eine noch nicht versendete Row
- * als "failed" markiert wird. Großzügig (24h), weil der Drip-Cron nur
- * einmal täglich um 09:00 UTC läuft: eine Row, deren scheduled_at z. B.
- * heute 11:00 UTC ist, hat den heutigen Cron-Tick bereits verpasst und
- * wird erst morgen 09:00 versucht — das ist normal, kein Failure.
- */
-export const FAILED_GRACE_HOURS = 24;
 
 export interface DripScheduleRow {
   id: string;
@@ -46,6 +31,12 @@ export interface DripScheduleRow {
   scheduled_at: string;
   sent_at: string | null;
   created_at: string;
+  /** Zeitstempel des letzten fehlgeschlagenen Versuchs. NULL = noch nie versucht. */
+  last_attempt_at: string | null;
+  /** Letzter Resend-Fehlertext. NOT NULL → mind. ein Versuch fehlgeschlagen. */
+  last_error: string | null;
+  /** Anzahl der fehlgeschlagenen Versuche. */
+  attempt_count: number;
 }
 
 export interface DripCounts {
@@ -81,8 +72,6 @@ export interface DripBucketWindows {
   dayAfterTomorrowStartIso: string;
   weekFromNowIso: string;
   sevenDaysAgoIso: string;
-  /** scheduled_at vor diesem Zeitpunkt + sent_at IS NULL → "failed". */
-  failedThresholdIso: string;
 }
 
 export function dripBucketWindows(now: Date): DripBucketWindows {
@@ -91,7 +80,6 @@ export function dripBucketWindows(now: Date): DripBucketWindows {
   const dayAfterTomorrowStart = new Date(tomorrowStart.getTime() + 24 * 60 * 60 * 1000);
   const weekFromNow = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
   const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-  const failedThreshold = new Date(now.getTime() - FAILED_GRACE_HOURS * 60 * 60 * 1000);
   return {
     nowIso: now.toISOString(),
     todayStartIso: todayStart.toISOString(),
@@ -99,7 +87,6 @@ export function dripBucketWindows(now: Date): DripBucketWindows {
     dayAfterTomorrowStartIso: dayAfterTomorrowStart.toISOString(),
     weekFromNowIso: weekFromNow.toISOString(),
     sevenDaysAgoIso: sevenDaysAgo.toISOString(),
-    failedThresholdIso: failedThreshold.toISOString(),
   };
 }
 
@@ -108,20 +95,16 @@ export function dripBucketWindows(now: Date): DripBucketWindows {
  *
  * Reihenfolge ist wichtig:
  *   1. `sent_at` gesetzt → "sent" (terminal, keine weiteren Buckets).
- *   2. überfällig > FAILED_GRACE_HOURS → "failed" (Triage-Bucket).
+ *   2. `last_error` gesetzt → "failed" (echter Resend-Fehler, kein Raten).
  *   3. fällig heute / morgen / diese Woche / später → reine Kalender-
  *      Logik gegen `scheduled_at`. "Diese Woche" meint die nächsten
- *      7 Tage ab now, NICHT die ISO-Kalenderwoche — Operatoren wollen
- *      "was kommt in den nächsten 7 Tagen?", nicht "was steht zwischen
- *      Montag und Sonntag dieser Woche?".
+ *      7 Tage ab now, NICHT die ISO-Kalenderwoche.
  */
 export function classifyRow(row: DripScheduleRow, now: Date): DripStatus {
   if (row.sent_at) return "sent";
-  const scheduled = new Date(row.scheduled_at);
-  const overdueMs = now.getTime() - scheduled.getTime();
-  const graceMs = FAILED_GRACE_HOURS * 60 * 60 * 1000;
-  if (overdueMs > graceMs) return "failed";
+  if (row.last_error) return "failed";
 
+  const scheduled = new Date(row.scheduled_at);
   const todayStart = startOfDayUtc(now);
   const tomorrowStart = new Date(todayStart.getTime() + 24 * 60 * 60 * 1000);
   const dayAfterTomorrowStart = new Date(tomorrowStart.getTime() + 24 * 60 * 60 * 1000);

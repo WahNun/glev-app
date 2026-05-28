@@ -52,6 +52,13 @@ export const dynamic = "force-dynamic";
  */
 const BATCH_SIZE = 50;
 
+/**
+ * Maximale Zeichenlänge für `last_error` in der DB. Resend-Fehlertexte
+ * sind kurz, aber wir kürzen sicherheitshalber ab, damit kein
+ * überlanges Stacktrace die Spalte sprengt.
+ */
+const MAX_ERROR_LENGTH = 500;
+
 function unauthorized() {
   return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 }
@@ -62,6 +69,12 @@ interface DripRow {
   first_name: string | null;
   email_type: DripEmailType;
   locale: "de" | "en" | null;
+  attempt_count: number;
+}
+
+/** Kürzt einen Fehlertext auf MAX_ERROR_LENGTH Zeichen. */
+function truncateError(msg: string): string {
+  return msg.length > MAX_ERROR_LENGTH ? msg.slice(0, MAX_ERROR_LENGTH - 1) + "…" : msg;
 }
 
 async function handle(req: NextRequest): Promise<NextResponse> {
@@ -87,9 +100,13 @@ async function handle(req: NextRequest): Promise<NextResponse> {
   const nowIso = new Date().toISOString();
 
   // 1. Fällige, noch nicht versendete Rows holen, älteste zuerst.
+  //    Wir holen auch last_error IS NOT NULL Rows (stuck/failed) —
+  //    der Cron versucht sie täglich erneut. Wenn Resend den Grund
+  //    (z. B. ungültige Domain) extern behebt, soll der nächste Lauf
+  //    die Mail trotzdem losschicken.
   const { data: due, error: selectErr } = await admin
     .from("email_drip_schedule")
-    .select("id, email, first_name, email_type, locale")
+    .select("id, email, first_name, email_type, locale, attempt_count")
     .is("sent_at", null)
     .lte("scheduled_at", nowIso)
     .order("scheduled_at", { ascending: true })
@@ -163,6 +180,7 @@ async function handle(req: NextRequest): Promise<NextResponse> {
   const resend = getDripResend();
 
   for (const raw of sendable) {
+    const attemptAt = new Date().toISOString();
     try {
       // Locale defaults to 'de' for rows scheduled before the column
       // existed (NULL in DB) — those buyers were on the EUR/German flow
@@ -183,32 +201,37 @@ async function handle(req: NextRequest): Promise<NextResponse> {
 
       if (error) {
         failed += 1;
+        const errText = truncateError(
+          `${error.name ?? "ResendError"}: ${error.message ?? "unknown"}`,
+        );
         // eslint-disable-next-line no-console
         console.error("[cron/drip] resend error:", {
           id: raw.id,
           to: raw.email,
           type: raw.email_type,
-          err: `${error.name ?? "ResendError"}: ${error.message ?? "unknown"}`,
+          err: errText,
         });
-        // sent_at bleibt NULL → der nächste 09:00-UTC-Cron probiert
-        // es erneut. Ein verpasster Tag schadet bei Drip-Mails nicht,
-        // und exponentielles Backoff ist hier (anders als in der
-        // Outbox) Overkill, weil der nächste Versuch ohnehin erst in
-        // 24 Stunden kommt.
+        // Fehler in DB persistieren — Dashboard kann jetzt den echten
+        // Grund anzeigen, ohne dass Lucas die Logs durchsuchen muss.
+        await admin
+          .from("email_drip_schedule")
+          .update({
+            last_attempt_at: attemptAt,
+            last_error: errText,
+            attempt_count: (raw.attempt_count ?? 0) + 1,
+          })
+          .eq("id", raw.id)
+          .is("sent_at", null);
         continue;
       }
 
-      // Erfolg: sent_at atomar setzen. Die `is("sent_at", null)`-Guard
-      // verhindert, dass ein paralleler Cron-Lauf (z. B. manueller
-      // Test während der reguläre Cron auch gerade dran ist) die Row
-      // ein zweites Mal als "frisch versendet" markiert. Bei Race-
-      // Loss werden 0 Rows aktualisiert — wir loggen das, aber es
-      // ist kein Fehler, weil Resend die Mail trotzdem akzeptiert
-      // hat und die Row bereits `sent_at` aus dem ersten Lauf hat.
+      // Erfolg: sent_at setzen und last_error aufräumen (falls ein
+      // vorheriger Versuch gescheitert war). Die `is("sent_at", null)`-
+      // Guard verhindert Race-Loss-Doppel-Markierungen.
       const sentAt = new Date().toISOString();
       const { data: updRows, error: updErr } = await admin
         .from("email_drip_schedule")
-        .update({ sent_at: sentAt })
+        .update({ sent_at: sentAt, last_error: null, last_attempt_at: attemptAt })
         .eq("id", raw.id)
         .is("sent_at", null)
         .select("id");
@@ -243,13 +266,26 @@ async function handle(req: NextRequest): Promise<NextResponse> {
       });
     } catch (err) {
       failed += 1;
+      const errText = truncateError(
+        err instanceof Error ? err.message : String(err),
+      );
       // eslint-disable-next-line no-console
       console.error("[cron/drip] unexpected:", {
         id: raw.id,
         to: raw.email,
         type: raw.email_type,
-        err: err instanceof Error ? err.message : String(err),
+        err: errText,
       });
+      // Auch unerwartete Exceptions in DB schreiben.
+      await admin
+        .from("email_drip_schedule")
+        .update({
+          last_attempt_at: attemptAt,
+          last_error: truncateError(`Unexpected: ${errText}`),
+          attempt_count: (raw.attempt_count ?? 0) + 1,
+        })
+        .eq("id", raw.id)
+        .is("sent_at", null);
     }
   }
 

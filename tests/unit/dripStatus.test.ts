@@ -1,18 +1,16 @@
 // Unit coverage for the drip-status helpers in lib/emails/drip-status.ts.
 //
 // Why this exists:
-//   The /admin/drip operator dashboard (Task #162) shows six counter
-//   cards (today / tomorrow / next 7 days / sent 7d / sent total /
-//   failed) plus a per-row status badge. Both consume the SAME
-//   classifyRow + computeDripCounts helpers — if the bucket boundaries
-//   drift (e.g. "tomorrow" silently includes today, or "failed" fires
-//   on every row that's a few minutes late), the operator sees the
-//   wrong picture and triages the wrong rows.
+//   The /admin/drip operator dashboard shows six counter cards (today /
+//   tomorrow / next 7 days / sent 7d / sent total / failed) plus a per-row
+//   status badge. Both consume the SAME classifyRow + computeDripCounts
+//   helpers — if the bucket boundaries drift the operator sees the wrong
+//   picture and triages the wrong rows.
 //
-//   The most subtle bit is the FAILED_GRACE_HOURS = 24h window: an
-//   overdue-by-3h row is still "due_today" (the cron only runs once
-//   a day at 09:00 UTC, so 3h of slack is normal), while overdue-by-
-//   25h is a real stuck row.
+//   As of Task #166, "failed" is driven by `last_error IS NOT NULL` (real
+//   Resend error persisted by the cron), NOT by a time-heuristic. A row
+//   that is overdue but has no last_error is still "due_today" — the cron
+//   just hasn't ticked yet.
 
 import { test, expect } from "@playwright/test";
 
@@ -36,12 +34,16 @@ function row(partial: Partial<DripScheduleRow>): DripScheduleRow {
     scheduled_at: partial.scheduled_at ?? NOW.toISOString(),
     sent_at: partial.sent_at ?? null,
     created_at: partial.created_at ?? NOW.toISOString(),
+    last_attempt_at: partial.last_attempt_at ?? null,
+    last_error: partial.last_error ?? null,
+    attempt_count: partial.attempt_count ?? 0,
   };
 }
 
 test("classifyRow: sent_at takes precedence over everything else", () => {
-  // Even an "overdue by a year" row counts as sent if sent_at is set —
-  // the cron eventually delivered it.
+  // Even a row with a last_error counts as sent if sent_at is set —
+  // the cron eventually delivered it (last_error was cleared on success,
+  // but even if somehow both were set, sent wins).
   const r = row({
     scheduled_at: "2025-01-01T00:00:00Z",
     sent_at: "2025-01-02T00:00:00Z",
@@ -49,19 +51,35 @@ test("classifyRow: sent_at takes precedence over everything else", () => {
   expect(classifyRow(r, NOW)).toBe("sent");
 });
 
+test("classifyRow: last_error makes a row failed regardless of timing", () => {
+  // Row scheduled for tomorrow, but Resend already returned an error.
+  const r = row({
+    scheduled_at: "2026-05-02T09:00:00Z",
+    last_error: "ResendError: domain not verified",
+  });
+  expect(classifyRow(r, NOW)).toBe("failed");
+});
+
+test("classifyRow: overdue row WITHOUT last_error is still due_today (cron not yet ticked)", () => {
+  // 25h overdue but no error recorded → cron just hasn't ticked yet.
+  // Should NOT be "failed" without an actual Resend error.
+  const twentyFiveHoursAgo = new Date(NOW.getTime() - 25 * 60 * 60 * 1000);
+  const r = row({ scheduled_at: twentyFiveHoursAgo.toISOString() });
+  expect(classifyRow(r, NOW)).not.toBe("failed");
+  expect(classifyRow(r, NOW)).toBe("due_today");
+});
+
 test("classifyRow: scheduled later today is due_today", () => {
   const r = row({ scheduled_at: "2026-05-01T18:00:00Z" });
   expect(classifyRow(r, NOW)).toBe("due_today");
 });
 
-test("classifyRow: scheduled a few hours ago but not overdue is still due_today", () => {
-  // 3 hours ago — well within the 24h grace window. The cron just
-  // hasn't ticked yet (or is ticking right now).
+test("classifyRow: scheduled a few hours ago (no error) is still due_today", () => {
   const r = row({ scheduled_at: "2026-05-01T09:00:00Z" });
   expect(classifyRow(r, NOW)).toBe("due_today");
 });
 
-test("classifyRow: scheduled tomorrow is due_tomorrow", () => {
+test("classifyRow: scheduled tomorrow (no error) is due_tomorrow", () => {
   const r = row({ scheduled_at: "2026-05-02T09:00:00Z" });
   expect(classifyRow(r, NOW)).toBe("due_tomorrow");
 });
@@ -76,23 +94,9 @@ test("classifyRow: scheduled in 10 days is scheduled_later", () => {
   expect(classifyRow(r, NOW)).toBe("scheduled_later");
 });
 
-test("classifyRow: overdue by exactly grace window edge stays non-failed", () => {
-  // Exactly 24h overdue — the boundary is "> 24h", so 24h on the dot
-  // is not yet failed. Anything more is.
-  const exactly24hAgo = new Date(NOW.getTime() - 24 * 60 * 60 * 1000);
-  const r = row({ scheduled_at: exactly24hAgo.toISOString() });
-  expect(classifyRow(r, NOW)).not.toBe("failed");
-});
-
-test("classifyRow: overdue by 25h is failed", () => {
-  const twentyFiveHoursAgo = new Date(NOW.getTime() - 25 * 60 * 60 * 1000);
-  const r = row({ scheduled_at: twentyFiveHoursAgo.toISOString() });
-  expect(classifyRow(r, NOW)).toBe("failed");
-});
-
 test("computeDripCounts: aggregates all six buckets correctly", () => {
   const rows: DripScheduleRow[] = [
-    // Two due today (one earlier today, one later today)
+    // Two due today (one earlier today, one later today — no errors)
     row({ id: "1", scheduled_at: "2026-05-01T11:00:00Z" }),
     row({ id: "2", scheduled_at: "2026-05-01T20:00:00Z" }),
     // One due tomorrow
@@ -117,9 +121,9 @@ test("computeDripCounts: aggregates all six buckets correctly", () => {
       scheduled_at: "2026-01-01T09:00:00Z",
       sent_at: "2026-01-08T09:00:00Z",
     }),
-    // Two failed — overdue by more than 24h, not sent
-    row({ id: "9", scheduled_at: "2026-04-20T09:00:00Z" }),
-    row({ id: "10", scheduled_at: "2026-04-25T09:00:00Z" }),
+    // Two failed — last_error set by the cron
+    row({ id: "9", scheduled_at: "2026-04-20T09:00:00Z", last_error: "ResendError: domain not verified" }),
+    row({ id: "10", scheduled_at: "2026-04-25T09:00:00Z", last_error: "ResendError: invalid recipient" }),
   ];
 
   const c = computeDripCounts(rows, NOW);
@@ -134,15 +138,12 @@ test("computeDripCounts: aggregates all six buckets correctly", () => {
 test("dripBucketWindows: produces consistent ISO boundaries for SQL filters", () => {
   // The page uses these ISO strings as Supabase filter values for the
   // six counter cards. Same boundaries also drive classifyRow above —
-  // SQL counters and per-row badges MUST agree, otherwise the operator
-  // sees "3 failed" in the card but only 2 red badges in the table.
+  // SQL counters and per-row badges MUST agree.
   const w = dripBucketWindows(NOW);
   expect(w.nowIso).toBe("2026-05-01T12:00:00.000Z");
   expect(w.todayStartIso).toBe("2026-05-01T00:00:00.000Z");
   expect(w.tomorrowStartIso).toBe("2026-05-02T00:00:00.000Z");
   expect(w.dayAfterTomorrowStartIso).toBe("2026-05-03T00:00:00.000Z");
-  // failed threshold is 24h ago
-  expect(w.failedThresholdIso).toBe("2026-04-30T12:00:00.000Z");
   // sevenDaysAgo is exactly 7 days ago
   expect(w.sevenDaysAgoIso).toBe("2026-04-24T12:00:00.000Z");
   // 7 days from now (used as exclusive upper bound for "diese Woche")

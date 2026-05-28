@@ -23,11 +23,19 @@ import {
 
 const COOKIE = "glev_admin_token";
 
+/** Maximale Zeichenlänge für `last_error` — identisch zum Cron-Worker. */
+const MAX_ERROR_LENGTH = 500;
+
 function constantTimeEqual(a: string, b: string): boolean {
   const aBuf = Buffer.from(a);
   const bBuf = Buffer.from(b);
   if (aBuf.length !== bBuf.length) return false;
   return timingSafeEqual(aBuf, bBuf);
+}
+
+/** Kürzt einen Fehlertext auf MAX_ERROR_LENGTH Zeichen. */
+function truncateError(msg: string): string {
+  return msg.length > MAX_ERROR_LENGTH ? msg.slice(0, MAX_ERROR_LENGTH - 1) + "…" : msg;
 }
 
 export async function loginAction(formData: FormData): Promise<void> {
@@ -93,14 +101,12 @@ async function requireAdmin(): Promise<void> {
  * "Jetzt sofort senden" — ruft Resend für genau diese Row auf und setzt
  * `sent_at`. Verhalten 1:1 wie der Cron (selbe Render-Funktion, selbe
  * Idempotenz-Guard via `is("sent_at", null)`), nur außerhalb des
- * 09:00-UTC-Schedules. Praktisch für: Trustpilot-Mail an einen
- * unzufriedenen Kunden vorzeitig rausschicken, oder eine seit Tagen
- * stuck'te "failed"-Row manuell wiederbeleben, nachdem der Resend-
- * Bounce-Grund (z. B. ungültige Domain) extern geklärt wurde.
+ * 09:00-UTC-Schedules.
  *
- * Liefert keinen Wert; Erfolg / Fehler wird nur geloggt und über
- * `revalidatePath` sichtbar (Status springt auf "sent" oder bleibt
- * mit "failed"-Bucket sichtbar).
+ * Bei Erfolg: `sent_at` setzen, `last_error` auf NULL zurücksetzen
+ * (sodass die Row aus dem "Fehlgeschlagen"-Bucket verschwindet).
+ * Bei Fehler: `last_error` + `last_attempt_at` + `attempt_count` persistieren,
+ * damit das Dashboard den echten Grund anzeigt.
  */
 export async function sendNowAction(formData: FormData): Promise<void> {
   await requireAdmin();
@@ -110,7 +116,7 @@ export async function sendNowAction(formData: FormData): Promise<void> {
   const admin = getSupabaseAdmin();
   const { data: row, error: fetchErr } = await admin
     .from("email_drip_schedule")
-    .select("id, email, first_name, email_type, sent_at, locale")
+    .select("id, email, first_name, email_type, sent_at, locale, attempt_count")
     .eq("id", id)
     .maybeSingle();
 
@@ -133,6 +139,8 @@ export async function sendNowAction(formData: FormData): Promise<void> {
     return;
   }
 
+  const attemptAt = new Date().toISOString();
+
   try {
     // Locale defaults to 'de' for legacy rows scheduled before the column
     // existed (NULL in DB). Same fallback as the cron worker — see
@@ -152,25 +160,36 @@ export async function sendNowAction(formData: FormData): Promise<void> {
       html: rendered.html,
     });
     if (error) {
+      const errText = truncateError(
+        `${error.name ?? "ResendError"}: ${error.message ?? "unknown"}`,
+      );
       // eslint-disable-next-line no-console
       console.error("[admin/drip] sendNow resend error:", {
         id: row.id,
         to: row.email,
         type: row.email_type,
-        err: `${error.name ?? "ResendError"}: ${error.message ?? "unknown"}`,
+        err: errText,
       });
+      // Fehler persistieren — Dashboard zeigt ihn sofort nach Revalidierung.
+      await admin
+        .from("email_drip_schedule")
+        .update({
+          last_attempt_at: attemptAt,
+          last_error: errText,
+          attempt_count: (row.attempt_count ?? 0) + 1,
+        })
+        .eq("id", row.id)
+        .is("sent_at", null);
       revalidatePath("/admin/drip");
       return;
     }
+
     const sentAt = new Date().toISOString();
-    // `.select("id")` nach dem Update, damit wir Race-Loss erkennen:
-    // wenn der Cron-Job parallel dieselbe Row gerade markiert hat,
-    // gibt das `.is("sent_at", null)`-Filter 0 Zeilen zurück. Resend
-    // hat die Mail trotzdem akzeptiert, also kein Fehler — aber wir
-    // wollen das im Log sehen, gleiches Pattern wie der Cron.
+    // Erfolg: sent_at setzen und last_error aufräumen, damit die Row
+    // nicht mehr im "Fehlgeschlagen"-Bucket erscheint.
     const { data: updRows, error: updErr } = await admin
       .from("email_drip_schedule")
-      .update({ sent_at: sentAt })
+      .update({ sent_at: sentAt, last_error: null, last_attempt_at: attemptAt })
       .eq("id", row.id)
       .is("sent_at", null)
       .select("id");
@@ -193,12 +212,24 @@ export async function sendNowAction(formData: FormData): Promise<void> {
       });
     }
   } catch (err) {
+    const errText = truncateError(
+      `Unexpected: ${err instanceof Error ? err.message : String(err)}`,
+    );
     // eslint-disable-next-line no-console
     console.error("[admin/drip] sendNow unexpected:", {
       id: row.id,
       to: row.email,
-      err: err instanceof Error ? err.message : String(err),
+      err: errText,
     });
+    await admin
+      .from("email_drip_schedule")
+      .update({
+        last_attempt_at: attemptAt,
+        last_error: errText,
+        attempt_count: (row.attempt_count ?? 0) + 1,
+      })
+      .eq("id", row.id)
+      .is("sent_at", null);
   }
   revalidatePath("/admin/drip");
 }
@@ -243,6 +274,11 @@ export async function cancelAction(formData: FormData): Promise<void> {
  * interpretiert die Browser-Engine als Lokalzeit. Wir konvertieren in
  * UTC-ISO bevor wir es schreiben, damit der Cron (der in UTC vergleicht)
  * den richtigen Termin sieht.
+ *
+ * Beim Neu-Einplanen wird `last_error` nicht zurückgesetzt — das
+ * ist Absicht: "Neu einplanen" ändert nur den Zeitpunkt, heilt aber
+ * nicht automatisch den Resend-Fehler. Erst ein erfolgreicher Versuch
+ * (Cron oder "Sofort senden") räumt `last_error` auf.
  */
 export async function rescheduleAction(formData: FormData): Promise<void> {
   await requireAdmin();

@@ -68,6 +68,47 @@ function fmtType(t: string): string {
   }
 }
 
+/** Kürzt den Fehlertext für die Tabellenzelle auf maximal CELL_MAX Zeichen. */
+const CELL_MAX = 60;
+
+function ErrorCell({ error, attemptCount }: { error: string | null; attemptCount: number }) {
+  if (!error) return <span style={{ color: "#bbb", fontSize: 13 }}>—</span>;
+  const truncated = error.length > CELL_MAX;
+  const display = truncated ? error.slice(0, CELL_MAX - 1) + "…" : error;
+  return (
+    <span
+      title={error}
+      style={{
+        display: "inline-block",
+        maxWidth: 260,
+        overflow: "hidden",
+        textOverflow: "ellipsis",
+        whiteSpace: "nowrap",
+        verticalAlign: "bottom",
+        color: "#a4271c",
+        fontSize: 12,
+        cursor: truncated ? "help" : "default",
+        fontFamily: "monospace",
+      }}
+    >
+      {display}
+      {attemptCount > 1 && (
+        <span
+          style={{
+            marginLeft: 6,
+            fontSize: 11,
+            color: "#888",
+            fontFamily: "system-ui, sans-serif",
+          }}
+          title={`${attemptCount} Versuche insgesamt`}
+        >
+          ×{attemptCount}
+        </span>
+      )}
+    </span>
+  );
+}
+
 const STATUS_LABEL: Record<DripStatusFilter, string> = {
   all: "Alle Status",
   pending: "Wartend (alle offenen)",
@@ -246,9 +287,9 @@ export default function DripDashboard({
         </div>
         <p style={{ color: "#777", fontSize: 13, margin: "8px 0 0" }}>
           Counter zählen über die gesamte Tabelle, nicht nur die unten gezeigte
-          Liste. „Fehlgeschlagen" = noch nicht versendet und mehr als 24 h überfällig
-          — der Drip-Cron läuft täglich um 09:00 UTC und probiert es bei jedem Lauf
-          erneut. Klick auf eine Karte filtert die Tabelle entsprechend.
+          Liste. „Fehlgeschlagen" = Resend hat beim letzten Versuch einen Fehler
+          zurückgegeben — der genaue Fehlertext steht in der Tabellenspalte „Letzter Fehler".
+          Klick auf eine Karte filtert die Tabelle entsprechend.
         </p>
       </section>
 
@@ -319,13 +360,22 @@ export default function DripDashboard({
                 <th style={thStyle}>Typ</th>
                 <th style={thStyle}>Geplant</th>
                 <th style={thStyle}>Versendet</th>
+                <th style={{ ...thStyle, minWidth: 160 }}>
+                  Letzter Fehler
+                  <span
+                    title="Resend-Fehlertext des letzten fehlgeschlagenen Versuchs. Hover für vollständigen Text. ×N = Anzahl Versuche."
+                    style={{ marginLeft: 4, cursor: "help", color: "#888", fontWeight: 400 }}
+                  >
+                    ⓘ
+                  </span>
+                </th>
                 <th style={thStyle}>Aktionen</th>
               </tr>
             </thead>
             <tbody>
               {rows.length === 0 ? (
                 <tr>
-                  <td colSpan={7} style={{ ...tdStyle, textAlign: "center", color: "#888" }}>
+                  <td colSpan={8} style={{ ...tdStyle, textAlign: "center", color: "#888" }}>
                     {anyFilter ? "Keine Treffer." : "Keine Drip-Termine."}
                   </td>
                 </tr>
@@ -344,6 +394,9 @@ export default function DripDashboard({
                       <td style={tdStyle}>{fmtType(r.email_type)}</td>
                       <td style={tdStyle}>{fmtDate(r.scheduled_at)}</td>
                       <td style={tdStyle}>{fmtDate(r.sent_at)}</td>
+                      <td style={{ ...tdStyle, whiteSpace: "normal", maxWidth: 280 }}>
+                        <ErrorCell error={r.last_error} attemptCount={r.attempt_count} />
+                      </td>
                       <td style={tdStyle}>
                         {!canAct ? (
                           <span style={{ color: "#888", fontSize: 13 }}>—</span>
@@ -480,6 +533,11 @@ export default function DripDashboard({
               <strong>{fmtType(confirmRow.email_type)}</strong> an{" "}
               <strong>{confirmRow.email}</strong> ({fmtTier(confirmRow.tier)}).
             </p>
+            {confirmRow.last_error && (
+              <p style={{ margin: "0 0 10px", fontSize: 13, color: "#a4271c", lineHeight: 1.5, fontFamily: "monospace", wordBreak: "break-all" }}>
+                Letzter Fehler: {confirmRow.last_error}
+              </p>
+            )}
             <p style={{ margin: "0 0 18px", fontSize: 13, color: "#666", lineHeight: 1.5 }}>
               Die Mail geht sofort über Resend raus und kann nicht mehr zurückgeholt werden.
             </p>

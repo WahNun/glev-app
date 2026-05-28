@@ -11,22 +11,18 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 /**
- * Operator-Dashboard für die Drip-Mail-Pipeline (Task #162).
+ * Operator-Dashboard für die Drip-Mail-Pipeline (Task #162, erweitert in Task #166).
  *
  * Zweck: Lucas (und jede:r andere mit dem ADMIN_API_SECRET) soll
  * ohne SQL gegen `email_drip_schedule` sehen können, was läuft —
- * wie viele Tag-7/14/30-Mails morgen rausgehen, welche in den letzten
- * 7 Tagen fehlgeschlagen sind, und ob für eine bestimmte Mail-Adresse
- * tatsächlich die drei Touches eingeplant sind.
+ * wie viele Tag-7/14/30-Mails morgen rausgehen, welche fehlgeschlagen
+ * sind und warum (echter Resend-Fehlertext, kein Raten mehr).
  *
- * Datenmodell-Hintergrund:
- *   `email_drip_schedule` (Migration 20260501_add_email_drip_schedule.sql)
- *   trackt KEINEN expliziten Failure-Zustand — der Drip-Cron in
- *   app/api/cron/drip/route.ts lässt fehlgeschlagene Rows mit
- *   `sent_at IS NULL` stehen und probiert beim nächsten 09:00-UTC-Tick
- *   erneut. "Failed" leiten wir daher heuristisch aus "überfällig
- *   > 24 h und immer noch nicht versendet" ab (siehe
- *   lib/emails/drip-status.ts → FAILED_GRACE_HOURS).
+ * Datenmodell ab Task #166:
+ *   `email_drip_schedule` hat zusätzlich `last_attempt_at`, `last_error`
+ *   und `attempt_count`. "Failed" = `last_error IS NOT NULL AND sent_at IS NULL`.
+ *   Kein Zeitstempel-Raten mehr. Der Cron persistiert den Resend-Fehler
+ *   direkt — das Dashboard zeigt ihn in einer eigenen Spalte.
  *
  * Auth:
  *   Bearer-Token-Cookie `glev_admin_token` mit `path: "/admin"` —
@@ -134,9 +130,11 @@ async function loadDripData(now: Date, filters: DripFilters): Promise<DripPageDa
   const w = dripBucketWindows(now);
 
   // 6 parallele Aggregat-Queries. Jede liefert nur einen Count, kein
-  // Row-Payload — das skaliert auch bei sechsstelligen Drip-Volumina,
-  // weil Postgres die WHERE-Clauses über Indexe (insbesondere den
-  // partial index `email_drip_schedule_pending_idx`) ausführt.
+  // Row-Payload — das skaliert auch bei sechsstelligen Drip-Volumina.
+  //
+  // "failed" = last_error IS NOT NULL AND sent_at IS NULL (kein Zeitstempel-Raten
+  //            mehr — echter Resend-Fehler vom Cron persistiert).
+  // "due_today/tomorrow/this_week" = kein last_error + Kalender-Logik gegen scheduled_at.
   //
   // Wichtig: die Filter müssen 1:1 zu classifyRow() in
   // lib/emails/drip-status.ts passen — sonst widerspricht das Per-
@@ -145,18 +143,20 @@ async function loadDripData(now: Date, filters: DripFilters): Promise<DripPageDa
     .from("email_drip_schedule")
     .select("id", { count: "exact", head: true })
     .is("sent_at", null)
-    .gte("scheduled_at", w.failedThresholdIso) // Failed-Grace ausschließen
+    .is("last_error", null)
     .lt("scheduled_at", w.tomorrowStartIso);
   const dueTomorrowP = sb
     .from("email_drip_schedule")
     .select("id", { count: "exact", head: true })
     .is("sent_at", null)
+    .is("last_error", null)
     .gte("scheduled_at", w.tomorrowStartIso)
     .lt("scheduled_at", w.dayAfterTomorrowStartIso);
   const dueThisWeekP = sb
     .from("email_drip_schedule")
     .select("id", { count: "exact", head: true })
     .is("sent_at", null)
+    .is("last_error", null)
     .gte("scheduled_at", w.dayAfterTomorrowStartIso)
     .lt("scheduled_at", w.weekFromNowIso);
   const sentTotalP = sb
@@ -167,11 +167,12 @@ async function loadDripData(now: Date, filters: DripFilters): Promise<DripPageDa
     .from("email_drip_schedule")
     .select("id", { count: "exact", head: true })
     .gte("sent_at", w.sevenDaysAgoIso);
+  // "failed" = mind. ein Versuch fehlgeschlagen (echter Fehlertext in last_error).
   const failedP = sb
     .from("email_drip_schedule")
     .select("id", { count: "exact", head: true })
     .is("sent_at", null)
-    .lt("scheduled_at", w.failedThresholdIso);
+    .not("last_error", "is", null);
 
   // Tabellen-Inhalt — Filter werden additiv aufgesetzt. Sobald
   // irgendein Filter aktiv ist, fahren wir das größere SEARCH_LIMIT
@@ -187,12 +188,11 @@ async function loadDripData(now: Date, filters: DripFilters): Promise<DripPageDa
 
   let listQ = sb
     .from("email_drip_schedule")
-    .select("id, email, first_name, tier, email_type, scheduled_at, sent_at, created_at");
+    .select(
+      "id, email, first_name, tier, email_type, scheduled_at, sent_at, created_at, last_attempt_at, last_error, attempt_count",
+    );
 
   if (trimmedQ) {
-    // Suche per ILIKE auf email — Substring, case-insensitive,
-    // damit sowohl "alice@example.com" als auch "alice" und
-    // "@example.com" zum gewünschten Treffer führen.
     listQ = listQ.ilike("email", `%${trimmedQ}%`);
   }
   if (filters.tier !== "all") {
@@ -202,34 +202,34 @@ async function loadDripData(now: Date, filters: DripFilters): Promise<DripPageDa
     listQ = listQ.eq("email_type", filters.type);
   }
   // Status: 1:1 dieselben Bucket-Bedingungen wie die Counter oben +
-  // wie classifyRow() in drip-status.ts. Sonst widerspricht das
-  // Status-Badge der Tabelle dem Filter, mit dem es geladen wurde.
+  // wie classifyRow() in drip-status.ts.
   switch (filters.status) {
     case "pending":
-      // Wartend = noch nicht versendet UND nicht failed-grace überschritten.
-      // (Inkl. heute fällig + morgen + diese Woche + weiter in der Zukunft.)
-      listQ = listQ.is("sent_at", null).gte("scheduled_at", w.failedThresholdIso);
+      // Wartend = noch nicht versendet UND kein Fehler.
+      listQ = listQ.is("sent_at", null).is("last_error", null);
       break;
     case "due_today":
       listQ = listQ
         .is("sent_at", null)
-        .gte("scheduled_at", w.failedThresholdIso)
+        .is("last_error", null)
         .lt("scheduled_at", w.tomorrowStartIso);
       break;
     case "due_tomorrow":
       listQ = listQ
         .is("sent_at", null)
+        .is("last_error", null)
         .gte("scheduled_at", w.tomorrowStartIso)
         .lt("scheduled_at", w.dayAfterTomorrowStartIso);
       break;
     case "due_this_week":
       listQ = listQ
         .is("sent_at", null)
+        .is("last_error", null)
         .gte("scheduled_at", w.dayAfterTomorrowStartIso)
         .lt("scheduled_at", w.weekFromNowIso);
       break;
     case "failed":
-      listQ = listQ.is("sent_at", null).lt("scheduled_at", w.failedThresholdIso);
+      listQ = listQ.is("sent_at", null).not("last_error", "is", null);
       break;
     case "sent":
       listQ = listQ.not("sent_at", "is", null);
@@ -341,10 +341,6 @@ export default async function AdminDripPage({
   // `now` EINMAL pro Render festnageln und an alles weiterreichen:
   // - die SQL-Counter in loadDripData (Bucket-Grenzen),
   // - die Status-Badges in der Tabelle (per `nowIso` an den Client).
-  // Würden wir hier bzw. dort separat `new Date()` rufen, könnten an
-  // den Bucket-Grenzen (z. B. exakt um Mitternacht UTC oder beim
-  // 24h-Failed-Schwellwert) Counter und Badges ein Row anders
-  // klassifizieren als die andere Stelle.
   const now = new Date();
   const { counts, rows, truncated, fetchErrors } = await loadDripData(now, filters);
 
