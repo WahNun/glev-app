@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo, useRef, useCallback } from "react";
+import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import RefreshingBar from "@/components/RefreshingBar";
 import { useTranslations, useLocale } from "next-intl";
 import { fetchMeals, deleteMeal, updateMeal, FETCH_MEALS_DEFAULT_SINCE_DAYS, type Meal } from "@/lib/meals";
@@ -31,6 +31,7 @@ import { TYPE_COLORS, TYPE_LABELS, TYPE_EXPLAIN, getEvalColor, getEvalLabel, chi
 import { lifecycleFor, STATE_LABELS, type OutcomeState } from "@/lib/engine/lifecycle";
 import { renderEngineMessages } from "@/lib/engineMessages";
 import MealEntryCardCollapsed from "@/components/MealEntryCardCollapsed";
+import MealTrendArrow from "@/components/MealTrendArrow";
 import PendingGlucoseStrip from "@/components/PendingGlucoseStrip";
 import ManualEntryModal from "@/components/ManualEntryModal";
 import EntryAddCTA from "@/components/EntryAddCTA";
@@ -1248,10 +1249,13 @@ export default function EntriesPage() {
             // "Schnelle Kohlenhydrate" (KATEGORIE-Tile) nicht über den
             // Kartenrand rutschen. `wordBreak:"break-word"` lässt mehr-
             // wörtige Werte umbrechen statt zu clippen.
-            const MiniCard = ({ l, v, c }: { l: string; v: string; c?: string }) => (
+            const MiniCard = ({ l, v, c, icon }: { l: string; v: string; c?: string; icon?: React.ReactNode }) => (
               <div style={{ background:"var(--surface-soft)", border:`1px solid ${BORDER}`, borderRadius:10, padding:"10px 12px", minWidth:0, overflow:"hidden" }}>
                 <div style={{ fontSize:11, color:"var(--text-faint)", letterSpacing:"0.08em", fontWeight:600, marginBottom:4 }}>{l}</div>
-                <div style={{ fontSize:14, fontWeight:700, color:c || "var(--text-strong)", letterSpacing:"-0.01em", wordBreak:"break-word", lineHeight:1.3 }}>{v}</div>
+                <div style={{ fontSize:14, fontWeight:700, color:c || "var(--text-strong)", letterSpacing:"-0.01em", wordBreak:"break-word", lineHeight:1.3, display:"flex", alignItems:"center", gap:5 }}>
+                  <span>{v}</span>
+                  {icon}
+                </div>
               </div>
             );
 
@@ -1517,7 +1521,7 @@ export default function EntriesPage() {
                     <div>
                       <div style={{ fontSize:11, color:"var(--text-faint)", letterSpacing:"0.1em", fontWeight:700, marginBottom:8 }}>{tx("glucose_section").toUpperCase()}</div>
                       <div style={{ display:"grid", gridTemplateColumns:"repeat(2,1fr)", gap:8 }}>
-                        <MiniCard l={tx("mini_bg_before")} v={m.glucose_before ? `${m.glucose_before} mg/dL` : "—"} c={bgC}/>
+                        <MiniCard l={tx("mini_bg_before")} v={m.glucose_before ? `${m.glucose_before} mg/dL` : "—"} c={bgC} icon={m.pre_meal_trend ? <MealTrendArrow trend={m.pre_meal_trend} size="sm"/> : undefined}/>
                         <MiniCard l={afterTag ? `${tx("mini_bg_after")} (${afterTag})` : tx("mini_bg_after")} v={afterValue != null ? `${afterValue} mg/dL` : "—"} c={afterC}/>
                         <MiniCard l={afterTag ? `${tx("mini_delta")} (${afterTag})` : tx("mini_delta")} v={glucDelta !== null ? `${glucDelta > 0 ? "+" : ""}${glucDelta} mg/dL` : "—"} c={deltaC}/>
                         <MiniCard l={tx("mini_time_gap")} v={timeGapStr ?? "—"} c={timeGapStr ? "var(--text-strong)" : undefined}/>

@@ -10,6 +10,7 @@ import { useCarbUnit } from "@/hooks/useCarbUnit";
 import { useTimeFormat } from "@/hooks/useTimeFormat";
 import { useGlucoseUnit } from "@/hooks/useGlucoseUnit";
 import { useTranslations, useLocale } from "next-intl";
+import MealTrendArrow from "@/components/MealTrendArrow";
 
 const ACCENT = "#4F6EF7";
 const ORANGE = "#FF9500";
@@ -187,6 +188,11 @@ export default function MealEntryCardCollapsed({
           >
             {chip.finalOutcome ? chipLabels.evalLabel(chip.finalOutcome) : renderEngineMessage(tEngine, chip.label)}
           </span>
+
+          {/* Pre-meal trend arrow — only when a trend was captured at save time */}
+          {meal.pre_meal_trend && (
+            <MealTrendArrow trend={meal.pre_meal_trend} size="sm"/>
+          )}
 
           {/* Post-Meal BG badge — only when data is present */}
           {postBgMgdl != null && postBgColor != null && (
