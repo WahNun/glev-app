@@ -259,6 +259,7 @@ Neue Tabelle `admin_tts_config` (Singleton-Row, id = 'singleton') speichert die 
 
 ## Fix Log
 | Datum | Task-Name | Asana-GID | Beschreibung |
+| 2026-05-28 | Fix Plan-Simulator: CGM-Kurve respektiert jetzt simulierten Free-Plan | — | `components/CurrentDayGlucoseCard.tsx`: `usePlan()` + `canAccess("cgm_sync")` eingebaut. Wenn Free simuliert wird, wird `fetchCgmHistory()` übersprungen und CGM-Array leer gehalten — Fingersticks bleiben sichtbar. `hasCgmAccess` in `useCallback`-Dependency-Array. |
 | 2026-05-28 | Fix missing icrToUnit import in lib/pdfReport.tsx | — | `lib/pdfReport.tsx` Z. 803 nutzte `icrToUnit()` aber importierte es nicht aus `@/lib/carbUnits`. Import ergänzt. Vercel TS-Check schlug mit TS2304 fehl. |
 | 2026-05-28 | Fix TS type cast error in lib/featureFlags.ts | — | `lib/featureFlags.ts`: `window as Record<string, unknown>` ist laut TS nicht erlaubt — über `unknown` als Zwischenschritt casten: `window as unknown as Record<string, unknown>`. Vercel TS-Check schlug fehl. |
 | 2026-05-28 | Fix TS implicit any in lib/emails/outbox.ts reclaimed.map | — | `lib/emails/outbox.ts` Z. 547: `reclaimed.map((r) => r.id)` — `r` hatte implizit `any`. Fix: `(r: { id: string })` explizit typisiert. Vercel-Build TS-Check schlug fehl. |
