@@ -437,7 +437,7 @@ test.describe("GlevReport — per-section detail tables", () => {
     expect(collectStrings(tree)).not.toContain("KH (g)");
   });
 
-  test("Insulin table: 7 column headers + one row per fixture log", () => {
+  test("Insulin table: 8 column headers + one row per fixture log", () => {
     const insulin = [
       makeInsulin({ id: "i1", insulin_name: "NovoRapid", units: 5 }),
       makeInsulin({ id: "i2", insulin_name: "Humalog",   units: 4, insulin_type: "bolus" }),
@@ -452,6 +452,7 @@ test.describe("GlevReport — per-section detail tables", () => {
       "BG vorher",
       "BG +1h",
       "BG +2h",
+      "ICR bei Log (g/IE)",
     ]);
     expect(table, "expected the Insulin-Einträge table").not.toBeNull();
     expect(table!.rows.length).toBe(insulin.length);
@@ -717,6 +718,152 @@ test.describe("GlevReport — 14-day trend arrow", () => {
     const arrow = findTrendArrow(tree);
     expect(arrow!.direction).toBe("up");
     expect(arrow!.color).toBe(ORANGE);
+  });
+});
+
+/* ──────────────────────────────────────────────────────────────────
+   3b. Per-section display caps — long-history fixture
+   ──────────────────────────────────────────────────────────────────
+   The render function slices each section to a documented maximum so
+   the printed PDF stays manageable for clinicians:
+       Mahlzeiten        → most recent 60 of N
+       Insulin-Einträge  → most recent 80 of N
+       Fingerstick       → most recent 80 of N
+       Sport & Aktivität → most recent 40 of N
+
+   Feeding more entries than the cap used to be impossible to regress
+   with the existing 3-5 entry fixtures (all well below every cap).
+   These tests close that gap by verifying:
+     a) the detail table renders exactly the cap number of rows
+     b) the section subtitle contains BOTH the total entry count
+        AND the cap ("100 erfasste Einträge — die 60 jüngsten …")
+
+   A helper `findSubtitleWithCounts` locates the subtitle `<Text>`
+   element whose immediate string leaves include the total, the cap,
+   and the German subtitle marker text, without ambiguity.
+   ────────────────────────────────────────────────────────────────── */
+
+function findSubtitleWithCounts(
+  tree: ReactNode,
+  total: string,
+  cap: string,
+  marker: string,
+): boolean {
+  const matches = findElements(tree, (el) => {
+    const leaves = collectStrings(el.props?.children ?? null);
+    return (
+      leaves.includes(total) &&
+      leaves.includes(cap) &&
+      leaves.some((l) => l.includes(marker))
+    );
+  });
+  return matches.length > 0;
+}
+
+test.describe("GlevReport — per-section display caps (long history)", () => {
+  test("Mahlzeiten: 100 entries → exactly 60 rows rendered + subtitle shows '100' and '60'", () => {
+    const meals = Array.from({ length: 100 }, (_, i) =>
+      makeMeal({ id: `m${i}`, input_text: `Meal ${i}`, carbs_grams: 40 + (i % 20) }),
+    );
+    const tree = GlevReport({ ...baseProps, meals }) as ReactElement;
+
+    const table = findTable(tree, [
+      "Datum/Zeit",
+      "Typ",
+      "Beschreibung",
+      "KH (g)",
+      "Insulin (U)",
+      "Glucose vor",
+      "+2h",
+      "Outcome",
+    ]);
+    expect(table, "expected the Mahlzeiten table to be present with 100 input entries").not.toBeNull();
+    expect(
+      table!.rows.length,
+      "expected exactly 60 rows (display cap) in the Mahlzeiten table",
+    ).toBe(60);
+
+    expect(
+      findSubtitleWithCounts(tree, "100", "60", "erfasste Einträge"),
+      'expected Mahlzeiten subtitle to contain "100" and "60" alongside the subtitle marker',
+    ).toBe(true);
+  });
+
+  test("Insulin-Einträge: 100 entries → exactly 80 rows rendered + subtitle shows '100' and '80'", () => {
+    const insulin = Array.from({ length: 100 }, (_, i) =>
+      makeInsulin({ id: `i${i}`, insulin_name: "NovoRapid", units: 4 + (i % 10) }),
+    );
+    const tree = GlevReport({ ...baseProps, insulin }) as ReactElement;
+
+    const table = findTable(tree, [
+      "Datum/Zeit",
+      "Typ",
+      "Präparat",
+      "Dosis (U)",
+      "BG vorher",
+      "BG +1h",
+      "BG +2h",
+      "ICR bei Log (g/IE)",
+    ]);
+    expect(table, "expected the Insulin-Einträge table to be present with 100 input entries").not.toBeNull();
+    expect(
+      table!.rows.length,
+      "expected exactly 80 rows (display cap) in the Insulin-Einträge table",
+    ).toBe(80);
+
+    expect(
+      findSubtitleWithCounts(tree, "100", "80", "erfasste Einträge"),
+      'expected Insulin subtitle to contain "100" and "80" alongside the subtitle marker',
+    ).toBe(true);
+  });
+
+  test("Fingerstick: 100 entries → exactly 80 rows rendered + subtitle shows '100' and '80'", () => {
+    const fingersticks = Array.from({ length: 100 }, (_, i) =>
+      makeFingerstick({ id: `f${i}`, value_mg_dl: 90 + (i % 60) }),
+    );
+    const tree = GlevReport({ ...baseProps, fingersticks }) as ReactElement;
+
+    const table = findTable(tree, [
+      "Datum/Zeit",
+      "Wert (mg/dL)",
+      "Notiz",
+    ]);
+    expect(table, "expected the Fingerstick-Messungen table to be present with 100 input entries").not.toBeNull();
+    expect(
+      table!.rows.length,
+      "expected exactly 80 rows (display cap) in the Fingerstick-Messungen table",
+    ).toBe(80);
+
+    expect(
+      findSubtitleWithCounts(tree, "100", "80", "erfasste Werte"),
+      'expected Fingerstick subtitle to contain "100" and "80" alongside the subtitle marker',
+    ).toBe(true);
+  });
+
+  test("Sport & Aktivität: 60 entries → exactly 40 rows rendered + subtitle shows '60' and '40'", () => {
+    const exercise = Array.from({ length: 60 }, (_, i) =>
+      makeExercise({ id: `e${i}`, exercise_type: "run", duration_minutes: 20 + (i % 40) }),
+    );
+    const tree = GlevReport({ ...baseProps, exercise }) as ReactElement;
+
+    const table = findTable(tree, [
+      "Datum/Zeit",
+      "Typ",
+      "Dauer",
+      "Intensität",
+      "BG Start",
+      "BG Ende",
+    ]);
+    expect(table, "expected the Sport & Aktivität table to be present with 60 input entries").not.toBeNull();
+    expect(
+      table!.rows.length,
+      "expected exactly 40 rows (display cap) in the Sport & Aktivität table",
+    ).toBe(40);
+
+    expect(
+      findSubtitleWithCounts(tree, "60", "40", "erfasste Einträge"),
+      'expected Sport subtitle to contain "60" and "40" alongside the subtitle marker',
+    ).toBe(true);
   });
 });
 
