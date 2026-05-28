@@ -41,6 +41,7 @@ import { calcEagerDose } from "@/lib/engine/eagerDose";
 import { fetchMeals } from "@/lib/meals";
 import { hapticSuccess, hapticError, hapticSelection } from "@/lib/haptics";
 import SnapSlider from "@/components/log/SnapSlider";
+import SaveButton from "@/components/log/SaveButton";
 import ReviewMacrosCards from "@/components/ReviewMacrosCards";
 import { usePlan } from "@/hooks/usePlan";
 import UpgradeGate from "@/components/UpgradeGate";
@@ -3239,23 +3240,17 @@ export default function EnginePage() {
               <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                 {bolusEnabled ? (
                   <>
-                    <button
+                    <SaveButton
                       onClick={() => activeDose !== null ? handleSaveWithEagerBolus(activeDose) : handleSaveWithoutBolus()}
-                      disabled={confirming || running}
-                      style={{
-                        width: "100%", height: 52, borderRadius: 12, border: "none",
-                        background: confirming ? "rgba(79,110,247,0.4)" : ACCENT,
-                        color: "var(--text)", fontSize: 15, fontWeight: 700, letterSpacing: "-0.01em",
-                        cursor: confirming ? "wait" : "pointer",
-                        transition: "background 0.2s",
-                      }}
-                    >
-                      {confirming
+                      busy={confirming}
+                      disabled={running}
+                      label={confirming
                         ? tEngine("btn_saving")
                         : activeDose !== null
                           ? tEngine("btn_save_with_bolus", { dose: formatNum(activeDose, 1), units: tEngine("units_short") })
                           : tEngine("btn_save_without_bolus")}
-                    </button>
+                      accent={ACCENT}
+                    />
                     {(() => {
                       const blocked = running || confirming;
                       return (
@@ -3287,19 +3282,12 @@ export default function EnginePage() {
                     })()}
                   </>
                 ) : (
-                  <button
+                  <SaveButton
                     onClick={handleSaveWithoutBolus}
-                    disabled={confirming}
-                    style={{
-                      width: "100%", height: 52, borderRadius: 12, border: "none",
-                      background: confirming ? "rgba(79,110,247,0.4)" : ACCENT,
-                      color: "var(--text)", fontSize: 15, fontWeight: 700, letterSpacing: "-0.01em",
-                      cursor: confirming ? "wait" : "pointer",
-                      transition: "background 0.2s",
-                    }}
-                  >
-                    {confirming ? tEngine("btn_saving") : tEngine("btn_save_without_bolus")}
-                  </button>
+                    busy={confirming}
+                    label={confirming ? tEngine("btn_saving") : tEngine("btn_save_without_bolus")}
+                    accent={ACCENT}
+                  />
                 )}
               </div>
           </div>
@@ -3494,19 +3482,14 @@ export default function EnginePage() {
 
                     {/* Save button or post-save confirmation */}
                     {wizardSavedDose === null ? (
-                      <button
-                        onClick={handleWizardSave}
-                        disabled={confirming}
-                        style={{
-                          width: "100%", height: 52, borderRadius: 12, border: "none",
-                          background: confirming ? "rgba(79,110,247,0.4)" : ACCENT,
-                          color: "var(--text)", fontSize: 15, fontWeight: 700, letterSpacing: "-0.01em",
-                          cursor: confirming ? "wait" : "pointer",
-                          marginBottom: 12, transition: "background 0.2s",
-                        }}
-                      >
-                        {confirming ? tEngine("btn_saving") : tEngine("btn_confirm_save")}
-                      </button>
+                      <div style={{ marginBottom: 12 }}>
+                        <SaveButton
+                          onClick={handleWizardSave}
+                          busy={confirming}
+                          label={confirming ? tEngine("btn_saving") : tEngine("btn_confirm_save")}
+                          accent={ACCENT}
+                        />
+                      </div>
                     ) : (
                       <div
                         style={{
