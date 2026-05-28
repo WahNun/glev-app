@@ -1136,6 +1136,8 @@
     "logout": "Sign out",
     "language_confirm_title": "Change language?",
     "language_confirm_body": "The app will reload to load the new language. Unsaved input will be lost.",
+    "lang_saved_account": "Language saved to your account",
+    "lang_saved_device_only": "Language saved on this device only — sync to other devices failed",
     "appearance": "Appearance",
     "appearance_hint": "Choose how Glev looks. System follows your device setting.",
     "appearance_app_only_hint": "Applies to the app only — marketing pages stay dark.",

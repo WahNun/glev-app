@@ -1136,6 +1136,8 @@
     "logout": "Abmelden",
     "language_confirm_title": "Sprache wechseln?",
     "language_confirm_body": "Die App lädt neu, damit die neue Sprache geladen wird. Nicht gespeicherte Eingaben gehen verloren.",
+    "lang_saved_account": "Sprache in deinem Konto gespeichert",
+    "lang_saved_device_only": "Sprache nur auf diesem Gerät gespeichert — Sync fehlgeschlagen",
     "appearance": "Erscheinungsbild",
     "appearance_hint": "Lege fest, wie Glev aussieht. „System“ folgt deiner Geräteeinstellung.",
     "appearance_app_only_hint": "Gilt nur für den App-Bereich — Marketingseiten bleiben dunkel.",

@@ -62,10 +62,13 @@ function isLangOverridePath(pathname: string): boolean {
 
 export async function setLocale(next: Locale): Promise<void> {
   writeLocaleCookie(next);
-  // Persist to Supabase as fire-and-forget — must NOT block the reload,
-  // otherwise a hanging auth/profile call (e.g. inside the Replit
-  // preview iframe) prevents the language from switching at all.
-  void persistLocaleToProfile(next);
+  // Signal to LanguageSync (which runs after the reload) that a DB write
+  // is pending. We cannot await the write here because it must NOT block
+  // the reload (a hanging Supabase call inside the Replit preview iframe
+  // would prevent the language from switching at all).
+  if (typeof sessionStorage !== "undefined") {
+    sessionStorage.setItem("glev_lang_toast", "pending");
+  }
   if (typeof window === "undefined") return;
 
   // On the public marketing pages, hop through `?lang=` so the
@@ -84,14 +87,23 @@ export async function setLocale(next: Locale): Promise<void> {
   window.location.reload();
 }
 
-async function persistLocaleToProfile(next: Locale): Promise<void> {
+/**
+ * Persists the chosen locale to `profiles.language` in Supabase.
+ * Returns `{ ok: true }` when the write succeeded, `{ ok: false }` on any
+ * network or auth error. Callers are responsible for showing feedback.
+ */
+export async function persistLocaleToProfile(next: Locale): Promise<{ ok: boolean }> {
   try {
-    if (!supabase) return;
+    if (!supabase) return { ok: false };
     const { data } = await supabase.auth.getUser();
     const uid = data.user?.id;
-    if (!uid) return;
-    await supabase.from("profiles").update({ language: next }).eq("user_id", uid);
+    if (!uid) return { ok: false };
+    const { error } = await supabase
+      .from("profiles")
+      .update({ language: next })
+      .eq("user_id", uid);
+    return { ok: !error };
   } catch {
-    // Network/profile errors must not block the language switch.
+    return { ok: false };
   }
 }
