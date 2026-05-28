@@ -181,13 +181,15 @@ export default function MealNodeCluster(props: MealNodeClusterProps) {
   const groupRef = useRef<SVGGElement>(null);
 
   // Re-sync if parent reloads checks (e.g. after the page hydrates and
-  // listChecksForMeals resolves). Only when the meal id changes or the
-  // initial set actually changes — never while a drag is in flight.
+  // listChecksForMeals resolves). Only when the meal id changes, the
+  // initial arm count changes, or any arm's bgAtCheck value fills in —
+  // never while a drag is in flight.
+  const bgAtCheckKey = props.initialArms.map(a => a.bgAtCheck ?? "").join(",");
   useEffect(() => {
     if (drag) return;
     setArms(props.initialArms);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [props.mealId, props.initialArms.length]);
+  }, [props.mealId, props.initialArms.length, bgAtCheckKey]);
 
   const msPerPx = props.msPerPx;
   const cx = props.centerX;
