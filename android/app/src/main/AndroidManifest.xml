@@ -1,6 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
+    <!--
+      Health Connect package visibility. Required on Android 11+ (API 30+) so
+      the app can call HealthConnectClient.getSdkStatus() and getOrCreate()
+      without a PackageManager SecurityException.  This does not grant any
+      permissions — it only makes the HC provider package visible to our app.
+    -->
+    <queries>
+        <package android:name="com.google.android.apps.healthdata" />
+    </queries>
+
     <application
         android:allowBackup="true"
         android:icon="@mipmap/ic_launcher"
@@ -23,6 +33,15 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
 
+            <!--
+              Required so Health Connect's permission rationale dialog can deep-link
+              back into Glev.  Without this filter the in-app permission flow breaks
+              on Android 14+ (HC shows an "open app settings" button that goes nowhere).
+            -->
+            <intent-filter>
+                <action android:name="androidx.health.ACTION_SHOW_PERMISSIONS_RATIONALE" />
+            </intent-filter>
+
         </activity>
 
         <provider
@@ -34,6 +53,20 @@
                 android:name="android.support.FILE_PROVIDER_PATHS"
                 android:resource="@xml/file_paths"></meta-data>
         </provider>
+
+        <!--
+          GlucoseChangeReceiver is woken by Health Connect whenever new
+          blood-glucose samples are written — even when Glev is closed.
+          It immediately enqueues a one-shot GlucoseSyncWorker job, giving
+          us near-real-time background sync analogous to iOS HKObserverQuery.
+
+          exported="false" is correct: only Health Connect's own
+          PendingIntent mechanism fires this receiver, not third-party apps.
+        -->
+        <receiver
+            android:name=".GlucoseChangeReceiver"
+            android:exported="false" />
+
     </application>
 
     <!-- Permissions -->
@@ -64,4 +97,16 @@
       plugin needed).
     -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
+
+    <!--
+      Health Connect blood-glucose read permission.
+      READ_BLOOD_GLUCOSE is the fine-grained permission that gates all
+      HealthConnectClient calls related to blood glucose data.  The user
+      must grant this at runtime via the Health Connect permission sheet
+      (triggered from the JS layer in Settings → Health Connect).
+      Without this grant, HealthConnectSyncRegistrar silently skips
+      registration and GlucoseSyncWorker returns Result.success() early.
+    -->
+    <uses-permission android:name="android.permission.health.READ_BLOOD_GLUCOSE" />
+
 </manifest>
