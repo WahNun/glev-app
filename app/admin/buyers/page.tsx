@@ -22,12 +22,14 @@ export const dynamic = "force-dynamic";
  * the service role to read both tables (RLS is intentionally disabled on
  * them) so we cannot piggy-back on the user-facing auth.
  *
- * Search (task #151): the most-recent-200 rows from each table are fetched
- * server-side; the search input itself lives in `BuyersTables` (a client
- * component) and filters in-memory by case-insensitive substring against
- * `email` OR `full_name`. The section heading counts reflect the filtered
- * result. We intentionally keep the fetch capped — search is meant to
- * narrow down the recent window, not act as a full-table search.
+ * Paging & search (task #156):
+ * - When `?q=` is non-empty the server runs a full-table ilike search against
+ *   email OR full_name and returns all matching rows (no cap).
+ * - When `?q=` is absent/empty the server returns PAGE_LIMIT rows at a time,
+ *   ordered newest-first, with exact total counts for prev/next navigation via
+ *   `?page=N`.
+ * - The section headings always make it clear how many rows are shown and
+ *   whether that is a page slice or a full search result.
  */
 
 const PAGE_LIMIT = 200;
@@ -73,25 +75,54 @@ export default async function AdminBuyersPage({
     );
   }
 
+  const rawQ = Array.isArray(sp.q) ? sp.q[0] : sp.q;
+  const q = (rawQ ?? "").trim();
+
+  const rawPage = Array.isArray(sp.page) ? sp.page[0] : sp.page;
+  const page = Math.max(1, parseInt(rawPage ?? "1", 10) || 1);
+  const offset = (page - 1) * PAGE_LIMIT;
+
   const sb = getSupabaseAdmin();
 
   const [betaRes, proRes] = await Promise.all([
-    sb
-      .from("beta_reservations")
-      .select("id, email, full_name, status, amount_cents, currency, stripe_session_id, stripe_customer_id, created_at, fulfilled_at")
-      .order("created_at", { ascending: false })
-      .limit(PAGE_LIMIT),
-    sb
-      .from("pro_subscriptions")
-      .select("id, email, full_name, status, trial_ends_at, current_period_end, stripe_session_id, stripe_customer_id, stripe_subscription_id, created_at")
-      .order("created_at", { ascending: false })
-      .limit(PAGE_LIMIT),
+    (() => {
+      let query = sb
+        .from("beta_reservations")
+        .select(
+          "id, email, full_name, status, amount_cents, currency, stripe_session_id, stripe_customer_id, created_at, fulfilled_at",
+          { count: "exact" },
+        )
+        .order("created_at", { ascending: false });
+      if (q) {
+        query = query.or(`email.ilike.%${q}%,full_name.ilike.%${q}%`);
+      } else {
+        query = query.range(offset, offset + PAGE_LIMIT - 1);
+      }
+      return query;
+    })(),
+    (() => {
+      let query = sb
+        .from("pro_subscriptions")
+        .select(
+          "id, email, full_name, status, trial_ends_at, current_period_end, stripe_session_id, stripe_customer_id, stripe_subscription_id, created_at",
+          { count: "exact" },
+        )
+        .order("created_at", { ascending: false });
+      if (q) {
+        query = query.or(`email.ilike.%${q}%,full_name.ilike.%${q}%`);
+      } else {
+        query = query.range(offset, offset + PAGE_LIMIT - 1);
+      }
+      return query;
+    })(),
   ]);
 
   const betaErr = betaRes.error?.message ?? null;
   const proErr = proRes.error?.message ?? null;
   const beta = (betaRes.data ?? []) as BetaRow[];
   const pro = (proRes.data ?? []) as ProRow[];
+  const betaTotal = betaRes.count ?? beta.length;
+  const proTotal = proRes.count ?? pro.length;
 
   return (
     <main style={pageStyle}>
@@ -107,9 +138,11 @@ export default async function AdminBuyersPage({
       <BuyersTables
         beta={beta}
         pro={pro}
+        betaTotal={betaTotal}
+        proTotal={proTotal}
         pageLimit={PAGE_LIMIT}
-        betaTruncated={beta.length === PAGE_LIMIT}
-        proTruncated={pro.length === PAGE_LIMIT}
+        page={page}
+        q={q}
       />
     </main>
   );

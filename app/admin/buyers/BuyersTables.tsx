@@ -1,6 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
+import { useRef, useState, useTransition } from "react";
 import CaseStatusCell from "../_components/CaseStatusCell";
 
 export type BetaRow = {
@@ -32,9 +33,11 @@ export type ProRow = {
 type Props = {
   beta: BetaRow[];
   pro: ProRow[];
+  betaTotal: number;
+  proTotal: number;
   pageLimit: number;
-  betaTruncated: boolean;
-  proTruncated: boolean;
+  page: number;
+  q: string;
 };
 
 function fmtName(n: string | null | undefined): string {
@@ -62,43 +65,130 @@ function fmtSessionId(id: string | null | undefined): string {
   return `${s.slice(0, 16)}…`;
 }
 
-function matches(row: { email: string; full_name: string | null }, needle: string): boolean {
-  if (!needle) return true;
-  const n = needle.toLowerCase();
-  if (row.email.toLowerCase().includes(n)) return true;
-  const name = (row.full_name ?? "").toLowerCase();
-  if (name.includes(n)) return true;
-  return false;
+function buildUrl(q: string, page: number): string {
+  const params = new URLSearchParams();
+  if (q) params.set("q", q);
+  if (page > 1) params.set("page", String(page));
+  const qs = params.toString();
+  return qs ? `/admin/buyers?${qs}` : "/admin/buyers";
 }
 
-export default function BuyersTables({ beta, pro, pageLimit, betaTruncated, proTruncated }: Props) {
-  const [q, setQ] = useState("");
-  const needle = q.trim();
+export default function BuyersTables({ beta, pro, betaTotal, proTotal, pageLimit, page, q }: Props) {
+  const router = useRouter();
+  const [isPending, startTransition] = useTransition();
+  const [inputValue, setInputValue] = useState(q);
+  const inputRef = useRef<HTMLInputElement>(null);
 
-  const filteredBeta = useMemo(() => beta.filter((r) => matches(r, needle)), [beta, needle]);
-  const filteredPro = useMemo(() => pro.filter((r) => matches(r, needle)), [pro, needle]);
+  const isSearching = q.length > 0;
+  const betaPages = Math.ceil(betaTotal / pageLimit);
+  const proPages = Math.ceil(proTotal / pageLimit);
+  const totalPages = Math.max(betaPages, proPages, 1);
+
+  function submit(value: string) {
+    startTransition(() => {
+      router.push(buildUrl(value.trim(), 1));
+    });
+  }
+
+  function goPage(p: number) {
+    startTransition(() => {
+      router.push(buildUrl(q, p));
+    });
+  }
+
+  function betaHeadingLabel(): string {
+    if (isSearching) {
+      return `${betaTotal} Treffer für „${q}"`;
+    }
+    if (betaTotal > pageLimit) {
+      const from = (page - 1) * pageLimit + 1;
+      const to = Math.min(page * pageLimit, betaTotal);
+      return `${from}–${to} von ${betaTotal}`;
+    }
+    return String(betaTotal);
+  }
+
+  function proHeadingLabel(): string {
+    if (isSearching) {
+      return `${proTotal} Treffer für „${q}"`;
+    }
+    if (proTotal > pageLimit) {
+      const from = (page - 1) * pageLimit + 1;
+      const to = Math.min(page * pageLimit, proTotal);
+      return `${from}–${to} von ${proTotal}`;
+    }
+    return String(proTotal);
+  }
 
   return (
-    <>
-      <div style={{ marginBottom: 24 }}>
+    <div style={{ opacity: isPending ? 0.6 : 1, transition: "opacity 0.15s" }}>
+      <div style={{ marginBottom: 24, display: "flex", gap: 8, alignItems: "center" }}>
         <input
+          ref={inputRef}
           type="search"
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
+          value={inputValue}
+          onChange={(e) => setInputValue(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") submit(inputValue);
+          }}
           placeholder="Suche nach Name oder Email…"
           aria-label="Käufer suchen"
           style={searchStyle}
         />
+        <button
+          type="button"
+          onClick={() => submit(inputValue)}
+          disabled={isPending}
+          style={searchBtnStyle}
+        >
+          Suchen
+        </button>
+        {isSearching && (
+          <button
+            type="button"
+            onClick={() => {
+              setInputValue("");
+              submit("");
+            }}
+            disabled={isPending}
+            style={clearBtnStyle}
+          >
+            ✕ Zurücksetzen
+          </button>
+        )}
+        {isPending && (
+          <span style={{ fontSize: 13, color: "#666" }}>Lädt…</span>
+        )}
       </div>
+
+      {!isSearching && totalPages > 1 && (
+        <div style={paginationBarStyle}>
+          <button
+            type="button"
+            disabled={page <= 1 || isPending}
+            onClick={() => goPage(page - 1)}
+            style={pageBtnStyle(page <= 1)}
+          >
+            ← Vorherige
+          </button>
+          <span style={{ fontSize: 13, color: "#444" }}>
+            Seite {page} von {totalPages}
+          </span>
+          <button
+            type="button"
+            disabled={page >= totalPages || isPending}
+            onClick={() => goPage(page + 1)}
+            style={pageBtnStyle(page >= totalPages)}
+          >
+            Nächste →
+          </button>
+        </div>
+      )}
 
       <section style={{ marginBottom: 32 }}>
         <h2 style={h2Style}>
           Beta-Reservierungen{" "}
-          <span style={countStyle}>
-            ({filteredBeta.length}
-            {needle ? ` von ${beta.length}` : ""}
-            {!needle && betaTruncated ? `+ neueste ${pageLimit}` : ""})
-          </span>
+          <span style={countStyle}>({betaHeadingLabel()})</span>
         </h2>
         <div style={tableWrapStyle}>
           <table style={tableStyle}>
@@ -115,14 +205,14 @@ export default function BuyersTables({ beta, pro, pageLimit, betaTruncated, proT
               </tr>
             </thead>
             <tbody>
-              {filteredBeta.length === 0 ? (
+              {beta.length === 0 ? (
                 <tr>
                   <td colSpan={8} style={{ ...tdStyle, textAlign: "center", color: "#888" }}>
-                    {needle ? "Keine Treffer." : "Keine Reservierungen."}
+                    {isSearching ? "Keine Treffer." : "Keine Reservierungen."}
                   </td>
                 </tr>
               ) : (
-                filteredBeta.map((r) => (
+                beta.map((r) => (
                   <tr key={r.id}>
                     <td style={tdStyle}>{fmtName(r.full_name)}</td>
                     <td style={tdStyle}>{r.email}</td>
@@ -147,11 +237,7 @@ export default function BuyersTables({ beta, pro, pageLimit, betaTruncated, proT
       <section>
         <h2 style={h2Style}>
           Pro-Abos{" "}
-          <span style={countStyle}>
-            ({filteredPro.length}
-            {needle ? ` von ${pro.length}` : ""}
-            {!needle && proTruncated ? `+ neueste ${pageLimit}` : ""})
-          </span>
+          <span style={countStyle}>({proHeadingLabel()})</span>
         </h2>
         <div style={tableWrapStyle}>
           <table style={tableStyle}>
@@ -168,14 +254,14 @@ export default function BuyersTables({ beta, pro, pageLimit, betaTruncated, proT
               </tr>
             </thead>
             <tbody>
-              {filteredPro.length === 0 ? (
+              {pro.length === 0 ? (
                 <tr>
                   <td colSpan={8} style={{ ...tdStyle, textAlign: "center", color: "#888" }}>
-                    {needle ? "Keine Treffer." : "Keine Pro-Abos."}
+                    {isSearching ? "Keine Treffer." : "Keine Pro-Abos."}
                   </td>
                 </tr>
               ) : (
-                filteredPro.map((r) => (
+                pro.map((r) => (
                   <tr key={r.id}>
                     <td style={tdStyle}>{fmtName(r.full_name)}</td>
                     <td style={tdStyle}>{r.email}</td>
@@ -196,7 +282,31 @@ export default function BuyersTables({ beta, pro, pageLimit, betaTruncated, proT
           </table>
         </div>
       </section>
-    </>
+
+      {!isSearching && totalPages > 1 && (
+        <div style={{ ...paginationBarStyle, marginTop: 16, marginBottom: 0 }}>
+          <button
+            type="button"
+            disabled={page <= 1 || isPending}
+            onClick={() => goPage(page - 1)}
+            style={pageBtnStyle(page <= 1)}
+          >
+            ← Vorherige
+          </button>
+          <span style={{ fontSize: 13, color: "#444" }}>
+            Seite {page} von {totalPages}
+          </span>
+          <button
+            type="button"
+            disabled={page >= totalPages || isPending}
+            onClick={() => goPage(page + 1)}
+            style={pageBtnStyle(page >= totalPages)}
+          >
+            Nächste →
+          </button>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -229,11 +339,49 @@ const monoTdStyle: React.CSSProperties = {
   color: "#444",
 };
 const searchStyle: React.CSSProperties = {
-  width: "100%",
-  maxWidth: 420,
+  flex: 1,
+  maxWidth: 360,
   padding: "10px 12px",
   border: "1px solid #ccc",
   borderRadius: 6,
   fontSize: 14,
   fontFamily: "inherit",
 };
+const searchBtnStyle: React.CSSProperties = {
+  padding: "10px 16px",
+  background: "#111",
+  color: "#fff",
+  border: "none",
+  borderRadius: 6,
+  fontSize: 14,
+  fontWeight: 600,
+  cursor: "pointer",
+};
+const clearBtnStyle: React.CSSProperties = {
+  padding: "10px 14px",
+  background: "transparent",
+  color: "#666",
+  border: "1px solid #ccc",
+  borderRadius: 6,
+  fontSize: 13,
+  cursor: "pointer",
+};
+const paginationBarStyle: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  gap: 12,
+  marginBottom: 16,
+};
+
+function pageBtnStyle(disabled: boolean): React.CSSProperties {
+  return {
+    padding: "8px 14px",
+    background: disabled ? "#f0f0f0" : "#111",
+    color: disabled ? "#aaa" : "#fff",
+    border: "none",
+    borderRadius: 6,
+    fontSize: 13,
+    fontWeight: 600,
+    cursor: disabled ? "default" : "pointer",
+  };
+}
