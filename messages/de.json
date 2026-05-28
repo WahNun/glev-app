@@ -441,7 +441,16 @@
     "bolus_sheet_static_why": "Warum dieser Fixwert?",
     "bolus_sheet_adaptive_detail": "{samples} Mahlzeiten · Ergebnisse gewichtet (GOOD 1,0 · SPIKE 0,7 · Über-/Unter-Dosis 0,3) · letzte 90 Tage",
     "bolus_sheet_static_detail": "Manuell konfigurierter KH-Faktor aus deinen Einstellungen{slot}.",
-    "bolus_sheet_static_slot": " · Slot: {label}"
+    "bolus_sheet_static_slot": " · Slot: {label}",
+    "err_carbs_required": "Bitte Kohlenhydrate eintragen (0 ist erlaubt).",
+    "err_insulin_valid": "Bitte gültige IE eintragen (≥ 0).",
+    "toast_no_carbs": "Keine Carbs hinterlegt — Einschätzung nicht möglich.",
+    "err_dose_valid": "Bitte eine gültige Dosis eintragen (0 ist erlaubt).",
+    "toast_dose_saved": "Dosis {dose}u gespeichert.",
+    "toast_save_failed": "Speichern fehlgeschlagen.",
+    "toast_log_deleted": "Log gelöscht.",
+    "toast_delete_failed": "Löschen fehlgeschlagen.",
+    "toast_no_bolus_saved": "Gespeichert ✓ — 0u Bolus"
   },
   "scopeHeader": {
     "today": "Heute",

@@ -1711,7 +1711,7 @@ export default function EnginePage() {
     // for everything downstream — DB storage and engine math are grams.
     const cDisplay = parseFloat(carbs);
     if (!Number.isFinite(cDisplay) || cDisplay < 0) {
-      setConfirmErr("Bitte Kohlenhydrate eintragen (0 ist erlaubt).");
+      setConfirmErr(tEngine("err_carbs_required"));
       return;
     }
     const cNum = carbUnit.toGrams(cDisplay);
@@ -1803,7 +1803,7 @@ export default function EnginePage() {
     // Validate displayed value (g/BE/KE), then convert to grams.
     const cDisplay = parseFloat(carbs);
     if (!Number.isFinite(cDisplay) || cDisplay < 0) {
-      setConfirmErr("Bitte Kohlenhydrate eintragen (0 ist erlaubt).");
+      setConfirmErr(tEngine("err_carbs_required"));
       return;
     }
     const cNum = carbUnit.toGrams(cDisplay);
@@ -1878,13 +1878,13 @@ export default function EnginePage() {
     // Validate displayed value (g/BE/KE), then convert to grams.
     const cDisplay = parseFloat(carbs);
     if (!Number.isFinite(cDisplay) || cDisplay < 0) {
-      setConfirmErr("Bitte Kohlenhydrate eintragen (0 ist erlaubt).");
+      setConfirmErr(tEngine("err_carbs_required"));
       return;
     }
     const cNum = carbUnit.toGrams(cDisplay);
     const iNum = parseFloat(directBolusValue);
     if (!Number.isFinite(iNum) || iNum < 0) {
-      setConfirmErr("Bitte gültige IE eintragen (≥ 0).");
+      setConfirmErr(tEngine("err_insulin_valid"));
       return;
     }
     const pNum  = parseFloat(protein) || 0;
@@ -1966,7 +1966,7 @@ export default function EnginePage() {
     setConfirmErr("");
     const cDisplay = parseFloat(carbs);
     if (!Number.isFinite(cDisplay) || cDisplay < 0) {
-      setConfirmErr("Bitte Kohlenhydrate eintragen (0 ist erlaubt).");
+      setConfirmErr(tEngine("err_carbs_required"));
       return;
     }
     const cNum = carbUnit.toGrams(cDisplay);
@@ -2035,7 +2035,7 @@ export default function EnginePage() {
     // 0g ist eine legitime Eingabe (z.B. reine Protein-/Fett-Mahlzeiten wie
     // Steak, Eier, Käse — können trotzdem über FPU Insulin brauchen). Nur
     // leere Eingabe oder negative Werte ablehnen.
-    if (!Number.isFinite(cDisplay) || cDisplay < 0) { setConfirmErr("Bitte Kohlenhydrate eintragen (0 ist erlaubt)."); return; }
+    if (!Number.isFinite(cDisplay) || cDisplay < 0) { setConfirmErr(tEngine("err_carbs_required")); return; }
     const cNum = carbUnit.toGrams(cDisplay);
     const pNum  = parseFloat(protein) || 0;
     const fNum  = parseFloat(fat)     || 0;
@@ -2171,7 +2171,7 @@ export default function EnginePage() {
     // confirmedMeal.carbs_grams already in grams; the form fallback is
     // in the user's display unit so convert before feeding the engine.
     const c = confirmedMeal.carbs_grams ?? carbUnit.toGrams(parseFloat(carbs) || 0);
-    if (!c) { setDecisionToast("Keine Carbs hinterlegt — Einschätzung nicht möglich."); return; }
+    if (!c) { setDecisionToast(tEngine("toast_no_carbs")); return; }
     setDecisionBusy(true);
     // Pre-Meal-Trend (Task #195): Bezugszeit ist hier der gespeicherte
     // `meal_time` der bestätigten Mahlzeit, nicht "jetzt" — der User
@@ -2213,7 +2213,7 @@ export default function EnginePage() {
     setDecisionInsulinErr(null);
     const iNum = parseFloat(insulin);
     if (insulin.trim() === "" || !Number.isFinite(iNum) || iNum < 0) {
-      setDecisionInsulinErr("Bitte eine gültige Dosis eintragen (0 ist erlaubt).");
+      setDecisionInsulinErr(tEngine("err_dose_valid"));
       return;
     }
     setDecisionBusy(true);
@@ -2221,7 +2221,7 @@ export default function EnginePage() {
       const updated = await updateMeal(confirmedMeal.id, { insulin_units: iNum });
       // Refresh the in-memory list so the next rec uses the updated dose.
       fetchMealsForEngine().then(setMeals).catch(() => {});
-      setDecisionToast(`Dosis ${iNum}u gespeichert.`);
+      setDecisionToast(tEngine("toast_dose_saved", { dose: iNum }));
       logDebug("ENGINE.DECISION.INSULIN_CONFIRM", {
         id: confirmedMeal.id,
         newDose: iNum,
@@ -2231,7 +2231,7 @@ export default function EnginePage() {
       resetForm({ keepGlucose: true });
       setTimeout(() => setDecisionToast(null), 2500);
     } catch (e) {
-      setDecisionInsulinErr(e instanceof Error ? e.message : "Speichern fehlgeschlagen.");
+      setDecisionInsulinErr(e instanceof Error ? e.message : tEngine("toast_save_failed"));
       setDecisionBusy(false);
     }
   }
@@ -2251,12 +2251,12 @@ export default function EnginePage() {
     try {
       await deleteMeal(confirmedMeal.id);
       fetchMealsForEngine().then(setMeals).catch(() => {});
-      setDecisionToast("Log gelöscht.");
+      setDecisionToast(tEngine("toast_log_deleted"));
       logDebug("ENGINE.DECISION.DELETE", { id: confirmedMeal.id });
       resetForm({ keepGlucose: true });
       setTimeout(() => setDecisionToast(null), 2500);
     } catch (e) {
-      setDecisionToast(e instanceof Error ? e.message : "Löschen fehlgeschlagen.");
+      setDecisionToast(e instanceof Error ? e.message : tEngine("toast_delete_failed"));
       setDecisionBusy(false);
     }
   }
@@ -2270,12 +2270,12 @@ export default function EnginePage() {
     try {
       await updateMeal(confirmedMeal.id, { insulin_units: 0 });
       fetchMealsForEngine().then(setMeals).catch(() => {});
-      setDecisionToast("Gespeichert ✓ — 0u Bolus");
+      setDecisionToast(tEngine("toast_no_bolus_saved"));
       logDebug("ENGINE.DECISION.NO_BOLUS", { id: confirmedMeal.id });
       resetForm({ keepGlucose: true });
       setTimeout(() => setDecisionToast(null), 2500);
     } catch (e) {
-      setDecisionToast(e instanceof Error ? e.message : "Speichern fehlgeschlagen.");
+      setDecisionToast(e instanceof Error ? e.message : tEngine("toast_save_failed"));
       setDecisionBusy(false);
     }
   }

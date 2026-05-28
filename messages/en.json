@@ -441,7 +441,16 @@
     "bolus_sheet_static_why": "Why this fixed value?",
     "bolus_sheet_adaptive_detail": "{samples} meals · outcomes weighted (GOOD 1.0 · SPIKE 0.7 · over-/under-dose 0.3) · last 90 days",
     "bolus_sheet_static_detail": "Manually configured ICR from your settings{slot}.",
-    "bolus_sheet_static_slot": " · slot: {label}"
+    "bolus_sheet_static_slot": " · slot: {label}",
+    "err_carbs_required": "Please enter carbohydrates (0 is allowed).",
+    "err_insulin_valid": "Please enter a valid insulin amount (≥ 0).",
+    "toast_no_carbs": "No carbs recorded — recommendation not possible.",
+    "err_dose_valid": "Please enter a valid dose (0 is allowed).",
+    "toast_dose_saved": "Dose {dose}u saved.",
+    "toast_save_failed": "Save failed.",
+    "toast_log_deleted": "Log deleted.",
+    "toast_delete_failed": "Delete failed.",
+    "toast_no_bolus_saved": "Saved ✓ — 0u bolus"
   },
   "scopeHeader": {
     "today": "Today",
