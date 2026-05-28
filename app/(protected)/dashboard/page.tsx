@@ -51,6 +51,7 @@ import { CSS } from "@dnd-kit/utilities";
 import { useCardOrder } from "@/lib/cardOrder";
 import PagerIndicator from "@/components/PagerIndicator";
 import { useEngineHeader } from "@/lib/engineHeaderContext";
+import UpgradeGate from "@/components/UpgradeGate";
 
 // Four-cluster cockpit layout (replaces the earlier 5-cluster "widget
 // wall"). Order is intentionally staged: Glucose is the primary
@@ -698,7 +699,7 @@ export default function DashboardPage() {
       id: "control",
       title: t("cluster_control"),
       cards: [
-        { id: "control-score", node: <ControlScoreCard meals={meals}/> },
+        { id: "control-score", node: <UpgradeGate feature="control_score"><ControlScoreCard meals={meals}/></UpgradeGate> },
         // rateCards = buildCards(...) minus the "control" entry —
         // shown as a single compact 3-up triplet (Good / Spike / Hypo)
         // so the breakdown is glanceable beneath the headline Control

@@ -1,39 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { readAllFromSheet, type SheetRow } from "@/lib/sheets";
 import { enrichMacrosBatch } from "@/lib/macroEnrich";
+import { authenticate, errResponse } from "../../cgm/_helpers";
+import { checkPlanAccess } from "@/lib/server/planAccess";
 
 export const dynamic = "force-dynamic";
 
 const SPREADSHEET_ID = "174KpxhA85hGCWCvQ40CeBitFBQrINW1OKss49nBmpFY";
-const MAX_CHUNKS = 16;
-
-function isAuthed(req: NextRequest): boolean {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
-  const projectRef = supabaseUrl.replace(/^https?:\/\//, "").split(".")[0];
-  if (!projectRef) return false;
-  const cookieName = `sb-${projectRef}-auth-token`;
-  const single = req.cookies.get(cookieName)?.value;
-  let raw = single ?? null;
-  if (!raw) {
-    const parts: string[] = [];
-    for (let i = 0; i < MAX_CHUNKS; i++) {
-      const piece = req.cookies.get(`${cookieName}.${i}`)?.value;
-      if (!piece) break;
-      parts.push(piece);
-    }
-    raw = parts.length ? parts.join("") : null;
-  }
-  if (!raw) return false;
-  try {
-    const parsed = JSON.parse(raw);
-    const session = Array.isArray(parsed) ? parsed[0] : parsed;
-    if (!session?.access_token) return false;
-    const expiresAt: number = session.expires_at ?? 0;
-    return expiresAt > Date.now() / 1000;
-  } catch {
-    return false;
-  }
-}
 
 const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
 
@@ -103,8 +76,12 @@ export interface MappedSheetMeal {
 }
 
 export async function POST(req: NextRequest) {
-  if (!isAuthed(req)) {
-    return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+  const { user, error: authErr } = await authenticate(req);
+  if (!user) {
+    return NextResponse.json({ error: authErr || "unauthorized" }, { status: 401 });
+  }
+  if (!(await checkPlanAccess(user.id, "google_sheets_import"))) {
+    return NextResponse.json({ error: "plan_required", plan: "pro" }, { status: 403 });
   }
   try {
     const body = await req.json().catch(() => ({}));

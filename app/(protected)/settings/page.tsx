@@ -86,6 +86,7 @@ import { fetchIcrSchedule } from "@/lib/icrSchedule";
 import SnapSlider from "@/components/log/SnapSlider";
 import { BASAL_WINDOW_PRESETS, DEFAULT_BASAL_WINDOW_H } from "@/lib/engine/constants";
 import { useFeatureFlag } from "@/lib/featureFlags";
+import UpgradeGate from "@/components/UpgradeGate";
 
 const ACCENT = "#4F6EF7", GREEN = "#22D3A0", PINK = "#FF2D78", PURPLE = "#A78BFA";
 const BORDER = "var(--border)";
@@ -3003,15 +3004,17 @@ export default function SettingsPage() {
       </SettingsSection>
 
       <SettingsSection title={tSettings("section_glucose")}>
-        <SettingsRow
-          first
-          iconColor={GREEN}
-          icon={ICON.glucose}
-          label={tSettings("row_target_range")}
-          subtitle={targetRangeSub}
-          ariaLabel={tSettings("row_open_aria", { label: tSettings("row_target_range") })}
-          onClick={() => openSheetWith("targetRange")}
-        />
+        <UpgradeGate feature="custom_target_range">
+          <SettingsRow
+            first
+            iconColor={GREEN}
+            icon={ICON.glucose}
+            label={tSettings("row_target_range")}
+            subtitle={targetRangeSub}
+            ariaLabel={tSettings("row_open_aria", { label: tSettings("row_target_range") })}
+            onClick={() => openSheetWith("targetRange")}
+          />
+        </UpgradeGate>
         <SettingsRow
           iconColor={GREEN}
           icon={
@@ -3213,17 +3216,19 @@ export default function SettingsPage() {
       {/* Arzttermine wandern aus der Insulin-Sektion in eine eigene
           „Termine"-Sektion — gehören thematisch nicht zu Insulin und
           standen vorher nur historisch dort. */}
-      <SettingsSection title={tSettings("section_appointments")}>
-        <SettingsRow
-          first
-          iconColor={ACCENT}
-          icon={ICON.calendar}
-          label={tSettings("appointments_title")}
-          subtitle={lastAppointmentSub}
-          ariaLabel={tSettings("row_open_aria", { label: tSettings("appointments_title") })}
-          onClick={() => openSheetWith("lastAppointment")}
-        />
-      </SettingsSection>
+      <UpgradeGate feature="doctor_appointment_tracker">
+        <SettingsSection title={tSettings("section_appointments")}>
+          <SettingsRow
+            first
+            iconColor={ACCENT}
+            icon={ICON.calendar}
+            label={tSettings("appointments_title")}
+            subtitle={lastAppointmentSub}
+            ariaLabel={tSettings("row_open_aria", { label: tSettings("appointments_title") })}
+            onClick={() => openSheetWith("lastAppointment")}
+          />
+        </SettingsSection>
+      </UpgradeGate>
 
       <SettingsSection title={tSettings("section_cgm")}>
         <SettingsRow
