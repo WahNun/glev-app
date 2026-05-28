@@ -2052,12 +2052,6 @@ export default function InsightsPage() {
         const allAvgs = rows.map(r => r.max);
         const barMax = allAvgs.length > 0 ? Math.max(...allAvgs, tirHigh + 60) : 300;
 
-        const TYPE_LABEL: Record<string, string> = {
-          FAST_CARBS:   locale === "de" ? "Fast Carbs"  : "Fast Carbs",
-          HIGH_PROTEIN: locale === "de" ? "High Protein": "High Protein",
-          HIGH_FAT:     locale === "de" ? "High Fat"    : "High Fat",
-          BALANCED:     locale === "de" ? "Balanced"    : "Balanced",
-        };
 
         return (
           <FlipCard
@@ -2112,7 +2106,7 @@ export default function InsightsPage() {
                     <div key={r.type} style={{ opacity: reliable ? 1 : 0.5 }}>
                       <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:4 }}>
                         <span style={{ fontSize:12, fontWeight:600, color:r.color, minWidth:88 }}>
-                          {TYPE_LABEL[r.type]}
+                          {chipLabels.typeLabel(r.type)}
                         </span>
                         <span style={{ fontSize:12, fontWeight:700, color:r.color, fontFamily:"var(--font-mono)" }}>
                           {tInsights("post_bolus_trend_avg", { avg: r.avg })}
