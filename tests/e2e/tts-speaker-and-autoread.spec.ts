@@ -354,7 +354,7 @@ test.describe("Per-bubble speaker icon and auto-read toggle", () => {
     // the quick-add sheet instead of the AI chat sheet while the async Supabase
     // lookup is still in flight.
     await context.addInitScript(() => {
-      window.localStorage.setItem("glev_cookie_consent", "rejected");
+      window.localStorage.setItem("glev_cookie_consent", JSON.stringify({ v: 2, necessary: true, analytics: false, marketing: false }));
       // @ts-expect-error — test-only window global (see lib/featureFlags.ts)
       window.__GLEV_FEATURE_FLAGS__ = { ai_voice: true };
     });
