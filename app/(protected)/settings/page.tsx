@@ -3062,6 +3062,19 @@ export default function SettingsPage() {
           ariaLabel={tSettings("row_open_aria", { label: tSettings("row_account") })}
           onClick={() => setAccountSheetOpen(true)}
         />
+        <SettingsRow
+          iconColor={PURPLE}
+          icon={
+            <svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="8" r="4" />
+              <path d="M4 21a8 8 0 0 1 16 0" />
+            </svg>
+          }
+          label={tSettings("about_me_row_label")}
+          subtitle={aboutMeSub}
+          ariaLabel={tSettings("row_open_aria", { label: tSettings("about_me_row_label") })}
+          onClick={() => openSheetWith("aboutMe")}
+        />
       </SettingsSection>
 
       {/* Glev AI & Glev+ im Konto-Tab (nur wenn sichtbar) */}
@@ -3389,19 +3402,6 @@ export default function SettingsPage() {
               }} />
             </div>
           }
-        />
-        <SettingsRow
-          iconColor={PURPLE}
-          icon={
-            <svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-              <circle cx="12" cy="8" r="4" />
-              <path d="M4 21a8 8 0 0 1 16 0" />
-            </svg>
-          }
-          label={tSettings("about_me_row_label")}
-          subtitle={aboutMeSub}
-          ariaLabel={tSettings("row_open_aria", { label: tSettings("about_me_row_label") })}
-          onClick={() => openSheetWith("aboutMe")}
         />
         {cycleRowVisible && (
           <SettingsRow
