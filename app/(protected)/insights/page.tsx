@@ -3243,6 +3243,65 @@ export default function InsightsPage() {
         .sort((a, b) => b.count - a.count)
         .slice(0, 3);
 
+      // ── Longer-range cycle trend ──────────────────────────────────────────
+      // Uses the FULL fetched menstrualLogs / symptomLogs arrays (up to 760 d
+      // with the year scope, minimum 90 d otherwise) — not the scope window.
+      // 1. Avg cycle length: differences between consecutive bleeding starts.
+      const bleedingStartsSorted = [...menstrualLogs]
+        .filter(r => r.flow_intensity !== null)
+        .map(r => r.start_date)
+        .sort();
+      let avgCycleLength: number | null = null;
+      let avgCycleLengthN = 0;
+      if (bleedingStartsSorted.length >= 2) {
+        const diffs: number[] = [];
+        for (let i = 1; i < bleedingStartsSorted.length; i++) {
+          const prev = new Date(bleedingStartsSorted[i - 1] + "T00:00:00").getTime();
+          const curr = new Date(bleedingStartsSorted[i] + "T00:00:00").getTime();
+          const d = Math.round((curr - prev) / 86400000);
+          if (d >= 14 && d <= 60) diffs.push(d);
+        }
+        if (diffs.length >= 1) {
+          avgCycleLength = Math.round(diffs.reduce((a, b) => a + b, 0) / diffs.length);
+          avgCycleLengthN = diffs.length + 1;
+        }
+      }
+      // 2. Avg bleeding duration from rows that have both start + end date.
+      let avgBleedingDuration: number | null = null;
+      const bleedingDurRows = menstrualLogs.filter(
+        r => r.flow_intensity !== null && r.end_date !== null,
+      );
+      if (bleedingDurRows.length >= 2) {
+        const durs = bleedingDurRows
+          .map(r => {
+            const s = new Date(r.start_date + "T00:00:00").getTime();
+            const e = new Date(r.end_date! + "T00:00:00").getTime();
+            return Math.round((e - s) / 86400000) + 1;
+          })
+          .filter(d => d >= 1 && d <= 14);
+        if (durs.length >= 2) {
+          avgBleedingDuration = Math.round(durs.reduce((a, b) => a + b, 0) / durs.length);
+        }
+      }
+      // 3. PMS phase pattern: for each PMS-category symptom log, find the most
+      //    recent menstrual_log whose start_date ≤ symptom date and read its phase.
+      const sortedMenstrualDesc = [...menstrualLogs].sort((a, b) =>
+        b.start_date > a.start_date ? 1 : b.start_date < a.start_date ? -1 : 0,
+      );
+      const phaseSymCounts: Record<string, number> = {};
+      for (const sl of symptomLogs) {
+        if (sl.category !== "pms") continue;
+        const day = sl.occurred_at.slice(0, 10);
+        const nearest = sortedMenstrualDesc.find(ml => ml.start_date <= day);
+        if (!nearest) continue;
+        const pk = nearest.cycle_phase ?? nearest.phase_marker;
+        if (!pk) continue;
+        phaseSymCounts[pk] = (phaseSymCounts[pk] || 0) + 1;
+      }
+      const topPhaseSym = Object.entries(phaseSymCounts)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 2);
+
       // The entire card is only shown for users who can menstruate.
       // Male users have no clinical use for cycle OR symptom context here
       // — symptom logging without cycle correlation adds no insight.
@@ -3250,6 +3309,8 @@ export default function InsightsPage() {
       if (sex === "male") return { id: "cycle-symptoms", node: null };
 
       const showCycle = cycleSurfacesAvailable(sex);
+      const hasTrendData =
+        showCycle && (avgCycleLength !== null || avgBleedingDuration !== null || topPhaseSym.length > 0);
       const hasAny = showCycle
         ? (bleedingDays > 0 || Object.keys(phaseCounts).length > 0 || totalSymptomEntries > 0)
         : totalSymptomEntries > 0;
@@ -3268,6 +3329,7 @@ export default function InsightsPage() {
                 paragraphs={[
                   tInsights("cycle_symptoms_back_p1", { range: rangeLabel }),
                   tInsights("cycle_symptoms_back_p2"),
+                  ...(hasTrendData ? [tInsights("cycle_symptoms_back_p3")] : []),
                 ]}
               />
             }
@@ -3343,6 +3405,60 @@ export default function InsightsPage() {
             ) : (
               <div style={{ fontSize:13, color:"var(--text-faint)", fontStyle:"italic" }}>
                 {tInsights("symptom_top_empty", { range: rangeLabel })}
+              </div>
+            )}
+
+            {hasTrendData && (
+              <div style={{ marginTop:12, paddingTop:12, borderTop:`1px solid ${PINK}20` }}>
+                <div style={{ fontSize:11, color:"var(--text-dim)", letterSpacing:"0.06em", fontWeight:700, textTransform:"uppercase", marginBottom:8 }}>
+                  {tInsights("cycle_trend_title")}
+                </div>
+                <div style={{ display:"grid", gridTemplateColumns: avgCycleLength !== null && avgBleedingDuration !== null ? "1fr 1fr" : "1fr", gap:8 }}>
+                  {avgCycleLength !== null && (
+                    <div style={{ background:`${PINK}10`, border:`1px solid ${PINK}20`, borderRadius:8, padding:"8px 10px" }}>
+                      <div style={{ fontSize:11, color:PINK, fontWeight:700, textTransform:"uppercase", letterSpacing:"0.04em" }}>
+                        {tInsights("cycle_avg_length_label")}
+                      </div>
+                      <div style={{ fontSize:20, fontWeight:800, color:PINK, fontFamily:"var(--font-mono)", lineHeight:1.15, marginTop:3 }}>
+                        {avgCycleLength}
+                        <span style={{ fontSize:12, fontWeight:500, marginLeft:4 }}>{tInsights("cycle_avg_length_unit")}</span>
+                      </div>
+                      <div style={{ fontSize:11, color:"var(--text-dim)", marginTop:3 }}>
+                        {tInsights("cycle_avg_length_from", { n: avgCycleLengthN })}
+                      </div>
+                    </div>
+                  )}
+                  {avgBleedingDuration !== null && (
+                    <div style={{ background:"var(--surface-soft)", border:`1px solid ${BORDER}`, borderRadius:8, padding:"8px 10px" }}>
+                      <div style={{ fontSize:11, color:"var(--text-dim)", fontWeight:700, textTransform:"uppercase", letterSpacing:"0.04em" }}>
+                        {tInsights("cycle_avg_bleeding_label")}
+                      </div>
+                      <div style={{ fontSize:20, fontWeight:800, color:"var(--text-strong)", fontFamily:"var(--font-mono)", lineHeight:1.15, marginTop:3 }}>
+                        {avgBleedingDuration}
+                        <span style={{ fontSize:12, fontWeight:500, marginLeft:4 }}>{tInsights("cycle_avg_length_unit")}</span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+                {topPhaseSym.length > 0 && (
+                  <div style={{ marginTop:8 }}>
+                    <div style={{ fontSize:11, color:"var(--text-dim)", fontWeight:700, textTransform:"uppercase", letterSpacing:"0.04em", marginBottom:6 }}>
+                      {tInsights("cycle_phase_symptoms_label")}
+                    </div>
+                    <div style={{ display:"flex", flexDirection:"column", gap:4 }}>
+                      {topPhaseSym.map(([pk, cnt]) => (
+                        <div key={pk} style={{ display:"grid", gridTemplateColumns:"1fr auto", gap:8, alignItems:"center", padding:"5px 10px", background:"var(--surface-soft)", borderRadius:7 }}>
+                          <div style={{ fontSize:12, fontWeight:600, color:"var(--text)" }}>
+                            {tInsights(`cycle_phase_${pk}` as never)}
+                          </div>
+                          <div style={{ fontSize:12, color:PINK, fontFamily:"var(--font-mono)" }}>
+                            ×{cnt}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </FlipCard>
