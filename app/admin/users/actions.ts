@@ -697,13 +697,13 @@ export async function clearGiftLabelAction(formData: FormData): Promise<void> {
 export async function confirmEmailAction(formData: FormData): Promise<void> {
   const adminToken = await requireAdminToken();
   const userId = String(formData.get("userId") ?? "");
-  if (!userId) throw new Error("userId fehlt");
+  if (!userId) redirect("/admin/users?err=action_failed&msg=" + encodeURIComponent("userId fehlt"));
 
   const sb = getSupabaseAdmin();
   const { error } = await sb.auth.admin.updateUserById(userId, {
     email_confirm: true,
   });
-  if (error) throw new Error("auth: " + error.message);
+  if (error) redirect(`/admin/users/${userId}?err=action_failed&msg=` + encodeURIComponent("auth: " + error.message));
 
   await writeAuditLog({
     action: "confirm_email",
@@ -914,13 +914,13 @@ export async function cancelAndBanAction(formData: FormData): Promise<void> {
 export async function restoreUserAction(formData: FormData): Promise<void> {
   const adminToken = await requireAdminToken();
   const userId = String(formData.get("userId") ?? "");
-  if (!userId) throw new Error("userId fehlt");
+  if (!userId) redirect("/admin/users?err=action_failed&msg=" + encodeURIComponent("userId fehlt"));
 
   const sb = getSupabaseAdmin();
   const { error: banErr } = await sb.auth.admin.updateUserById(userId, {
     ban_duration: "none",
   });
-  if (banErr) throw new Error("auth: " + banErr.message);
+  if (banErr) redirect(`/admin/users/${userId}?err=action_failed&msg=` + encodeURIComponent("auth: " + banErr.message));
 
   const { error: restoreErr } = await sb
     .from("profiles")
@@ -1333,7 +1333,7 @@ export async function sendPasswordResetAction(formData: FormData): Promise<void>
   const adminToken = await requireAdminToken();
   const userId = String(formData.get("userId") ?? "");
   const email = String(formData.get("email") ?? "").trim().toLowerCase();
-  if (!userId || !email) throw new Error("userId und email erforderlich");
+  if (!userId || !email) redirect((userId ? `/admin/users/${userId}` : "/admin/users") + "?err=action_failed&msg=" + encodeURIComponent("userId und email erforderlich"));
 
   const sb = getSupabaseAdmin();
   const appUrl = (process.env.NEXT_PUBLIC_APP_URL ?? "").replace(/\/$/, "");
@@ -1360,7 +1360,7 @@ export async function sendPasswordResetAction(formData: FormData): Promise<void>
     options: appUrl ? { redirectTo: `${appUrl}/auth/confirm` } : undefined,
   });
   if (linkErr || !linkData?.properties?.action_link) {
-    throw new Error("auth: " + (linkErr?.message ?? "kein action_link"));
+    redirect(`/admin/users/${userId}?err=action_failed&msg=` + encodeURIComponent("auth: " + (linkErr?.message ?? "kein action_link")));
   }
   const resetUrl = linkData.properties.action_link;
 
@@ -1389,7 +1389,7 @@ export async function sendMagicLinkAction(formData: FormData): Promise<void> {
   const adminToken = await requireAdminToken();
   const userId = String(formData.get("userId") ?? "");
   const email = String(formData.get("email") ?? "").trim().toLowerCase();
-  if (!userId || !email) throw new Error("userId und email erforderlich");
+  if (!userId || !email) redirect((userId ? `/admin/users/${userId}` : "/admin/users") + "?err=action_failed&msg=" + encodeURIComponent("userId und email erforderlich"));
 
   const sb = getSupabaseAdmin();
   const appUrl = (process.env.NEXT_PUBLIC_APP_URL ?? "").replace(/\/$/, "");
@@ -1398,7 +1398,7 @@ export async function sendMagicLinkAction(formData: FormData): Promise<void> {
     email,
     options: appUrl ? { redirectTo: `${appUrl}/dashboard` } : undefined,
   });
-  if (error) throw new Error("auth: " + error.message);
+  if (error) redirect(`/admin/users/${userId}?err=action_failed&msg=` + encodeURIComponent("auth: " + error.message));
 
   await writeAuditLog({
     action: "send_magic_link",
