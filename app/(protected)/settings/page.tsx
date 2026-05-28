@@ -3004,17 +3004,15 @@ export default function SettingsPage() {
       </SettingsSection>
 
       <SettingsSection title={tSettings("section_glucose")}>
-        <UpgradeGate feature="custom_target_range">
-          <SettingsRow
-            first
-            iconColor={GREEN}
-            icon={ICON.glucose}
-            label={tSettings("row_target_range")}
-            subtitle={targetRangeSub}
-            ariaLabel={tSettings("row_open_aria", { label: tSettings("row_target_range") })}
-            onClick={() => openSheetWith("targetRange")}
-          />
-        </UpgradeGate>
+        <SettingsRow
+          first
+          iconColor={GREEN}
+          icon={ICON.glucose}
+          label={tSettings("row_target_range")}
+          subtitle={targetRangeSub}
+          ariaLabel={tSettings("row_open_aria", { label: tSettings("row_target_range") })}
+          onClick={() => openSheetWith("targetRange")}
+        />
         <SettingsRow
           iconColor={GREEN}
           icon={
