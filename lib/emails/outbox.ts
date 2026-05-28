@@ -55,7 +55,7 @@ export const MAX_ATTEMPTS = 5;
  * 2 → 4 → 8 → 16 minutes — fits inside the cron-every-1-2-min cadence
  * without being so aggressive that a flaky Resend gets hammered.
  */
-const BACKOFF_MINUTES = [0, 2, 4, 8, 16];
+export const BACKOFF_MINUTES = [0, 2, 4, 8, 16];
 
 /**
  * Max rows processed per cron invocation. Keeps the request-bound
@@ -344,6 +344,22 @@ function renderTemplate(template: EmailTemplate, payload: EmailPayload): Rendere
   }
 }
 
+// ---- Dependency injection (for testing) -----------------------------------
+
+/**
+ * Optional overrides passed to `flushOutbox()` by tests. Production code
+ * never passes these — the defaults (`getSupabaseAdmin()` / `getResend()`)
+ * are used instead.
+ */
+export interface FlushDeps {
+  /** Substitute Supabase admin client (in-memory fake for unit tests). */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  admin?: any;
+  /** Substitute Resend client (fake for unit tests). */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  resend?: any;
+}
+
 // ---- Resend client (lazy) -------------------------------------------------
 
 let _resend: Resend | null = null;
@@ -490,8 +506,8 @@ interface FlushResult {
  *
  * Returns a counters object for the cron handler to log.
  */
-export async function flushOutbox(): Promise<FlushResult> {
-  const admin = getSupabaseAdmin();
+export async function flushOutbox(deps?: FlushDeps): Promise<FlushResult> {
+  const admin = deps?.admin ?? getSupabaseAdmin();
   const counters: FlushResult = {
     claimed: 0,
     sent: 0,
@@ -581,7 +597,7 @@ export async function flushOutbox(): Promise<FlushResult> {
       // template name or bad payload shape). Mark `dead` immediately;
       // retries can't fix a bad template.
       const message = err instanceof Error ? err.message : String(err);
-      const ok = await markDead(id as string, `render: ${message}`, attemptsAfter);
+      const ok = await markDead(admin, id as string, `render: ${message}`, attemptsAfter);
       if (ok) counters.dead += 1;
       counters.errors += 1;
       continue;
@@ -590,7 +606,7 @@ export async function flushOutbox(): Promise<FlushResult> {
     let sendError: string | null = null;
     let messageId: string | null = null;
     try {
-      const resend = getResend();
+      const resend = deps?.resend ?? getResend();
       const { data, error } = await resend.emails.send({
         from: rendered.from,
         to: claimed.recipient as string,
@@ -647,7 +663,7 @@ export async function flushOutbox(): Promise<FlushResult> {
 
     // Failure path.
     if (attemptsAfter >= MAX_ATTEMPTS) {
-      const ok = await markDead(id as string, sendError, attemptsAfter, claimed.recipient as string);
+      const ok = await markDead(admin, id as string, sendError, attemptsAfter, claimed.recipient as string);
       if (ok) {
         counters.dead += 1;
       } else {
@@ -718,13 +734,14 @@ async function finalizeWithRetry(
   return false;
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function markDead(
+  admin: any,
   id: string,
   err: string,
   attempts: number,
   recipient?: string,
 ): Promise<boolean> {
-  const admin = getSupabaseAdmin();
   const ok = await finalizeWithRetry(admin, id, {
     status: "dead",
     attempts,
