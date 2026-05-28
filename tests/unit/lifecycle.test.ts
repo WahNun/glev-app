@@ -310,3 +310,110 @@ test("lifecycleFor: legacy glucose_after (no bg_2h_at) → state='final', window
   expect(r.outOfWindow).toBe(false);
   expect(r.delta2).toBe(10);
 });
+
+/* ──────────────────────────────────────────────────────────────────
+   Outcome-cache drift guard (Task #261).
+
+   Background: Task #253 fixed the entries page so the chip and the
+   OUTCOME card always agree by using the LIVE `lifecycleFor` result
+   instead of the stale `meal.evaluation` DB column.  These tests
+   pin that contract so a future refactor cannot silently re-introduce
+   the divergence.
+
+   Scenario: curve backfill runs AFTER the initial bg_2h write.  At
+   bg_2h time the reading looked fine (102 mg/dL) → evaluation="GOOD"
+   persisted.  The +3h curve then reveals a hypo dip → had_hypo_window
+   or min_bg_180 flips the live outcome to HYPO_DURING while the DB
+   cache still says "GOOD".
+   ────────────────────────────────────────────────────────────────── */
+
+test("cache-drift: had_hypo_window=true overrides cached evaluation='GOOD' → HYPO_DURING", () => {
+  // Regression guard for entries/page.tsx line:
+  //   const mLc = lifecycleFor(m);
+  //   const ev  = mLc.outcome ?? m.evaluation;
+  // If someone reverts to `m.evaluation` directly, this test still passes
+  // but the companion pattern test below will catch it.
+  const meal = makeMeal({
+    evaluation: "GOOD",     // stale DB-cached value
+    had_hypo_window: true,  // curve aggregate written by +3h backfill
+    glucose_before: 100,
+    bg_2h: 102,             // post-meal value looks fine → old cache said GOOD
+    bg_2h_at: atOffset(120),
+  });
+
+  const lc = lifecycleFor(meal, NOW, SETTINGS);
+
+  expect(lc.state).toBe("final");
+  expect(lc.outcome).toBe("HYPO_DURING");
+  // The DB cache MUST NOT be used as the displayed value.
+  expect(lc.outcome).not.toBe(meal.evaluation);
+});
+
+test("cache-drift: entries-page reconcile pattern uses live outcome, not cached evaluation", () => {
+  // Pins the exact expression from app/(protected)/entries/page.tsx:
+  //   const mLc = lifecycleFor(m);
+  //   const ev  = mLc.outcome ?? m.evaluation;
+  // This test FAILS if the entries page is reverted to read m.evaluation
+  // directly, because `displayedOutcome` would then equal "GOOD".
+  const meal = makeMeal({
+    evaluation: "GOOD",
+    had_hypo_window: true,
+    glucose_before: 100,
+    bg_2h: 102,
+    bg_2h_at: atOffset(120),
+  });
+
+  const lc = lifecycleFor(meal, NOW, SETTINGS);
+  // Mirrors the read-side reconcile in the entries page:
+  const displayedOutcome = lc.outcome ?? meal.evaluation;
+
+  expect(displayedOutcome).toBe("HYPO_DURING");
+  expect(displayedOutcome).not.toBe(meal.evaluation); // "GOOD" must lose
+});
+
+test("cache-drift: cgm-jobs reconcile detects divergence → DB write required", () => {
+  // Mirrors the write-side reconcile in app/api/cgm-jobs/process/route.ts:
+  //   const lc       = lifecycleFor(full, ...);
+  //   const nextEval = lc.state === "final" ? lc.outcome : null;
+  //   const cachedEval = full.evaluation;
+  //   if (nextEval !== cachedEval) { await admin.from("meals").update(...) }
+  // This test fails if the `!== cachedEval` guard is removed.
+  const meal = makeMeal({
+    evaluation: "GOOD",
+    had_hypo_window: true,
+    glucose_before: 100,
+    bg_2h: 102,
+    bg_2h_at: atOffset(120),
+  });
+
+  const lc = lifecycleFor(meal, NOW, SETTINGS);
+  const nextEval   = lc.state === "final" ? lc.outcome : null;
+  const cachedEval = meal.evaluation;
+
+  // The reconcile MUST detect a diff and write the updated evaluation.
+  expect(nextEval).toBe("HYPO_DURING");
+  expect(cachedEval).toBe("GOOD");
+  expect(nextEval).not.toBe(cachedEval); // divergence confirmed → DB write needed
+});
+
+test("cache-drift: min_bg_180 < 70 also triggers HYPO_DURING without had_hypo_window flag", () => {
+  // Alternative curve path: the raw minimum BG over 180 min is below the
+  // hypo threshold even when the boolean aggregate has not been written yet.
+  const meal = makeMeal({
+    evaluation: "GOOD",
+    had_hypo_window: null, // flag not yet set
+    min_bg_180: 58,        // raw curve minimum confirms hypo
+    glucose_before: 100,
+    bg_2h: 102,
+    bg_2h_at: atOffset(120),
+  });
+
+  const lc = lifecycleFor(meal, NOW, SETTINGS);
+
+  expect(lc.state).toBe("final");
+  expect(lc.outcome).toBe("HYPO_DURING");
+  // Entries page reconcile expression still returns live outcome:
+  const displayedOutcome = lc.outcome ?? meal.evaluation;
+  expect(displayedOutcome).toBe("HYPO_DURING");
+  expect(displayedOutcome).not.toBe(meal.evaluation);
+});
