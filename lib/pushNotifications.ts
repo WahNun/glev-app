@@ -31,6 +31,11 @@
 type PushModule = typeof import("@capacitor/push-notifications");
 
 let initStarted = false;
+
+/** Resets the init guard so initPushNotifications() can be called again. */
+export function resetPushInit(): void {
+  initStarted = false;
+}
 let isNativeCache: boolean | undefined;
 
 function isBrowser(): boolean {

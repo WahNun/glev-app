@@ -238,32 +238,63 @@ function useNightscoutConnected(): boolean {
 function PushDebugSection() {
   const [token, setToken] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  useEffect(() => {
+  const [isNative, setIsNative] = useState(false);
+  const [retrying, setRetrying] = useState(false);
+
+  const refresh = () => {
     setToken(localStorage.getItem("glev_push_token"));
     setError(localStorage.getItem("glev_push_error"));
+  };
+
+  useEffect(() => {
+    refresh();
+    const w = window as unknown as { Capacitor?: { isNativePlatform?: () => boolean } };
+    setIsNative(!!w.Capacitor?.isNativePlatform?.());
   }, []);
-  if (!token && !error) return null;
+
+  // Only show on native Capacitor shells
+  if (!isNative) return null;
+
+  const handleRetry = async () => {
+    setRetrying(true);
+    localStorage.removeItem("glev_push_error");
+    localStorage.removeItem("glev_push_token");
+    refresh();
+    const { resetPushInit, initPushNotifications } = await import("@/lib/pushNotifications");
+    resetPushInit();
+    await initPushNotifications();
+    setTimeout(() => { refresh(); setRetrying(false); }, 2000);
+  };
+
   return (
     <div style={{
       margin: "16px 0",
       padding: "12px 16px",
       borderRadius: 12,
-      background: error ? "rgba(255,80,80,0.1)" : "rgba(80,255,120,0.1)",
-      border: `1px solid ${error ? "rgba(255,80,80,0.3)" : "rgba(80,255,120,0.3)"}`,
+      background: token ? "rgba(80,255,120,0.08)" : error ? "rgba(255,80,80,0.08)" : "rgba(120,120,120,0.08)",
+      border: `1px solid ${token ? "rgba(80,255,120,0.3)" : error ? "rgba(255,80,80,0.3)" : "rgba(120,120,120,0.2)"}`,
       fontSize: 12,
       color: "var(--fg)",
       wordBreak: "break-all",
     }}>
-      <div style={{ fontWeight: 600, marginBottom: 4 }}>
-        Push-Status
-      </div>
-      {token && (
-        <div>✅ Token: {token.slice(0, 20)}…{token.slice(-10)}</div>
-      )}
-      {error && (
-        <div>❌ Fehler: {error}</div>
-      )}
-      {!token && !error && null}
+      <div style={{ fontWeight: 600, marginBottom: 6 }}>Push-Debug</div>
+      {token
+        ? <div>✅ Token registriert: {token.slice(0, 16)}…</div>
+        : error
+          ? <div>❌ Fehler: {error}</div>
+          : <div>⏳ Kein Token vorhanden — noch nicht registriert</div>
+      }
+      <button
+        onClick={() => void handleRetry()}
+        disabled={retrying}
+        style={{
+          marginTop: 8, padding: "6px 12px", borderRadius: 8, border: "none",
+          background: "var(--accent)", color: "#fff", fontSize: 12,
+          cursor: retrying ? "default" : "pointer", opacity: retrying ? 0.6 : 1,
+        }}
+      >
+        {retrying ? "Registriere…" : "Push-Registrierung neu starten"}
+      </button>
     </div>
   );
 }
