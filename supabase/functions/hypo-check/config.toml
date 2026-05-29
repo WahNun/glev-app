@@ -4,11 +4,26 @@
 schedule = "*/5 * * * *"
 
 # Required secrets (set via Supabase Dashboard → Edge Functions → Secrets):
-#   FIREBASE_SERVER_KEY  — FCM server key for Android push
-#   APNS_KEY_P8          — APNs .p8 private key content (full PEM string)
-#   APNS_KEY_ID          — 10-char APNs key ID
-#   APNS_TEAM_ID         — 10-char Apple Team ID
-#   APNS_BUNDLE_ID       — iOS bundle ID (default: "app.glev.app")
+#
+#   iOS (APNs):
+#   APNS_KEY_P8    — APNs .p8 private key (Apple Developer → Certificates, IDs & Profiles →
+#                    Keys → create "Apple Push Notifications service (APNs)" key → download .p8)
+#   APNS_KEY_ID    — 10-char key ID shown in Apple Developer after key creation
+#   APNS_TEAM_ID   — 10-char Apple Team ID (Apple Developer → Membership → Team ID)
+#   APNS_BUNDLE_ID — Must be "com.glev.app" (Xcode PRODUCT_BUNDLE_IDENTIFIER).
+#                    ⚠ NOT "app.glev" (Capacitor appId) or "app.glev.app" (old wrong value).
+#
+#   Android (FCM HTTP v1):
+#   ⚠ FIREBASE_SERVER_KEY (legacy) was shut down by Google in June 2024. DO NOT use it.
+#   FIREBASE_PROJECT_ID           — Firebase project ID string
+#                                   Find: Firebase Console → Project Settings → General
+#   FIREBASE_SERVICE_ACCOUNT_JSON — Full service account key JSON as a single-line string
+#                                   Generate: Firebase Console → Project Settings →
+#                                   Service Accounts → Generate new private key → download JSON
+#                                   Then: cat key.json | tr -d '\n' and paste the result
 #
 # SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are injected automatically
 # by the Supabase runtime.
+#
+# Deploy command:
+#   supabase functions deploy hypo-check
