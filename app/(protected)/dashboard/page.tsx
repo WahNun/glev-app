@@ -160,7 +160,7 @@ function RateTripletCard({ cards }: { cards: CardData[] }) {
   return (
     <div
       onClick={() => setFlipped(f => !f)}
-      style={{ position: "relative", perspective: 1200, cursor: "pointer", minHeight: 140 }}
+      style={{ position: "relative", perspective: 1200, cursor: "pointer", minHeight: 120 }}
     >
       <div
         style={{
@@ -169,16 +169,16 @@ function RateTripletCard({ cards }: { cards: CardData[] }) {
           transformStyle: "preserve-3d",
           transition: "transform 0.55s cubic-bezier(0.4,0,0.2,1)",
           transform: flipped ? "rotateY(180deg)" : "rotateY(0deg)",
-          minHeight: 140,
+          minHeight: 120,
         }}
       >
         {/* ── FRONT ── */}
         <div
           className="glev-stat-card"
           style={{
-            background: SURFACE, border: `1px solid ${BORDER}`, borderRadius: 14,
-            padding: 10, boxSizing: "border-box",
-            display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8,
+            background: "transparent", border: "none",
+            padding: 0, boxSizing: "border-box",
+            display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10,
             position: "absolute", inset: 0,
             backfaceVisibility: "hidden",
           }}
@@ -186,10 +186,10 @@ function RateTripletCard({ cards }: { cards: CardData[] }) {
           {cards.map(c => (
             <div key={c.key} style={{
               background: "var(--surface-soft)", border: `1px solid ${BORDER}`,
-              borderRadius: 12,
-              padding: "clamp(8px,2.5vw,12px) clamp(8px,2.5vw,12px) clamp(6px,2vw,10px)",
+              borderRadius: 14,
+              padding: "14px clamp(10px,3vw,14px) 12px",
               boxSizing: "border-box",
-              display: "flex", flexDirection: "column", gap: 4, minWidth: 0,
+              display: "flex", flexDirection: "column", gap: 6, minWidth: 0,
             }}>
               <div style={{
                 fontSize: 10, color: "var(--text-dim)", letterSpacing: "0.08em",
@@ -198,14 +198,14 @@ function RateTripletCard({ cards }: { cards: CardData[] }) {
               }}>{c.label}</div>
               <div style={{ display: "flex", alignItems: "baseline", gap: 2 }}>
                 <span style={{
-                  fontSize: "clamp(22px,5.5vw,30px)", fontWeight: 800, color: c.color,
+                  fontSize: "clamp(24px,6vw,32px)", fontWeight: 800, color: c.color,
                   letterSpacing: "-0.02em", lineHeight: 1,
                   fontFamily: "var(--font-mono)",
                 }}>{c.value}</span>
-                <span style={{ fontSize: 11, color: "var(--text-faint)" }}>{c.unit}</span>
+                <span style={{ fontSize: 12, color: "var(--text-faint)" }}>{c.unit}</span>
               </div>
               <div style={{
-                fontSize: "clamp(9px,2.5vw,11px)", color: "var(--text-faint)", lineHeight: 1.25,
+                fontSize: "clamp(10px,2.5vw,12px)", color: "var(--text-faint)", lineHeight: 1.25,
               }}>{c.sub}</div>
             </div>
           ))}
