@@ -22,7 +22,7 @@ export default function AiSettingsPage() {
   const [aiScopeHistory, setAiScopeHistory] = useState<boolean | null>(null);
   const [aiScopeBusy, setAiScopeBusy] = useState<"glucose" | "iob" | "history" | "revoke" | null>(null);
 
-  const [fabMode, setFabMode] = useState<"ai" | "voice">("ai");
+  const [fabMode, setFabMode] = useState<"ai" | "voice">("voice");
   useEffect(() => {
     if (typeof window === "undefined") return;
     try {
