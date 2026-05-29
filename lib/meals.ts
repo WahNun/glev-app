@@ -131,10 +131,14 @@ export interface SaveMealInput {
  *                       gemischte Mahlzeiten mit dominantem Protein —
  *                       Schwelle von 25g auf 20g gesenkt 2026-05-04 weil
  *                       ein 24g-Whey-Shake intuitiv HIGH_PROTEIN ist)
- *   BALANCED      → otherwise (no dominant macro). The legacy HIGH_FIBER
- *                   bucket has been removed — high-fiber meals now fall
- *                   through to BALANCED (and the lifecycle absorption
- *                   curve handles the slower rise on its own).
+ *   HIGH_FIBER    → fiber >= 7g  AND  fiber/carbs >= 0.20
+ *                   (≥ 20 % Faserquote bei mind. 7g Absolutwert:
+ *                   Linsen, Bohnen, Kichererbsen, Vollkornbrot,
+ *                   faserreiches Gemüse). Klinisch: Ballaststoffe
+ *                   verlangsamen und dämpfen die Glukoseresorption
+ *                   ähnlich wie Fett, aber ohne den Delayed-Rise-Effekt.
+ *                   Spike-Cutoff liegt bei 40 mg/dL (= HIGH_FAT-Niveau).
+ *   BALANCED      → otherwise (no dominant macro).
  *
  * `sugars` is optional so existing call sites (historical seeds, Sheets
  * import) that don't track sugars-of-which keep working — they get the
@@ -163,6 +167,10 @@ export function classifyMeal(
   if (carbs < 5 && fat < 5 && protein > 0) return "HIGH_PROTEIN";
   // (b) Standard-Fall: Protein dominant + nennenswerte Menge.
   if (protein > carbs && protein > fat && protein >= 20) return "HIGH_PROTEIN";
+  // HIGH_FIBER: mind. 7g Ballaststoffe UND mind. 20% der KH-Menge.
+  // Kommt nach Fett/Protein damit Fettdominanz und Proteindominanz
+  // Vorrang behalten — HIGH_FIBER greift nur bei echter Fasermahlzeit.
+  if (carbs > 0 && fiber >= 7 && fiber / carbs >= 0.20) return "HIGH_FIBER";
   return "BALANCED";
 }
 

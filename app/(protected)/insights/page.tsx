@@ -1147,11 +1147,12 @@ export default function InsightsPage() {
   const icrScope = last7.filter(m=>m.carbs_grams&&m.insulin_units).map(m=>(m.carbs_grams||0)/(m.insulin_units||1));
   const estICR = icrScope.length ? Math.round(icrScope.reduce((a,b)=>a+b,0)/icrScope.length) : 15;
 
-  // Meal type breakdown (FAST_CARBS / HIGH_PROTEIN / HIGH_FAT / BALANCED)
+  // Meal type breakdown (FAST_CARBS / HIGH_PROTEIN / HIGH_FAT / HIGH_FIBER / BALANCED)
   const types: Record<string, {count:number; totalCarbs:number; totalInsulin:number; good:number}> = {
     FAST_CARBS:   {count:0,totalCarbs:0,totalInsulin:0,good:0},
     HIGH_PROTEIN: {count:0,totalCarbs:0,totalInsulin:0,good:0},
     HIGH_FAT:     {count:0,totalCarbs:0,totalInsulin:0,good:0},
+    HIGH_FIBER:   {count:0,totalCarbs:0,totalInsulin:0,good:0},
     BALANCED:     {count:0,totalCarbs:0,totalInsulin:0,good:0},
   };
   last7.forEach(m => {
@@ -1163,7 +1164,7 @@ export default function InsightsPage() {
       if (EVAL_NORM(unifiedOutcome(m))==="GOOD") types[t].good++;
     }
   });
-  const TYPE_ORDER = ["FAST_CARBS", "HIGH_PROTEIN", "HIGH_FAT", "BALANCED"] as const;
+  const TYPE_ORDER = ["FAST_CARBS", "HIGH_PROTEIN", "HIGH_FAT", "HIGH_FIBER", "BALANCED"] as const;
 
   // Time-of-day buckets
   const timeGroups: Record<string,{count:number;good:number}> = {
@@ -2146,9 +2147,10 @@ export default function InsightsPage() {
                 const best  = ranked[0];
                 const worst = ranked[ranked.length - 1];
                 const label = (t: string) =>
-                  t === "FAST_CARBS"   ? "Schnelle KH" :
-                  t === "HIGH_PROTEIN" ? "Protein"     :
-                  t === "HIGH_FAT"     ? "Fett"        : "Ausgewogen";
+                  t === "FAST_CARBS"   ? "Schnelle KH"    :
+                  t === "HIGH_PROTEIN" ? "Protein"        :
+                  t === "HIGH_FAT"     ? "Fett"           :
+                  t === "HIGH_FIBER"   ? "Ballaststoffe"  : "Ausgewogen";
                 const pct = (e: typeof best) => Math.round(e.d.good / e.d.count * 100);
                 return (
                   <div style={{ display:"flex", gap:8, marginTop:12 }}>
@@ -2212,7 +2214,7 @@ export default function InsightsPage() {
           }
         }
 
-        const TYPE_ORDER = ["FAST_CARBS", "HIGH_PROTEIN", "HIGH_FAT", "BALANCED"] as const;
+        const TYPE_ORDER = ["FAST_CARBS", "HIGH_PROTEIN", "HIGH_FAT", "HIGH_FIBER", "BALANCED"] as const;
         const rows = TYPE_ORDER
           .filter(t => typeAgg.has(t))
           .map(t => {

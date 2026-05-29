@@ -99,7 +99,7 @@ function AppleHealthBadge({ label, compact = false }: { label: string; compact?:
 // within a section. Meal-kind / outcome implicitly restrict to meal rows;
 // exercise-kind implicitly restricts to exercise rows.
 type EntryTypeKey   = "meal" | "bolus" | "basal" | "exercise" | "cycle" | "symptoms" | "influences";
-type MealKindKey    = "FAST_CARBS" | "HIGH_PROTEIN" | "HIGH_FAT" | "BALANCED";
+type MealKindKey    = "FAST_CARBS" | "HIGH_PROTEIN" | "HIGH_FAT" | "HIGH_FIBER" | "BALANCED";
 type ExerciseKindKey = "cardio" | "hypertrophy";
 type OutcomeKey     = "GOOD" | "UNDERDOSE" | "OVERDOSE" | "SPIKE";
 type DateRangeKey   = "all" | "today" | "7d" | "30d" | "custom";
@@ -132,6 +132,7 @@ const MEAL_KIND_OPTIONS: { value: MealKindKey; label: string }[] = [
   { value: "FAST_CARBS",   label: "Fast Carbs" },
   { value: "HIGH_PROTEIN", label: "High Protein" },
   { value: "HIGH_FAT",     label: "High Fat" },
+  { value: "HIGH_FIBER",   label: "High Fiber" },
   { value: "BALANCED",     label: "Balanced" },
 ];
 const EXERCISE_KIND_OPTIONS: { value: ExerciseKindKey; label: string }[] = [
