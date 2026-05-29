@@ -2497,6 +2497,33 @@ export default function InsightsPage() {
                   <div style={{ fontSize:10, color:"var(--text-faint)", marginTop:2, opacity:0.8 }}>
                     {tInsights("engine_meals_in_range", { n: last7.length })}
                   </div>
+                  {/* Fortschritt bis TUNED — nur sichtbar wenn noch nicht TUNED */}
+                  {conf !== "high" && (() => {
+                    const TUNED_AT = 8;
+                    const filled = Math.min(enginePattern.sampleSize, TUNED_AT);
+                    const pctFilled = Math.round((filled / TUNED_AT) * 100);
+                    const needed = Math.max(0, TUNED_AT - enginePattern.sampleSize);
+                    return (
+                      <div style={{ marginTop:8 }}>
+                        <div style={{ display:"flex", justifyContent:"space-between", marginBottom:4 }}>
+                          <div style={{ fontSize:10, color:"var(--text-faint)", fontWeight:600, textTransform:"uppercase", letterSpacing:"0.06em" }}>
+                            Fortschritt bis TUNED
+                          </div>
+                          <div style={{ fontSize:10, color:statusColor, fontFamily:"var(--font-mono)", fontWeight:700 }}>
+                            {filled} / {TUNED_AT}
+                          </div>
+                        </div>
+                        <div style={{ height:5, borderRadius:99, background:"var(--surface-soft)", overflow:"hidden" }}>
+                          <div style={{ height:"100%", width:`${pctFilled}%`, background:statusColor, borderRadius:99, transition:"width 0.4s ease" }}/>
+                        </div>
+                        {needed > 0 && (
+                          <div style={{ fontSize:9, color:"var(--text-ghost)", marginTop:3 }}>
+                            Noch {needed} Mahlzeit{needed === 1 ? "" : "en"} bis TUNED
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()}
                   {/* Phase B3+B4 — per-window learned ICRs. Collapsed by
                       default so the card stays calm; only renders when
                       the schedule master toggle is on AND the engine
@@ -2923,6 +2950,41 @@ export default function InsightsPage() {
                   </div>
                 </div>
               )}
+              {/* ISF-Schätzwert (Walsh 1700er-Regel) + TDD-Trend vs. Vorwoche */}
+              {tddAvg7 != null && tddAvg7 > 0 && (() => {
+                const isfEst = Math.round(1700 / tddAvg7);
+                const prevMs = tddFromMs - (tddNowMs - tddFromMs);
+                const prevTddSum = insulinLogs
+                  .filter(il => { const t = parseDbTs(il.created_at); return t >= prevMs && t < tddFromMs; })
+                  .reduce((s, il) => s + (il.units_delivered ?? 0), 0);
+                const prevTddAvg = prevTddSum > 0 ? +(prevTddSum / rangeDays).toFixed(1) : null;
+                const tddTrend = prevTddAvg != null && prevTddAvg > 0
+                  ? Math.round(((tddAvg7 - prevTddAvg) / prevTddAvg) * 100)
+                  : null;
+                return (
+                  <div style={{ display:"flex", gap:8, marginTop:10, marginBottom:2 }}>
+                    <div style={{ flex:1, padding:"8px 10px", background:`${ACCENT}08`, borderRadius:10, border:`1px solid ${ACCENT}20` }}>
+                      <div style={{ fontSize:10, color:"var(--text-faint)", fontWeight:600, textTransform:"uppercase", letterSpacing:"0.06em" }}>≈ ISF</div>
+                      <div style={{ display:"flex", alignItems:"baseline", gap:3, marginTop:3 }}>
+                        <span style={{ fontSize:18, fontWeight:800, color:ACCENT, fontFamily:"var(--font-mono)" }}>{isfEst}</span>
+                        <span style={{ fontSize:10, color:"var(--text-faint)" }}>mg/dL / U</span>
+                      </div>
+                      <div style={{ fontSize:9, color:"var(--text-ghost)", marginTop:1 }}>1700 ÷ TDD</div>
+                    </div>
+                    {tddTrend != null && (
+                      <div style={{ flex:1, padding:"8px 10px", background:"rgba(255,255,255,0.04)", borderRadius:10, border:"1px solid var(--border-soft)" }}>
+                        <div style={{ fontSize:10, color:"var(--text-faint)", fontWeight:600, textTransform:"uppercase", letterSpacing:"0.06em" }}>Trend</div>
+                        <div style={{ display:"flex", alignItems:"baseline", gap:3, marginTop:3 }}>
+                          <span style={{ fontSize:18, fontWeight:800, color: tddTrend > 10 ? ORANGE : tddTrend < -10 ? GREEN : "var(--text)", fontFamily:"var(--font-mono)" }}>
+                            {tddTrend > 0 ? "+" : ""}{tddTrend}%
+                          </span>
+                        </div>
+                        <div style={{ fontSize:9, color:"var(--text-ghost)", marginTop:1 }}>vs. Vorwoche</div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
               <div style={{ marginTop:10, display:"flex", justifyContent:"space-between", alignItems:"center", padding:"8px 10px", background:`${ACCENT}10`, border:`1px solid ${ACCENT}25`, borderRadius:10 }}>
                 <div style={{ fontSize:12, color:"var(--text-muted)", fontWeight:600 }}>{tInsights("tdd_today")}</div>
                 <div style={{ display:"flex", alignItems:"baseline", gap:8 }}>
@@ -3005,6 +3067,15 @@ export default function InsightsPage() {
                 </div>
               </div>
             ))}
+            {patterns.length === 0 && (
+              <div style={{ display:"flex", gap:10, padding:"12px 10px", background:`${GREEN}08`, border:`1px solid ${GREEN}25`, borderRadius:10, alignItems:"flex-start" }}>
+                <div style={{ width:22, height:22, borderRadius:99, background:`${GREEN}20`, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0, fontSize:14, color:GREEN, fontWeight:800 }}>✓</div>
+                <div>
+                  <div style={{ fontSize:13, fontWeight:700, color:GREEN, marginBottom:2 }}>Keine Auffälligkeiten</div>
+                  <div style={{ fontSize:12, color:"var(--text-dim)", lineHeight:1.45 }}>Alle BZ-Muster liegen im Zielbereich — weiter so!</div>
+                </div>
+              </div>
+            )}
           </div>
         </FlipCard>
         </UpgradeGate>
@@ -3048,6 +3119,23 @@ export default function InsightsPage() {
                 </div>
                 <div style={{ fontSize:13, color:"var(--text-dim)", fontWeight:600 }}>{tInsights("workout_outcomes_total_30d", { range: rangeLabel })}</div>
               </div>
+              {/* Dominantes Outcome — Überblick in einem Chip */}
+              {workoutClassifiedTotal > 0 && (() => {
+                const dom = RANKED_OUTCOMES.reduce((best, oc) =>
+                  workoutOutcomeCounts[oc] > workoutOutcomeCounts[best] ? oc : best, RANKED_OUTCOMES[0]);
+                const domPct = Math.round((workoutOutcomeCounts[dom] / workoutClassifiedTotal) * 100);
+                const domColor = OUTCOME_COLOR[dom];
+                const domLabel = tInsights(`workout_outcome_label_${dom.toLowerCase()}`);
+                return (
+                  <div style={{ marginBottom:10, padding:"8px 10px", background:`${domColor}08`, border:`1px solid ${domColor}20`, borderRadius:10, display:"flex", alignItems:"center", gap:10 }}>
+                    <div style={{ flex:1 }}>
+                      <div style={{ fontSize:10, color:"var(--text-faint)", fontWeight:600, textTransform:"uppercase", letterSpacing:"0.06em" }}>Häufigstes Outcome</div>
+                      <div style={{ fontSize:13, fontWeight:700, color:domColor, marginTop:2 }}>{domLabel}</div>
+                    </div>
+                    <div style={{ fontSize:22, fontWeight:800, color:domColor, fontFamily:"var(--font-mono)", lineHeight:1 }}>{domPct}<span style={{ fontSize:13, fontWeight:600 }}>%</span></div>
+                  </div>
+                );
+              })()}
               <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
                 {RANKED_OUTCOMES.map(oc => {
                   const n = workoutOutcomeCounts[oc];
@@ -3129,6 +3217,20 @@ export default function InsightsPage() {
                   </div>
                 );
               })}
+              {/* Stabilstes Training — das mit dem kleinsten absoluten BG-Delta */}
+              {bgResponseRows.length >= 2 && (() => {
+                const best = bgResponseRows.reduce((b, r) => Math.abs(r.avgDelta) < Math.abs(b.avgDelta) ? r : b);
+                return (
+                  <div style={{ marginTop:4, padding:"8px 10px", background:`${GREEN}08`, border:`1px solid ${GREEN}20`, borderRadius:10, display:"flex", alignItems:"center", gap:8 }}>
+                    <span style={{ fontSize:14 }}>🏅</span>
+                    <div>
+                      <div style={{ fontSize:10, color:"var(--text-faint)", fontWeight:600, textTransform:"uppercase", letterSpacing:"0.06em" }}>Stabilstes Training</div>
+                      <div style={{ fontSize:13, fontWeight:700, color:GREEN }}>{best.label}</div>
+                    </div>
+                    <div style={{ marginLeft:"auto", fontSize:14, fontWeight:800, color:GREEN, fontFamily:"var(--font-mono)" }}>±{Math.abs(best.avgDelta)}<span style={{ fontSize:10, fontWeight:500, marginLeft:2 }}>mg/dL</span></div>
+                  </div>
+                );
+              })()}
             </div>
           )}
         </FlipCard>
@@ -3231,6 +3333,26 @@ export default function InsightsPage() {
                 </div>
               );
             })}
+            {/* Höchstes Hypo-Risiko — Warnung wenn ≥ 25 % */}
+            {(() => {
+              const riskRows = exerciseTypeStatsRows
+                .filter(r => r.hypoRiskShare != null && r.hypoRiskShare >= 0.25)
+                .sort((a, b) => (b.hypoRiskShare ?? 0) - (a.hypoRiskShare ?? 0));
+              if (riskRows.length === 0) return null;
+              const top = riskRows[0];
+              return (
+                <div style={{ marginTop:4, padding:"8px 10px", background:`${PINK}08`, border:`1px solid ${PINK}25`, borderRadius:10, display:"flex", alignItems:"center", gap:8 }}>
+                  <span style={{ fontSize:16 }}>⚠</span>
+                  <div>
+                    <div style={{ fontSize:10, color:PINK, fontWeight:700, textTransform:"uppercase", letterSpacing:"0.06em" }}>Höchstes Hypo-Risiko</div>
+                    <div style={{ fontSize:13, fontWeight:700, color:"var(--text)" }}>{exTypeLabel(top.type)}</div>
+                  </div>
+                  <div style={{ marginLeft:"auto", fontSize:16, fontWeight:800, color:PINK, fontFamily:"var(--font-mono)" }}>
+                    {Math.round((top.hypoRiskShare ?? 0) * 100)}<span style={{ fontSize:10, fontWeight:500, marginLeft:1 }}>%</span>
+                  </div>
+                </div>
+              );
+            })()}
           </div>
         </FlipCard>
       ) : null,
@@ -3293,6 +3415,26 @@ export default function InsightsPage() {
               );
             })}
           </div>
+          {/* Gesamtanzahl + häufigster Typ */}
+          {(() => {
+            const total = TYPE_ORDER.reduce((s, t) => s + types[t].count, 0);
+            if (total === 0) return null;
+            const dominant = TYPE_ORDER.reduce((best, t) => types[t].count > types[best].count ? t : best, TYPE_ORDER[0]);
+            const domPct = Math.round(types[dominant].count / total * 100);
+            const domCol = TYPE_COLORS[dominant];
+            return (
+              <div style={{ display:"flex", alignItems:"center", gap:8, marginTop:8, padding:"8px 10px", background:"rgba(255,255,255,0.04)", borderRadius:10, border:"1px solid var(--border-soft)" }}>
+                <div style={{ fontSize:12, color:"var(--text-faint)" }}>
+                  <span style={{ fontWeight:700, color:"var(--text)", fontFamily:"var(--font-mono)" }}>{total}</span> Mahlzeiten gesamt
+                </div>
+                <div style={{ marginLeft:"auto", display:"flex", alignItems:"center", gap:5 }}>
+                  <div style={{ width:6, height:6, borderRadius:"50%", background:domCol }}/>
+                  <span style={{ fontSize:11, color:domCol, fontWeight:700 }}>{chipLabels.typeLabel(dominant)}</span>
+                  <span style={{ fontSize:11, color:"var(--text-faint)", fontFamily:"var(--font-mono)" }}>{domPct}%</span>
+                </div>
+              </div>
+            );
+          })()}
         </FlipCard>
         </UpgradeGate>
       ),
@@ -3341,6 +3483,34 @@ export default function InsightsPage() {
               );
             })}
           </div>
+          {/* Beste Tageszeit — höchste Trefferquote */}
+          {(() => {
+            const scored = Object.entries(timeGroups)
+              .filter(([, d]) => d.count >= 2)
+              .map(([label, d]) => ({
+                label,
+                pct: Math.round(d.good / d.count * 100),
+                i18nKey: label === "Morning (5–11)" ? "time_of_day_morning" : label === "Afternoon (11–17)" ? "time_of_day_afternoon" : label === "Evening (17–21)" ? "time_of_day_evening" : "time_of_day_night",
+              }))
+              .sort((a, b) => b.pct - a.pct);
+            if (scored.length < 2) return null;
+            const best  = scored[0];
+            const worst = scored[scored.length - 1];
+            return (
+              <div style={{ display:"flex", gap:8, marginTop:8 }}>
+                <div style={{ flex:1, padding:"8px 10px", background:`${GREEN}08`, borderRadius:10, border:`1px solid ${GREEN}20` }}>
+                  <div style={{ fontSize:9, color:GREEN, fontWeight:700, textTransform:"uppercase", letterSpacing:"0.06em", marginBottom:2 }}>↑ Beste Zeit</div>
+                  <div style={{ fontSize:12, fontWeight:700, color:"var(--text)" }}>{tInsights(best.i18nKey)}</div>
+                  <div style={{ fontSize:16, fontWeight:800, color:GREEN, fontFamily:"var(--font-mono)", marginTop:1 }}>{best.pct} %</div>
+                </div>
+                <div style={{ flex:1, padding:"8px 10px", background:`${PINK}08`, borderRadius:10, border:`1px solid ${PINK}20` }}>
+                  <div style={{ fontSize:9, color:PINK, fontWeight:700, textTransform:"uppercase", letterSpacing:"0.06em", marginBottom:2 }}>↓ Schwächste Zeit</div>
+                  <div style={{ fontSize:12, fontWeight:700, color:"var(--text)" }}>{tInsights(worst.i18nKey)}</div>
+                  <div style={{ fontSize:16, fontWeight:800, color:PINK, fontFamily:"var(--font-mono)", marginTop:1 }}>{worst.pct} %</div>
+                </div>
+              </div>
+            );
+          })()}
         </FlipCard>
       ),
     },
