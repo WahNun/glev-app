@@ -3397,9 +3397,9 @@ export default function InsightsPage() {
               const barCol = !has ? "var(--border-strong)" : successPct>=70?GREEN:successPct>=50?ORANGE:PINK;
               return (
                 <div key={type} style={{ background:`${col}08`, border:`1px solid ${col}20`, borderRadius:10, padding:"8px 10px", opacity: has ? 1 : 0.55 }}>
-                  <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:6, gap:4 }}>
-                    <div style={{ fontSize:11, fontWeight:700, color:col, letterSpacing:"0.06em", textTransform:"uppercase", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{chipLabels.typeLabel(type)}</div>
-                    <div style={{ fontSize:13, fontWeight:700, color:has?barCol:"var(--text-faint)", fontFamily:"var(--font-mono)" }}>
+                  <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:6, gap:4 }}>
+                    <div style={{ fontSize:11, fontWeight:700, color:col, letterSpacing:"0.04em", textTransform:"uppercase", lineHeight:1.25, flex:1, wordBreak:"break-word" }}>{chipLabels.typeLabel(type)}</div>
+                    <div style={{ fontSize:13, fontWeight:700, color:has?barCol:"var(--text-faint)", fontFamily:"var(--font-mono)", flexShrink:0 }}>
                       {has ? `${successPct}%` : "—"}
                     </div>
                   </div>
@@ -3427,10 +3427,13 @@ export default function InsightsPage() {
                 <div style={{ fontSize:12, color:"var(--text-faint)" }}>
                   <span style={{ fontWeight:700, color:"var(--text)", fontFamily:"var(--font-mono)" }}>{total}</span> Mahlzeiten gesamt
                 </div>
-                <div style={{ marginLeft:"auto", display:"flex", alignItems:"center", gap:5 }}>
-                  <div style={{ width:6, height:6, borderRadius:"50%", background:domCol }}/>
-                  <span style={{ fontSize:11, color:domCol, fontWeight:700 }}>{chipLabels.typeLabel(dominant)}</span>
-                  <span style={{ fontSize:11, color:"var(--text-faint)", fontFamily:"var(--font-mono)" }}>{domPct}%</span>
+                <div style={{ marginLeft:"auto", display:"flex", flexDirection:"column", alignItems:"flex-end", gap:1 }}>
+                  <div style={{ fontSize:9, color:"var(--text-ghost)", textTransform:"uppercase", letterSpacing:"0.05em" }}>häufigster Typ</div>
+                  <div style={{ display:"flex", alignItems:"center", gap:4 }}>
+                    <div style={{ width:5, height:5, borderRadius:"50%", background:domCol }}/>
+                    <span style={{ fontSize:11, color:domCol, fontWeight:700 }}>{chipLabels.typeLabel(dominant)}</span>
+                    <span style={{ fontSize:11, color:"var(--text-faint)", fontFamily:"var(--font-mono)" }}>· {types[dominant].count}×</span>
+                  </div>
                 </div>
               </div>
             );
@@ -3483,32 +3486,49 @@ export default function InsightsPage() {
               );
             })}
           </div>
-          {/* Beste Tageszeit — höchste Trefferquote */}
+          {/* Beste Tageszeit — höchste Trefferquote + aktivstes Fenster */}
           {(() => {
             const scored = Object.entries(timeGroups)
               .filter(([, d]) => d.count >= 2)
               .map(([label, d]) => ({
                 label,
                 pct: Math.round(d.good / d.count * 100),
+                count: d.count,
                 i18nKey: label === "Morning (5–11)" ? "time_of_day_morning" : label === "Afternoon (11–17)" ? "time_of_day_afternoon" : label === "Evening (17–21)" ? "time_of_day_evening" : "time_of_day_night",
               }))
               .sort((a, b) => b.pct - a.pct);
             if (scored.length < 2) return null;
             const best  = scored[0];
             const worst = scored[scored.length - 1];
+            const totalMeals = Object.values(timeGroups).reduce((s, d) => s + d.count, 0);
+            const mostActive = [...scored].sort((a, b) => b.count - a.count)[0];
             return (
-              <div style={{ display:"flex", gap:8, marginTop:8 }}>
-                <div style={{ flex:1, padding:"8px 10px", background:`${GREEN}08`, borderRadius:10, border:`1px solid ${GREEN}20` }}>
-                  <div style={{ fontSize:9, color:GREEN, fontWeight:700, textTransform:"uppercase", letterSpacing:"0.06em", marginBottom:2 }}>↑ Beste Zeit</div>
-                  <div style={{ fontSize:12, fontWeight:700, color:"var(--text)" }}>{tInsights(best.i18nKey)}</div>
-                  <div style={{ fontSize:16, fontWeight:800, color:GREEN, fontFamily:"var(--font-mono)", marginTop:1 }}>{best.pct} %</div>
+              <>
+                <div style={{ display:"flex", gap:8, marginTop:8 }}>
+                  <div style={{ flex:1, padding:"8px 10px", background:`${GREEN}08`, borderRadius:10, border:`1px solid ${GREEN}20` }}>
+                    <div style={{ fontSize:9, color:GREEN, fontWeight:700, textTransform:"uppercase", letterSpacing:"0.06em", marginBottom:2 }}>↑ Beste Zeit</div>
+                    <div style={{ fontSize:12, fontWeight:700, color:"var(--text)" }}>{tInsights(best.i18nKey)}</div>
+                    <div style={{ fontSize:16, fontWeight:800, color:GREEN, fontFamily:"var(--font-mono)", marginTop:1 }}>{best.pct} %</div>
+                  </div>
+                  <div style={{ flex:1, padding:"8px 10px", background:`${PINK}08`, borderRadius:10, border:`1px solid ${PINK}20` }}>
+                    <div style={{ fontSize:9, color:PINK, fontWeight:700, textTransform:"uppercase", letterSpacing:"0.06em", marginBottom:2 }}>↓ Schwächste Zeit</div>
+                    <div style={{ fontSize:12, fontWeight:700, color:"var(--text)" }}>{tInsights(worst.i18nKey)}</div>
+                    <div style={{ fontSize:16, fontWeight:800, color:PINK, fontFamily:"var(--font-mono)", marginTop:1 }}>{worst.pct} %</div>
+                  </div>
                 </div>
-                <div style={{ flex:1, padding:"8px 10px", background:`${PINK}08`, borderRadius:10, border:`1px solid ${PINK}20` }}>
-                  <div style={{ fontSize:9, color:PINK, fontWeight:700, textTransform:"uppercase", letterSpacing:"0.06em", marginBottom:2 }}>↓ Schwächste Zeit</div>
-                  <div style={{ fontSize:12, fontWeight:700, color:"var(--text)" }}>{tInsights(worst.i18nKey)}</div>
-                  <div style={{ fontSize:16, fontWeight:800, color:PINK, fontFamily:"var(--font-mono)", marginTop:1 }}>{worst.pct} %</div>
+                {/* Aktivstes Fenster + Gesamtzahl */}
+                <div style={{ display:"flex", alignItems:"center", gap:8, marginTop:8, padding:"8px 10px", background:"rgba(255,255,255,0.03)", borderRadius:10, border:"1px solid var(--border-soft)" }}>
+                  <div style={{ fontSize:12, color:"var(--text-faint)" }}>
+                    <span style={{ fontWeight:700, color:"var(--text)", fontFamily:"var(--font-mono)" }}>{totalMeals}</span> Mahlzeiten
+                  </div>
+                  <div style={{ marginLeft:"auto", display:"flex", flexDirection:"column", alignItems:"flex-end", gap:1 }}>
+                    <div style={{ fontSize:9, color:"var(--text-ghost)", textTransform:"uppercase", letterSpacing:"0.05em" }}>aktivstes Fenster</div>
+                    <div style={{ fontSize:11, color:"var(--accent)", fontWeight:700 }}>
+                      {tInsights(mostActive.i18nKey)} · <span style={{ fontFamily:"var(--font-mono)" }}>{mostActive.count}×</span>
+                    </div>
+                  </div>
                 </div>
-              </div>
+              </>
             );
           })()}
         </FlipCard>
@@ -3851,39 +3871,48 @@ export default function InsightsPage() {
     })(),
     {
       id: "performance-tiles",
-      node: (
-        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, minHeight: CARD_MIN_H }}>
-          {[
-            // Raw ICR moved to slot 0 (top-left) so it sits visually adjacent
-            // to the Adaptive Engine hero card directly above the grid —
-            // grouping both ICR-related views into one cluster. Color switched
-            // from ORANGE to ACCENT_SOFT (lighter sibling of the Adaptive
-            // Engine's ACCENT) to signal "same metric family, lower hierarchy".
-            // Color rules (page-wide, see Lucas' brief):
-            //   GREEN  → in-target metrics  (TIR, Trefferquote, Ø Glukose im Ziel)
-            //   text   → neutral data points (HbA1c/GMI, Ø Glukose vor Essen, Ø Insulin)
-            //   #A78BFA → raw / uncorrected   (Roher KH-Faktor)
-            { label:tInsights("tile_raw_icr_label"),      val:`1:${estICR}`,   sub:tInsights("tile_raw_icr_sub"), color:"#A78BFA",
-              formula:tInsights("tile_raw_icr_formula"),   explain:tInsights("tile_raw_icr_explain"),
-              infoBack: (
-                <IcrInfoBack
-                  heading={tInsights("raw_icr_info_heading")}
-                  accent="#A78BFA"
-                  body={tInsights("raw_icr_info_body")}
-                  subLine={tInsights("raw_icr_info_subline")}
-                />
-              ),
-            },
-            { label:tInsights("tile_avg_glucose_label"),  val:`${avgGlucose}`, sub:tInsights("tile_avg_glucose_sub"),           color:"var(--text)",
-              formula:tInsights("tile_avg_glucose_formula"),      explain:tInsights("tile_avg_glucose_explain") },
-            // Good rate (Trefferquote) — in-target metric → GREEN.
-            { label:tInsights("tile_good_rate_label"),    val:`${goodRate.toFixed(1)}%`,  sub:tInsights("tile_good_rate_sub", { good: goodAll, total: evaluatedCount }),   color:GREEN,
-              formula:tInsights("tile_good_rate_formula"),            explain:tInsights("tile_good_rate_explain") },
-            { label:tInsights("tile_avg_insulin_label"),  val:`${avgInsulin}u`, sub:tInsights("tile_avg_insulin_sub", { carbs: carbUnit.display(avgCarbs) }), color:"var(--text)",
-              formula:tInsights("tile_avg_insulin_formula"),               explain:tInsights("tile_avg_insulin_explain") },
-          ].map((t,i) => <InsightFlipTile key={i} tile={t}/>)}
-        </div>
-      ),
+      node: (() => {
+        // Dynamic colors for context-aware tiles.
+        // Ø pre-meal glucose: < 100 mg/dL excellent (GREEN), 100–130 ok (ORANGE), > 130 elevated (PINK).
+        const glucoseColor = avgGlucose < 100 ? GREEN : avgGlucose <= 130 ? ORANGE : PINK;
+        const glucoseSub   = avgGlucose < 100
+          ? tInsights("tile_avg_glucose_sub") + " ✓"
+          : tInsights("tile_avg_glucose_sub");
+        // Trefferquote dynamic color: ≥ 70 % → GREEN, ≥ 50 % → ORANGE, < 50 % → PINK.
+        const goodRateColor = goodRate >= 70 ? GREEN : goodRate >= 50 ? ORANGE : PINK;
+        return (
+          <div style={{ minHeight: CARD_MIN_H }}>
+            {/* Card header — gives the tile grid a title and tap-to-flip hint */}
+            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
+              <CardLabel text={tInsights("card_performance_title")} />
+              <div style={{ fontSize:10, color:"var(--text-ghost)", letterSpacing:"0.04em" }}>
+                {tInsights("card_performance_sub")}
+              </div>
+            </div>
+            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8 }}>
+              {[
+                { label:tInsights("tile_raw_icr_label"),     val:`1:${estICR}`,            sub:tInsights("tile_raw_icr_sub"),     color:"#A78BFA",
+                  formula:tInsights("tile_raw_icr_formula"),  explain:tInsights("tile_raw_icr_explain"),
+                  infoBack: (
+                    <IcrInfoBack
+                      heading={tInsights("raw_icr_info_heading")}
+                      accent="#A78BFA"
+                      body={tInsights("raw_icr_info_body")}
+                      subLine={tInsights("raw_icr_info_subline")}
+                    />
+                  ),
+                },
+                { label:tInsights("tile_avg_glucose_label"), val:`${avgGlucose}`,           sub:glucoseSub,                       color:glucoseColor,
+                  formula:tInsights("tile_avg_glucose_formula"), explain:tInsights("tile_avg_glucose_explain") },
+                { label:tInsights("tile_good_rate_label"),   val:`${goodRate.toFixed(1)}%`, sub:tInsights("tile_good_rate_sub", { good: goodAll, total: evaluatedCount }), color:goodRateColor,
+                  formula:tInsights("tile_good_rate_formula"),   explain:tInsights("tile_good_rate_explain") },
+                { label:tInsights("tile_avg_insulin_label"), val:`${avgInsulin}u`,           sub:tInsights("tile_avg_insulin_sub", { carbs: carbUnit.display(avgCarbs) }), color:"var(--text)",
+                  formula:tInsights("tile_avg_insulin_formula"), explain:tInsights("tile_avg_insulin_explain") },
+              ].map((t,i) => <InsightFlipTile key={i} tile={t}/>)}
+            </div>
+          </div>
+        );
+      })(),
     },
     // ── Daily Steps (Task #183) — hidden when no Apple-Health rows ──
     (() => {
@@ -5398,6 +5427,7 @@ function InsightMicroBars({
   barHeight?: number;
 }) {
   const max = Math.max(...values, 1);
+  const mid = Math.round(max / 2);
   return (
     <div style={{ marginTop: 16 }}>
       {title && (
@@ -5405,23 +5435,45 @@ function InsightMicroBars({
           {title}
         </div>
       )}
-      <div style={{ display: "flex", alignItems: "flex-end", gap: 3, height: barHeight }}>
-        {values.map((v, i) => (
-          <div key={i} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "flex-end", height: "100%", gap: 3 }}>
-            <div style={{
-              width: "100%",
-              height: v > 0 ? `${Math.max((v / max) * 100, 10)}%` : "5%",
-              background: v > 0 ? color : "var(--border-soft)",
-              borderRadius: "3px 3px 0 0",
-              transition: "height 0.5s ease",
-            }} />
-            {labels && (
-              <div style={{ fontSize: 8, color: "var(--text-faint)", lineHeight: 1, flexShrink: 0 }}>
-                {labels[i]}
-              </div>
-            )}
+      <div style={{ display: "flex", gap: 4 }}>
+        {/* Y-axis */}
+        <div style={{ display: "flex", flexDirection: "column", justifyContent: "space-between", paddingBottom: labels ? 14 : 2, width: 22, flexShrink: 0 }}>
+          <div style={{ fontSize: 8, color: "var(--text-ghost)", textAlign: "right", fontFamily: "var(--font-mono)", lineHeight: 1 }}>{max}</div>
+          {max >= 4 && <div style={{ fontSize: 8, color: "var(--text-ghost)", textAlign: "right", fontFamily: "var(--font-mono)", lineHeight: 1 }}>{mid}</div>}
+          <div style={{ fontSize: 8, color: "var(--text-ghost)", textAlign: "right", fontFamily: "var(--font-mono)", lineHeight: 1 }}>0</div>
+        </div>
+        <div style={{ flex: 1 }}>
+          {/* Grid lines */}
+          <div style={{ position: "relative", height: barHeight }}>
+            <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 1, background: "var(--border-soft)", opacity: 0.4 }} />
+            {max >= 4 && <div style={{ position: "absolute", top: "50%", left: 0, right: 0, height: 1, background: "var(--border-soft)", opacity: 0.25 }} />}
+            {/* Bars */}
+            <div style={{ display: "flex", alignItems: "flex-end", gap: 3, height: "100%" }}>
+              {values.map((v, i) => (
+                <div key={i} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "flex-end", height: "100%" }}>
+                  <div style={{
+                    width: "100%",
+                    height: v > 0 ? `${Math.max((v / max) * 100, 8)}%` : "4%",
+                    background: v > 0 ? color : "var(--border-soft)",
+                    borderRadius: "3px 3px 0 0",
+                    transition: "height 0.5s ease",
+                  }} />
+                </div>
+              ))}
+            </div>
           </div>
-        ))}
+          {/* X-axis baseline + labels */}
+          <div style={{ height: 1, background: "var(--border-soft)" }} />
+          {labels && (
+            <div style={{ display: "flex", gap: 3, marginTop: 3 }}>
+              {labels.map((l, i) => (
+                <div key={i} style={{ flex: 1, textAlign: "center", fontSize: 8, color: "var(--text-faint)", lineHeight: 1 }}>
+                  {l}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -5764,22 +5816,13 @@ function InsightFlipTile({ tile }: { tile: InsightTile }) {
       tabIndex={0}
       aria-pressed={flipped}
       onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setFlipped(f => !f); } }}
-      style={{ cursor:"pointer", perspective:1000 }}
+      style={{ cursor:"pointer" }}
     >
-      {/* FLIP STAGE — CSS grid stacks front + back in the same cell so
-          each face is rendered exactly once. Card height = max(front, back). */}
-      <div style={{
-        display:"grid",
-        transformStyle:"preserve-3d",
-        transition:"transform 0.5s cubic-bezier(0.4,0,0.2,1)",
-        transform: flipped ? "rotateY(180deg)" : "rotateY(0deg)",
-      }}>
-        <div style={{ gridArea:"1/1", backfaceVisibility:"hidden", ...frontShell }}>
-          {frontContent}
-        </div>
-        <div style={{ gridArea:"1/1", backfaceVisibility:"hidden", transform:"rotateY(180deg)", ...backShell }}>
-          {backContent}
-        </div>
+      {/* Simple conditional render — CSS 3D preserve-3d on grid containers
+          is unreliable on iOS Safari (backfaceVisibility leaks through).
+          Fade-swap is reliable everywhere and keeps the ℹ interaction clear. */}
+      <div style={{ transition:"opacity 0.15s", ...(flipped ? backShell : frontShell) }}>
+        {flipped ? backContent : frontContent}
       </div>
     </div>
   );

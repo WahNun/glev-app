@@ -647,6 +647,8 @@
     "tile_avg_insulin_sub": "{carbs} avg carbs",
     "tile_avg_insulin_formula": "Σ units / count",
     "tile_avg_insulin_explain": "Mean insulin per meal. Track against carbs to validate your ratio.",
+    "card_performance_title": "Performance Metrics",
+    "card_performance_sub": "Tap to explain",
     "pattern_balanced_label": "Balanced dosing",
     "pattern_balanced_explanation": "{pct}% of your last {n} meals landed in target — keep it up.",
     "pattern_overdosing_label": "Frequent over-dosing",

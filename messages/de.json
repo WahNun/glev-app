@@ -658,6 +658,8 @@
     "tile_avg_insulin_sub": "{carbs} Ø Kohlenhydrate",
     "tile_avg_insulin_formula": "Σ Einheiten / Anzahl",
     "tile_avg_insulin_explain": "Durchschnittliches Insulin pro Mahlzeit. Vergleiche mit den Kohlenhydraten, um dein Verhältnis zu prüfen.",
+    "card_performance_title": "Leistungs-Metriken",
+    "card_performance_sub": "Tippen zum Erklären",
     "card_time_in_range_title": "Zeit im Zielbereich",
     "card_avg_bg_title": "Ø Glukose",
     "card_gmi_title": "GMI / gesch. HbA1c",
