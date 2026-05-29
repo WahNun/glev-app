@@ -297,31 +297,37 @@ export default function AiSettingsPage() {
         <div style={{ padding: "0 16px 10px", fontSize: 13, color: "var(--text-dim)", lineHeight: 1.4 }}>
           {t("glev_intel_intro")}
         </div>
-        {([
-          { key: "meal" as const,    granted: true,            locked: true,  badge: null,
+        {/* When master consent is off, show an activation prompt instead of
+            grayed-out scope toggles — makes the required first step obvious. */}
+        {aiConsentGranted === false ? (
+          <div style={{ borderTop: `1px solid ${BORDER}`, padding: "16px 16px 14px", display: "flex", flexDirection: "column", gap: 10 }}>
+            <p style={{ margin: 0, fontSize: 13, color: "var(--text-dim)", lineHeight: 1.5 }}>
+              {t("glev_intel_master_off_hint")}
+            </p>
+            <button
+              type="button"
+              onClick={() => { void toggleAiConsent(true); }}
+              style={{ alignSelf: "flex-start", padding: "9px 16px", borderRadius: 10, border: "none", background: ACCENT, color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer", boxShadow: "0 4px 14px rgba(79,110,247,0.3)" }}
+            >
+              {t("glev_intel_master_off_cta")} →
+            </button>
+          </div>
+        ) : ([
+          { key: "meal" as const,    granted: true,            locked: true,
             title: t("glev_intel_row_meal_title"),    desc: t("glev_intel_row_meal_desc") },
-          { key: "glucose" as const, granted: !!aiScopeGlucose, locked: false, badge: null,
+          { key: "glucose" as const, granted: !!aiScopeGlucose, locked: false,
             title: t("glev_intel_row_glucose_title"), desc: t("glev_intel_row_glucose_desc") },
-          { key: "iob" as const,     granted: !!aiScopeIob,    locked: false, badge: null,
+          { key: "iob" as const,     granted: !!aiScopeIob,    locked: false,
             title: t("glev_intel_row_iob_title"),     desc: t("glev_intel_row_iob_desc") },
-          { key: "history" as const, granted: !!aiScopeHistory, locked: false, badge: null,
+          { key: "history" as const, granted: !!aiScopeHistory, locked: false,
             title: t("glev_intel_row_history_title"), desc: t("glev_intel_row_history_desc") },
         ]).map((row) => {
-          const masterOff = !aiConsentGranted;
-          const interactive = !row.locked && !masterOff;
           const busy = aiScopeBusy === row.key;
-          const disabled = !interactive || busy || aiConsentGranted === null;
+          const disabled = row.locked || busy || aiConsentGranted === null;
           return (
-            <div key={row.key} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 16px", gap: 12, borderTop: `1px solid ${BORDER}`, opacity: masterOff && !row.locked ? 0.55 : 1 }}>
+            <div key={row.key} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 16px", gap: 12, borderTop: `1px solid ${BORDER}` }}>
               <span style={{ display: "flex", flexDirection: "column", minWidth: 0, flex: 1 }}>
-                <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <span style={{ fontSize: 14, fontWeight: 500, color: "var(--text-strong)", lineHeight: 1.25 }}>{row.title}</span>
-                  {row.badge && (
-                    <span style={{ fontSize: 11, fontWeight: 600, padding: "2px 6px", borderRadius: 6, background: "var(--border-soft)", color: "var(--text-dim)", border: `1px solid ${BORDER}`, textTransform: "uppercase", letterSpacing: 0.4 }}>
-                      {row.badge}
-                    </span>
-                  )}
-                </span>
+                <span style={{ fontSize: 14, fontWeight: 500, color: "var(--text-strong)", lineHeight: 1.25 }}>{row.title}</span>
                 <span style={{ fontSize: 13, color: "var(--text-dim)", marginTop: 2, lineHeight: 1.35 }}>{row.desc}</span>
               </span>
               <div
