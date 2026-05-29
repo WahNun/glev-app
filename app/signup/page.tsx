@@ -124,6 +124,23 @@ export default function SignupPage() {
             "Authorization": `Bearer ${session.access_token}`,
           },
         }).catch((e) => console.warn("[signup] trial API call failed:", e));
+
+        // If the user arrived via a referral link, record the source.
+        const refCode = document.cookie
+          .split("; ")
+          .find((c) => c.startsWith("glev_ref="))
+          ?.split("=")[1];
+        if (refCode) {
+          fetch("/api/auth/signup-source", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${session.access_token}`,
+            },
+            body: JSON.stringify({ code: refCode }),
+          }).catch(() => {});
+          document.cookie = "glev_ref=; max-age=0; path=/";
+        }
       }
 
       // Pixel Lead event (Browser) — CAPI parallel via trackEvent

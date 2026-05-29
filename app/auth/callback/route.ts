@@ -54,6 +54,23 @@ export async function GET(req: NextRequest) {
         } catch {
           // Non-fatal — user still gets to onboarding, trial can be set retroactively.
         }
+
+        // If a referral cookie is present (email-confirmation flow), record the source.
+        const refCookie = cookieStore.get("glev_ref")?.value;
+        if (refCookie && /^[A-Z0-9]{5,10}$/.test(refCookie)) {
+          try {
+            await fetch(`${origin}/api/auth/signup-source`, {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${sessionData.session.access_token}`,
+              },
+              body: JSON.stringify({ code: refCookie }),
+            });
+          } catch {
+            // Non-fatal
+          }
+        }
       }
       return NextResponse.redirect(`${origin}${next}`);
     }
