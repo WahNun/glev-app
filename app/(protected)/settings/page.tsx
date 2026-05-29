@@ -307,7 +307,7 @@ export default function SettingsPage() {
   const aiVoiceEnabled = useFeatureFlag("ai_voice");
   const { canAccess } = usePlan();
   const [settings, setSettings] = useState<Settings>(DEFAULTS);
-  const [activeTab, setActiveTab] = useState<"konto"|"glukose"|"insulin"|"cgm"|"app"|"mehr">(() => {
+  const [expandedCluster, setExpandedCluster] = useState<"konto"|"glukose"|"insulin"|"cgm"|"app"|"mehr"|null>(() => {
     if (typeof window !== "undefined") {
       return (sessionStorage.getItem("settings_tab") as "konto"|"glukose"|"insulin"|"cgm"|"app"|"mehr") || "konto";
     }
@@ -3051,18 +3051,19 @@ export default function SettingsPage() {
     ? tSettings("subtitle_adjustment_history_empty")
     : tSettings("subtitle_adjustment_history_count", { n: adjustmentHistory.length });
 
-  const switchTab = (tab: typeof activeTab) => {
-    setActiveTab(tab);
-    sessionStorage.setItem("settings_tab", tab);
+  const toggleCluster = (id: NonNullable<typeof expandedCluster>) => {
+    const next = expandedCluster === id ? null : id;
+    setExpandedCluster(next);
+    if (next) sessionStorage.setItem("settings_tab", next);
   };
 
-  const SETTINGS_TABS: { id: typeof activeTab; label: string }[] = [
-    { id: "konto",   label: tSettings("section_account") },
-    { id: "glukose", label: tSettings("section_glucose") },
-    { id: "insulin", label: tSettings("section_insulin") },
-    { id: "cgm",     label: "CGM" },
-    { id: "app",     label: tSettings("section_app") },
-    { id: "mehr",    label: "Mehr" },
+  const CLUSTER_DEFS: { id: NonNullable<typeof expandedCluster>; label: string; icon: React.ReactNode; color: string }[] = [
+    { id: "konto",   label: tSettings("section_account"),  icon: ICON.account,  color: ACCENT },
+    { id: "glukose", label: tSettings("section_glucose"),  icon: ICON.glucose,  color: GREEN },
+    { id: "insulin", label: tSettings("section_insulin"),  icon: ICON.insulin,  color: ACCENT },
+    { id: "cgm",     label: "CGM",                         icon: ICON.cgm,      color: ACCENT },
+    { id: "app",     label: tSettings("section_app"),      icon: ICON.bell,     color: ACCENT },
+    { id: "mehr",    label: "Mehr",                        icon: ICON.support,  color: PURPLE },
   ];
 
   return (
@@ -3077,44 +3078,19 @@ export default function SettingsPage() {
         <p style={{ color: "var(--text-faint)", fontSize: 14 }}>{tSettings("page_subtitle")}</p>
       </div>
 
-      {/* ── Cluster Meta Tabs ───────────────────────────────────────── */}
-      <div style={{
-        display: "flex",
-        gap: 4,
-        overflowX: "auto",
-        marginBottom: 20,
-        paddingBottom: 2,
-        scrollbarWidth: "none",
-        WebkitOverflowScrolling: "touch",
-      }}>
-        {SETTINGS_TABS.map(({ id, label }) => {
-          const active = activeTab === id;
-          return (
-            <button
-              key={id}
-              type="button"
-              onClick={() => switchTab(id)}
-              style={{
-                flexShrink: 0,
-                padding: "6px 14px",
-                borderRadius: 20,
-                border: "none",
-                cursor: "pointer",
-                fontSize: 13,
-                fontWeight: active ? 600 : 400,
-                background: active ? ACCENT : "var(--surface-raised, var(--border))",
-                color: active ? "#fff" : "var(--text-dim)",
-                transition: "background 0.15s, color 0.15s",
-              }}
-            >
-              {label}
-            </button>
-          );
-        })}
-      </div>
-
-      {/* ── Tab: Konto ──────────────────────────────────────────────── */}
-      {activeTab === "konto" && <>
+      {/* ── Cluster: Konto ──────────────────────────────────────────── */}
+      {CLUSTER_DEFS.slice(0, 1).map(({ id, label, icon, color }) => (
+        <button key={id} type="button" onClick={() => toggleCluster(id)} aria-expanded={expandedCluster === id}
+          style={{ width: "100%", display: "flex", alignItems: "center", gap: 14, padding: "12px 14px", background: "transparent", border: "none", cursor: "pointer", textAlign: "left", color: "inherit" }}
+        >
+          <span aria-hidden style={{ width: 32, height: 32, borderRadius: 8, flexShrink: 0, background: `${color}18`, color, display: "flex", alignItems: "center", justifyContent: "center" }}>{icon}</span>
+          <span style={{ display: "flex", flexDirection: "column", minWidth: 0, flex: 1 }}>
+            <span style={{ fontSize: 14, fontWeight: 500, color: "var(--text-strong)", lineHeight: 1.25 }}>{label}</span>
+          </span>
+          <span aria-hidden style={{ flexShrink: 0, color: "var(--text-faint)", transform: expandedCluster === id ? "rotate(90deg)" : "rotate(0deg)", transition: "transform 0.15s", fontSize: 18, lineHeight: 1 }}>›</span>
+        </button>
+      ))}
+      {expandedCluster === "konto" && <>
 
       <SettingsSection title={tSettings("section_account")}>
         <SettingsRow
@@ -3171,8 +3147,19 @@ export default function SettingsPage() {
       )}
       </>}
 
-      {/* ── Tab: Glukose ────────────────────────────────────────────── */}
-      {activeTab === "glukose" && <>
+      {/* ── Cluster: Glukose ────────────────────────────────────────── */}
+      {CLUSTER_DEFS.slice(1, 2).map(({ id, label, icon, color }) => (
+        <button key={id} type="button" onClick={() => toggleCluster(id)} aria-expanded={expandedCluster === id}
+          style={{ width: "100%", display: "flex", alignItems: "center", gap: 14, padding: "12px 14px", background: "transparent", border: "none", cursor: "pointer", textAlign: "left", color: "inherit" }}
+        >
+          <span aria-hidden style={{ width: 32, height: 32, borderRadius: 8, flexShrink: 0, background: `${color}18`, color, display: "flex", alignItems: "center", justifyContent: "center" }}>{icon}</span>
+          <span style={{ display: "flex", flexDirection: "column", minWidth: 0, flex: 1 }}>
+            <span style={{ fontSize: 14, fontWeight: 500, color: "var(--text-strong)", lineHeight: 1.25 }}>{label}</span>
+          </span>
+          <span aria-hidden style={{ flexShrink: 0, color: "var(--text-faint)", transform: expandedCluster === id ? "rotate(90deg)" : "rotate(0deg)", transition: "transform 0.15s", fontSize: 18, lineHeight: 1 }}>›</span>
+        </button>
+      ))}
+      {expandedCluster === "glukose" && <>
 
       <SettingsSection title={tSettings("section_glucose")}>
         <SettingsRow
@@ -3229,8 +3216,19 @@ export default function SettingsPage() {
       </SettingsSection>
       </>}
 
-      {/* ── Tab: Insulin ────────────────────────────────────────────── */}
-      {activeTab === "insulin" && <>
+      {/* ── Cluster: Insulin ────────────────────────────────────────── */}
+      {CLUSTER_DEFS.slice(2, 3).map(({ id, label, icon, color }) => (
+        <button key={id} type="button" onClick={() => toggleCluster(id)} aria-expanded={expandedCluster === id}
+          style={{ width: "100%", display: "flex", alignItems: "center", gap: 14, padding: "12px 14px", background: "transparent", border: "none", cursor: "pointer", textAlign: "left", color: "inherit" }}
+        >
+          <span aria-hidden style={{ width: 32, height: 32, borderRadius: 8, flexShrink: 0, background: `${color}18`, color, display: "flex", alignItems: "center", justifyContent: "center" }}>{icon}</span>
+          <span style={{ display: "flex", flexDirection: "column", minWidth: 0, flex: 1 }}>
+            <span style={{ fontSize: 14, fontWeight: 500, color: "var(--text-strong)", lineHeight: 1.25 }}>{label}</span>
+          </span>
+          <span aria-hidden style={{ flexShrink: 0, color: "var(--text-faint)", transform: expandedCluster === id ? "rotate(90deg)" : "rotate(0deg)", transition: "transform 0.15s", fontSize: 18, lineHeight: 1 }}>›</span>
+        </button>
+      ))}
+      {expandedCluster === "insulin" && <>
 
       <SettingsSection title={tSettings("section_insulin")}>
         {/* Übergeordnete „Insulin-Einstellungen"-Row — klappt die 9
@@ -3387,8 +3385,19 @@ export default function SettingsPage() {
       </SettingsSection>
       </>}
 
-      {/* ── Tab: CGM ────────────────────────────────────────────────── */}
-      {activeTab === "cgm" && <>
+      {/* ── Cluster: CGM ────────────────────────────────────────────── */}
+      {CLUSTER_DEFS.slice(3, 4).map(({ id, label, icon, color }) => (
+        <button key={id} type="button" onClick={() => toggleCluster(id)} aria-expanded={expandedCluster === id}
+          style={{ width: "100%", display: "flex", alignItems: "center", gap: 14, padding: "12px 14px", background: "transparent", border: "none", cursor: "pointer", textAlign: "left", color: "inherit" }}
+        >
+          <span aria-hidden style={{ width: 32, height: 32, borderRadius: 8, flexShrink: 0, background: `${color}18`, color, display: "flex", alignItems: "center", justifyContent: "center" }}>{icon}</span>
+          <span style={{ display: "flex", flexDirection: "column", minWidth: 0, flex: 1 }}>
+            <span style={{ fontSize: 14, fontWeight: 500, color: "var(--text-strong)", lineHeight: 1.25 }}>{label}</span>
+          </span>
+          <span aria-hidden style={{ flexShrink: 0, color: "var(--text-faint)", transform: expandedCluster === id ? "rotate(90deg)" : "rotate(0deg)", transition: "transform 0.15s", fontSize: 18, lineHeight: 1 }}>›</span>
+        </button>
+      ))}
+      {expandedCluster === "cgm" && <>
 
       <SettingsSection title={tSettings("section_cgm")}>
         <SettingsRow
@@ -3419,8 +3428,19 @@ export default function SettingsPage() {
       </SettingsSection>
       </>}
 
-      {/* ── Tab: App ────────────────────────────────────────────────── */}
-      {activeTab === "app" && <>
+      {/* ── Cluster: App ────────────────────────────────────────────── */}
+      {CLUSTER_DEFS.slice(4, 5).map(({ id, label, icon, color }) => (
+        <button key={id} type="button" onClick={() => toggleCluster(id)} aria-expanded={expandedCluster === id}
+          style={{ width: "100%", display: "flex", alignItems: "center", gap: 14, padding: "12px 14px", background: "transparent", border: "none", cursor: "pointer", textAlign: "left", color: "inherit" }}
+        >
+          <span aria-hidden style={{ width: 32, height: 32, borderRadius: 8, flexShrink: 0, background: `${color}18`, color, display: "flex", alignItems: "center", justifyContent: "center" }}>{icon}</span>
+          <span style={{ display: "flex", flexDirection: "column", minWidth: 0, flex: 1 }}>
+            <span style={{ fontSize: 14, fontWeight: 500, color: "var(--text-strong)", lineHeight: 1.25 }}>{label}</span>
+          </span>
+          <span aria-hidden style={{ flexShrink: 0, color: "var(--text-faint)", transform: expandedCluster === id ? "rotate(90deg)" : "rotate(0deg)", transition: "transform 0.15s", fontSize: 18, lineHeight: 1 }}>›</span>
+        </button>
+      ))}
+      {expandedCluster === "app" && <>
 
       <SettingsSection title={tSettings("section_app")}>
         <SettingsRow
@@ -3547,8 +3567,19 @@ export default function SettingsPage() {
 
       </>}
 
-      {/* ── Tab: Mehr ───────────────────────────────────────────────── */}
-      {activeTab === "mehr" && <>
+      {/* ── Cluster: Mehr ───────────────────────────────────────────── */}
+      {CLUSTER_DEFS.slice(5, 6).map(({ id, label, icon, color }) => (
+        <button key={id} type="button" onClick={() => toggleCluster(id)} aria-expanded={expandedCluster === id}
+          style={{ width: "100%", display: "flex", alignItems: "center", gap: 14, padding: "12px 14px", background: "transparent", border: "none", cursor: "pointer", textAlign: "left", color: "inherit" }}
+        >
+          <span aria-hidden style={{ width: 32, height: 32, borderRadius: 8, flexShrink: 0, background: `${color}18`, color, display: "flex", alignItems: "center", justifyContent: "center" }}>{icon}</span>
+          <span style={{ display: "flex", flexDirection: "column", minWidth: 0, flex: 1 }}>
+            <span style={{ fontSize: 14, fontWeight: 500, color: "var(--text-strong)", lineHeight: 1.25 }}>{label}</span>
+          </span>
+          <span aria-hidden style={{ flexShrink: 0, color: "var(--text-faint)", transform: expandedCluster === id ? "rotate(90deg)" : "rotate(0deg)", transition: "transform 0.15s", fontSize: 18, lineHeight: 1 }}>›</span>
+        </button>
+      ))}
+      {expandedCluster === "mehr" && <>
 
       <SettingsSection title={tSettings("section_data")}>
         <SettingsRow
