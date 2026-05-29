@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
+import { useState, useCallback } from "react";
 import PlanSimulator from "@/components/PlanSimulator";
 
 const ACCENT = "#4F6EF7", GREEN = "#22D3A0", PURPLE = "#A78BFA";
@@ -87,6 +88,37 @@ function FirstNavRow({ iconColor, icon, label, path, router }: NavRowProps) {
 export default function SettingsPage() {
   const t = useTranslations("settings");
   const router = useRouter();
+  const [referralSharing, setReferralSharing] = useState(false);
+  const [referralCopied, setReferralCopied] = useState(false);
+
+  const handleShareReferral = useCallback(async () => {
+    if (referralSharing) return;
+    setReferralSharing(true);
+    try {
+      const res = await fetch("/api/me/referral", { credentials: "include" });
+      if (!res.ok) throw new Error("api_error");
+      const { shareUrl } = await res.json() as { shareUrl: string };
+
+      const title = t("referral_share_title");
+      const text = t("referral_share_text", { url: shareUrl });
+
+      try {
+        const { Share } = await import("@capacitor/share");
+        const { value: canShare } = await Share.canShare();
+        if (canShare) { await Share.share({ title, text, url: shareUrl, dialogTitle: title }); return; }
+      } catch { /* fallthrough */ }
+
+      if (typeof navigator !== "undefined" && navigator.share) {
+        await navigator.share({ title, text, url: shareUrl }); return;
+      }
+
+      await navigator.clipboard.writeText(shareUrl);
+      setReferralCopied(true);
+      setTimeout(() => setReferralCopied(false), 2500);
+    } catch { /* ignore */ } finally {
+      setReferralSharing(false);
+    }
+  }, [referralSharing, t]);
 
   const row = (iconColor: string, icon: React.ReactNode, label: string, path: string, first = false) => {
     const Comp = first ? FirstNavRow : NavRow;
@@ -106,6 +138,30 @@ export default function SettingsPage() {
         {row(ACCENT,
           <svg {...ip}><circle cx="12" cy="8" r="4" /><path d="M4 21c0-4 4-7 8-7s8 3 8 7" /></svg>,
           t("section_account"), "/settings/konto", true)}
+        <button
+          type="button"
+          onClick={handleShareReferral}
+          style={{
+            width: "100%", display: "flex", alignItems: "center", gap: 14,
+            padding: "12px 14px", background: "transparent", border: "none",
+            cursor: referralSharing ? "wait" : "pointer", textAlign: "left", color: "inherit",
+            borderTop: "1px solid var(--border)",
+          }}
+        >
+          <span aria-hidden style={{
+            width: 32, height: 32, borderRadius: 8, flexShrink: 0,
+            background: `${GREEN}18`, color: GREEN,
+            display: "flex", alignItems: "center", justifyContent: "center",
+          }}>
+            <svg {...ip}><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8" /><polyline points="16 6 12 2 8 6" /><line x1="12" y1="2" x2="12" y2="15" /></svg>
+          </span>
+          <span style={{ flex: 1, fontSize: 14, fontWeight: 500, color: "var(--text-strong)", lineHeight: 1.25 }}>
+            {referralCopied ? t("referral_share_copy_success") : t("row_referral")}
+          </span>
+          <span aria-hidden style={{ flexShrink: 0, color: "var(--text-faint)", fontSize: 18, lineHeight: 1 }}>
+            {referralSharing ? "…" : "›"}
+          </span>
+        </button>
         {row(GREEN,
           <svg {...ip}><path d="M12 2C8 8 6 12 6 15a6 6 0 0 0 12 0c0-3-2-7-6-13z" /></svg>,
           t("section_glucose"), "/settings/glukose")}

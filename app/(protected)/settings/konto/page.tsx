@@ -42,9 +42,6 @@ export default function KontoSettingsPage() {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [saveError, setSaveError] = useState("");
-  const [referralSharing, setReferralSharing] = useState(false);
-  const [referralCopied, setReferralCopied] = useState(false);
-  const [referralCounts, setReferralCounts] = useState<{ referred: number; rewarded: number } | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -66,46 +63,8 @@ export default function KontoSettingsPage() {
       .then((j: { plan?: EffectivePlan }) => { if (!cancelled && j.plan) setPlan(j.plan); })
       .catch(() => {});
     fetchUserProfile().then(setUserProfile).catch(() => {});
-    fetch("/api/me/referral", { credentials: "include" })
-      .then((r) => r.ok ? r.json() : null)
-      .then((j: { referredCount?: number; rewardedCount?: number } | null) => {
-        if (!cancelled && j) setReferralCounts({ referred: j.referredCount ?? 0, rewarded: j.rewardedCount ?? 0 });
-      })
-      .catch(() => {});
     return () => { cancelled = true; };
   }, [bcp47]);
-
-  const handleShareReferral = useCallback(async () => {
-    if (referralSharing) return;
-    setReferralSharing(true);
-    try {
-      const res = await fetch("/api/me/referral", { credentials: "include" });
-      if (!res.ok) throw new Error("api_error");
-      const { shareUrl, referredCount, rewardedCount } = await res.json() as {
-        shareUrl: string; referredCount: number; rewardedCount: number;
-      };
-      setReferralCounts({ referred: referredCount, rewarded: rewardedCount });
-
-      const title = t("referral_share_title");
-      const text = t("referral_share_text", { url: shareUrl });
-
-      try {
-        const { Share } = await import("@capacitor/share");
-        const { value: canShare } = await Share.canShare();
-        if (canShare) { await Share.share({ title, text, url: shareUrl, dialogTitle: title }); return; }
-      } catch { /* fallthrough to web */ }
-
-      if (typeof navigator !== "undefined" && navigator.share) {
-        await navigator.share({ title, text, url: shareUrl }); return;
-      }
-
-      await navigator.clipboard.writeText(shareUrl);
-      setReferralCopied(true);
-      setTimeout(() => setReferralCopied(false), 2500);
-    } catch { /* ignore */ } finally {
-      setReferralSharing(false);
-    }
-  }, [referralSharing, t]);
 
   const openAboutMeSheet = useCallback(() => {
     setUserProfile((cur) => {
@@ -253,18 +212,6 @@ export default function KontoSettingsPage() {
             onClick={() => router.push("/settings/ai")}
           />
         )}
-        <SettingsRow
-          iconColor={GREEN}
-          icon={<svg {...iconProps}><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8" /><polyline points="16 6 12 2 8 6" /><line x1="12" y1="2" x2="12" y2="15" /></svg>}
-          label={referralCopied ? t("referral_share_copy_success") : (referralSharing ? "…" : t("row_referral"))}
-          subtitle={
-            referralCounts && referralCounts.referred > 0
-              ? `${t("referral_referred_count", { n: referralCounts.referred })} · ${t("referral_rewarded_count", { n: referralCounts.rewarded })}`
-              : t("subtitle_referral")
-          }
-          ariaLabel={t("row_referral")}
-          onClick={handleShareReferral}
-        />
         {plan === "plus" && (
           <SettingsRow
             iconColor={PURPLE}
