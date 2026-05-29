@@ -1617,6 +1617,25 @@ export default function InsightsPage() {
               )}
             </div>
 
+            {/* GMI = klinisch definiertes HbA1c-Äquivalent aus CGM-Daten.
+                Bergenstal et al., Diabetes Care 2018 (GMI = 3.31 + 0.02392 × avgBG).
+                Compliance: als Schätzwert rahmen, kein Laborwert. */}
+            {gmi != null && (
+              <div style={{
+                padding: "8px 10px",
+                background: `${ACCENT}08`,
+                borderRadius: 8,
+                border: `1px solid ${ACCENT}20`,
+              }}>
+                <div style={{ fontSize: 11, color: ACCENT, fontWeight: 700, marginBottom: 2 }}>
+                  Entspricht ca. HbA1c
+                </div>
+                <div style={{ fontSize: 10, color: "var(--text-ghost)", lineHeight: 1.5 }}>
+                  Schätzwert aus CGM-Daten — kein Laborwert. Kann vom Labor-HbA1c abweichen. Bitte mit Diabetologen besprechen.
+                </div>
+              </div>
+            )}
+
             {/* Shared 7-day sparkline — fills remaining card height.
                 Grid lines give a BG scale at a glance. */}
             {trendHasData && trendValues.length >= 2 && (
@@ -1688,6 +1707,39 @@ export default function InsightsPage() {
               <div style={{ display:"flex", justifyContent:"space-between", marginTop:6, fontSize:11, color:"var(--text-faint)" }}>
                 {trendDays.map((d, i) => <span key={i}>{d.label}</span>)}
               </div>
+              {/* Tag/Nacht-Split — nächtliche Hypos sind häufig unsichtbar */}
+              {(() => {
+                const dayR   = readings7.filter(r => { const h = new Date(r.t).getHours(); return h >= 6 && h < 22; });
+                const nightR = readings7.filter(r => { const h = new Date(r.t).getHours(); return h < 6 || h >= 22; });
+                const dayAvg   = dayR.length   >= 5 ? Math.round(dayR.reduce((s,r)=>s+r.v,0)/dayR.length)   : null;
+                const nightAvg = nightR.length >= 5 ? Math.round(nightR.reduce((s,r)=>s+r.v,0)/nightR.length) : null;
+                if (dayAvg == null && nightAvg == null) return null;
+                const col = (v: number) => v > tirHigh ? ORANGE : v < tirLow ? PINK : GREEN;
+                return (
+                  <div style={{ display:"flex", gap:8, marginTop:10 }}>
+                    {dayAvg != null && (
+                      <div style={{ flex:1, padding:"8px 10px", background:"rgba(255,255,255,0.04)", borderRadius:10, border:"1px solid var(--border-soft)" }}>
+                        <div style={{ fontSize:10, color:"var(--text-faint)", fontWeight:600, textTransform:"uppercase", letterSpacing:"0.06em" }}>☀ Tag</div>
+                        <div style={{ display:"flex", alignItems:"baseline", gap:3, marginTop:3 }}>
+                          <span style={{ fontSize:18, fontWeight:800, color:col(dayAvg), fontFamily:"var(--font-mono)" }}>{dayAvg}</span>
+                          <span style={{ fontSize:10, color:"var(--text-faint)" }}>mg/dL</span>
+                        </div>
+                        <div style={{ fontSize:9, color:"var(--text-ghost)", marginTop:1 }}>6–22 Uhr</div>
+                      </div>
+                    )}
+                    {nightAvg != null && (
+                      <div style={{ flex:1, padding:"8px 10px", background:"rgba(255,255,255,0.04)", borderRadius:10, border:"1px solid var(--border-soft)" }}>
+                        <div style={{ fontSize:10, color:"var(--text-faint)", fontWeight:600, textTransform:"uppercase", letterSpacing:"0.06em" }}>🌙 Nacht</div>
+                        <div style={{ display:"flex", alignItems:"baseline", gap:3, marginTop:3 }}>
+                          <span style={{ fontSize:18, fontWeight:800, color:col(nightAvg), fontFamily:"var(--font-mono)" }}>{nightAvg}</span>
+                          <span style={{ fontSize:10, color:"var(--text-faint)" }}>mg/dL</span>
+                        </div>
+                        <div style={{ fontSize:9, color:"var(--text-ghost)", marginTop:1 }}>22–6 Uhr</div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
             </>
           ) : (
             <div style={{
@@ -1794,6 +1846,46 @@ export default function InsightsPage() {
                 </div>
               </div>
             )}
+            {/* Tageszeit-Verteilung der Hypos — zeigt wann Hypos auftreten */}
+            {hypoEnough && hypoTotal7d > 0 && (() => {
+              const segs = [
+                { label:"Nacht",  sub:"22–6 h",  count:0 },
+                { label:"Morgen", sub:"6–10 h",  count:0 },
+                { label:"Tag",    sub:"10–18 h", count:0 },
+                { label:"Abend",  sub:"18–22 h", count:0 },
+              ];
+              readings7.filter(r => r.v < HYPO_THRESHOLD_MGDL).forEach(r => {
+                const h = new Date(r.t).getHours();
+                if (h >= 22 || h < 6)         segs[0].count++;
+                else if (h >= 6  && h < 10)   segs[1].count++;
+                else if (h >= 10 && h < 18)   segs[2].count++;
+                else                           segs[3].count++;
+              });
+              const maxC = Math.max(...segs.map(s => s.count), 1);
+              const hasAny = segs.some(s => s.count > 0);
+              if (!hasAny) return null;
+              return (
+                <div style={{ marginTop:12 }}>
+                  <div style={{ fontSize:10, color:"var(--text-faint)", fontWeight:600, textTransform:"uppercase", letterSpacing:"0.06em", marginBottom:6 }}>
+                    Tageszeit der Hypos
+                  </div>
+                  <div style={{ display:"flex", flexDirection:"column", gap:5 }}>
+                    {segs.map(seg => (
+                      <div key={seg.label} style={{ display:"flex", alignItems:"center", gap:8 }}>
+                        <div style={{ width:40, fontSize:10, color:seg.count>0?PINK:"var(--text-ghost)", fontWeight:600, flexShrink:0 }}>{seg.label}</div>
+                        <div style={{ flex:1, height:5, background:"var(--surface-soft)", borderRadius:99, overflow:"hidden" }}>
+                          {seg.count > 0 && <div style={{ height:"100%", width:`${(seg.count/maxC)*100}%`, background:PINK, borderRadius:99 }}/>}
+                        </div>
+                        <div style={{ width:18, textAlign:"right", fontSize:10, color:seg.count>0?PINK:"var(--text-ghost)", fontFamily:"var(--font-mono)", fontWeight:700 }}>
+                          {seg.count}
+                        </div>
+                        <div style={{ width:32, fontSize:9, color:"var(--text-ghost)" }}>{seg.sub}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })()}
             {/* 7-day daily hypo readings bar chart */}
             {hypoEnough && (() => {
               const nowMs = Date.now();
@@ -1853,6 +1945,29 @@ export default function InsightsPage() {
                 <div style={{ marginLeft:"auto", fontSize:11, color:"var(--text-dim)" }}>
                   {tInsights("readings_count", { n: readings7.length })}
                 </div>
+              </div>
+            )}
+            {/* TAR + geschätzte Hyper-Dauer */}
+            {hyperEnough && (
+              <div style={{ display:"flex", gap:8, marginTop:10 }}>
+                <div style={{ flex:1, padding:"8px 10px", background:`${ORANGE}08`, borderRadius:10, border:`1px solid ${ORANGE}20` }}>
+                  <div style={{ fontSize:10, color:"var(--text-faint)", fontWeight:600, textTransform:"uppercase", letterSpacing:"0.06em" }}>TAR &gt;{tirHigh}</div>
+                  <div style={{ display:"flex", alignItems:"baseline", gap:3, marginTop:3 }}>
+                    <span style={{ fontSize:18, fontWeight:800, color:b7.hi > 25 ? ORANGE : GREEN, fontFamily:"var(--font-mono)" }}>{b7.hi}</span>
+                    <span style={{ fontSize:10, color:"var(--text-faint)" }}>%</span>
+                  </div>
+                  <div style={{ fontSize:9, color:"var(--text-ghost)", marginTop:1 }}>Ziel: &lt; 25 %</div>
+                </div>
+                {hyperCount7d > 0 && (
+                  <div style={{ flex:1, padding:"8px 10px", background:`${ORANGE}08`, borderRadius:10, border:`1px solid ${ORANGE}20` }}>
+                    <div style={{ fontSize:10, color:"var(--text-faint)", fontWeight:600, textTransform:"uppercase", letterSpacing:"0.06em" }}>≈ Dauer</div>
+                    <div style={{ display:"flex", alignItems:"baseline", gap:3, marginTop:3 }}>
+                      <span style={{ fontSize:18, fontWeight:800, color:ORANGE, fontFamily:"var(--font-mono)" }}>{(hyperCount7d * 5 / 60).toFixed(1)}</span>
+                      <span style={{ fontSize:10, color:"var(--text-faint)" }}>h / 7d</span>
+                    </div>
+                    <div style={{ fontSize:9, color:"var(--text-ghost)", marginTop:1 }}>bei 5-min CGM-Takt</div>
+                  </div>
+                )}
               </div>
             )}
             {/* 7-day daily hyper readings bar chart */}
@@ -1928,6 +2043,38 @@ export default function InsightsPage() {
                 <span style={{ color:HIGH_YELLOW }}>{tInsights("cv_legend_medium")}</span>
                 <span style={{ color:PINK }}>{tInsights("cv_legend_unstable")}</span>
               </div>
+              {/* Glukose-Spannweite der 14 Tage + Ziel-Referenz */}
+              {readings14.length >= 5 && (() => {
+                const vals14 = readings14.map(r => r.v);
+                const minBg  = Math.min(...vals14);
+                const maxBg  = Math.max(...vals14);
+                return (
+                  <div style={{ display:"flex", gap:8, marginTop:10 }}>
+                    <div style={{ flex:1, padding:"8px 10px", background:"rgba(255,255,255,0.04)", borderRadius:10, border:"1px solid var(--border-soft)" }}>
+                      <div style={{ fontSize:10, color:"var(--text-faint)", fontWeight:600, textTransform:"uppercase", letterSpacing:"0.06em" }}>Min 14d</div>
+                      <div style={{ display:"flex", alignItems:"baseline", gap:3, marginTop:3 }}>
+                        <span style={{ fontSize:18, fontWeight:800, color:minBg < tirLow ? PINK : GREEN, fontFamily:"var(--font-mono)" }}>{minBg}</span>
+                        <span style={{ fontSize:10, color:"var(--text-faint)" }}>mg/dL</span>
+                      </div>
+                    </div>
+                    <div style={{ flex:1, padding:"8px 10px", background:"rgba(255,255,255,0.04)", borderRadius:10, border:"1px solid var(--border-soft)" }}>
+                      <div style={{ fontSize:10, color:"var(--text-faint)", fontWeight:600, textTransform:"uppercase", letterSpacing:"0.06em" }}>Max 14d</div>
+                      <div style={{ display:"flex", alignItems:"baseline", gap:3, marginTop:3 }}>
+                        <span style={{ fontSize:18, fontWeight:800, color:maxBg > tirHigh ? ORANGE : GREEN, fontFamily:"var(--font-mono)" }}>{maxBg}</span>
+                        <span style={{ fontSize:10, color:"var(--text-faint)" }}>mg/dL</span>
+                      </div>
+                    </div>
+                    <div style={{ flex:1, padding:"8px 10px", background:`${cvColor}08`, borderRadius:10, border:`1px solid ${cvColor}20` }}>
+                      <div style={{ fontSize:10, color:"var(--text-faint)", fontWeight:600, textTransform:"uppercase", letterSpacing:"0.06em" }}>Ziel</div>
+                      <div style={{ display:"flex", alignItems:"baseline", gap:2, marginTop:3 }}>
+                        <span style={{ fontSize:15, fontWeight:800, color:cvColor, fontFamily:"var(--font-mono)" }}>&lt; 36</span>
+                        <span style={{ fontSize:10, color:"var(--text-faint)" }}>%</span>
+                      </div>
+                      <div style={{ fontSize:9, color:"var(--text-ghost)", marginTop:1 }}>CV-Zielwert</div>
+                    </div>
+                  </div>
+                );
+              })()}
               {/* 14-day daily CV% bar chart */}
               {(() => {
                 const nowMs = Date.now();
@@ -1989,6 +2136,37 @@ export default function InsightsPage() {
                   </div>
                 ))}
               </div>
+              {/* Bester / schlechtester Mahlzeittyp nach Trefferquote */}
+              {(() => {
+                const ranked = TYPE_ORDER
+                  .map(t => ({ t, d: types[t] }))
+                  .filter(e => e.d.count >= 2)
+                  .sort((a, b) => (b.d.good/b.d.count) - (a.d.good/a.d.count));
+                if (ranked.length < 2) return null;
+                const best  = ranked[0];
+                const worst = ranked[ranked.length - 1];
+                const label = (t: string) =>
+                  t === "FAST_CARBS"   ? "Schnelle KH" :
+                  t === "HIGH_PROTEIN" ? "Protein"     :
+                  t === "HIGH_FAT"     ? "Fett"        : "Ausgewogen";
+                const pct = (e: typeof best) => Math.round(e.d.good / e.d.count * 100);
+                return (
+                  <div style={{ display:"flex", gap:8, marginTop:12 }}>
+                    <div style={{ flex:1, padding:"8px 10px", background:`${GREEN}08`, borderRadius:10, border:`1px solid ${GREEN}20` }}>
+                      <div style={{ fontSize:9, color:GREEN, fontWeight:700, textTransform:"uppercase", letterSpacing:"0.06em", marginBottom:2 }}>↑ Beste</div>
+                      <div style={{ fontSize:12, fontWeight:700, color:"var(--text)", lineHeight:1.2 }}>{label(best.t)}</div>
+                      <div style={{ fontSize:16, fontWeight:800, color:GREEN, fontFamily:"var(--font-mono)", marginTop:2 }}>{pct(best)} %</div>
+                      <div style={{ fontSize:9, color:"var(--text-ghost)", marginTop:1 }}>{best.d.count} Mahlzeiten</div>
+                    </div>
+                    <div style={{ flex:1, padding:"8px 10px", background:`${PINK}08`, borderRadius:10, border:`1px solid ${PINK}20` }}>
+                      <div style={{ fontSize:9, color:PINK, fontWeight:700, textTransform:"uppercase", letterSpacing:"0.06em", marginBottom:2 }}>↓ Schwächste</div>
+                      <div style={{ fontSize:12, fontWeight:700, color:"var(--text)", lineHeight:1.2 }}>{label(worst.t)}</div>
+                      <div style={{ fontSize:16, fontWeight:800, color:PINK, fontFamily:"var(--font-mono)", marginTop:2 }}>{pct(worst)} %</div>
+                      <div style={{ fontSize:9, color:"var(--text-ghost)", marginTop:1 }}>{worst.d.count} Mahlzeiten</div>
+                    </div>
+                  </div>
+                );
+              })()}
               {/* 7-day daily meal hit-rate bar chart */}
               {(() => {
                 const nowMs = Date.now();
