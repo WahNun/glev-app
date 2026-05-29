@@ -253,10 +253,11 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
       try { storedMode = window.localStorage.getItem("glev_fab_mode"); } catch { /* ignore */ }
     }
 
-    // AI mode: only when user explicitly chose "ai" AND feature flag is on.
-    // If feature flag is off (aiVoiceEnabled=false/null), fall through to voice —
-    // never fall back to quick-add on a short press.
-    if (storedMode === "ai" && aiVoiceEnabled) {
+    // AI mode: only when user explicitly chose "ai", feature flag is on,
+    // AND consent has already been granted. Without consent the user would
+    // see the activation modal on every tap — instead fall through to voice
+    // so the FAB always does something useful without prompting.
+    if (storedMode === "ai" && aiVoiceEnabled && glevAi.consentGranted) {
       // If the chat sheet is already open, start a new voice take.
       if (glevAi.sheetOpen) {
         window.dispatchEvent(new CustomEvent("glev:voice-start"));
@@ -264,15 +265,14 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
       }
       glevAi.openFromButton();
       // Delay voice-start so the sheet can animate in before recording.
-      if (glevAi.consentGranted) {
-        window.setTimeout(() => {
-          window.dispatchEvent(new CustomEvent("glev:voice-start"));
-        }, 350);
-      }
+      window.setTimeout(() => {
+        window.dispatchEvent(new CustomEvent("glev:voice-start"));
+      }, 350);
       return;
     }
 
-    // Default (and fallback when AI not available): open voice input.
+    // Default (and fallback when AI not available or consent not granted):
+    // open legacy voice input — works for ALL users.
     router.push(`/engine?voice=1&vt=${Date.now()}`);
   };
 
