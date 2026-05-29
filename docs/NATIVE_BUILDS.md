@@ -32,12 +32,25 @@
 | Android `google-services.json` | `android/app/google-services.json` | ⚠️ Gitignored — muss auf Build-Maschine vorhanden sein |
 | iOS APNs-Konfiguration | Im Xcode-Projekt (Capability: Push Notifications) | ❓ Status unklar |
 
-### Offene Fragen / Probleme
+### Problem (Stand 2026-05-29): Kein APNs-Token trotz granted Permission
 
-- [ ] Werden Push-Tokens tatsächlich vom Gerät registriert und in `profiles.push_token` gespeichert?  
-  → Prüfen: Supabase Dashboard → `profiles`-Tabelle → `push_token`-Spalte für Testgerät
-- [ ] Sendet die `hypo-check`-Edge-Function erfolgreich? → Supabase Dashboard → Edge Functions → hypo-check → Logs
-- [ ] Sind die Supabase Edge Function Secrets gesetzt?
+**Symptom:** Debug-Panel zeigt `register() called` → Kein Token, kein Error. APNs antwortet einfach nicht.
+
+**Was korrekt ist:**
+- `App.entitlements` hat `aps-environment: production` ✅
+- `AppDelegate.swift` ruft `ApplicationDelegateProxy.shared.application(...)` auf ✅
+- `lib/pushNotifications.ts` ruft `register()` korrekt auf ✅
+
+**Wahrscheinliche Ursache:** Das **Provisioning-Profil** im aktuellen TestFlight-Build (Build 1) enthält die Push-Notifications-Capability nicht. Die Entitlements-Datei allein reicht nicht — das Profil muss neu generiert werden, nachdem Push Notifications auf der App-ID aktiviert wurde.
+
+**Fix-Checkliste:**
+1. Apple Developer → [Identifiers](https://developer.apple.com/account/resources/identifiers/list) → App-ID → Edit → **Push Notifications = ON** ← sicherstellen
+2. Provisioning-Profil neu generieren: `bundle exec fastlane match appstore --force`
+3. Neuen Build: `bundle exec fastlane ios beta`
+4. Neuen TestFlight-Build auf Testgerät installieren → "Push-Registrierung starten"
+
+**Danach noch offen (Server-Push):**
+- Supabase Edge Function Secrets setzen (Dashboard → Project Settings → Edge Functions → Secrets):
 
 ### Erforderliche Supabase Edge Function Secrets
 

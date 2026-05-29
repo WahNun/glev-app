@@ -1,0 +1,1 @@
+- [Push-Notifications iOS Debug](push-notifications-ios.md) — register() fired, permission granted, aber kein Token — Ursache & nächste Schritte dokumentiert
