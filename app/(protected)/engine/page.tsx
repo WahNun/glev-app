@@ -543,6 +543,16 @@ export default function EnginePage() {
   const [iobDisplay, setIobDisplay] = useState<string | null>(null);
   const [insulinType, setInsulinType] = useState<InsulinType>('rapid');
   const [glucose, setGlucose] = useState("");
+  // Provenance of the current glucose value — used to decide whether a
+  // historical CGM auto-fill is allowed to overwrite it.
+  // "live"       = filled from live CGM on mount or via CGM button
+  // "historical" = filled by the past-mealTime auto-fill effect
+  // "manual"     = user typed it themselves → never overwrite
+  // null         = empty / not yet filled
+  const [glucoseProvenance, setGlucoseProvenance] = useState<"live" | "historical" | "manual" | null>(null);
+  // Ref mirrors the state so effects can read the current value without
+  // needing it in their dependency array (avoids re-run loops).
+  const glucoseProvenanceRef = useRef<"live" | "historical" | "manual" | null>(null);
   // The `carbs` form state holds the user-displayed value in their
   // chosen unit (g / BE / KE) — see useCarbUnit below. All persistence
   // (saveMeal, runGlevEngine, classifyMeal, computeCalories) operates
@@ -899,6 +909,10 @@ export default function EnginePage() {
         if (cancelled) return;
         if (j.connected && typeof j.glucose === "number" && j.glucose > 0) {
           setGlucose(prev => prev === "" ? String(j.glucose) : prev);
+          if (glucoseProvenanceRef.current === null) {
+            glucoseProvenanceRef.current = "live";
+            setGlucoseProvenance("live");
+          }
         }
       } catch {
         // Spec: fail silently — CGM unavailability must never block manual entry.
@@ -994,8 +1008,15 @@ export default function EnginePage() {
     }
     if (!best) return; // nothing close enough
 
-    // Only auto-fill when glucose field is currently empty — respect manual input.
-    setGlucose((prev) => (prev === "" ? String(best!.value) : prev));
+    // Allow overwriting live/auto-filled values, but never overwrite what the
+    // user typed themselves. Use the ref so we read the current value without
+    // adding glucoseProvenance to the dependency array (that would re-trigger
+    // this effect each time provenance changes, causing a harmless but noisy loop).
+    if (glucoseProvenanceRef.current === "manual") return;
+
+    setGlucose(String(best.value));
+    glucoseProvenanceRef.current = "historical";
+    setGlucoseProvenance("historical");
   }, [mealTime, trendSamples]);
 
   // Hydrate the dismissed-suggestion cooldown map from localStorage. Each
@@ -1544,6 +1565,8 @@ export default function EnginePage() {
         if (Number.isFinite(measuredMs) && (Date.now() - measuredMs) <= FS_OVERRIDE_WINDOW_MS) {
           const reading = Math.round(Number(fs.value_mg_dl));
           setGlucose(String(reading));
+          glucoseProvenanceRef.current = "live";
+          setGlucoseProvenance("live");
           const d = new Date(measuredMs);
           setLastReading(`${String(d.getHours()).padStart(2,"0")}:${String(d.getMinutes()).padStart(2,"0")} · FS`);
           logDebug("ENGINE.FS_USED", { reading, measured_at: fs.measured_at });
@@ -1556,6 +1579,8 @@ export default function EnginePage() {
       if (r.ok) {
         const reading = Math.round(r.value);
         setGlucose(String(reading));
+        glucoseProvenanceRef.current = "live";
+        setGlucoseProvenance("live");
         const tsMs = r.timestamp ? parseLluTs(r.timestamp) : null;
         const d = new Date(tsMs ?? Date.now());
         setLastReading(`${String(d.getHours()).padStart(2,"0")}:${String(d.getMinutes()).padStart(2,"0")}`);
@@ -2121,7 +2146,11 @@ export default function EnginePage() {
   //  - the form-mode "Cancel" button
   //  - all 3 decision buttons after their work is done
   function resetForm(opts: { keepGlucose?: boolean } = {}) {
-    if (!opts.keepGlucose) setGlucose("");
+    if (!opts.keepGlucose) {
+      setGlucose("");
+      glucoseProvenanceRef.current = null;
+      setGlucoseProvenance(null);
+    }
     setCarbs(""); setProtein(""); setFat(""); setFiber("");
     setDesc(""); setInsulin(""); setResult(null); setResultICRSource(null); setTranscript("");
     setAiMealType(null);
@@ -3139,7 +3168,11 @@ export default function EnginePage() {
                           type="number"
                           placeholder="—"
                           value={glucose}
-                          onChange={(e) => setGlucose(e.target.value)}
+                          onChange={(e) => {
+                            setGlucose(e.target.value);
+                            glucoseProvenanceRef.current = "manual";
+                            setGlucoseProvenance("manual");
+                          }}
                           aria-label={tEngine("glucose_before_label")}
                           style={{
                             background: "transparent", border: "none", outline: "none",
@@ -3168,9 +3201,37 @@ export default function EnginePage() {
                           {cgmPulling ? tEngine("cgm_pulling") : tEngine("cgm_button")}
                         </button>
                       </div>
-                      {/* Row 2: unit */}
-                      <div style={{ fontSize: 11, color: "var(--text-faint)", fontFamily: "var(--font-mono)", letterSpacing: "0.05em" }}>
-                        mg/dL
+                      {/* Row 2: unit + provenance chip */}
+                      <div style={{ display: "flex", alignItems: "center", gap: 6, justifyContent: "flex-end" }}>
+                        <div style={{ fontSize: 11, color: "var(--text-faint)", fontFamily: "var(--font-mono)", letterSpacing: "0.05em" }}>
+                          mg/dL
+                        </div>
+                        {glucose && glucoseProvenance === "historical" && (
+                          <div style={{
+                            fontSize: 10, fontWeight: 600,
+                            color: "var(--text-dim)",
+                            background: "var(--surface-raised, rgba(255,255,255,0.06))",
+                            border: "1px solid var(--border)",
+                            borderRadius: 5, padding: "1px 5px",
+                            letterSpacing: "0.03em",
+                            whiteSpace: "nowrap",
+                          }}>
+                            ⏱ Historisch
+                          </div>
+                        )}
+                        {glucose && glucoseProvenance === "live" && (
+                          <div style={{
+                            fontSize: 10, fontWeight: 600,
+                            color: GREEN,
+                            background: "var(--surface-raised, rgba(255,255,255,0.06))",
+                            border: `1px solid ${GREEN}44`,
+                            borderRadius: 5, padding: "1px 5px",
+                            letterSpacing: "0.03em",
+                            whiteSpace: "nowrap",
+                          }}>
+                            ● Live
+                          </div>
+                        )}
                       </div>
                     </div>
                   </div>
