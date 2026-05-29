@@ -1,17 +1,18 @@
 "use client";
 
 /**
- * Onboarding flow — Step 7 of 8: Glev-Button gestures.
+ * Onboarding flow — Step 5 of 8: Glev-Button gestures.
  *
  * Explains the two core gestures of the central Glev FAB:
  *   Short tap  → Voice input / AI chat
  *   Long press → Quick-add menu (Insulin, Fingerstick, Activity, Symptoms)
  *
- * CSS-only FAB illustration — no dependency on GlevAIButton or Layout.
- * No Skip link needed: this is the final step before the dashboard.
+ * Renders the real GlevAIButton inside a mini nav-bar context so the user
+ * sees exactly what they will find in the app.
  */
 
 import { useTranslations } from "next-intl";
+import GlevAIButton from "@/components/GlevAIButton";
 import {
   Shell,
   ACCENT,
@@ -32,7 +33,7 @@ export default function GlevButtonStep({
 
   return (
     <Shell
-      step={7}
+      step={5}
       onNext={onNext}
       onBack={onBack}
       showSkip={false}
@@ -79,45 +80,52 @@ export default function GlevButtonStep({
 
 function FabIllustration() {
   return (
-    <div
-      style={{
-        display: "flex",
-        justifyContent: "center",
-        alignItems: "center",
-        padding: "10px 0 4px",
-      }}
-    >
-      <div
-        style={{
-          position: "relative",
-          width: 72,
-          height: 72,
-        }}
-      >
+    <div style={{ display: "flex", justifyContent: "center", padding: "4px 0 0" }}>
+      <div style={{ position: "relative", width: 300, height: 72 }}>
         <div
           style={{
             position: "absolute",
-            inset: 0,
-            borderRadius: "50%",
-            background: `${ACCENT}22`,
-            transform: "scale(1.35)",
-          }}
-        />
-        <div
-          style={{
-            position: "absolute",
-            inset: 0,
-            borderRadius: "50%",
-            background: ACCENT,
-            boxShadow: `0 6px 24px ${ACCENT}88`,
+            bottom: 0, left: 0, right: 0,
+            height: 54,
+            background: "#111117",
+            borderTop: `1px solid ${BORDER}`,
+            borderRadius: "0 0 14px 14px",
             display: "flex",
             alignItems: "center",
-            justifyContent: "center",
+            padding: "0 4px",
+            overflow: "visible",
           }}
         >
-          <span style={{ fontSize: 28, lineHeight: 1, color: "#fff" }}>G</span>
+          <div style={{ flex: "1 1 0", display: "flex", justifyContent: "space-around" }}>
+            <TabDot /><TabDot />
+          </div>
+          <div style={{ flex: "0 0 72px" }} />
+          <div style={{ flex: "1 1 0", display: "flex", justifyContent: "space-around" }}>
+            <TabDot /><TabDot />
+          </div>
+        </div>
+        <div
+          style={{
+            position: "absolute",
+            left: "50%",
+            bottom: 18,
+            transform: "translateX(-50%)",
+            pointerEvents: "none",
+            zIndex: 10,
+          }}
+        >
+          <GlevAIButton onPress={() => {}} />
         </div>
       </div>
+    </div>
+  );
+}
+
+function TabDot() {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4, padding: "4px 10px" }}>
+      <div style={{ width: 20, height: 20, borderRadius: 6, background: "rgba(255,255,255,0.07)" }} />
+      <div style={{ width: 26, height: 4, borderRadius: 2, background: "rgba(255,255,255,0.07)" }} />
     </div>
   );
 }

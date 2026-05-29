@@ -2814,7 +2814,7 @@
     },
     "install": {
       "headline": "Add Glev to your home screen",
-      "sub": "Make Glev feel like a native app — no App Store needed.",
+      "sub": "The native iOS & Android apps are arriving around 1 July — until then, add Glev to your home screen.",
       "android_title": "Android (Chrome)",
       "android_step_1": "Open Glev in Chrome and tap the three-dot menu (⋮) in the top right.",
       "android_step_2": "Tap \"Install app\" or \"Add to Home screen\".",

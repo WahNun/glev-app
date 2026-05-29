@@ -89,7 +89,7 @@ function OnboardingFlow() {
   if (step === 2) return <LogMealStep onNext={next} onBack={back} onSkip={skip} />;
   if (step === 3) return <EngineStep onNext={next} onBack={back} onSkip={skip} />;
   if (step === 4) return <InsightsStep onNext={next} onBack={back} />;
-  if (step === 5) return <CgmStep onSkip={() => goTo(6)} onBack={back} primaryDisabled={submitting} />;
-  if (step === 6) return <InstallStep onNext={next} onBack={back} onSkip={skip} />;
-  return <GlevButtonStep onNext={next} onBack={back} />;
+  if (step === 5) return <GlevButtonStep onNext={next} onBack={back} />;
+  if (step === 6) return <CgmStep onSkip={() => goTo(7)} onBack={back} />;
+  return <InstallStep onNext={next} onBack={back} onSkip={skip} />;
 }

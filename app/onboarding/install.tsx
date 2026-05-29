@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * Onboarding flow — Step 6 of 6: Homescreen Install.
+ * Onboarding flow — Step 7 of 8: Homescreen Install.
  *
  * Two expandable platform cards (Android / iOS). Tapping a card
  * expands it and shows numbered installation steps. The selected
@@ -59,7 +59,7 @@ export default function InstallStep({
 
   return (
     <Shell
-      step={6}
+      step={7}
       onNext={onNext}
       onBack={onBack}
       onSkip={onSkip}

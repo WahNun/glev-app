@@ -2814,7 +2814,7 @@
     },
     "install": {
       "headline": "Glev zum Homescreen hinzufügen",
-      "sub": "So fühlt sich Glev wie eine native App an — kein App-Store nötig.",
+      "sub": "Die nativen iOS- und Android-Apps kommen voraussichtlich ab 1. Juli — bis dahin füge Glev als Webapp zum Homescreen hinzu.",
       "android_title": "Android (Chrome)",
       "android_step_1": "Öffne Glev in Chrome und tippe auf die drei Punkte (⋮) oben rechts.",
       "android_step_2": "Tippe auf „App installieren“ oder „Zum Startbildschirm hinzufügen“.",
