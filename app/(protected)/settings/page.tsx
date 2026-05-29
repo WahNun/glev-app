@@ -235,6 +235,39 @@ function useNightscoutConnected(): boolean {
   return connected;
 }
 
+function PushDebugSection() {
+  const [token, setToken] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  useEffect(() => {
+    setToken(localStorage.getItem("glev_push_token"));
+    setError(localStorage.getItem("glev_push_error"));
+  }, []);
+  if (!token && !error) return null;
+  return (
+    <div style={{
+      margin: "16px 0",
+      padding: "12px 16px",
+      borderRadius: 12,
+      background: error ? "rgba(255,80,80,0.1)" : "rgba(80,255,120,0.1)",
+      border: `1px solid ${error ? "rgba(255,80,80,0.3)" : "rgba(80,255,120,0.3)"}`,
+      fontSize: 12,
+      color: "var(--fg)",
+      wordBreak: "break-all",
+    }}>
+      <div style={{ fontWeight: 600, marginBottom: 4 }}>
+        Push-Status
+      </div>
+      {token && (
+        <div>✅ Token: {token.slice(0, 20)}…{token.slice(-10)}</div>
+      )}
+      {error && (
+        <div>❌ Fehler: {error}</div>
+      )}
+      {!token && !error && null}
+    </div>
+  );
+}
+
 export default function SettingsPage() {
   const tSettings = useTranslations("settings");
   const tCommon = useTranslations("common");
@@ -3477,6 +3510,10 @@ export default function SettingsPage() {
           onClick={() => openSheetWith("macros")}
         />
       </SettingsSection>
+
+      {/* ── Push-Debug (nur auf Gerät sichtbar wenn Token oder Fehler vorhanden) ── */}
+      <PushDebugSection />
+
       </>}
 
       {/* ── Tab: Mehr ───────────────────────────────────────────────── */}
