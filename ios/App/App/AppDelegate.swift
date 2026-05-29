@@ -21,7 +21,12 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         // on each launch; `enableBackgroundDelivery` is daemon-scoped
         // and idempotent so re-calling it is cheap.
         glucoseBackgroundSync.start()
-        return true
+        // IMPORTANT: Capacitor's ApplicationDelegateProxy MUST be called
+        // here so that Capacitor plugins (PushNotifications, etc.) can
+        // hook into the app lifecycle. Without this call, register() fires
+        // but neither `registration` nor `registrationError` ever fires
+        // because the plugin's native bridge is never initialised.
+        return ApplicationDelegateProxy.shared.application(application, didFinishLaunchingWithOptions: launchOptions)
     }
 
     func applicationWillResignActive(_ application: UIApplication) {
