@@ -245,7 +245,22 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
   // monotonic `vt` token that re-triggers auto-record even if the
   // user is already on /engine.
   const runFabShortTap = () => {
-    // If AI is not enabled, always fall through to quick-add sheet.
+    // Voice mode: navigate to /engine?voice=1 — works for ALL users,
+    // independent of the ai_voice feature flag. The AI chat path below
+    // is what requires aiVoiceEnabled. Checking localStorage first so
+    // a user-set "voice" preference always wins even when AI is off.
+    let mode: "ai" | "voice" = "ai";
+    if (typeof window !== "undefined") {
+      try {
+        mode = window.localStorage.getItem("glev_fab_mode") === "voice" ? "voice" : "ai";
+      } catch { /* ignore — fall back to ai */ }
+    }
+    if (mode === "voice") {
+      router.push(`/engine?voice=1&vt=${Date.now()}`);
+      return;
+    }
+    // AI mode below — gated behind aiVoiceEnabled.
+    // null = feature-flag still loading → safe fallback to quick-add.
     if (!aiVoiceEnabled) {
       setQuickAddOpen(true);
       return;
@@ -256,24 +271,14 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
       window.dispatchEvent(new CustomEvent("glev:voice-start"));
       return;
     }
-    let mode: "ai" | "voice" = "ai";
-    if (typeof window !== "undefined") {
-      try {
-        mode = window.localStorage.getItem("glev_fab_mode") === "voice" ? "voice" : "ai";
-      } catch { /* ignore — fall back to ai */ }
-    }
-    if (mode === "voice") {
-      router.push(`/engine?voice=1&vt=${Date.now()}`);
-    } else {
-      glevAi.openFromButton();
-      // If consent is already granted the chat sheet opens immediately.
-      // Dispatch a delayed voice-start so the sheet can animate in before
-      // we start recording — this enables tap-to-talk from any screen.
-      if (glevAi.consentGranted) {
-        window.setTimeout(() => {
-          window.dispatchEvent(new CustomEvent("glev:voice-start"));
-        }, 350);
-      }
+    glevAi.openFromButton();
+    // If consent is already granted the chat sheet opens immediately.
+    // Dispatch a delayed voice-start so the sheet can animate in before
+    // we start recording — this enables tap-to-talk from any screen.
+    if (glevAi.consentGranted) {
+      window.setTimeout(() => {
+        window.dispatchEvent(new CustomEvent("glev:voice-start"));
+      }, 350);
     }
   };
 
