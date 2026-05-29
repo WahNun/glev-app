@@ -1486,7 +1486,7 @@ export default function InsightsPage() {
                 return readings14.filter(r => r.t >= s && r.t < s + 86400000 && r.v < HYPO_THRESHOLD_MGDL).length;
               });
               const lbls = Array.from({ length: 7 }, (_, i) => String(new Date(nowMs - (6 - i) * 86400000).getDate()));
-              return <InsightMicroBars values={vals} labels={lbls} color={PINK} title={tInsights("micro_trend_7d")} barHeight={90} />;
+              return <InsightMicroBars values={vals} labels={lbls} color={PINK} title={tInsights("micro_trend_7d")} barHeight={110} />;
             })()}
             {tirSelected != null && (() => {
                 const cfg =
@@ -1556,6 +1556,7 @@ export default function InsightsPage() {
       node: (
         <UpgradeGate feature="hba1c_gmi">
         <FlipCard
+          minHeight={CARD_MIN_H}
           accent={ACCENT}
           back={
             <FlipBack
@@ -1616,13 +1617,11 @@ export default function InsightsPage() {
               )}
             </div>
 
-            {/* Shared 7-day sparkline — full card width now that both
-                metrics live in the same chip. Reuses the same series
-                the Glucose Trend card derives from `last7Bg` (no extra
-                fetch). Hidden until we have at least 2 days of data. */}
+            {/* Shared 7-day sparkline — fills remaining card height.
+                Grid lines give a BG scale at a glance. */}
             {trendHasData && trendValues.length >= 2 && (
-              <div style={{ opacity:0.85 }}>
-                <Sparkline values={trendValues.slice(-8)} color={ACCENT}/>
+              <div style={{ marginTop:4, opacity:0.9 }}>
+                <Sparkline values={trendValues.slice(-8)} color={ACCENT} height={170} showGrid />
               </div>
             )}
           </div>
@@ -1685,8 +1684,8 @@ export default function InsightsPage() {
           </div>
           {trendHasData ? (
             <>
-              <Sparkline values={trendValues} color={ACCENT} height={100}/>
-              <div style={{ display:"flex", justifyContent:"space-between", marginTop:4, fontSize:11, color:"var(--text-faint)" }}>
+              <Sparkline values={trendValues} color={ACCENT} height={210} showGrid />
+              <div style={{ display:"flex", justifyContent:"space-between", marginTop:6, fontSize:11, color:"var(--text-faint)" }}>
                 {trendDays.map((d, i) => <span key={i}>{d.label}</span>)}
               </div>
             </>
@@ -1803,7 +1802,7 @@ export default function InsightsPage() {
                 return readings14.filter(r => r.t >= s && r.t < s + 86400000 && r.v < HYPO_THRESHOLD_MGDL).length;
               });
               const lbls = Array.from({ length: 7 }, (_, i) => String(new Date(nowMs - (6 - i) * 86400000).getDate()));
-              return <InsightMicroBars values={vals} labels={lbls} color={accent} title={tInsights("micro_trend_7d")} barHeight={90} />;
+              return <InsightMicroBars values={vals} labels={lbls} color={accent} title={tInsights("micro_trend_7d")} barHeight={150} />;
             })()}
           </FlipCard>
           </UpgradeGate>
@@ -1864,7 +1863,7 @@ export default function InsightsPage() {
                 return readings14.filter(r => r.t >= s && r.t < s + 86400000 && r.v > HYPER_THRESHOLD_MGDL).length;
               });
               const lbls = Array.from({ length: 7 }, (_, i) => String(new Date(nowMs - (6 - i) * 86400000).getDate()));
-              return <InsightMicroBars values={vals} labels={lbls} color={accent} title={tInsights("micro_trend_7d")} barHeight={90} />;
+              return <InsightMicroBars values={vals} labels={lbls} color={accent} title={tInsights("micro_trend_7d")} barHeight={150} />;
             })()}
           </FlipCard>
           </UpgradeGate>
@@ -1940,7 +1939,7 @@ export default function InsightsPage() {
                   const variance = dayVals.reduce((acc, v) => acc + (v - mean) ** 2, 0) / dayVals.length;
                   return +(Math.sqrt(variance) / mean * 100).toFixed(1);
                 });
-                return <InsightMicroBars values={cvVals} color={cvColor} title={tInsights("micro_trend_14d")} barHeight={80} />;
+                return <InsightMicroBars values={cvVals} color={cvColor} title={tInsights("micro_trend_14d")} barHeight={130} />;
               })()}
             </>
           )}
@@ -2000,7 +1999,7 @@ export default function InsightsPage() {
                   return dayMeals.length > 0 ? Math.round((good / dayMeals.length) * 100) : 0;
                 });
                 const evalLabels = Array.from({ length: 7 }, (_, i) => String(new Date(nowMs - (6 - i) * 86400000).getDate()));
-                return <InsightMicroBars values={evalVals} labels={evalLabels} color={GREEN} title={tInsights("micro_hit_rate_7d")} barHeight={80} />;
+                return <InsightMicroBars values={evalVals} labels={evalLabels} color={GREEN} title={tInsights("micro_hit_rate_7d")} barHeight={120} />;
               })()}
             </>
           )}
@@ -2786,7 +2785,7 @@ export default function InsightsPage() {
                   return b ? +(b.bolus + b.basal).toFixed(1) : 0;
                 });
                 const tddBarLabels = Array.from({ length: 7 }, (_, i) => String(new Date(nowMs - (6 - i) * 86400000).getDate()));
-                return <InsightMicroBars values={tddBarVals} labels={tddBarLabels} color={ACCENT} title={tInsights("micro_tdd_7d")} barHeight={80} />;
+                return <InsightMicroBars values={tddBarVals} labels={tddBarLabels} color={ACCENT} title={tInsights("micro_tdd_7d")} barHeight={100} />;
               })()}
             </>
           )}
@@ -5080,27 +5079,56 @@ function InsightMicroBars({
   );
 }
 
-/** Sparkline — ported 1:1 from `components/AppMockupPhone.tsx`. */
-function Sparkline({ values, color, height = 36 }: { values: number[]; color: string; height?: number }) {
-  const W = 268, H = height;
+/** Sparkline — enhanced with optional Y-axis grid lines and value labels.
+ *  `showGrid` adds 3 horizontal reference lines (max/mid/min) with labels.
+ *  `height` controls the SVG pixel height (default 80). */
+function Sparkline({ values, color, height = 80, showGrid = false }: {
+  values: number[]; color: string; height?: number; showGrid?: boolean;
+}) {
+  const VW = 268;
+  const LBL = showGrid ? 28 : 0;     // left margin reserved for Y-axis labels
+  const PAD_T = showGrid ? 8 : 0;    // top padding so top label isn't clipped
+  const PAD_B = showGrid ? 6 : 0;    // bottom padding
+  const VH = height;
+  const CW = VW - LBL;               // chart area width
+  const CH = VH - PAD_T - PAD_B;     // chart area height
+  const gradId = useId().replace(/[^a-zA-Z0-9]/g, "");
   const min = Math.min(...values), max = Math.max(...values);
   const span = max - min || 1;
-  const gradId = useId().replace(/[^a-zA-Z0-9]/g, "");
+  const toY = (v: number) => PAD_T + CH - ((v - min) / span) * CH;
   const pts = values.map((v, i) => {
-    const x = (i / Math.max(1, values.length - 1)) * W;
-    const y = H - ((v - min) / span) * H;
-    return `${x.toFixed(1)},${y.toFixed(1)}`;
+    const x = LBL + (i / Math.max(1, values.length - 1)) * CW;
+    return `${x.toFixed(1)},${toY(v).toFixed(1)}`;
   }).join(" ");
+  const yBot = PAD_T + CH;
+  const gridLevels = showGrid
+    ? [max, (min + max) / 2, min].map(v => ({ v, y: toY(v) }))
+    : [];
   return (
-    <svg width="100%" height={H} viewBox={`0 0 ${W} ${H}`} style={{ marginTop:8, display:"block" }} preserveAspectRatio="none">
+    <svg width="100%" height={VH} viewBox={`0 0 ${VW} ${VH}`}
+      style={{ display:"block", marginTop: showGrid ? 4 : 8 }} preserveAspectRatio="none">
       <defs>
         <linearGradient id={`spark-${gradId}`} x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor={color} stopOpacity="0.35"/>
+          <stop offset="0%" stopColor={color} stopOpacity="0.28"/>
           <stop offset="100%" stopColor={color} stopOpacity="0"/>
         </linearGradient>
       </defs>
-      <polyline points={`0,${H} ${pts} ${W},${H}`} fill={`url(#spark-${gradId})`} stroke="none"/>
-      <polyline points={pts} fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+      {gridLevels.map(({ v, y }, i) => (
+        <g key={i}>
+          <line x1={LBL} y1={y} x2={VW} y2={y}
+            stroke="rgba(255,255,255,0.07)" strokeWidth="0.7"
+            strokeDasharray={i === 1 ? "4,4" : undefined}
+          />
+          <text x={LBL - 2} y={y + 3.5} textAnchor="end" fontSize="7.5"
+            fill="rgba(255,255,255,0.3)" fontFamily="monospace">
+            {Math.round(v)}
+          </text>
+        </g>
+      ))}
+      <polyline points={`${LBL},${yBot} ${pts} ${LBL + CW},${yBot}`}
+        fill={`url(#spark-${gradId})`} stroke="none"/>
+      <polyline points={pts} fill="none" stroke={color}
+        strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
     </svg>
   );
 }
