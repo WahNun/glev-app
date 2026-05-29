@@ -162,3 +162,9 @@ id = "dhcoNr34oseiPEgfLGglX"
 uri = "file://docs/cgm-anbindungen-report.md"
 type = "text"
 title = "Glev CGM-Anbindungen — Technischer Report"
+
+[[outputs]]
+id = "ZlhWyhp0kS0WEBbLa90tj"
+uri = "file://exports/glev-diagnose-bolus-icr.txt"
+type = "text"
+title = "Glev Diagnose: Bolus & ICR (TXT)"
