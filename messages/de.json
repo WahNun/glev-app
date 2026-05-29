@@ -1460,7 +1460,7 @@
     "glev_intel_row_iob_title": "Aktives Insulin (IOB)",
     "glev_intel_row_iob_desc": "Aktuell aktive Bolusmenge darf in den Kontext-Snapshot fließen.",
     "glev_intel_row_history_title": "7-Tage-Verlauf",
-    "glev_intel_row_history_desc": "Längerfristiger Verlauf (Mahlzeiten, Glukose, Insulin) als zusätzlicher Kontext — kommt mit Phase 5.",
+    "glev_intel_row_history_desc": "Längerfristiger Verlauf (Mahlzeiten, Glukose, Insulin) als zusätzlicher Kontext.",
     "glev_intel_badge_phase5": "Phase 5",
     "glev_intel_revoke_all": "Alle AI-Zugriffe widerrufen",
     "glev_intel_revoke_busy": "Widerrufe…",

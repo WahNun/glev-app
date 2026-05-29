@@ -1460,7 +1460,7 @@
     "glev_intel_row_iob_title": "Active insulin (IOB)",
     "glev_intel_row_iob_desc": "Allow the currently active bolus amount to flow into the context snapshot.",
     "glev_intel_row_history_title": "7-day history",
-    "glev_intel_row_history_desc": "Longer-term history (meals, glucose, insulin) as extra context — coming in Phase 5.",
+    "glev_intel_row_history_desc": "Longer-term history (meals, glucose, insulin) as extra context.",
     "glev_intel_badge_phase5": "Phase 5",
     "glev_intel_revoke_all": "Revoke all AI access",
     "glev_intel_revoke_busy": "Revoking…",

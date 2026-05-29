@@ -156,3 +156,9 @@ id = "vXVA383jiWMpYksdoZL6Z"
 uri = "file://public/marketer-briefing.md"
 type = "text"
 title = "Marketer Briefing — korrigiert (Plattform-Status)"
+
+[[outputs]]
+id = "dhcoNr34oseiPEgfLGglX"
+uri = "file://docs/cgm-anbindungen-report.md"
+type = "text"
+title = "Glev CGM-Anbindungen — Technischer Report"
