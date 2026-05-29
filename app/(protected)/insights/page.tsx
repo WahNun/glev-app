@@ -2956,7 +2956,7 @@ export default function InsightsPage() {
                 const prevMs = tddFromMs - (tddNowMs - tddFromMs);
                 const prevTddSum = insulinLogs
                   .filter(il => { const t = parseDbTs(il.created_at); return t >= prevMs && t < tddFromMs; })
-                  .reduce((s, il) => s + (il.units_delivered ?? 0), 0);
+                  .reduce((s, il) => s + (il.units ?? 0), 0);
                 const prevTddAvg = prevTddSum > 0 ? +(prevTddSum / rangeDays).toFixed(1) : null;
                 const tddTrend = prevTddAvg != null && prevTddAvg > 0
                   ? Math.round(((tddAvg7 - prevTddAvg) / prevTddAvg) * 100)
