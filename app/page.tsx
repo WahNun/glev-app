@@ -1302,11 +1302,21 @@ function PlusCard() {
     if (loading) return;
     setLoading(true);
     setError(null);
+
+    let email: string | undefined;
+    try {
+      const sb = (await import("@/lib/supabase")).supabase;
+      if (sb) {
+        const { data } = await sb.auth.getUser();
+        if (data.user?.email) email = data.user.email;
+      }
+    } catch { /* best-effort */ }
+
     try {
       const res = await fetch("/api/checkout/plus", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ locale: "de" }),
+        body: JSON.stringify({ locale: "de", ...(email ? { email } : {}) }),
       });
       const data = (await res.json().catch(() => ({}))) as { url?: string; error?: string };
       if (data.url) {
