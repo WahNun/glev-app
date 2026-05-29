@@ -2,6 +2,7 @@
 
 import { Suspense, useEffect, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
+import { useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import Image from "next/image";
 import AppMockupPhone from "@/components/AppMockupPhone";
@@ -22,7 +23,7 @@ import {
  * /preview-pro — copy & layout preview of /pro.
  * Stripe wiring untouched: posts to /api/checkout/pro with locale.
  */
-function PreviewProCTA({ block = true }: { block?: boolean }) {
+function PreviewProCTA({ block = true, prefillEmail }: { block?: boolean; prefillEmail?: string }) {
   const t = useTranslations("previewPro");
   const locale = useLocale();
   const [hover, setHover] = useState(false);
@@ -38,7 +39,7 @@ function PreviewProCTA({ block = true }: { block?: boolean }) {
       (window as unknown as { fbq: (...args: unknown[]) => void }).fbq("track", "InitiateCheckout");
     }
 
-    let email: string | undefined;
+    let email: string | undefined = prefillEmail;
     try {
       if (supabase) {
         const { data } = await supabase.auth.getUser();
@@ -126,6 +127,8 @@ const SECTION_WRAP_NARROW: React.CSSProperties = {
 
 function PreviewProContent() {
   const t = useTranslations("previewPro");
+  const searchParams = useSearchParams();
+  const prefillEmail = searchParams.get("email") ?? undefined;
 
   useEffect(() => {
     if (typeof window !== "undefined" && (window as unknown as { fbq?: (...args: unknown[]) => void }).fbq) {
@@ -229,7 +232,7 @@ function PreviewProContent() {
               className="glev-hero-form"
               style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 12 }}
             >
-              <PreviewProCTA />
+              <PreviewProCTA prefillEmail={prefillEmail} />
             </div>
 
             <div
@@ -428,7 +431,7 @@ function PreviewProContent() {
             ))}
           </ul>
           <div style={{ marginTop: 8 }}>
-            <PreviewProCTA />
+            <PreviewProCTA prefillEmail={prefillEmail} />
           </div>
           <div style={{ fontSize: 13, color: MINT, textAlign: "center", marginTop: 4 }}>
             {t("pricing_microcopy")}

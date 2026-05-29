@@ -1,8 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useLocale } from "next-intl";
-import Link from "next/link";
 import { usePlan } from "@/hooks/usePlan";
 import { requiredPlanLabel, FEATURE_TIERS } from "@/lib/planFeatures";
 import { supabase } from "@/lib/supabase";
@@ -177,20 +176,6 @@ function UpgradeModal({
         >
           {busy ? "Weiterleitung …" : "Jetzt upgraden →"}
         </button>
-
-        <Link
-          href="/pro"
-          onClick={onClose}
-          style={{
-            fontSize: 12,
-            color: "var(--text-faint)",
-            textDecoration: "none",
-            marginTop: 2,
-            opacity: 0.8,
-          }}
-        >
-          Mehr Informationen
-        </Link>
       </div>
     </>
   );
@@ -210,7 +195,17 @@ export default function UpgradeGate({
   opacity?: number;
 }) {
   const { canAccess, loading } = usePlan();
+  const locale = useLocale();
   const [modalOpen, setModalOpen] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [userEmail, setUserEmail] = useState("");
+
+  useEffect(() => {
+    if (!supabase) return;
+    supabase.auth.getUser()
+      .then(({ data }) => { if (data.user?.email) setUserEmail(data.user.email); })
+      .catch(() => {});
+  }, []);
 
   if (loading || canAccess(feature)) {
     return <>{children}</>;
@@ -218,6 +213,21 @@ export default function UpgradeGate({
 
   const tier = FEATURE_TIERS[feature] ?? "pro";
   const planName = requiredPlanLabel(tier);
+
+  const handleUpgrade = async () => {
+    if (busy) return;
+    setBusy(true);
+    const url = await startCheckout(locale, tier);
+    if (url) {
+      window.location.href = url;
+    } else {
+      setBusy(false);
+    }
+  };
+
+  const moreInfoHref = userEmail
+    ? `/pro?email=${encodeURIComponent(userEmail)}`
+    : "/pro";
 
   if (variant === "row") {
     return (
@@ -252,91 +262,100 @@ export default function UpgradeGate({
   }
 
   return (
-    <>
-      <div style={{ position: "relative" }}>
-        {children && (
-          <div
-            aria-hidden="true"
-            style={{
-              filter: `blur(${blurPx}px)`,
-              opacity,
-              pointerEvents: "none",
-              userSelect: "none",
-            }}
-          >
-            {children}
-          </div>
-        )}
-
-        <button
-          type="button"
-          onClick={() => setModalOpen(true)}
+    <div style={{ position: "relative" }}>
+      {children && (
+        <div
+          aria-hidden="true"
           style={{
-            position: children ? "absolute" : "relative",
-            inset: children ? 0 : undefined,
+            filter: `blur(${blurPx}px)`,
+            opacity,
+            pointerEvents: "none",
+            userSelect: "none",
+          }}
+        >
+          {children}
+        </div>
+      )}
+
+      <div
+        style={{
+          position: children ? "absolute" : "relative",
+          inset: children ? 0 : undefined,
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          justifyContent: "center",
+          padding: children ? 0 : "36px 24px",
+          minHeight: children ? undefined : 200,
+          textAlign: "center",
+        }}
+      >
+        <div
+          style={{
             display: "flex",
             flexDirection: "column",
             alignItems: "center",
-            justifyContent: "center",
-            gap: 12,
-            padding: children ? 0 : "36px 24px",
-            minHeight: children ? undefined : 200,
-            textAlign: "center",
-            background: "transparent",
-            border: "none",
-            cursor: "pointer",
-            width: "100%",
+            gap: 8,
+            padding: "18px 22px",
+            background: "var(--surface)",
+            border: "1px solid var(--border)",
+            borderRadius: 14,
+            boxShadow: "0 8px 32px rgba(0,0,0,0.18)",
           }}
         >
+          <div style={{ fontSize: 26, lineHeight: 1 }}>🔒</div>
+
           <div
             style={{
-              display: "flex",
-              flexDirection: "column",
-              alignItems: "center",
-              gap: 8,
-              padding: "18px 22px",
-              background: "var(--surface)",
-              border: "1px solid var(--border)",
-              borderRadius: 14,
-              boxShadow: "0 8px 32px rgba(0,0,0,0.18)",
+              display: "inline-block",
+              padding: "3px 10px",
+              borderRadius: 20,
+              background: `${ACCENT}18`,
+              color: ACCENT,
+              fontSize: 11,
+              fontWeight: 700,
+              letterSpacing: "0.04em",
+              textTransform: "uppercase",
             }}
           >
-            <div style={{ fontSize: 26, lineHeight: 1 }}>🔒</div>
-            <div
-              style={{
-                display: "inline-block",
-                padding: "3px 10px",
-                borderRadius: 20,
-                background: `${ACCENT}18`,
-                color: ACCENT,
-                fontSize: 11,
-                fontWeight: 700,
-                letterSpacing: "0.04em",
-                textTransform: "uppercase",
-              }}
-            >
-              {planName}
-            </div>
-            <div
-              style={{
-                padding: "9px 20px",
-                background: ACCENT,
-                color: "#fff",
-                borderRadius: 9,
-                fontSize: 13,
-                fontWeight: 700,
-                letterSpacing: "-0.01em",
-              }}
-            >
-              Upgraden →
-            </div>
+            {planName}
           </div>
-        </button>
-      </div>
 
-      {modalOpen && (
-        <UpgradeModal planName={planName} tier={tier} onClose={() => setModalOpen(false)} />
-      )}
-    </>
+          <button
+            type="button"
+            onClick={() => void handleUpgrade()}
+            disabled={busy}
+            style={{
+              padding: "9px 20px",
+              background: busy ? `${ACCENT}88` : ACCENT,
+              color: "#fff",
+              borderRadius: 9,
+              border: "none",
+              fontSize: 13,
+              fontWeight: 700,
+              letterSpacing: "-0.01em",
+              cursor: busy ? "default" : "pointer",
+              transition: "background 0.15s",
+              whiteSpace: "nowrap",
+            }}
+          >
+            {busy ? "Weiterleitung …" : "Upgraden →"}
+          </button>
+
+          <a
+            href={moreInfoHref}
+            style={{
+              fontSize: 12,
+              color: "var(--text-faint)",
+              textDecoration: "none",
+              marginTop: 2,
+              opacity: 0.8,
+            }}
+          >
+            Mehr Informationen
+          </a>
+        </div>
+      </div>
+    </div>
   );
 }
