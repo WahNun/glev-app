@@ -511,14 +511,16 @@ export default function SettingsPage() {
   const [autoApplyBusy, setAutoApplyBusy] = useState(false);
 
 
-  // Insulin-Einstellungen — alle insulinbezogenen Rows (ICR, CF, Ziel-BG,
-  // DIA, Insulintyp, Bolus-/Basal-Marken, Basal-Wirkdauer, Engine-Verlauf)
-  // sind hinter einer „übergeordneten" Row zusammengefasst. Tap auf den
-  // Header klappt die Gruppe auf/zu; die einzelnen Rows behalten ihre
-  // bestehenden BottomSheets unverändert. Default: zugeklappt, damit die
-  // Settings-Liste insgesamt aufgeräumter wirkt. Persistiert NICHT — wir
-  // wollen Frischeintritte gezielt mit Default-Zustand begrüßen.
-  const [insulinExpanded, setInsulinExpanded] = useState(false);
+  // Accordion-Cluster-State: Set enthält die IDs der gerade geöffneten
+  // Cluster. Default: alle zu — User öffnet gezielt was er braucht.
+  const [expandedClusters, setExpandedClusters] = useState<Set<string>>(() => new Set());
+  function toggleCluster(id: string) {
+    setExpandedClusters(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }
 
   const [openSheet, setOpenSheet] = useState<SheetKey | null>(null);
   // Account-Sheet aus dem Header — geteilte Komponente, deshalb
@@ -3105,6 +3107,44 @@ export default function SettingsPage() {
     ? tSettings("subtitle_adjustment_history_empty")
     : tSettings("subtitle_adjustment_history_count", { n: adjustmentHistory.length });
 
+  function clRow(id: string, icon: React.ReactNode, iconColor: string, label: string, subtitle?: string) {
+    const open = expandedClusters.has(id);
+    return (
+      <button
+        type="button"
+        onClick={() => toggleCluster(id)}
+        aria-expanded={open}
+        style={{
+          width: "100%", display: "flex", alignItems: "center", gap: 14,
+          padding: "12px 14px", background: "transparent", border: "none",
+          cursor: "pointer", textAlign: "left", color: "inherit",
+        }}
+      >
+        <span aria-hidden style={{
+          width: 32, height: 32, borderRadius: 8, flexShrink: 0,
+          background: `${iconColor}18`, color: iconColor,
+          display: "flex", alignItems: "center", justifyContent: "center",
+        }}>
+          {icon}
+        </span>
+        <span style={{ display: "flex", flexDirection: "column", minWidth: 0, flex: 1 }}>
+          <span style={{ fontSize: 14, fontWeight: 500, color: "var(--text-strong)", lineHeight: 1.25 }}>
+            {label}
+          </span>
+          {subtitle && (
+            <span style={{ fontSize: 13, color: "var(--text-dim)", marginTop: 2, lineHeight: 1.3, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+              {subtitle}
+            </span>
+          )}
+        </span>
+        <span aria-hidden style={{
+          flexShrink: 0, color: "var(--text-faint)",
+          transform: open ? "rotate(90deg)" : "rotate(0deg)",
+          transition: "transform 0.15s", fontSize: 18, lineHeight: 1,
+        }}>›</span>
+      </button>
+    );
+  }
 
   return (
     <div style={{ maxWidth: 720, margin: "0 auto" }}>
@@ -3119,175 +3159,120 @@ export default function SettingsPage() {
       </div>
 
       {/* ── Cluster: Konto ──────────────────────────────────────────── */}
-
-      <SettingsSection title={tSettings("section_account")}>
-        <SettingsRow
-          first
-          iconColor={ACCENT}
-          icon={ICON.account}
-          label={tSettings("row_account")}
-          subtitle={accountEmail || tSettings("account_subtitle_placeholder")}
-          ariaLabel={tSettings("row_open_aria", { label: tSettings("row_account") })}
-          onClick={() => setAccountSheetOpen(true)}
-        />
-        <SettingsRow
-          iconColor={PURPLE}
-          icon={
-            <svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-              <circle cx="12" cy="8" r="4" />
-              <path d="M4 21a8 8 0 0 1 16 0" />
-            </svg>
-          }
-          label={tSettings("about_me_row_label")}
-          subtitle={aboutMeSub}
-          ariaLabel={tSettings("row_open_aria", { label: tSettings("about_me_row_label") })}
-          onClick={() => openSheetWith("aboutMe")}
-        />
+      <SettingsSection>
+        {clRow("konto", ICON.account, ACCENT, tSettings("section_account"), accountEmail || undefined)}
+        {expandedClusters.has("konto") && (
+          <>
+            <SettingsRow
+              iconColor={ACCENT}
+              icon={ICON.account}
+              label={tSettings("row_account")}
+              subtitle={accountEmail || tSettings("account_subtitle_placeholder")}
+              ariaLabel={tSettings("row_open_aria", { label: tSettings("row_account") })}
+              onClick={() => setAccountSheetOpen(true)}
+            />
+            <SettingsRow
+              iconColor={PURPLE}
+              icon={
+                <svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="12" cy="8" r="4" />
+                  <path d="M4 21a8 8 0 0 1 16 0" />
+                </svg>
+              }
+              label={tSettings("about_me_row_label")}
+              subtitle={aboutMeSub}
+              ariaLabel={tSettings("row_open_aria", { label: tSettings("about_me_row_label") })}
+              onClick={() => openSheetWith("aboutMe")}
+            />
+            {aiVoiceEnabled && (
+              <SettingsRow
+                iconColor={ACCENT}
+                icon={ICON.sparkle}
+                label={tSettings("section_glev_ai")}
+                subtitle={tSettings("ai_settings_row_subtitle")}
+                ariaLabel={tSettings("section_glev_ai")}
+                onClick={() => router.push("/settings/ai")}
+              />
+            )}
+            {plan === "plus" && (
+              <SettingsRow
+                iconColor={PURPLE}
+                icon={ICON.sparkle}
+                label={tSettings("row_founder_contact")}
+                subtitle={tSettings("subtitle_founder_contact")}
+                ariaLabel={tSettings("row_open_aria", { label: tSettings("row_founder_contact") })}
+                onClick={() => window.open("mailto:lucas@glev.app", "_blank", "noopener,noreferrer")}
+              />
+            )}
+          </>
+        )}
       </SettingsSection>
-
-      {/* Glev AI & Glev+ im Konto-Tab (nur wenn sichtbar) */}
-      {aiVoiceEnabled && (
-        <SettingsSection title={tSettings("section_glev_ai")}>
-          <SettingsRow
-            first
-            iconColor={ACCENT}
-            icon={ICON.sparkle}
-            label={tSettings("section_glev_ai")}
-            subtitle={tSettings("ai_settings_row_subtitle")}
-            ariaLabel={tSettings("section_glev_ai")}
-            onClick={() => router.push("/settings/ai")}
-          />
-        </SettingsSection>
-      )}
-
-      {plan === "plus" && (
-        <SettingsSection title={tSettings("section_glev_plus")}>
-          <SettingsRow
-            first
-            iconColor={PURPLE}
-            icon={ICON.sparkle}
-            label={tSettings("row_founder_contact")}
-            subtitle={tSettings("subtitle_founder_contact")}
-            ariaLabel={tSettings("row_open_aria", { label: tSettings("row_founder_contact") })}
-            onClick={() => window.open("mailto:lucas@glev.app", "_blank", "noopener,noreferrer")}
-          />
-        </SettingsSection>
-      )}
 
       {/* ── Glukose ───────────────────────────────────────────────── */}
-      <SettingsSection title={tSettings("section_glucose")}>
-        <SettingsRow
-          first
-          iconColor={GREEN}
-          icon={ICON.glucose}
-          label={tSettings("row_target_range")}
-          subtitle={targetRangeSub}
-          ariaLabel={tSettings("row_open_aria", { label: tSettings("row_target_range") })}
-          onClick={() => openSheetWith("targetRange")}
-        />
-        <SettingsRow
-          iconColor={GREEN}
-          icon={
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M18 8h1a4 4 0 0 1 0 8h-1" />
-              <path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z" />
-              <line x1="6" y1="1" x2="6" y2="4" />
-              <line x1="10" y1="1" x2="10" y2="4" />
-              <line x1="14" y1="1" x2="14" y2="4" />
-            </svg>
-          }
-          label={tSettings("row_low_alarm")}
-          subtitle={
-            lowAlarmEnabled
-              ? tSettings("subtitle_low_alarm_on", { threshold: lowAlarmThreshold })
-              : tSettings("subtitle_low_alarm_off")
-          }
-          ariaLabel={tSettings("row_open_aria", { label: tSettings("row_low_alarm") })}
-          onClick={() => openSheetWith("lowAlarm")}
-        />
-        <SettingsRow
-          iconColor={GREEN}
-          icon={ICON.units}
-          label={tSettings("row_units")}
-          subtitle={tSettings("subtitle_unit_mgdl")}
-          ariaLabel={tSettings("row_open_aria", { label: tSettings("row_units") })}
-          onClick={() => openSheetWith("units")}
-        />
+      <SettingsSection>
+        {clRow("glukose", ICON.glucose, GREEN, tSettings("section_glucose"), targetRangeSub)}
+        {expandedClusters.has("glukose") && (
+          <>
+            <SettingsRow
+              iconColor={GREEN}
+              icon={ICON.glucose}
+              label={tSettings("row_target_range")}
+              subtitle={targetRangeSub}
+              ariaLabel={tSettings("row_open_aria", { label: tSettings("row_target_range") })}
+              onClick={() => openSheetWith("targetRange")}
+            />
+            <SettingsRow
+              iconColor={GREEN}
+              icon={
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M18 8h1a4 4 0 0 1 0 8h-1" />
+                  <path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z" />
+                  <line x1="6" y1="1" x2="6" y2="4" />
+                  <line x1="10" y1="1" x2="10" y2="4" />
+                  <line x1="14" y1="1" x2="14" y2="4" />
+                </svg>
+              }
+              label={tSettings("row_low_alarm")}
+              subtitle={
+                lowAlarmEnabled
+                  ? tSettings("subtitle_low_alarm_on", { threshold: lowAlarmThreshold })
+                  : tSettings("subtitle_low_alarm_off")
+              }
+              ariaLabel={tSettings("row_open_aria", { label: tSettings("row_low_alarm") })}
+              onClick={() => openSheetWith("lowAlarm")}
+            />
+            <SettingsRow
+              iconColor={GREEN}
+              icon={ICON.units}
+              label={tSettings("row_units")}
+              subtitle={tSettings("subtitle_unit_mgdl")}
+              ariaLabel={tSettings("row_open_aria", { label: tSettings("row_units") })}
+              onClick={() => openSheetWith("units")}
+            />
+          </>
+        )}
       </SettingsSection>
 
-      {/* Termine gehört thematisch zu Glukose/Gesundheit */}
-      <SettingsSection title={tSettings("section_appointments")}>
-        <SettingsRow
-          first
-          iconColor={ACCENT}
-          icon={ICON.calendar}
-          label={tSettings("appointments_title")}
-          subtitle={lastAppointmentSub}
-          ariaLabel={tSettings("row_open_aria", { label: tSettings("appointments_title") })}
-          onClick={canAccess("doctor_appointment_tracker") ? () => openSheetWith("lastAppointment") : () => {}}
-          rightAdornment={<UpgradeGate feature="doctor_appointment_tracker" variant="row" />}
-        />
+      {/* ── Termine ───────────────────────────────────────────────── */}
+      <SettingsSection>
+        {clRow("termine", ICON.calendar, ACCENT, tSettings("section_appointments"), lastAppointmentSub)}
+        {expandedClusters.has("termine") && (
+          <SettingsRow
+            iconColor={ACCENT}
+            icon={ICON.calendar}
+            label={tSettings("appointments_title")}
+            subtitle={lastAppointmentSub}
+            ariaLabel={tSettings("row_open_aria", { label: tSettings("appointments_title") })}
+            onClick={canAccess("doctor_appointment_tracker") ? () => openSheetWith("lastAppointment") : () => {}}
+            rightAdornment={<UpgradeGate feature="doctor_appointment_tracker" variant="row" />}
+          />
+        )}
       </SettingsSection>
 
       {/* ── Insulin ───────────────────────────────────────────────── */}
-      <SettingsSection title={tSettings("section_insulin")}>
-        {/* Übergeordnete „Insulin-Einstellungen"-Row — klappt die 9
-            insulin-bezogenen Rows auf/zu. Eigene Button-Markup statt
-            SettingsRow, damit wir den Chevron drehen + aria-expanded
-            steuern können. Optisch lehnt sich das Layout aber an
-            SettingsRow an (Icon-Tile + zwei Textzeilen + 14px Padding). */}
-        <button
-          type="button"
-          onClick={() => setInsulinExpanded((v) => !v)}
-          aria-expanded={insulinExpanded}
-          aria-label={tSettings(insulinExpanded ? "insulin_settings_collapse_aria" : "insulin_settings_expand_aria")}
-          style={{
-            width: "100%",
-            display: "flex",
-            alignItems: "center",
-            gap: 14,
-            padding: "12px 14px",
-            background: "transparent",
-            border: "none",
-            cursor: "pointer",
-            textAlign: "left",
-            color: "inherit",
-          }}
-        >
-          <span
-            aria-hidden
-            style={{
-              width: 32, height: 32, borderRadius: 8, flexShrink: 0,
-              background: `${ACCENT}18`, color: ACCENT,
-              display: "flex", alignItems: "center", justifyContent: "center",
-            }}
-          >
-            {ICON.insulin}
-          </span>
-          <span style={{ display: "flex", flexDirection: "column", minWidth: 0, flex: 1 }}>
-            <span style={{ fontSize: 14, fontWeight: 500, color: "var(--text-strong)", lineHeight: 1.25 }}>
-              {tSettings("row_insulin_settings")}
-            </span>
-            <span style={{ fontSize: 13, color: "var(--text-dim)", marginTop: 2, lineHeight: 1.3, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-              {icrSub}{diaSub ? ` · ${diaSub}` : ""}
-            </span>
-          </span>
-          <span
-            aria-hidden
-            style={{
-              flexShrink: 0,
-              color: "var(--text-faint)",
-              transform: insulinExpanded ? "rotate(90deg)" : "rotate(0deg)",
-              transition: "transform 0.15s",
-              fontSize: 18,
-              lineHeight: 1,
-            }}
-          >
-            ›
-          </span>
-        </button>
-
-        {insulinExpanded && (
+      <SettingsSection>
+        {clRow("insulin", ICON.insulin, ACCENT, tSettings("section_insulin"), `${icrSub}${diaSub ? ` · ${diaSub}` : ""}`)}
+        {expandedClusters.has("insulin") && (
           <>
             <SubgroupLabel label={tSettings("group_insulin_params")} />
             <SettingsRow
@@ -3322,7 +3307,6 @@ export default function SettingsPage() {
               ariaLabel={tSettings("row_open_aria", { label: tSettings("row_dia") })}
               onClick={() => openSheetWith("dia")}
             />
-
             <SubgroupLabel label={tSettings("group_insulin_bolus")} />
             <SettingsRow
               iconColor={ACCENT}
@@ -3350,7 +3334,6 @@ export default function SettingsPage() {
               ariaLabel={tSettings("row_open_aria", { label: tSettings("row_insulin_brand_bolus_2") })}
               onClick={() => openSheetWith("insulinBrandBolus2")}
             />
-
             <SubgroupLabel label={tSettings("group_insulin_basal")} />
             <SettingsRow
               iconColor={ACCENT}
@@ -3370,7 +3353,6 @@ export default function SettingsPage() {
               ariaLabel={tSettings("row_open_aria", { label: tSettings("row_basal_window") })}
               onClick={() => openSheetWith("basalWindow")}
             />
-
             <SubgroupLabel label={tSettings("group_insulin_history")} />
             <SettingsRow
               iconColor={ACCENT}
@@ -3385,208 +3367,227 @@ export default function SettingsPage() {
       </SettingsSection>
 
       {/* ── CGM ───────────────────────────────────────────────────── */}
-      <SettingsSection title="CGM">
-        <SettingsRow
-          first
-          iconColor={ACCENT}
-          icon={ICON.cgm}
-          label={tSettings("row_libre2")}
-          rightAdornment={cgmConnected ? <ConnectedDot label={tSettings("status_connected")} /> : undefined}
-          ariaLabel={tSettings("row_open_aria", { label: tSettings("row_libre2") })}
-          onClick={() => openSheetWith("libre2")}
-        />
-        <SettingsRow
-          iconColor={ACCENT}
-          icon={ICON.nightscout}
-          label={tSettings("row_nightscout")}
-          rightAdornment={nightscoutConnected ? <ConnectedDot label={tSettings("status_connected")} /> : undefined}
-          ariaLabel={tSettings("row_open_aria", { label: tSettings("row_nightscout") })}
-          onClick={() => openSheetWith("nightscout")}
-        />
-        <SettingsRow
-          iconColor={ACCENT}
-          icon={ICON.dexcom}
-          label={tSettings("row_cgm_dexcom")}
-          subtitle={tSettings("subtitle_coming_soon")}
-          ariaLabel={tSettings("row_open_aria", { label: tSettings("row_cgm_dexcom") })}
-          onClick={() => openSheetWith("dexcom")}
-        />
+      <SettingsSection>
+        {clRow("cgm", ICON.cgm, ACCENT, "CGM", cgmConnected ? tSettings("status_connected") : undefined)}
+        {expandedClusters.has("cgm") && (
+          <>
+            <SettingsRow
+              iconColor={ACCENT}
+              icon={ICON.cgm}
+              label={tSettings("row_libre2")}
+              rightAdornment={cgmConnected ? <ConnectedDot label={tSettings("status_connected")} /> : undefined}
+              ariaLabel={tSettings("row_open_aria", { label: tSettings("row_libre2") })}
+              onClick={() => openSheetWith("libre2")}
+            />
+            <SettingsRow
+              iconColor={ACCENT}
+              icon={ICON.nightscout}
+              label={tSettings("row_nightscout")}
+              rightAdornment={nightscoutConnected ? <ConnectedDot label={tSettings("status_connected")} /> : undefined}
+              ariaLabel={tSettings("row_open_aria", { label: tSettings("row_nightscout") })}
+              onClick={() => openSheetWith("nightscout")}
+            />
+            <SettingsRow
+              iconColor={ACCENT}
+              icon={ICON.dexcom}
+              label={tSettings("row_cgm_dexcom")}
+              subtitle={tSettings("subtitle_coming_soon")}
+              ariaLabel={tSettings("row_open_aria", { label: tSettings("row_cgm_dexcom") })}
+              onClick={() => openSheetWith("dexcom")}
+            />
+          </>
+        )}
       </SettingsSection>
 
       {/* ── App ───────────────────────────────────────────────────── */}
-      <SettingsSection title={tSettings("section_app")}>
-        <SettingsRow
-          first
-          iconColor={ACCENT}
-          icon={ICON.bell}
-          label={tSettings("notifications")}
-          subtitle={notifSub}
-          ariaLabel={tSettings("row_open_aria", { label: tSettings("notifications") })}
-          onClick={() => openSheetWith("notifications")}
-        />
-        <SettingsRow
-          iconColor={ACCENT}
-          icon={
-            <svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-              <path d="M5 12h2a5 5 0 0 1 10 0h2" />
-              <path d="M5 12a7 7 0 0 0 14 0" />
-              <line x1="12" y1="19" x2="12" y2="22" />
-            </svg>
-          }
-          label={tSettings("row_haptics_label")}
-          subtitle={hapticsEnabled ? tSettings("row_haptics_subtitle_on") : tSettings("row_haptics_subtitle_off")}
-          ariaLabel={tSettings("row_haptics_label")}
-          onClick={() => void toggleHapticsEnabled(!hapticsEnabled)}
-          rightAdornment={
-            <div
-              role="switch"
-              aria-checked={hapticsEnabled}
-              style={{
-                width: 44, height: 26, borderRadius: 13,
-                background: hapticsEnabled ? ACCENT : "var(--border)",
-                position: "relative", transition: "background 0.2s ease",
-                flexShrink: 0, cursor: "pointer",
-              }}
-            >
-              <div style={{
-                position: "absolute", top: 3,
-                left: hapticsEnabled ? 21 : 3,
-                width: 20, height: 20, borderRadius: "50%",
-                background: "white",
-                transition: "left 0.2s ease",
-                boxShadow: "0 1px 3px rgba(0,0,0,0.2)",
-              }} />
-            </div>
-          }
-        />
-        {cycleRowVisible && (
-          <SettingsRow
-            iconColor={PINK}
-            icon={ICON.cycle}
-            label={tSettings("cycle_logging_title")}
-            subtitle={cycleLoggingSub}
-            ariaLabel={tSettings("row_open_aria", { label: tSettings("cycle_logging_title") })}
-            onClick={() => openSheetWith("cycleLogging")}
-          />
+      <SettingsSection>
+        {clRow("app", ICON.bell, ACCENT, tSettings("section_app"))}
+        {expandedClusters.has("app") && (
+          <>
+            <SettingsRow
+              iconColor={ACCENT}
+              icon={ICON.bell}
+              label={tSettings("notifications")}
+              subtitle={notifSub}
+              ariaLabel={tSettings("row_open_aria", { label: tSettings("notifications") })}
+              onClick={() => openSheetWith("notifications")}
+            />
+            <SettingsRow
+              iconColor={ACCENT}
+              icon={
+                <svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M5 12h2a5 5 0 0 1 10 0h2" />
+                  <path d="M5 12a7 7 0 0 0 14 0" />
+                  <line x1="12" y1="19" x2="12" y2="22" />
+                </svg>
+              }
+              label={tSettings("row_haptics_label")}
+              subtitle={hapticsEnabled ? tSettings("row_haptics_subtitle_on") : tSettings("row_haptics_subtitle_off")}
+              ariaLabel={tSettings("row_haptics_label")}
+              onClick={() => void toggleHapticsEnabled(!hapticsEnabled)}
+              rightAdornment={
+                <div
+                  role="switch"
+                  aria-checked={hapticsEnabled}
+                  style={{
+                    width: 44, height: 26, borderRadius: 13,
+                    background: hapticsEnabled ? ACCENT : "var(--border)",
+                    position: "relative", transition: "background 0.2s ease",
+                    flexShrink: 0, cursor: "pointer",
+                  }}
+                >
+                  <div style={{
+                    position: "absolute", top: 3,
+                    left: hapticsEnabled ? 21 : 3,
+                    width: 20, height: 20, borderRadius: "50%",
+                    background: "white",
+                    transition: "left 0.2s ease",
+                    boxShadow: "0 1px 3px rgba(0,0,0,0.2)",
+                  }} />
+                </div>
+              }
+            />
+            {cycleRowVisible && (
+              <SettingsRow
+                iconColor={PINK}
+                icon={ICON.cycle}
+                label={tSettings("cycle_logging_title")}
+                subtitle={cycleLoggingSub}
+                ariaLabel={tSettings("row_open_aria", { label: tSettings("cycle_logging_title") })}
+                onClick={() => openSheetWith("cycleLogging")}
+              />
+            )}
+            <SettingsRow
+              iconColor={ACCENT}
+              icon={ICON.globe}
+              label={tSettings("row_language")}
+              subtitle={localeSub}
+              ariaLabel={tSettings("row_open_aria", { label: tSettings("row_language") })}
+              onClick={() => openSheetWith("language")}
+            />
+            <SettingsRow
+              iconColor={ACCENT}
+              icon={ICON.globe}
+              label={tSettings("row_time_format")}
+              subtitle={timeFormatSub}
+              ariaLabel={tSettings("row_open_aria", { label: tSettings("row_time_format") })}
+              onClick={() => openSheetWith("timeFormat")}
+            />
+            <SettingsRow
+              iconColor={ACCENT}
+              icon={ICON.carbs}
+              label={tSettings("row_carb_unit")}
+              subtitle={carbUnit.label}
+              ariaLabel={tSettings("row_open_aria", { label: tSettings("row_carb_unit") })}
+              onClick={() => openSheetWith("carbUnit")}
+            />
+            <SettingsRow
+              iconColor={ACCENT}
+              icon={ICON.carbs}
+              label={tFoodHistory("page_title")}
+              subtitle={tFoodHistory("page_subtitle")}
+              ariaLabel={tSettings("row_open_aria", { label: tFoodHistory("page_title") })}
+              onClick={() => router.push("/settings/food-history")}
+            />
+            <SettingsRow
+              iconColor={ACCENT}
+              icon={ICON.download}
+              label={tSettings("row_export")}
+              ariaLabel={tSettings("row_open_aria", { label: tSettings("row_export") })}
+              onClick={() => openSheetWith("export")}
+            />
+            <SettingsRow
+              iconColor={ACCENT}
+              icon={ICON.sheets}
+              label={tSettings("onboarding_replay_title")}
+              subtitle={tSettings("onboarding_replay_desc")}
+              ariaLabel={tSettings("row_open_aria", { label: tSettings("onboarding_replay_title") })}
+              onClick={() => openSheetWith("onboarding")}
+            />
+            <SettingsRow
+              iconColor={PURPLE}
+              icon={ICON.appearance}
+              label={tSettings("appearance")}
+              subtitle={themeSub}
+              ariaLabel={tSettings("row_open_aria", { label: tSettings("appearance") })}
+              onClick={() => openSheetWith("appearance")}
+            />
+            <SettingsRow
+              iconColor={ACCENT}
+              icon={ICON.target}
+              label={tSettings("daily_macros_title")}
+              subtitle={macroSub}
+              ariaLabel={tSettings("row_open_aria", { label: tSettings("daily_macros_title") })}
+              onClick={() => openSheetWith("macros")}
+            />
+          </>
         )}
-        <SettingsRow
-          iconColor={ACCENT}
-          icon={ICON.globe}
-          label={tSettings("row_language")}
-          subtitle={localeSub}
-          ariaLabel={tSettings("row_open_aria", { label: tSettings("row_language") })}
-          onClick={() => openSheetWith("language")}
-        />
-        <SettingsRow
-          iconColor={ACCENT}
-          icon={ICON.globe}
-          label={tSettings("row_time_format")}
-          subtitle={timeFormatSub}
-          ariaLabel={tSettings("row_open_aria", { label: tSettings("row_time_format") })}
-          onClick={() => openSheetWith("timeFormat")}
-        />
-        <SettingsRow
-          iconColor={ACCENT}
-          icon={ICON.carbs}
-          label={tSettings("row_carb_unit")}
-          subtitle={carbUnit.label}
-          ariaLabel={tSettings("row_open_aria", { label: tSettings("row_carb_unit") })}
-          onClick={() => openSheetWith("carbUnit")}
-        />
-        <SettingsRow
-          iconColor={ACCENT}
-          icon={ICON.carbs}
-          label={tFoodHistory("page_title")}
-          subtitle={tFoodHistory("page_subtitle")}
-          ariaLabel={tSettings("row_open_aria", { label: tFoodHistory("page_title") })}
-          onClick={() => router.push("/settings/food-history")}
-        />
-        <SettingsRow
-          iconColor={ACCENT}
-          icon={ICON.download}
-          label={tSettings("row_export")}
-          ariaLabel={tSettings("row_open_aria", { label: tSettings("row_export") })}
-          onClick={() => openSheetWith("export")}
-        />
-        <SettingsRow
-          iconColor={ACCENT}
-          icon={ICON.sheets}
-          label={tSettings("onboarding_replay_title")}
-          subtitle={tSettings("onboarding_replay_desc")}
-          ariaLabel={tSettings("row_open_aria", { label: tSettings("onboarding_replay_title") })}
-          onClick={() => openSheetWith("onboarding")}
-        />
-        <SettingsRow
-          iconColor={PURPLE}
-          icon={ICON.appearance}
-          label={tSettings("appearance")}
-          subtitle={themeSub}
-          ariaLabel={tSettings("row_open_aria", { label: tSettings("appearance") })}
-          onClick={() => openSheetWith("appearance")}
-        />
-        <SettingsRow
-          iconColor={ACCENT}
-          icon={ICON.target}
-          label={tSettings("daily_macros_title")}
-          subtitle={macroSub}
-          ariaLabel={tSettings("row_open_aria", { label: tSettings("daily_macros_title") })}
-          onClick={() => openSheetWith("macros")}
-        />
       </SettingsSection>
 
       {/* ── Push-Debug (nur auf Gerät sichtbar wenn Token oder Fehler vorhanden) ── */}
       <PushDebugSection />
 
-      {/* ── Mehr ──────────────────────────────────────────────────── */}
-      <SettingsSection title={tSettings("section_data")}>
-        <SettingsRow
-          first
-          iconColor={GREEN}
-          icon={ICON.upload}
-          label={tSettings("row_import")}
-          ariaLabel={tSettings("row_open_aria", { label: tSettings("row_import") })}
-          onClick={() => openSheetWith("import")}
-        />
-        <SettingsRow
-          iconColor={GREEN}
-          icon={ICON.refresh}
-          label={tSettings("row_historical_reload")}
-          ariaLabel={tSettings("row_open_aria", { label: tSettings("row_historical_reload") })}
-          onClick={() => openSheetWith("historical")}
-        />
+      {/* ── Daten ─────────────────────────────────────────────────── */}
+      <SettingsSection>
+        {clRow("daten", ICON.upload, GREEN, tSettings("section_data"))}
+        {expandedClusters.has("daten") && (
+          <>
+            <SettingsRow
+              iconColor={GREEN}
+              icon={ICON.upload}
+              label={tSettings("row_import")}
+              ariaLabel={tSettings("row_open_aria", { label: tSettings("row_import") })}
+              onClick={() => openSheetWith("import")}
+            />
+            <SettingsRow
+              iconColor={GREEN}
+              icon={ICON.refresh}
+              label={tSettings("row_historical_reload")}
+              ariaLabel={tSettings("row_open_aria", { label: tSettings("row_historical_reload") })}
+              onClick={() => openSheetWith("historical")}
+            />
+          </>
+        )}
       </SettingsSection>
 
-      <SettingsSection title={tSettings("section_integrations")}>
-        <SettingsRow
-          first
-          iconColor={GREEN}
-          icon={ICON.sheets}
-          label={tSettings("google_sheets_title")}
-          subtitle={tSettings("subtitle_coming_soon")}
-          ariaLabel={tSettings("row_open_aria", { label: tSettings("google_sheets_title") })}
-          onClick={() => openSheetWith("googleSheets")}
-        />
+      {/* ── Integrationen ─────────────────────────────────────────── */}
+      <SettingsSection>
+        {clRow("integrationen", ICON.sheets, GREEN, tSettings("section_integrations"))}
+        {expandedClusters.has("integrationen") && (
+          <SettingsRow
+            iconColor={GREEN}
+            icon={ICON.sheets}
+            label={tSettings("google_sheets_title")}
+            subtitle={tSettings("subtitle_coming_soon")}
+            ariaLabel={tSettings("row_open_aria", { label: tSettings("google_sheets_title") })}
+            onClick={() => openSheetWith("googleSheets")}
+          />
+        )}
       </SettingsSection>
 
       {/* ── Hilfe & Support ───────────────────────────────────────── */}
-      <SettingsSection title="Hilfe">
-        <SettingsRow
-          first
-          iconColor={PURPLE}
-          icon={ICON.feedback}
-          label={tSettings("row_feature_requests")}
-          subtitle={tSettings("subtitle_feature_requests")}
-          ariaLabel={tSettings("row_open_aria", { label: tSettings("row_feature_requests") })}
-          onClick={() => window.open("https://glev.featurebase.app/", "_blank", "noopener,noreferrer")}
-        />
-        <SettingsRow
-          iconColor={ACCENT}
-          icon={ICON.support}
-          label={tSettings("row_help_cgm_sources")}
-          subtitle={tSettings("subtitle_help_cgm_sources")}
-          ariaLabel={tSettings("row_open_aria", { label: tSettings("row_help_cgm_sources") })}
-          onClick={() => router.push("/settings/help/cgm-quellen")}
-        />
+      <SettingsSection>
+        {clRow("hilfe", ICON.support, PURPLE, "Hilfe")}
+        {expandedClusters.has("hilfe") && (
+          <>
+            <SettingsRow
+              iconColor={PURPLE}
+              icon={ICON.feedback}
+              label={tSettings("row_feature_requests")}
+              subtitle={tSettings("subtitle_feature_requests")}
+              ariaLabel={tSettings("row_open_aria", { label: tSettings("row_feature_requests") })}
+              onClick={() => window.open("https://glev.featurebase.app/", "_blank", "noopener,noreferrer")}
+            />
+            <SettingsRow
+              iconColor={ACCENT}
+              icon={ICON.support}
+              label={tSettings("row_help_cgm_sources")}
+              subtitle={tSettings("subtitle_help_cgm_sources")}
+              ariaLabel={tSettings("row_open_aria", { label: tSettings("row_help_cgm_sources") })}
+              onClick={() => router.push("/settings/help/cgm-quellen")}
+            />
+          </>
+        )}
       </SettingsSection>
 
       {/* Plan-Simulator — immer sichtbar (nur für Admin-Account) */}
