@@ -238,60 +238,66 @@ function useNightscoutConnected(): boolean {
 function PushDebugSection() {
   const [token, setToken] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [step, setStep] = useState<string | null>(null);
+  const [perm, setPerm] = useState<string | null>(null);
+  const [platform, setPlatform] = useState<string | null>(null);
   const [isNative, setIsNative] = useState(false);
   const [retrying, setRetrying] = useState(false);
 
   const refresh = () => {
     setToken(localStorage.getItem("glev_push_token"));
     setError(localStorage.getItem("glev_push_error"));
+    setStep(localStorage.getItem("glev_push_step"));
+    setPerm(localStorage.getItem("glev_push_perm"));
   };
 
   useEffect(() => {
     refresh();
-    const w = window as unknown as { Capacitor?: { isNativePlatform?: () => boolean } };
+    const w = window as unknown as { Capacitor?: { isNativePlatform?: () => boolean; getPlatform?: () => string } };
     setIsNative(!!w.Capacitor?.isNativePlatform?.());
+    setPlatform(w.Capacitor?.getPlatform?.() ?? "web");
   }, []);
 
-  // Only show on native Capacitor shells
-  if (!isNative) return null;
-
+  // Always show on native; on web show a compact line so it's inspectable
   const handleRetry = async () => {
     setRetrying(true);
     localStorage.removeItem("glev_push_error");
     localStorage.removeItem("glev_push_token");
+    localStorage.removeItem("glev_push_step");
+    localStorage.removeItem("glev_push_perm");
     refresh();
     const { resetPushInit, initPushNotifications } = await import("@/lib/pushNotifications");
     resetPushInit();
     await initPushNotifications();
-    setTimeout(() => { refresh(); setRetrying(false); }, 2000);
+    setTimeout(() => { refresh(); setRetrying(false); }, 2500);
   };
 
+  const bg = token ? "rgba(80,255,120,0.08)" : error ? "rgba(255,80,80,0.08)" : "rgba(120,120,120,0.08)";
+  const border = token ? "rgba(80,255,120,0.3)" : error ? "rgba(255,80,80,0.3)" : "rgba(120,120,120,0.2)";
+
   return (
-    <div style={{
-      margin: "16px 0",
-      padding: "12px 16px",
-      borderRadius: 12,
-      background: token ? "rgba(80,255,120,0.08)" : error ? "rgba(255,80,80,0.08)" : "rgba(120,120,120,0.08)",
-      border: `1px solid ${token ? "rgba(80,255,120,0.3)" : error ? "rgba(255,80,80,0.3)" : "rgba(120,120,120,0.2)"}`,
-      fontSize: 12,
-      color: "var(--fg)",
-      wordBreak: "break-all",
-    }}>
-      <div style={{ fontWeight: 600, marginBottom: 6 }}>Push-Debug</div>
-      {token
-        ? <div>✅ Token registriert: {token.slice(0, 16)}…</div>
-        : error
-          ? <div>❌ Fehler: {error}</div>
-          : <div>⏳ Kein Token vorhanden — noch nicht registriert</div>
-      }
+    <div style={{ margin: "16px 0", padding: "12px 16px", borderRadius: 12, background: bg, border: `1px solid ${border}`, fontSize: 12, color: "var(--fg)", wordBreak: "break-all" }}>
+      <div style={{ fontWeight: 600, marginBottom: 8 }}>Push-Debug</div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+        <div>🖥 Platform: <strong>{platform ?? "?"}</strong> {isNative ? "(native ✓)" : "(web — push no-op)"}</div>
+        <div>🔑 Permission: <strong>{perm ?? "—"}</strong></div>
+        <div>📍 Letzter Schritt: <strong>{step ?? "—"}</strong></div>
+        {token
+          ? <div>✅ Token: {token.slice(0, 20)}…</div>
+          : <div>⏳ Kein Token</div>
+        }
+        {error && <div style={{ color: "var(--red, #f87171)", marginTop: 2 }}>❌ {error}</div>}
+      </div>
+      {perm === "denied" && (
+        <div style={{ marginTop: 8, padding: "6px 10px", borderRadius: 8, background: "rgba(255,80,80,0.12)", fontSize: 11, lineHeight: 1.4 }}>
+          ⚠️ Benachrichtigungen in iOS-Einstellungen abgelehnt.<br />
+          Geh zu <strong>Einstellungen → Glev → Mitteilungen</strong> und schalte sie manuell ein.
+        </div>
+      )}
       <button
         onClick={() => void handleRetry()}
         disabled={retrying}
-        style={{
-          marginTop: 8, padding: "6px 12px", borderRadius: 8, border: "none",
-          background: "var(--accent)", color: "#fff", fontSize: 12,
-          cursor: retrying ? "default" : "pointer", opacity: retrying ? 0.6 : 1,
-        }}
+        style={{ marginTop: 10, padding: "6px 12px", borderRadius: 8, border: "none", background: "var(--accent)", color: "#fff", fontSize: 12, cursor: retrying ? "default" : "pointer", opacity: retrying ? 0.6 : 1 }}
       >
         {retrying ? "Registriere…" : "Push-Registrierung neu starten"}
       </button>
