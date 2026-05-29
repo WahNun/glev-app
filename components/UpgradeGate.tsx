@@ -5,6 +5,7 @@ import { useLocale } from "next-intl";
 import Link from "next/link";
 import { usePlan } from "@/hooks/usePlan";
 import { requiredPlanLabel, FEATURE_TIERS } from "@/lib/planFeatures";
+import { supabase } from "@/lib/supabase";
 
 const ACCENT = "#4F6EF7";
 
@@ -40,11 +41,22 @@ function resolveCheckoutLocale(appLocale: string): string {
 async function startCheckout(appLocale: string, tier: string): Promise<string | null> {
   const endpoint = CHECKOUT_ENDPOINT[tier] ?? "/api/checkout/pro";
   const locale = resolveCheckoutLocale(appLocale);
+
+  let email: string | undefined;
+  try {
+    if (supabase) {
+      const { data } = await supabase.auth.getUser();
+      if (data.user?.email) email = data.user.email;
+    }
+  } catch {
+    // best-effort — Stripe pre-fill ist nice-to-have, kein blocker
+  }
+
   try {
     const res = await fetch(endpoint, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ locale }),
+      body: JSON.stringify({ locale, ...(email ? { email } : {}) }),
     });
     const data = (await res.json().catch(() => ({}))) as { url?: string; error?: string };
     if (!res.ok || !data.url) return null;
