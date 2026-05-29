@@ -1,9 +1,7 @@
 "use server";
 
-import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
-import { timingSafeEqual } from "node:crypto";
 
 import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
 import { getStripe } from "@/lib/stripeServer";
@@ -13,99 +11,66 @@ import { scheduleDripEmails } from "@/lib/emails/drip-scheduler";
 import type { EmailLocale } from "@/lib/emails/beta-welcome";
 
 /**
- * Server actions for /admin/users (Stages 1-3).
+ * Server actions for /glev-ops/users (Stages 1-3).
  *
  * Auth: same shared `glev_admin_token` cookie + `ADMIN_API_SECRET`
- * pattern as /admin/buyers, /admin/drip, /admin/emails. The cookie is
+ * pattern as /glev-ops/buyers, /glev-ops/drip, /admin/emails. The cookie is
  * scoped to /admin so a single login covers every admin tab.
  *
  * Every mutating action (Stage 2 + 3):
  *   1. asserts auth via `requireAdminToken()` — throws if not
  *   2. performs the action via the service-role Supabase client
  *   3. writes an audit log row with the SHA-256 prefix of the cookie token
- *   4. revalidates the affected /admin/users paths so the UI re-renders
+ *   4. revalidates the affected /glev-ops/users paths so the UI re-renders
  *
  * Hard-deletes are intentionally CASCADED via Supabase's auth.admin
  * deleteUser API — that takes care of meals/insulin/cycle/etc. via the
  * existing FK ON DELETE CASCADE wiring on user_id.
  */
 
-const COOKIE = "glev_admin_token";
-
-function constantTimeEqual(a: string, b: string): boolean {
-  const aBuf = Buffer.from(a);
-  const bBuf = Buffer.from(b);
-  if (aBuf.length !== bBuf.length) return false;
-  return timingSafeEqual(aBuf, bBuf);
-}
-
 // ---------------------------------------------------------------------------
-// Login / logout / auth probe (mirrors app/admin/buyers/actions.ts so the
-// /admin/users entry point can show its own login form on first hit and
-// redirect back to /admin/users — not /admin/buyers — after login).
+// Login / logout / auth probe
 // ---------------------------------------------------------------------------
+
+export { isAdminAuthed } from "@/lib/adminAuth";
 
 export async function loginAction(formData: FormData): Promise<void> {
-  const expected = process.env.ADMIN_API_SECRET ?? "";
-  if (!expected || expected.length < 16) {
-    redirect("/glev-ops/users?err=server");
-  }
-  const submitted = String(formData.get("token") ?? "");
-  if (!submitted || !constantTimeEqual(submitted, expected)) {
-    redirect("/glev-ops/users?err=bad");
-  }
-  const store = await cookies();
-  store.set(COOKIE, submitted, {
-    httpOnly: true,
-    sameSite: "strict",
-    secure: process.env.NODE_ENV === "production",
-    path: "/glev-ops",
-    maxAge: 60 * 60 * 8,
-  });
+  const { verifyAdminCredentials, setAdminCookie } = await import("@/lib/adminAuth");
+  const email    = String(formData.get("email")    ?? "");
+  const password = String(formData.get("password") ?? "");
+  const totp     = String(formData.get("totp")     ?? "");
+  const ok = await verifyAdminCredentials(email, password, totp);
+  if (!ok) redirect("/glev-ops/users?err=bad");
+  await setAdminCookie();
   redirect("/glev-ops/users");
 }
 
 export async function logoutAction(): Promise<void> {
-  const store = await cookies();
-  store.delete(COOKIE);
+  const { clearAdminCookie } = await import("@/lib/adminAuth");
+  await clearAdminCookie();
   redirect("/glev-ops/users");
 }
 
-export async function isAdminAuthed(): Promise<boolean> {
-  const expected = process.env.ADMIN_API_SECRET ?? "";
-  if (!expected || expected.length < 16) return false;
-  const store = await cookies();
-  const tok = store.get(COOKIE)?.value ?? "";
-  if (!tok) return false;
-  return constantTimeEqual(tok, expected);
-}
-
 /**
- * Returns the raw cookie token if the operator is authenticated, else
- * throws. The token is needed by every mutating action so we can hash
- * it into the audit log.
+ * Returns the session token (HMAC) for audit logging if authenticated, else throws.
  */
 async function requireAdminToken(): Promise<string> {
-  const expected = process.env.ADMIN_API_SECRET ?? "";
-  if (!expected || expected.length < 16) {
-    throw new Error("ADMIN_API_SECRET nicht konfiguriert");
-  }
+  const { isAdminAuthed: check, ADMIN_COOKIE } = await import("@/lib/adminAuth");
+  const ok = await check();
+  if (!ok) throw new Error("nicht eingeloggt");
+  const { cookies } = await import("next/headers");
   const store = await cookies();
-  const tok = store.get(COOKIE)?.value ?? "";
-  if (!tok || !constantTimeEqual(tok, expected)) {
-    throw new Error("nicht eingeloggt");
-  }
-  return tok;
+  return store.get(ADMIN_COOKIE)?.value ?? "authenticated";
 }
 
 function revalidateUserPaths(userId?: string | null): void {
   revalidatePath("/glev-ops/users");
-  if (userId) revalidatePath(`/admin/users/${userId}`);
+  if (userId) revalidatePath(`/glev-ops/users/${userId}`);
 }
 
 // ---------------------------------------------------------------------------
 // Quick-Grant: per E-Mail einen manuellen Plan vergeben (Beta-Freischaltung
-// für Friends-&-Family ohne Stripe). Auf /admin/users im Kopf eingebaut,
+// für Friends-&-Family ohne Stripe). Auf /glev-ops/users im Kopf eingebaut,
 // damit man ohne Klick durch die Liste & Detailseite jemanden freischalten
 // kann.
 // ---------------------------------------------------------------------------
@@ -146,7 +111,7 @@ export async function grantPlanByEmailAction(formData: FormData): Promise<void> 
   }
 
   if (!found) {
-    redirect(`/admin/users?grant_err=notfound&email=${encodeURIComponent(email)}`);
+    redirect(`/glev-ops/users?grant_err=notfound&email=${encodeURIComponent(email)}`);
   }
   const userId = found.id;
 
@@ -167,9 +132,9 @@ export async function grantPlanByEmailAction(formData: FormData): Promise<void> 
 
   if (updErr) {
     if (isSchemaMissingError(updErr)) {
-      redirect(`/admin/users/${userId}?err=migration`);
+      redirect(`/glev-ops/users/${userId}?err=migration`);
     }
-    redirect(`/admin/users?grant_err=db&email=${encodeURIComponent(email)}`);
+    redirect(`/glev-ops/users?grant_err=db&email=${encodeURIComponent(email)}`);
   }
 
   await writeAuditLog({
@@ -184,7 +149,7 @@ export async function grantPlanByEmailAction(formData: FormData): Promise<void> 
 
   revalidateUserPaths(userId);
   redirect(
-    `/admin/users?granted=${encodeURIComponent(email)}&plan=${plan}`,
+    `/glev-ops/users?granted=${encodeURIComponent(email)}&plan=${plan}`,
   );
 }
 
@@ -273,7 +238,7 @@ export async function grantBetaFreeYearAction(formData: FormData): Promise<void>
           "[admin/users/betaFreeYear] createUser failed:",
           createErr?.message,
         );
-        redirect(`/admin/users?bfy_err=invite&email=${encodeURIComponent(email)}`);
+        redirect(`/glev-ops/users?bfy_err=invite&email=${encodeURIComponent(email)}`);
       }
       userId = created.user.id;
 
@@ -297,7 +262,7 @@ export async function grantBetaFreeYearAction(formData: FormData): Promise<void>
     } catch (e) {
       // eslint-disable-next-line no-console
       console.warn("[admin/users/betaFreeYear] new-user setup failed:", e);
-      redirect(`/admin/users?bfy_err=invite&email=${encodeURIComponent(email)}`);
+      redirect(`/glev-ops/users?bfy_err=invite&email=${encodeURIComponent(email)}`);
     }
   } else {
     userId = found.id;
@@ -371,9 +336,9 @@ export async function grantBetaFreeYearAction(formData: FormData): Promise<void>
 
   if (updRes.error) {
     if (isSchemaMissingError(updRes.error)) {
-      redirect(`/admin/users/${userId}?err=migration`);
+      redirect(`/glev-ops/users/${userId}?err=migration`);
     }
-    redirect(`/admin/users?bfy_err=db&email=${encodeURIComponent(email)}`);
+    redirect(`/glev-ops/users?bfy_err=db&email=${encodeURIComponent(email)}`);
   }
 
   // Sprache fürs Mailing — Profil ist die Quelle der Wahrheit, default
@@ -439,7 +404,7 @@ export async function grantBetaFreeYearAction(formData: FormData): Promise<void>
 
   revalidateUserPaths(userId);
   redirect(
-    `/admin/users?bfy_granted=${encodeURIComponent(email)}&until=${encodeURIComponent(expiresAt.slice(0, 10))}&plan=${plan}${isNewUser ? "&new=1" : ""}`,
+    `/glev-ops/users?bfy_granted=${encodeURIComponent(email)}&until=${encodeURIComponent(expiresAt.slice(0, 10))}&plan=${plan}${isNewUser ? "&new=1" : ""}`,
   );
 }
 
@@ -466,7 +431,7 @@ export async function setManualPlanAction(formData: FormData): Promise<void> {
   const durationDays = parseInt(String(formData.get("durationDays") ?? "0"), 10);
 
   if (!userId) redirect("/glev-ops/users?err=action_failed&msg=" + encodeURIComponent("userId fehlt"));
-  if (!["free", "beta", "pro", "plus"].includes(plan)) redirect(`/admin/users/${userId}?err=action_failed&msg=` + encodeURIComponent("ungültiger plan"));
+  if (!["free", "beta", "pro", "plus"].includes(plan)) redirect(`/glev-ops/users/${userId}?err=action_failed&msg=` + encodeURIComponent("ungültiger plan"));
 
   const now = new Date();
   const expiresAt =
@@ -502,9 +467,9 @@ export async function setManualPlanAction(formData: FormData): Promise<void> {
 
   if (error) {
     if (isSchemaMissingError(error)) {
-      redirect(`/admin/users/${userId}?err=migration`);
+      redirect(`/glev-ops/users/${userId}?err=migration`);
     }
-    redirect(`/admin/users/${userId}?err=action_failed&msg=` + encodeURIComponent(error.message));
+    redirect(`/glev-ops/users/${userId}?err=action_failed&msg=` + encodeURIComponent(error.message));
   }
 
   await writeAuditLog({
@@ -517,7 +482,7 @@ export async function setManualPlanAction(formData: FormData): Promise<void> {
   });
 
   if (autoGiftLabel) {
-    redirect(`/admin/users/${userId}?plan_ok=${encodeURIComponent(`${plan} — ${autoGiftLabel}`)}`);
+    redirect(`/glev-ops/users/${userId}?plan_ok=${encodeURIComponent(`${plan} — ${autoGiftLabel}`)}`);
   }
   revalidateUserPaths(userId);
 }
@@ -535,7 +500,7 @@ export async function setLanguageAction(formData: FormData): Promise<void> {
   const language = String(formData.get("language") ?? "");
   if (!userId) redirect("/glev-ops/users?err=action_failed&msg=" + encodeURIComponent("userId fehlt"));
   if (!["de", "en"].includes(language)) {
-    redirect(`/admin/users/${userId}?err=action_failed&msg=` + encodeURIComponent("language muss 'de' oder 'en' sein"));
+    redirect(`/glev-ops/users/${userId}?err=action_failed&msg=` + encodeURIComponent("language muss 'de' oder 'en' sein"));
   }
 
   const sb = getSupabaseAdmin();
@@ -552,9 +517,9 @@ export async function setLanguageAction(formData: FormData): Promise<void> {
 
   if (error) {
     if (isSchemaMissingError(error)) {
-      redirect(`/admin/users/${userId}?err=migration`);
+      redirect(`/glev-ops/users/${userId}?err=migration`);
     }
-    redirect(`/admin/users/${userId}?err=action_failed&msg=` + encodeURIComponent(error.message));
+    redirect(`/glev-ops/users/${userId}?err=action_failed&msg=` + encodeURIComponent(error.message));
   }
 
   await writeAuditLog({
@@ -592,9 +557,9 @@ export async function clearManualPlanAction(formData: FormData): Promise<void> {
 
   if (error) {
     if (isSchemaMissingError(error)) {
-      redirect(`/admin/users/${userId}?err=migration`);
+      redirect(`/glev-ops/users/${userId}?err=migration`);
     }
-    redirect(`/admin/users/${userId}?err=action_failed&msg=` + encodeURIComponent(error.message));
+    redirect(`/glev-ops/users/${userId}?err=action_failed&msg=` + encodeURIComponent(error.message));
   }
 
   await writeAuditLog({
@@ -618,7 +583,7 @@ export async function setGiftLabelAction(formData: FormData): Promise<void> {
   const userId = String(formData.get("userId") ?? "");
   const label = String(formData.get("label") ?? "").trim();
   if (!userId) redirect("/glev-ops/users?err=action_failed&msg=" + encodeURIComponent("userId fehlt"));
-  if (!label) redirect(`/admin/users/${userId}?err=action_failed&msg=` + encodeURIComponent("label darf nicht leer sein"));
+  if (!label) redirect(`/glev-ops/users/${userId}?err=action_failed&msg=` + encodeURIComponent("label darf nicht leer sein"));
 
   const sb = getSupabaseAdmin();
   const { data: before } = await sb
@@ -634,9 +599,9 @@ export async function setGiftLabelAction(formData: FormData): Promise<void> {
 
   if (error) {
     if (isSchemaMissingError(error)) {
-      redirect(`/admin/users/${userId}?err=migration`);
+      redirect(`/glev-ops/users/${userId}?err=migration`);
     }
-    redirect(`/admin/users/${userId}?err=action_failed&msg=` + encodeURIComponent(error.message));
+    redirect(`/glev-ops/users/${userId}?err=action_failed&msg=` + encodeURIComponent(error.message));
   }
 
   await writeAuditLog({
@@ -648,7 +613,7 @@ export async function setGiftLabelAction(formData: FormData): Promise<void> {
     adminToken,
   });
 
-  redirect(`/admin/users/${userId}?gift_ok=${encodeURIComponent(label)}`);
+  redirect(`/glev-ops/users/${userId}?gift_ok=${encodeURIComponent(label)}`);
 }
 
 /**
@@ -673,9 +638,9 @@ export async function clearGiftLabelAction(formData: FormData): Promise<void> {
 
   if (error) {
     if (isSchemaMissingError(error)) {
-      redirect(`/admin/users/${userId}?err=migration`);
+      redirect(`/glev-ops/users/${userId}?err=migration`);
     }
-    redirect(`/admin/users/${userId}?err=action_failed&msg=` + encodeURIComponent(error.message));
+    redirect(`/glev-ops/users/${userId}?err=action_failed&msg=` + encodeURIComponent(error.message));
   }
 
   await writeAuditLog({
@@ -703,7 +668,7 @@ export async function confirmEmailAction(formData: FormData): Promise<void> {
   const { error } = await sb.auth.admin.updateUserById(userId, {
     email_confirm: true,
   });
-  if (error) redirect(`/admin/users/${userId}?err=action_failed&msg=` + encodeURIComponent("auth: " + error.message));
+  if (error) redirect(`/glev-ops/users/${userId}?err=action_failed&msg=` + encodeURIComponent("auth: " + error.message));
 
   await writeAuditLog({
     action: "confirm_email",
@@ -757,13 +722,13 @@ export async function softDeleteAction(formData: FormData): Promise<void> {
   const userId = String(formData.get("userId") ?? "");
   const confirmEmail = String(formData.get("confirmEmail") ?? "").trim().toLowerCase();
   if (!userId) redirect("/glev-ops/users?err=action_failed&msg=" + encodeURIComponent("userId fehlt"));
-  if (!confirmEmail) redirect(`/admin/users/${userId}?err=action_failed&msg=` + encodeURIComponent("E-Mail-Bestätigung fehlt"));
+  if (!confirmEmail) redirect(`/glev-ops/users/${userId}?err=action_failed&msg=` + encodeURIComponent("E-Mail-Bestätigung fehlt"));
 
   const sb = getSupabaseAdmin();
   const { data: authData } = await sb.auth.admin.getUserById(userId);
   const realEmail = authData?.user?.email?.toLowerCase() ?? "";
   if (realEmail !== confirmEmail) {
-    redirect(`/admin/users/${userId}?err=action_failed&msg=` + encodeURIComponent("E-Mail-Bestätigung passt nicht zur User-E-Mail"));
+    redirect(`/glev-ops/users/${userId}?err=action_failed&msg=` + encodeURIComponent("E-Mail-Bestätigung passt nicht zur User-E-Mail"));
   }
 
   // Long ban duration as a soft "blocked" marker — Supabase has no
@@ -772,7 +737,7 @@ export async function softDeleteAction(formData: FormData): Promise<void> {
   const { error: banErr } = await sb.auth.admin.updateUserById(userId, {
     ban_duration: "876000h",
   });
-  if (banErr) redirect(`/admin/users/${userId}?err=action_failed&msg=` + encodeURIComponent(banErr.message));
+  if (banErr) redirect(`/glev-ops/users/${userId}?err=action_failed&msg=` + encodeURIComponent(banErr.message));
 
   const { error: softErr } = await sb
     .from("profiles")
@@ -781,7 +746,7 @@ export async function softDeleteAction(formData: FormData): Promise<void> {
   if (softErr && isSchemaMissingError(softErr)) {
     // Spalte deleted_at fehlt — Ban (oben) ist trotzdem schon gesetzt.
     // Den Operator informieren statt 500 zu werfen.
-    redirect(`/admin/users/${userId}?err=migration`);
+    redirect(`/glev-ops/users/${userId}?err=migration`);
   }
 
   await writeAuditLog({
@@ -810,7 +775,7 @@ export async function softDeleteAction(formData: FormData): Promise<void> {
  *      JWTs server-seitig nicht früher invalidieren (Supabase hat
  *      keinen Admin-`deleteSessions`-Endpoint).
  *   3) `profiles.deleted_at` setzen — gleicher Marker wie Soft-Delete,
- *      damit existing Code (z.B. /admin/users-Liste) den User als
+ *      damit existing Code (z.B. /glev-ops/users-Liste) den User als
  *      „gelöscht" sieht und Restore über denselben Button geht.
  *
  * Reversibel via `restoreUserAction` (unbannt + `deleted_at` clear).
@@ -822,13 +787,13 @@ export async function cancelAndBanAction(formData: FormData): Promise<void> {
   const userId = String(formData.get("userId") ?? "");
   const confirmEmail = String(formData.get("confirmEmail") ?? "").trim().toLowerCase();
   if (!userId) redirect("/glev-ops/users?err=action_failed&msg=" + encodeURIComponent("userId fehlt"));
-  if (!confirmEmail) redirect(`/admin/users/${userId}?err=action_failed&msg=` + encodeURIComponent("E-Mail-Bestätigung fehlt"));
+  if (!confirmEmail) redirect(`/glev-ops/users/${userId}?err=action_failed&msg=` + encodeURIComponent("E-Mail-Bestätigung fehlt"));
 
   const sb = getSupabaseAdmin();
   const { data: authData } = await sb.auth.admin.getUserById(userId);
   const realEmail = authData?.user?.email?.toLowerCase() ?? "";
   if (realEmail !== confirmEmail) {
-    redirect(`/admin/users/${userId}?err=action_failed&msg=` + encodeURIComponent("E-Mail-Bestätigung passt nicht zur User-E-Mail"));
+    redirect(`/glev-ops/users/${userId}?err=action_failed&msg=` + encodeURIComponent("E-Mail-Bestätigung passt nicht zur User-E-Mail"));
   }
 
   // 1) Stripe-Sub kündigen (best-effort). Wir suchen die letzte
@@ -872,7 +837,7 @@ export async function cancelAndBanAction(formData: FormData): Promise<void> {
   const { error: banErr } = await sb.auth.admin.updateUserById(userId, {
     ban_duration: "876000h",
   });
-  if (banErr) redirect(`/admin/users/${userId}?err=action_failed&msg=` + encodeURIComponent(banErr.message));
+  if (banErr) redirect(`/glev-ops/users/${userId}?err=action_failed&msg=` + encodeURIComponent(banErr.message));
 
   // 3) `deleted_at` setzen, damit Listen/UI den User als gesperrt
   //    rendern und der Restore-Button erscheint.
@@ -881,7 +846,7 @@ export async function cancelAndBanAction(formData: FormData): Promise<void> {
     .update({ deleted_at: new Date().toISOString() })
     .eq("user_id", userId);
   if (softErr && isSchemaMissingError(softErr)) {
-    redirect(`/admin/users/${userId}?err=migration`);
+    redirect(`/glev-ops/users/${userId}?err=migration`);
   }
 
   // Auch die `profiles.plan` direkt auf free zurücksetzen, falls der
@@ -920,14 +885,14 @@ export async function restoreUserAction(formData: FormData): Promise<void> {
   const { error: banErr } = await sb.auth.admin.updateUserById(userId, {
     ban_duration: "none",
   });
-  if (banErr) redirect(`/admin/users/${userId}?err=action_failed&msg=` + encodeURIComponent("auth: " + banErr.message));
+  if (banErr) redirect(`/glev-ops/users/${userId}?err=action_failed&msg=` + encodeURIComponent("auth: " + banErr.message));
 
   const { error: restoreErr } = await sb
     .from("profiles")
     .update({ deleted_at: null })
     .eq("user_id", userId);
   if (restoreErr && isSchemaMissingError(restoreErr)) {
-    redirect(`/admin/users/${userId}?err=migration`);
+    redirect(`/glev-ops/users/${userId}?err=migration`);
   }
 
   await writeAuditLog({
@@ -1059,7 +1024,7 @@ export async function createUserAction(formData: FormData): Promise<void> {
       // User wurde in auth.users angelegt, aber Profile-Patch (mit
       // created_by_admin / manual_plan_*) ist gescheitert weil Migration
       // fehlt. User ist nutzbar, nur ohne diese Marker.
-      redirect(`/admin/users/${userId}?err=migration_partial`);
+      redirect(`/glev-ops/users/${userId}?err=migration_partial`);
     }
     // eslint-disable-next-line no-console
     console.warn("[admin/users/createUser] profile upsert warning:", profErr.message);
@@ -1074,7 +1039,7 @@ export async function createUserAction(formData: FormData): Promise<void> {
     adminToken,
   });
 
-  redirect(`/admin/users/${userId}`);
+  redirect(`/glev-ops/users/${userId}`);
 }
 
 /**
@@ -1089,13 +1054,13 @@ export async function hardDeleteAction(formData: FormData): Promise<void> {
   const userId = String(formData.get("userId") ?? "");
   const confirmEmail = String(formData.get("confirmEmail") ?? "").trim().toLowerCase();
   if (!userId) redirect("/glev-ops/users?err=action_failed&msg=" + encodeURIComponent("userId fehlt"));
-  if (!confirmEmail) redirect(`/admin/users/${userId}?err=action_failed&msg=` + encodeURIComponent("E-Mail-Bestätigung fehlt"));
+  if (!confirmEmail) redirect(`/glev-ops/users/${userId}?err=action_failed&msg=` + encodeURIComponent("E-Mail-Bestätigung fehlt"));
 
   const sb = getSupabaseAdmin();
   const { data: authData } = await sb.auth.admin.getUserById(userId);
   const realEmail = authData?.user?.email?.toLowerCase() ?? "";
   if (realEmail !== confirmEmail) {
-    redirect(`/admin/users/${userId}?err=action_failed&msg=` + encodeURIComponent("E-Mail-Bestätigung passt nicht zur User-E-Mail"));
+    redirect(`/glev-ops/users/${userId}?err=action_failed&msg=` + encodeURIComponent("E-Mail-Bestätigung passt nicht zur User-E-Mail"));
   }
 
   await writeAuditLog({
@@ -1107,7 +1072,7 @@ export async function hardDeleteAction(formData: FormData): Promise<void> {
   });
 
   const { error } = await sb.auth.admin.deleteUser(userId);
-  if (error) redirect(`/admin/users/${userId}?err=action_failed&msg=` + encodeURIComponent(error.message));
+  if (error) redirect(`/glev-ops/users/${userId}?err=action_failed&msg=` + encodeURIComponent(error.message));
 
   revalidatePath("/glev-ops/users");
   redirect("/glev-ops/users?deleted=" + encodeURIComponent(realEmail));
@@ -1118,7 +1083,7 @@ export async function setRoleAction(formData: FormData): Promise<void> {
   const userId = String(formData.get("userId") ?? "");
   const role = String(formData.get("role") ?? "user");
   if (!userId) redirect("/glev-ops/users?err=action_failed&msg=" + encodeURIComponent("userId fehlt"));
-  if (!["user", "admin"].includes(role)) redirect(`/admin/users/${userId}?err=action_failed&msg=` + encodeURIComponent("Ungültige Rolle"));
+  if (!["user", "admin"].includes(role)) redirect(`/glev-ops/users/${userId}?err=action_failed&msg=` + encodeURIComponent("Ungültige Rolle"));
 
   const sb = getSupabaseAdmin();
   const { data: before } = await sb
@@ -1131,7 +1096,7 @@ export async function setRoleAction(formData: FormData): Promise<void> {
     .from("profiles")
     .update({ role })
     .eq("user_id", userId);
-  if (error) redirect(`/admin/users/${userId}?err=action_failed&msg=` + encodeURIComponent(error.message));
+  if (error) redirect(`/glev-ops/users/${userId}?err=action_failed&msg=` + encodeURIComponent(error.message));
 
   await writeAuditLog({
     action: "set_role",
@@ -1299,7 +1264,7 @@ export async function backfillCurrencyCountryAction(): Promise<void> {
   });
 
   // Backfill-Button lebt jetzt unter /admin/settings (vorher direkt auf
-  // /admin/users); UsersPage neu rendern, aber zur Settings-Seite
+  // /glev-ops/users); UsersPage neu rendern, aber zur Settings-Seite
   // zurückspringen, damit das Ergebnis-Banner dort sichtbar wird.
   revalidatePath("/glev-ops/users");
   revalidatePath("/glev-ops/settings");
@@ -1333,7 +1298,7 @@ export async function sendPasswordResetAction(formData: FormData): Promise<void>
   const adminToken = await requireAdminToken();
   const userId = String(formData.get("userId") ?? "");
   const email = String(formData.get("email") ?? "").trim().toLowerCase();
-  if (!userId || !email) redirect((userId ? `/admin/users/${userId}` : "/glev-ops/users") + "?err=action_failed&msg=" + encodeURIComponent("userId und email erforderlich"));
+  if (!userId || !email) redirect((userId ? `/glev-ops/users/${userId}` : "/glev-ops/users") + "?err=action_failed&msg=" + encodeURIComponent("userId und email erforderlich"));
 
   const sb = getSupabaseAdmin();
   const appUrl = (process.env.NEXT_PUBLIC_APP_URL ?? "").replace(/\/$/, "");
@@ -1360,7 +1325,7 @@ export async function sendPasswordResetAction(formData: FormData): Promise<void>
     options: appUrl ? { redirectTo: `${appUrl}/auth/confirm` } : undefined,
   });
   if (linkErr || !linkData?.properties?.action_link) {
-    redirect(`/admin/users/${userId}?err=action_failed&msg=` + encodeURIComponent("auth: " + (linkErr?.message ?? "kein action_link")));
+    redirect(`/glev-ops/users/${userId}?err=action_failed&msg=` + encodeURIComponent("auth: " + (linkErr?.message ?? "kein action_link")));
   }
   const resetUrl = linkData.properties.action_link;
 
@@ -1389,7 +1354,7 @@ export async function sendMagicLinkAction(formData: FormData): Promise<void> {
   const adminToken = await requireAdminToken();
   const userId = String(formData.get("userId") ?? "");
   const email = String(formData.get("email") ?? "").trim().toLowerCase();
-  if (!userId || !email) redirect((userId ? `/admin/users/${userId}` : "/glev-ops/users") + "?err=action_failed&msg=" + encodeURIComponent("userId und email erforderlich"));
+  if (!userId || !email) redirect((userId ? `/glev-ops/users/${userId}` : "/glev-ops/users") + "?err=action_failed&msg=" + encodeURIComponent("userId und email erforderlich"));
 
   const sb = getSupabaseAdmin();
   const appUrl = (process.env.NEXT_PUBLIC_APP_URL ?? "").replace(/\/$/, "");
@@ -1398,7 +1363,7 @@ export async function sendMagicLinkAction(formData: FormData): Promise<void> {
     email,
     options: appUrl ? { redirectTo: `${appUrl}/dashboard` } : undefined,
   });
-  if (error) redirect(`/admin/users/${userId}?err=action_failed&msg=` + encodeURIComponent("auth: " + error.message));
+  if (error) redirect(`/glev-ops/users/${userId}?err=action_failed&msg=` + encodeURIComponent("auth: " + error.message));
 
   await writeAuditLog({
     action: "send_magic_link",

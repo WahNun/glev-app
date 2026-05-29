@@ -1,6 +1,7 @@
 import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
-import { isAdminAuthed } from "@/app/admin/buyers/actions";
+import { isAdminAuthed } from "@/lib/adminAuth";
 import { loginAction } from "./actions";
+import AdminLoginForm from "../_components/AdminLoginForm";
 import {
   aggregateDripStats,
   aggregateDailyDripSeries,
@@ -57,39 +58,9 @@ export default async function AdminDripStatsPage({
 
   if (!authed) {
     const errParam = Array.isArray(sp.err) ? sp.err[0] : sp.err;
-    const err =
-      errParam === "bad"
-        ? "Falsches Token."
-        : errParam === "server"
-          ? "ADMIN_API_SECRET ist nicht konfiguriert."
-          : null;
-    return (
-      <main style={pageStyle}>
-        <h1 style={{ fontSize: 22, margin: "0 0 16px" }}>Glev Support — Drip-Statistik</h1>
-        <p style={{ marginBottom: 16, color: "#555" }}>
-          Internal-only. Bitte das <code>ADMIN_API_SECRET</code> einfügen.
-        </p>
-        <form
-          action={loginAction}
-          style={{ display: "flex", flexDirection: "column", gap: 12, maxWidth: 420 }}
-        >
-          <input
-            type="password"
-            name="token"
-            autoComplete="off"
-            required
-            placeholder="ADMIN_API_SECRET"
-            style={inputStyle}
-          />
-          <button type="submit" style={btnStyle}>
-            Einloggen
-          </button>
-          {err ? <span style={{ color: "#c00", fontSize: 14 }}>{err}</span> : null}
-        </form>
-      </main>
-    );
+    const err = errParam === "bad" ? "Login fehlgeschlagen." : null;
+    return <AdminLoginForm action={loginAction} title="Drip-Statistik" error={err} />;
   }
-
   const sb = getSupabaseAdmin();
 
   // Two parallel fetches. Filtering `sent_at IS NOT NULL` server-side

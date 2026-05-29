@@ -6,6 +6,7 @@ import {
 } from "@/lib/emails/drip-status";
 import { isAdminAuthed, loginAction } from "./actions";
 import DripDashboard from "./DripDashboard";
+import AdminLoginForm from "../_components/AdminLoginForm";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -293,40 +294,9 @@ export default async function AdminDripPage({
 
   if (!authed) {
     const errParam = Array.isArray(sp.err) ? sp.err[0] : sp.err;
-    const err =
-      errParam === "bad"
-        ? "Falsches Token."
-        : errParam === "server"
-          ? "ADMIN_API_SECRET ist nicht konfiguriert."
-          : null;
-    return (
-      <main style={pageStyle}>
-        <h1 style={{ fontSize: 22, margin: "0 0 16px" }}>Glev Operator — Drip-Mails</h1>
-        <p style={{ marginBottom: 16, color: "#555" }}>
-          Internal-only. Bitte das <code>ADMIN_API_SECRET</code> einfügen, um die Drip-
-          Pipeline einzusehen.
-        </p>
-        <form
-          action={loginAction}
-          style={{ display: "flex", flexDirection: "column", gap: 12, maxWidth: 420 }}
-        >
-          <input
-            type="password"
-            name="token"
-            autoComplete="off"
-            required
-            placeholder="ADMIN_API_SECRET"
-            style={inputStyle}
-          />
-          <button type="submit" style={btnStyle}>
-            Einloggen
-          </button>
-          {err ? <span style={{ color: "#c00", fontSize: 14 }}>{err}</span> : null}
-        </form>
-      </main>
-    );
+    const err = errParam === "bad" ? "Login fehlgeschlagen." : null;
+    return <AdminLoginForm action={loginAction} title="Drip-Pipeline" error={err} />;
   }
-
   const qParam = Array.isArray(sp.q) ? sp.q[0] : sp.q;
   const statusParam = Array.isArray(sp.status) ? sp.status[0] : sp.status;
   const tierParam = Array.isArray(sp.tier) ? sp.tier[0] : sp.tier;

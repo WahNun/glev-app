@@ -3,6 +3,7 @@ import {
   loginAction,
   backfillCurrencyCountryAction,
 } from "../users/actions";
+import AdminLoginForm from "../_components/AdminLoginForm";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -25,34 +26,8 @@ export default async function AdminSettingsPage({
 
   if (!authed) {
     const errParam = Array.isArray(sp.err) ? sp.err[0] : sp.err;
-    const err =
-      errParam === "bad"
-        ? "Falsches Token."
-        : errParam === "server"
-          ? "ADMIN_API_SECRET ist nicht konfiguriert."
-          : null;
-    return (
-      <main style={pageStyle}>
-        <h1 style={{ fontSize: 22, margin: "0 0 16px" }}>Glev Admin — Einstellungen</h1>
-        <form
-          action={loginAction}
-          style={{ display: "flex", flexDirection: "column", gap: 12, maxWidth: 420 }}
-        >
-          <input
-            type="password"
-            name="token"
-            autoComplete="off"
-            required
-            placeholder="ADMIN_API_SECRET"
-            style={inputStyle}
-          />
-          <button type="submit" style={btnStyle}>
-            Einloggen
-          </button>
-          {err ? <span style={{ color: "#c00", fontSize: 14 }}>{err}</span> : null}
-        </form>
-      </main>
-    );
+    const err = errParam === "bad" ? "Login fehlgeschlagen." : null;
+    return <AdminLoginForm action={loginAction} title="Einstellungen" error={err} />;
   }
 
   // Banner für den Backfill-Rücksprung — nur wenn der Action-Redirect

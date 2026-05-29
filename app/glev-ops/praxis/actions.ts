@@ -2,7 +2,7 @@
 
 import { redirect } from "next/navigation";
 import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
-import { isAdminAuthed } from "../buyers/actions";
+import { isAdminAuthed } from "@/lib/adminAuth";
 
 function slugify(raw: string): string {
   return raw
@@ -32,7 +32,7 @@ export async function createPracticeAction(formData: FormData): Promise<void> {
 
   if (error) {
     const code = error.code === "23505" ? "duplicate" : "db";
-    redirect(`/admin/praxis?err=${code}`);
+    redirect(`/glev-ops/praxis?err=${code}`);
   }
 
   redirect("/glev-ops/praxis?ok=created");

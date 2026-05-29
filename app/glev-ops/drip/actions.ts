@@ -1,9 +1,7 @@
 "use server";
 
-import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
-import { timingSafeEqual } from "crypto";
 
 import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
 import {
@@ -11,27 +9,12 @@ import {
   renderDripEmail,
   type DripEmailType,
 } from "@/lib/emails/drip-templates";
+import { verifyAdminCredentials, setAdminCookie, clearAdminCookie, isAdminAuthed } from "@/lib/adminAuth";
 
-// Auth — gleiches Bearer-Token-Cookie-Pattern wie /admin/buyers.
-//
-// Die Buyers-Page nutzt denselben Cookie-Namen mit `path: "/glev-ops"`,
-// d. h. wer bei /admin/buyers eingeloggt ist, ist hier automatisch
-// auch eingeloggt (und umgekehrt). Wir duplizieren die login/logout-
-// Actions hier nur, um lokale `redirect("/glev-ops/drip")`-Ziele zu
-// haben — sonst landet ein Login auf /admin/buyers, was verwirrend
-// wäre, wenn der Operator gerade die Drip-Pipeline ansehen wollte.
-
-const COOKIE = "glev_admin_token";
+export { isAdminAuthed } from "@/lib/adminAuth";
 
 /** Maximale Zeichenlänge für `last_error` — identisch zum Cron-Worker. */
 const MAX_ERROR_LENGTH = 500;
-
-function constantTimeEqual(a: string, b: string): boolean {
-  const aBuf = Buffer.from(a);
-  const bBuf = Buffer.from(b);
-  if (aBuf.length !== bBuf.length) return false;
-  return timingSafeEqual(aBuf, bBuf);
-}
 
 /** Kürzt einen Fehlertext auf MAX_ERROR_LENGTH Zeichen. */
 function truncateError(msg: string): string {
@@ -39,38 +22,18 @@ function truncateError(msg: string): string {
 }
 
 export async function loginAction(formData: FormData): Promise<void> {
-  const expected = process.env.ADMIN_API_SECRET ?? "";
-  if (!expected || expected.length < 16) {
-    redirect("/glev-ops/drip?err=server");
-  }
-  const submitted = String(formData.get("token") ?? "");
-  if (!submitted || !constantTimeEqual(submitted, expected)) {
-    redirect("/glev-ops/drip?err=bad");
-  }
-  const store = await cookies();
-  store.set(COOKIE, submitted, {
-    httpOnly: true,
-    sameSite: "strict",
-    secure: process.env.NODE_ENV === "production",
-    path: "/glev-ops",
-    maxAge: 60 * 60 * 8,
-  });
+  const email    = String(formData.get("email")    ?? "");
+  const password = String(formData.get("password") ?? "");
+  const totp     = String(formData.get("totp")     ?? "");
+  const ok = await verifyAdminCredentials(email, password, totp);
+  if (!ok) redirect("/glev-ops/drip?err=bad");
+  await setAdminCookie();
   redirect("/glev-ops/drip");
 }
 
 export async function logoutAction(): Promise<void> {
-  const store = await cookies();
-  store.delete(COOKIE);
+  await clearAdminCookie();
   redirect("/glev-ops/drip");
-}
-
-export async function isAdminAuthed(): Promise<boolean> {
-  const expected = process.env.ADMIN_API_SECRET ?? "";
-  if (!expected || expected.length < 16) return false;
-  const store = await cookies();
-  const tok = store.get(COOKIE)?.value ?? "";
-  if (!tok) return false;
-  return constantTimeEqual(tok, expected);
 }
 
 // ---- Manuelle Aktionen (send-now / cancel / reschedule) -------------------

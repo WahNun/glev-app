@@ -1,5 +1,6 @@
 import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
 import { isAdminAuthed, loginAction } from "../buyers/actions";
+import AdminLoginForm from "../_components/AdminLoginForm";
 import PraxisClient, { type Practice } from "./PraxisClient";
 
 export const runtime = "nodejs";
@@ -15,20 +16,8 @@ export default async function AdminPraxisPage({
 
   if (!authed) {
     const errParam = Array.isArray(sp.err) ? sp.err[0] : sp.err;
-    const err =
-      errParam === "bad"    ? "Falsches Token." :
-      errParam === "server" ? "ADMIN_API_SECRET ist nicht konfiguriert." :
-      null;
-    return (
-      <main style={pageStyle}>
-        <h1 style={{ fontSize: 22, margin: "0 0 16px" }}>Glev Admin — Praxis-Links</h1>
-        <form action={loginAction} style={{ display: "flex", flexDirection: "column", gap: 12, maxWidth: 420 }}>
-          <input type="password" name="token" autoComplete="off" required placeholder="ADMIN_API_SECRET" style={inputStyle} />
-          <button type="submit" style={btnStyle}>Einloggen</button>
-          {err ? <span style={{ color: "#c00", fontSize: 14 }}>{err}</span> : null}
-        </form>
-      </main>
-    );
+    const err = errParam === "bad" ? "Login fehlgeschlagen." : null;
+    return <AdminLoginForm action={loginAction} title="Praxis-Links" error={err} />;
   }
 
   const sb = getSupabaseAdmin();

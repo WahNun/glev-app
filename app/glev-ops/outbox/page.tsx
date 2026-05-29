@@ -1,6 +1,7 @@
 import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
 import { isAdminAuthed, loginAction } from "./actions";
 import OutboxDashboard from "./OutboxDashboard";
+import AdminLoginForm from "../_components/AdminLoginForm";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -158,38 +159,8 @@ export default async function AdminOutboxPage({
   const statusFilter = parseStatusFilter(params.status);
 
   if (!authed) {
-    return (
-      <main style={pageStyle}>
-        <div style={loginCardStyle}>
-          <h1 style={{ fontSize: 20, fontWeight: 700, marginBottom: 16 }}>
-            Mail-Outbox · Admin-Login
-          </h1>
-          {err === "bad" && (
-            <p style={{ color: "#dc2626", marginBottom: 12, fontSize: 14 }}>
-              Falsches Token. Bitte erneut versuchen.
-            </p>
-          )}
-          {err === "server" && (
-            <p style={{ color: "#dc2626", marginBottom: 12, fontSize: 14 }}>
-              ADMIN_API_SECRET nicht gesetzt oder zu kurz.
-            </p>
-          )}
-          <form action={loginAction} style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-            <input
-              type="password"
-              name="token"
-              placeholder="Admin-Token"
-              required
-              style={inputStyle}
-              autoFocus
-            />
-            <button type="submit" style={submitBtnStyle}>
-              Einloggen
-            </button>
-          </form>
-        </div>
-      </main>
-    );
+    const loginErr = err === "bad" ? "Login fehlgeschlagen." : null;
+    return <AdminLoginForm action={loginAction} title="Mail-Outbox" error={loginErr} />;
   }
 
   const data = await loadOutboxData(statusFilter);

@@ -1,6 +1,6 @@
 "use server";
 
-import { isAdminAuthed } from "@/app/admin/buyers/actions";
+import { isAdminAuthed } from "@/lib/adminAuth";
 import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
 
 const MAX_BYTES = 5 * 1024 * 1024; // 5 MB

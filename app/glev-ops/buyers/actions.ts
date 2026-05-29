@@ -1,51 +1,23 @@
 "use server";
 
-import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { timingSafeEqual } from "crypto";
+import { verifyAdminCredentials, setAdminCookie, clearAdminCookie } from "@/lib/adminAuth";
 
-const COOKIE = "glev_admin_token";
-
-function constantTimeEqual(a: string, b: string): boolean {
-  const aBuf = Buffer.from(a);
-  const bBuf = Buffer.from(b);
-  if (aBuf.length !== bBuf.length) return false;
-  return timingSafeEqual(aBuf, bBuf);
-}
+export { isAdminAuthed } from "@/lib/adminAuth";
 
 export async function loginAction(formData: FormData): Promise<void> {
-  const expected = process.env.ADMIN_API_SECRET ?? "";
-  if (!expected || expected.length < 16) {
-    redirect("/glev-ops/buyers?err=server");
-  }
-  const submitted = String(formData.get("token") ?? "");
-  if (!submitted || !constantTimeEqual(submitted, expected)) {
-    redirect("/glev-ops/buyers?err=bad");
-  }
-  const store = await cookies();
-  store.set(COOKIE, submitted, {
-    httpOnly: true,
-    sameSite: "strict",
-    secure: process.env.NODE_ENV === "production",
-    path: "/glev-ops",
-    maxAge: 60 * 60 * 8,
-  });
+  const email    = String(formData.get("email")    ?? "");
+  const password = String(formData.get("password") ?? "");
+  const totp     = String(formData.get("totp")     ?? "");
+  const ok = await verifyAdminCredentials(email, password, totp);
+  if (!ok) redirect("/glev-ops/buyers?err=bad");
+  await setAdminCookie();
   redirect("/glev-ops/buyers");
 }
 
 export async function logoutAction(): Promise<void> {
-  const store = await cookies();
-  store.delete(COOKIE);
+  await clearAdminCookie();
   redirect("/glev-ops/buyers");
-}
-
-export async function isAdminAuthed(): Promise<boolean> {
-  const expected = process.env.ADMIN_API_SECRET ?? "";
-  if (!expected || expected.length < 16) return false;
-  const store = await cookies();
-  const tok = store.get(COOKIE)?.value ?? "";
-  if (!tok) return false;
-  return constantTimeEqual(tok, expected);
 }
 
 /**
@@ -93,11 +65,11 @@ export async function createMetaLeadAction(formData: FormData): Promise<void> {
       const { data: { users } } = await sb.auth.admin.listUsers({ perPage: 1000 });
       const existing = users.find((u) => u.email?.toLowerCase() === email);
       if (!existing) {
-        redirect(`/admin/buyers?lead_err=create_failed`);
+        redirect(`/glev-ops/buyers?lead_err=create_failed`);
       }
       userId = existing.id;
     } else {
-      redirect(`/admin/buyers?lead_err=create_failed`);
+      redirect(`/glev-ops/buyers?lead_err=create_failed`);
     }
   } else {
     userId = invited!.user!.id;
