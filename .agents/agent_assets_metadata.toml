@@ -168,3 +168,9 @@ id = "ZlhWyhp0kS0WEBbLa90tj"
 uri = "file://exports/glev-diagnose-bolus-icr.txt"
 type = "text"
 title = "Glev Diagnose: Bolus & ICR (TXT)"
+
+[[outputs]]
+id = "VVrHiBJQ-lbZXn1sH1biO"
+uri = "file://docs/high-fiber-analysis.md"
+type = "text"
+title = "HIGH_FIBER Bolus-Diagnose"
