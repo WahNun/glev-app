@@ -3092,7 +3092,7 @@ export default function SettingsPage() {
       ))}
       {expandedCluster === "konto" && <>
 
-      <SettingsSection title={tSettings("section_account")}>
+      <SettingsSection>
         <SettingsRow
           first
           iconColor={ACCENT}
@@ -3161,7 +3161,7 @@ export default function SettingsPage() {
       ))}
       {expandedCluster === "glukose" && <>
 
-      <SettingsSection title={tSettings("section_glucose")}>
+      <SettingsSection>
         <SettingsRow
           first
           iconColor={GREEN}
@@ -3230,7 +3230,7 @@ export default function SettingsPage() {
       ))}
       {expandedCluster === "insulin" && <>
 
-      <SettingsSection title={tSettings("section_insulin")}>
+      <SettingsSection>
         {/* Übergeordnete „Insulin-Einstellungen"-Row — klappt die 9
             insulin-bezogenen Rows auf/zu. Eigene Button-Markup statt
             SettingsRow, damit wir den Chevron drehen + aria-expanded
@@ -3399,7 +3399,7 @@ export default function SettingsPage() {
       ))}
       {expandedCluster === "cgm" && <>
 
-      <SettingsSection title={tSettings("section_cgm")}>
+      <SettingsSection>
         <SettingsRow
           first
           iconColor={ACCENT}
@@ -3442,7 +3442,7 @@ export default function SettingsPage() {
       ))}
       {expandedCluster === "app" && <>
 
-      <SettingsSection title={tSettings("section_app")}>
+      <SettingsSection>
         <SettingsRow
           first
           iconColor={ACCENT}
@@ -3611,7 +3611,10 @@ export default function SettingsPage() {
         />
       </SettingsSection>
 
-      <SettingsSection title={tSettings("section_support")}>
+      </>}
+
+      {/* ── Permanente Hilfe-Zeilen (immer sichtbar, kein Cluster) ────── */}
+      <SettingsSection>
         <SettingsRow
           first
           iconColor={PURPLE}
@@ -3621,12 +3624,6 @@ export default function SettingsPage() {
           ariaLabel={tSettings("row_open_aria", { label: tSettings("row_feature_requests") })}
           onClick={() => window.open("https://glev.featurebase.app/", "_blank", "noopener,noreferrer")}
         />
-        {/* In-app CGM-sources help page (Lucas-spec 2026-05-15:
-            switched from PDF download to a normal in-app tab with a
-            Zurück-zu-Einstellungen header). Content lives at
-            app/(protected)/settings/help/cgm-quellen/page.tsx, locale
-            picked there via useLocale. The PDF generator script
-            stays around but is no longer linked from here. */}
         <SettingsRow
           iconColor={ACCENT}
           icon={ICON.support}
@@ -3636,7 +3633,6 @@ export default function SettingsPage() {
           onClick={() => router.push("/settings/help/cgm-quellen")}
         />
       </SettingsSection>
-      </>}
 
       {/* Plan-Simulator — immer sichtbar (nur für Admin-Account) */}
       <div style={{ marginTop: 32, marginBottom: 8 }}>
