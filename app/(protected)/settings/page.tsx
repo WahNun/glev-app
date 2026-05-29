@@ -243,6 +243,9 @@ function PushDebugSection() {
   const [platform, setPlatform] = useState<string | null>(null);
   const [isNative, setIsNative] = useState(false);
   const [retrying, setRetrying] = useState(false);
+  const [waitingSecs, setWaitingSecs] = useState(0);
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const waitRef  = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const refresh = () => {
     setToken(localStorage.getItem("glev_push_token"));
@@ -251,26 +254,64 @@ function PushDebugSection() {
     setPerm(localStorage.getItem("glev_push_perm"));
   };
 
+  const stopPolling = () => {
+    if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
+    if (waitRef.current) { clearInterval(waitRef.current); waitRef.current = null; }
+  };
+
   useEffect(() => {
     refresh();
     const w = window as unknown as { Capacitor?: { isNativePlatform?: () => boolean; getPlatform?: () => string } };
     setIsNative(!!w.Capacitor?.isNativePlatform?.());
     setPlatform(w.Capacitor?.getPlatform?.() ?? "web");
+
+    // Listen for the token-arrival event dispatched by persistToken() —
+    // this fires immediately when the APNs registration event comes back,
+    // even if it takes several seconds after register() was called.
+    const onToken = () => { refresh(); stopPolling(); setRetrying(false); setWaitingSecs(0); };
+    window.addEventListener("glev:push-token", onToken);
+    return () => {
+      window.removeEventListener("glev:push-token", onToken);
+      stopPolling();
+    };
   }, []);
 
-  // Always show on native; on web show a compact line so it's inspectable
   const handleRetry = async () => {
+    stopPolling();
     setRetrying(true);
+    setWaitingSecs(0);
     localStorage.removeItem("glev_push_error");
     localStorage.removeItem("glev_push_token");
     localStorage.removeItem("glev_push_step");
     localStorage.removeItem("glev_push_perm");
     refresh();
+
     const { resetPushInit, initPushNotifications } = await import("@/lib/pushNotifications");
     resetPushInit();
     await initPushNotifications();
-    setTimeout(() => { refresh(); setRetrying(false); }, 2500);
+
+    // Poll localStorage every 500 ms for up to 15 s so we catch tokens
+    // that arrive after the initial await (APNs can take 3–8 s on iOS).
+    let elapsed = 0;
+    pollRef.current = setInterval(() => {
+      refresh();
+      elapsed += 500;
+      const tok = localStorage.getItem("glev_push_token");
+      const err = localStorage.getItem("glev_push_error");
+      if (tok || err || elapsed >= 15000) {
+        stopPolling();
+        setRetrying(false);
+        setWaitingSecs(0);
+      }
+    }, 500);
+
+    // Tick counter so the user sees "Warte … 3s" instead of a frozen button.
+    waitRef.current = setInterval(() => setWaitingSecs(s => s + 1), 1000);
   };
+
+  const stuckAtRegister = retrying && waitingSecs >= 4 &&
+    !localStorage.getItem("glev_push_token") &&
+    !localStorage.getItem("glev_push_error");
 
   const bg = token ? "rgba(80,255,120,0.08)" : error ? "rgba(255,80,80,0.08)" : "rgba(120,120,120,0.08)";
   const border = token ? "rgba(80,255,120,0.3)" : error ? "rgba(255,80,80,0.3)" : "rgba(120,120,120,0.2)";
@@ -281,25 +322,38 @@ function PushDebugSection() {
       <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
         <div>🖥 Platform: <strong>{platform ?? "?"}</strong> {isNative ? "(native ✓)" : "(web — push no-op)"}</div>
         <div>🔑 Permission: <strong>{perm ?? "—"}</strong></div>
-        <div>📍 Letzter Schritt: <strong>{step ?? "—"}</strong></div>
+        <div>📍 Letzter Schritt: <strong>{step ?? "—"}</strong>
+          {retrying && waitingSecs > 0 && <span style={{ color: "var(--text-faint)", marginLeft: 6 }}>({waitingSecs}s)</span>}
+        </div>
         {token
           ? <div>✅ Token: {token.slice(0, 20)}…</div>
           : <div>⏳ Kein Token</div>
         }
         {error && <div style={{ color: "var(--red, #f87171)", marginTop: 2 }}>❌ {error}</div>}
       </div>
+
       {perm === "denied" && (
         <div style={{ marginTop: 8, padding: "6px 10px", borderRadius: 8, background: "rgba(255,80,80,0.12)", fontSize: 11, lineHeight: 1.4 }}>
           ⚠️ Benachrichtigungen in iOS-Einstellungen abgelehnt.<br />
           Geh zu <strong>Einstellungen → Glev → Mitteilungen</strong> und schalte sie manuell ein.
         </div>
       )}
+
+      {stuckAtRegister && (
+        <div style={{ marginTop: 8, padding: "8px 10px", borderRadius: 8, background: "rgba(255,180,0,0.10)", border: "1px solid rgba(255,180,0,0.3)", fontSize: 11, lineHeight: 1.5 }}>
+          ⏳ <strong>register() wurde aufgerufen — warte auf APNs-Antwort…</strong><br />
+          Wenn das nach 15 s hängen bleibt, prüfe in Xcode:<br />
+          <strong>Target → Signing &amp; Capabilities → Push Notifications</strong> muss als Capability eingetragen sein.<br />
+          Danach neuen Build via <code>fastlane ios beta</code> deployen.
+        </div>
+      )}
+
       <button
         onClick={() => void handleRetry()}
         disabled={retrying}
         style={{ marginTop: 10, padding: "6px 12px", borderRadius: 8, border: "none", background: "var(--accent)", color: "#fff", fontSize: 12, cursor: retrying ? "default" : "pointer", opacity: retrying ? 0.6 : 1 }}
       >
-        {retrying ? "Registriere…" : "Push-Registrierung neu starten"}
+        {retrying ? `Warte auf APNs… (${waitingSecs}s)` : "Push-Registrierung neu starten"}
       </button>
     </div>
   );
