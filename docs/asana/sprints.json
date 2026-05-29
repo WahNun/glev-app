@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-05-29T16:15:11.809Z",
+  "generated_at": "2026-05-29T16:20:57.196Z",
   "workspace_gid": "1213452700618853",
   "include_completed": false,
   "sprints": [
@@ -44,18 +44,6 @@
           "notes": "Ziel: AI kennt was gerade auf dem Screen steht und kann Werte korrigieren. Bolus-Flow komplett per Sprache steuerbar.\n\nNeue Tools (Mistral Function Calling):\n- set_macro({ field: 'fat'|'carbs'|'protein'|'calories', value: number })\n  → 'nenee 80g Fett nicht 60' → patcht aktuellen Macros-Screen live\n- open_bolus_calculator({ carbs?, current_bg? })\n  → 'willst du Bolus nehmen?' → öffnet Berechnungs-Screen\n- log_bolus({ units: number })\n  → nach Bestätigung → direkt in insulin_logs\n- confirm / cancel — für interaktive Rückfragen\n\nScreen-Kontext Erweiterung:\n- Wenn Macros-Edit-Screen offen: aktuelle Werte (fat/carbs/protein) in VoiceContext injizieren\n- LLM-Prompt bekommt: 'Aktuell auf dem Screen: fat=60g, carbs=45g, protein=20g'\n\nDauer: ~2–3 Tage"
         },
         {
-          "gid": "1215086431468544",
-          "name": "Repo-Wechsel vorbereiten: .env.local + GitHub Token",
-          "completed": false,
-          "due_on": "2026-05-24",
-          "assignee": {
-            "gid": "1213432759001229",
-            "name": "rave pickle"
-          },
-          "section": "Backlog",
-          "notes": "Ziel: Replit abschalten nach Mistral-Migration. Claude arbeitet direkt im GitHub-Repo.\n\nSchritt 1 - .env.local anlegen\nIm Repo-Root (neben package.json) .env.local erstellen:\nMISTRAL_API_KEY=sk-...\nNEXT_PUBLIC_SUPABASE_URL=https://...\nNEXT_PUBLIC_SUPABASE_ANON_KEY=ey...\nSUPABASE_SERVICE_ROLE_KEY=ey...\nWerte: Mistral console + Supabase Project Settings -> API. Datei ist in .gitignore.\n\nSchritt 2 - GitHub Personal Access Token\nGitHub -> Settings -> Developer Settings -> Personal Access Tokens -> Fine-grained token\nScope: repo (read + write auf Glev-Repo)\nToken bereit halten fuer Claude.\n\nSchritt 3 - HANDOFF.md abwarten\nReplit erstellt HANDOFF.md mit allen 236 offenen Tasks + Prio-Analyse.\nSobald fertig: Claude liest und wir starten direkt im Repo."
-        },
-        {
           "gid": "1215086431516857",
           "name": "Datenschutzerklaerung aktualisieren: Mistral AI erwaehnen",
           "completed": false,
@@ -84,54 +72,6 @@
           "assignee": null,
           "section": "Backlog",
           "notes": "Problem\n=======\nManuell als Pro markierte User (stripe_customer_id IS NULL in pro_subscriptions) durchlaufen NICHT den Stripe-Checkout → /pro/success-Flow. Sie bekommen daher keinen Resume-Link und haben keinen Weg, sich einen Supabase-Auth-User + Passwort anzulegen.\n\nAktuell betroffen (Stand 2026-05-23, Production):\n  - management@ravepickles.com  (bezahlt 2026-04-28, kein auth_user)\n  - lroelleke@yahoo.de          (bezahlt 2026-04-28, kein auth_user)\n\nSie können auch den UI-Pfad 'Passwort ändern' im AccountSheet nicht nutzen, weil dafür schon ein Auth-User existieren müsste.\n\nZiel\n====\nBeim manuellen Pro-Grant automatisch:\n  1. Supabase-Auth-User finden oder anlegen\n  2. Magic-Login-Link via auth.admin.generateLink({ type: 'magiclink', email, options: { redirectTo: 'https://glev.app/dashboard' } }) erzeugen\n  3. action_link in die Pro-Welcome-Mail einbetten, analog zum Beta-Free-Year-Fix\n\nReferenz-Pattern (existiert schon 1:1 im Repo)\n==============================================\n  - app/admin/users/actions.ts L203-310: grantBetaFreeYearAction macht exakt das für Beta-Free-Year\n  - lib/emails/beta-free-year-welcome.ts: zwei CTAs (signupUrl wenn vorhanden, sonst /dashboard)\n  - lib/emails/outbox.ts L165-185: signupUrl-Parameter in BetaWelcomePayload\n\nScope\n=====\n1. lib/emails/pro-welcome.ts (DE + EN): signupUrl-Parameter ergänzen. Wenn gesetzt → CTA-Text 'Account in 30 Sekunden einrichten' + Link auf magic action_link. Sonst (Stripe-Käufer): bestehender 'Registrierung abschließen → /pro/success?session_id=' Pfad bleibt unverändert.\n2. lib/emails/outbox.ts: ProWelcomePayload.signupUrl?: string | null + 'pro-welcome'-case reicht es durch.\n3. Neue Admin-Action grantProAction(formData) in app/admin/users/actions.ts — analog zu grantBetaFreeYearAction. Legt pro_subscriptions an (source=admin_grant), holt/erzeugt Auth-User, generateLink type=magiclink, enqueued 'pro-welcome' mit signupUrl. Audit-Log 'grant_pro_admin'.\n4. UI-Button im /admin/users-Detail: 'Pro manuell aktivieren'.\n5. Backfill: für management@ravepickles.com + lroelleke@yahoo.de einmalig den neuen Flow auslösen, nachdem der Code live ist.\n\nAkzeptanzkriterien\n==================\n[ ] /pro/success-Pfad für Stripe-Käufer unverändert (keine Regression)\n[ ] Admin kann auf /admin/users einen User 'Pro manuell aktivieren' → sie bekommt Welcome-Mail mit 'Account in 30 Sekunden einrichten'-CTA, klickt drauf, ist eingeloggt\n[ ] Supabase-Auth-Log zeigt magiclink-Generierung, Outbox dedupliziert auf 1 Eintrag pro Grant\n[ ] DECISIONS.md D-XXX + Fix Log-Eintrag\n[ ] Backfill für management@ravepickles.com + lroelleke@yahoo.de durchgeführt\n\nAufwand: ~2-3h (Pattern 1:1 vom Beta-Free-Year-Flow kopierbar, plus Backfill)\nPriorität: Hoch — blockiert 2 zahlende Pro-Userinnen seit knapp einem Monat"
-        },
-        {
-          "gid": "1215074191596289",
-          "name": "AI Button Phase 1 — UI Shell (GlevAIButton + Chat Sheet)",
-          "completed": false,
-          "due_on": "2026-05-23",
-          "assignee": {
-            "gid": "1213432759001229",
-            "name": "rave pickle"
-          },
-          "section": "Backlog",
-          "notes": "Baue GlevAIButton.tsx + GlevAIChatSheet.tsx.\n\nButton: 64×64px, circuit-animation (Breath 3.8s · Sweep 5.2s · 3 Dots · IconPulse). Nur #4F6EF7. isListening prop: boolean.\n\nChat Sheet: Bottom Sheet 85vh. Header: 'Frag Glev' + X. Chips: ['Wie wirkt diese Mahlzeit?', 'Erkläre meinen IOB', 'Was sagt mein Verlauf heute?', 'Tipps für stabilen BZ']. Input-Bar + deaktivierter Mic-Button. User-Bubble rechts (#4F6EF7), Glev-Bubble links (#161b22).\n\nPhase 1: Beim Senden → isListening=true → 800ms → Dummy-Response → isListening=false. Kein API-Call. Kein localStorage. Capacitor-kompatibel.\n\nReplit-Prompt liegt in MISTRAL_IMPLEMENTATION_PLAN.md (Glev-Ordner)."
-        },
-        {
-          "gid": "1215063660709179",
-          "name": "AI Button Phase 3 — Function Calling (Glev-Tools)",
-          "completed": false,
-          "due_on": "2026-05-23",
-          "assignee": {
-            "gid": "1213432759001229",
-            "name": "rave pickle"
-          },
-          "section": "Backlog",
-          "notes": "Mistral Small 4 Function Calling: Tools get_glucose_status, get_active_iob, get_last_meal, log_meal_entry. Tool-Execution server-seitig, Mistral bekommt nur Zusammenfassungen (nie Rohdaten). Mahlzeit-Logging direkt aus Chat heraus. Replit-Prompt liegt in MISTRAL_IMPLEMENTATION_PLAN.md (Glev-Ordner)."
-        },
-        {
-          "gid": "1215063660650119",
-          "name": "AI Button Phase 2 — Consent Gate + Mistral API Route",
-          "completed": false,
-          "due_on": "2026-05-23",
-          "assignee": {
-            "gid": "1213432759001229",
-            "name": "rave pickle"
-          },
-          "section": "Backlog",
-          "notes": "DSGVO Art. 9 Consent Modal bauen (ai_consent_at, ai_consent_version in Supabase). Next.js API Route POST /api/ai/chat mit Mistral Small 4, Streaming SSE, JWT-Auth-Check, Rate Limit 20 req/min/user (in-memory Map). Nur Mahlzeits-Beschreibungen gehen raus, CGM/Insulin bleibt intern. Replit-Prompt liegt in MISTRAL_IMPLEMENTATION_PLAN.md (Glev-Ordner)."
-        },
-        {
-          "gid": "1215063554575614",
-          "name": "AI Button Phase 4 — Voice (Voxtral Realtime STT)",
-          "completed": false,
-          "due_on": "2026-05-23",
-          "assignee": {
-            "gid": "1213432759001229",
-            "name": "rave pickle"
-          },
-          "section": "Backlog",
-          "notes": "Mic-Button im Chat-Sheet aktivieren. Voxtral Realtime WebSocket STT, Hold-to-Talk UX. Mikrofon-Permission über @capacitor/microphone (nicht Web-API direkt). Transcript landet im Input-Feld, User kann korrigieren vor dem Senden. Replit-Prompt liegt in MISTRAL_IMPLEMENTATION_PLAN.md (Glev-Ordner)."
         },
         {
           "gid": "1215055509183643",
@@ -413,18 +353,6 @@
           "notes": "Im Dashboard (ops.glev.app) eintippen:\n'Was sind meine P1-Tasks für heute?'\n\nErwartete Antwort: knappe deutsche Antwort mit Stripe-Bug, DNS, Dexcom als Top-Prioritäten — ohne Markdown, ohne Bullet-Listen.\n\nDann testen mit Delegation:\n'Was ist der aktuelle Stand beim Stripe-Bug?'\n→ Agent sollte an OPS delegieren und technische Antwort geben.\n\nFertig wenn: Antwort in unter 5 Sekunden kommt und sinnvoll klingt."
         },
         {
-          "gid": "1214324212996503",
-          "name": "Post-Meal Feedback Loop — BG-Check 2h nach Mahlzeit",
-          "completed": false,
-          "due_on": null,
-          "assignee": {
-            "gid": "1213432759001229",
-            "name": "rave pickle"
-          },
-          "section": "Backlog",
-          "notes": "FEATURE: Post-Meal Glucose Feedback Loop\n\n== ZIEL ==\nUser loggt eine Mahlzeit → 2 Stunden später wird er nach seinem aktuellen Blutzucker gefragt → Eingabe wird in glucose_2h gespeichert → Wert fließt in den Adaptive ICR und die Engine-Auswertung ein.\n\n== USER FLOW ==\n1. User loggt Mahlzeit über /log (Wizard Step 3 → Speichern)\n2. App setzt intern einen Timer / Reminder: T+2h\n3. Nach 2 Stunden erscheint ein Prompt (In-App Banner oder Push-Notification):\n   \"Deine Mahlzeit von vor 2h — wie ist dein BG jetzt?\"\n   [Eingabefeld: mg/dL] [Speichern]\n4. Eingabe wird in meals.glucose_2h gespeichert (Spalte existiert bereits in DB)\n5. Optional: Auch glucose_1h (T+1h) und glucose_3h (T+3h) per gleichem Mechanismus\n\n== UI-KOMPONENTEN ==\n- PostMealPrompt Banner: fixiertes Banner am unteren Rand (über dem Nav), erscheint wenn T+2h vergangen und glucose_2h noch NULL\n- Felder: Nur eine Zahl (mg/dL) + Speichern-Button + Schließen-Button (\"später\")\n- Persistenz: localStorage-Timestamp des letzten Meal-Logs, check auf glucose_2h IS NULL\n- Mehrere offene Mahlzeiten: Nur die jüngste wird prompted\n\n== TRIGGER-LOGIK ==\n- Bei App-Öffnung: prüfe ob eine Mahlzeit der letzten 3h in der DB existiert mit glucose_2h IS NULL\n- Falls ja UND T+2h seit meal_time vergangen: Prompt anzeigen\n- Client-seitig (kein Scheduler nötig für V1) — beim App-Öffnen/Focus-Event\n- V2: Push Notification via Capacitor/FCM (für native App, Sprint 3)\n\n== DB-FELDER (bereits vorhanden) ==\n- meals.glucose_2h int4\n- meals.glucose_1h int4\n- meals.glucose_30min int4\n- meals.glucose_90min int4\n- meals.glucose_3h int4\n\n== ENGINE-INTEGRATION ==\n- glucose_2h-Wert fließt in Adaptive ICR Outcome-Gewichtung:\n  Gutes Outcome = glucose_2h zwischen 70-140 mg/dL\n  Schlechtes Outcome = glucose_2h > 180 (Spike) oder < 70 (Hypo)\n- Engine-Neuberechnung des ICR nach Eingabe des 2h-Werts\n\n== TECHNISCHE UMSETZUNG ==\n- Komponente: components/PostMealPrompt.tsx (Client Component)\n- Hook: hooks/usePostMealCheck.ts — prüft beim Mount ob Prompt nötig\n- API Route: PATCH /api/meals/[id]/glucose — nimmt {timepoint: '2h', value: 140} entgegen\n- Layout.tsx: PostMealPrompt einbinden (rendert nur wenn aktiv)\n\n== AKZEPTANZKRITERIEN ==\n- [ ] Banner erscheint ~2h nach Mahlzeit-Log beim App-Öffnen\n- [ ] Eingabe wird korrekt in glucose_2h gespeichert\n- [ ] Engine-ICR berücksichtigt den neuen Wert\n- [ ] Banner verschwindet nach Speichern oder \"später\"\n- [ ] Kein Banner wenn glucose_2h bereits gefüllt\n- [ ] tsc --noEmit clean\n\n== PRIORITÄT ==\nSprint 1 — Core Data Loop. Ohne diesen Loop hat der Adaptive ICR keine Outcome-Daten zum Lernen."
-        },
-        {
           "gid": "1214320751360967",
           "name": "[CGM] Settings — CGM Provider Selection + Credential Input UI",
           "completed": false,
@@ -441,15 +369,6 @@
           "assignee": null,
           "section": "Backlog",
           "notes": "CareLink API ist inoffiziell / reverse-engineered. Als Beta-Feature labeln beim Launch. Niedrigere Prio als LibreLinkUp und Dexcom Share."
-        },
-        {
-          "gid": "1214321337259853",
-          "name": "[DB] Meal-Klassen auf 5 erweitert — DONE",
-          "completed": false,
-          "due_on": null,
-          "assignee": null,
-          "section": "Backlog",
-          "notes": "Erledigt 2026-04-28: FAST_CARBS, HIGH_PROTEIN, HIGH_FAT, HIGH_FIBER, BALANCED. lib/meals.ts + systemPrompt.ts aktualisiert. Farben: BALANCED=#22D3A0, HIGH_FIBER=#4DB6AC. DB-Migration (glucose_30min, glucose_1h, glucose_90min, glucose_2h, glucose_3h, glucose_curve, protein_grams, fat_grams, fiber_grams, calories, meal_type) vom User im Supabase SQL-Editor ausgeführt."
         },
         {
           "gid": "1214288386177479",
@@ -537,15 +456,6 @@
           "assignee": null,
           "section": "Backlog",
           "notes": "ENTSCHEIDUNG (28.04.2026): Junction kündigen — noch nicht ausgeführt, muss Lucas manuell tun.\n\nNachdem gekündigt: LibreView UI auf 'Coming Soon' setzen, Nightscout Bridge deployen (Prompt: REPLIT_PROMPT_NIGHTSCOUT_BRIDGE.md).\n\nAlternativen falls Junction zu teuer: Terra API, Dexcom API direkt (kostenlos)."
-        },
-        {
-          "gid": "1214286395533079",
-          "name": "Onboarding Welcome Screens — Setup Wizard für neue User",
-          "completed": false,
-          "due_on": null,
-          "assignee": null,
-          "section": "Backlog",
-          "notes": "Beim ersten Login eines neuen Users soll ein mehrstufiger Welcome-Flow erscheinen (Wizard-Style).\n\nVorgeschlagene Screens:\n1. Willkommen bei Glev — kurze App-Vorstellung, Founder-Note\n2. CGM verbinden — Libre 2 via LibreLinkUp einrichten (oder überspringen)\n3. Erstes Profil — Diabetestyp bestätigen (T1D), ggf. Zielwerte\n4. Voice-Input Demo — kurze interaktive Demo: 'Sag was du gegessen hast'\n5. Fertig — CTA: 'Erste Mahlzeit loggen'\n\nAnforderungen:\n- Nur beim allerersten Login anzeigen (localStorage oder Supabase-Flag: onboarding_completed)\n- Überspringen-Option auf jedem Screen außer Screen 1\n- Fortschrittsbalken oben (z.B. Schritt 2 von 5)\n- Dark Theme, Brand-Farben (#111117, #4F6EF7)\n- Kein Modal — eigene Route z.B. /onboarding\n- Nach Abschluss: redirect auf /dashboard\n- tsc --noEmit muss sauber bleiben\n\nCompliance: Kein Bezug zu Insulindosierung oder medizinischen Entscheidungen im Onboarding."
         },
         {
           "gid": "1214281055174385",
@@ -1124,18 +1034,6 @@
       "name": "Glev — Sprint 2: Legal + Account-Setup",
       "tasks": [
         {
-          "gid": "1215060386899594",
-          "name": "🔴 Compliance Fix: IOB-Badge HWG-konform umformulieren",
-          "completed": false,
-          "due_on": "2026-05-23",
-          "assignee": {
-            "gid": "1213432759001229",
-            "name": "rave pickle"
-          },
-          "section": "Unbenannter Abschnitt",
-          "notes": "PROBLEM\nBadge-Text 'Kein zusätzliches Insulin nötig — bestehende Wirkung reicht aus' ist eine medizinische Handlungsempfehlung über ein Arzneimittel (Insulin) und fällt unter HWG §3.\n\nFIX\nIn IOBCard.tsx (Badge 1 + Badge 2, aktuell hardcoded DE):\n- Badge 1: 'Kein zusätzliches Insulin nötig — bestehende Wirkung reicht aus' → 'ℹ️ IOB deckt die Schätzung ab'\n- Badge 2: 'Noch aktiv: X.X IE — Empfehlung bereits bereinigt' → 'ℹ️ Noch aktiv: X.X IE — Richtwert angepasst'\n\nBeide Badges auf i18n-Keys migrieren (aktuell hardcoded DE — kein i18n-Key vorhanden).\n\nIn DECISIONS.md Fix Log eintragen."
-        },
-        {
           "gid": "1215060446176303",
           "name": "⚪ Compliance Backlog: intended-purpose.md anlegen",
           "completed": false,
@@ -1146,18 +1044,6 @@
           },
           "section": "Unbenannter Abschnitt",
           "notes": "HINTERGRUND\nGlev hat keine formale Zweckbestimmung als Dokument. Vor CE-Antrag, MDR-Einreichung oder App-Store-Health-Claims muss dieses Dokument existieren.\n\nAUFGABE\nDatei /docs/intended-purpose.md anlegen mit:\n- Produktname + Version\n- Zweckbestimmung (Glev ist ein Dokumentations- und Tracking-Tool für Menschen mit Typ-1-Diabetes. Es gibt keine medizinischen Diagnosen, Therapieentscheidungen oder Dosierungsvorschriften. Alle angezeigten Werte sind Orientierungswerte auf Basis der vom User eingetragenen Daten.)\n- Was Glev NICHT ist (kein Medizinprodukt, kein Ersatz für ärztliche Beratung)\n- Zielgruppe\n- Verweis auf Disclaimer-Strings in der App\n\nKEIN sofortiger Fix nötig — Backlog für vor erstem CE-Antrag."
-        },
-        {
-          "gid": "1215060446176239",
-          "name": "🟡 Compliance Fix: Disclaimer ins Engine-Ergebnis-Panel",
-          "completed": false,
-          "due_on": "2026-05-23",
-          "assignee": {
-            "gid": "1213432759001229",
-            "name": "rave pickle"
-          },
-          "section": "Unbenannter Abschnitt",
-          "notes": "PROBLEM\nDisclaimer 'Orientierungswert — kein Ersatz für ärztliche Beratung.' existiert nur auf der IOB-Kartenrückseite (BG-Wirkungsbereich). Im Engine-Ergebnis-Panel — genau dort wo 'Berechneter Richtwert X.X IE' + IOB-Badges angezeigt werden — gibt es keinen Disclaimer.\n\nFIX\nDirekt unter dem 'Berechneter Richtwert X.X IE' Wert im Engine-Ergebnis-Panel einen Disclaimer hinzufügen:\n🇩🇪 'Orientierungswert — kein Ersatz für ärztliche Beratung.'\n🇬🇧 'Contextual estimate — not a substitute for medical advice.'\n\nKleiner grauer Text, gleicher Style wie der bestehende Disclaimer auf der IOB-Kartenrückseite.\n\nIn DECISIONS.md Fix Log eintragen."
         },
         {
           "gid": "1214304286751827",
@@ -1250,15 +1136,6 @@
       "name": "Glev — Sprint 3: Capacitor + Native Setup",
       "tasks": [
         {
-          "gid": "1215029864791639",
-          "name": "Control Score → Adapt Score: Rename + Sublabel + Tooltip",
-          "completed": false,
-          "due_on": "2026-05-22",
-          "assignee": null,
-          "section": "Unbenannter Abschnitt",
-          "notes": "## Replit-Prompt\n\n# Rename: Control Score → Adapt Score\n\n## Ziel\n\"Control Score\" wird zu \"Adapt Score\" umbenannt — aus Compliance-Gründen (\"Control\" suggeriert Kontrolle über eine Krankheit) und weil der Name besser beschreibt was der Score misst: die Qualität der Bolus-Entscheidungen des Users.\n\n## Was zu ändern ist\n\n### 1. Alle Anzeige-Texte in der UI\nSuche nach `Control Score`, `control score`, `CONTROL SCORE`, `controlScore` (nur Display-Text, nicht die Funktion in lib/controlScore.ts):\n- Dashboard-Label: `CONTROL SCORE · 7T` → `ADAPT SCORE · 7T`\n- Jede weitere Stelle wo der Name angezeigt wird\n\n### 2. Sublabel hinzufügen\nDirekt unter dem Score-Wert (oder als Untertitel der Karte):\n`Bolus-Präzision · 7T`\n\n### 3. Info-Tooltip / Erklärungstext\nWenn der User auf das (i)-Icon oder die Karte tippt:\n```\n\"Dein Adapt Score zeigt wie präzise deine Insulindosis in den letzten 7 Tagen war — basierend auf deinen Mahlzeiten und deren Blutzucker-Verlauf danach. Je höher der Score, desto öfter hat deine Dosierung gepasst.\"\n```\n\n### 4. i18n (de.json + en.json)\nNeue/geänderte Keys:\n- `adapt_score_title`: \"Adapt Score\" (war: \"Control Score\")\n- `adapt_score_sublabel`: \"Bolus-Präzision · 7T\" / \"Bolus Precision · 7D\"\n- `adapt_score_tooltip`: Text wie oben / englische Version\n\n### 5. NICHT ändern\n- Die Funktion `computeControlScore()` in `lib/controlScore.ts` — nur UI-Texte\n- Die Berechnungslogik\n- Datenbank-Spalten oder API-Parameter\n\n## Fix-Report\nbash scripts/finalize-task.sh 1215035278730499\nTask-GID: wird nach Erstellung bekannt"
-        },
-        {
           "gid": "1215035278730536",
           "name": "RISIKO: Abbott LibreLinkUp v5 — verschlüsselte API könnte Drittanbieter-Anbindung brechen",
           "completed": false,
@@ -1266,54 +1143,6 @@
           "assignee": null,
           "section": "Unbenannter Abschnitt",
           "notes": "## Hintergrund\nAbbott hat LibreLinkUp Version 5 mit einer neuen verschlüsselten Schnittstelle veröffentlicht. Falls Abbott die alte unverschlüsselte Schnittstelle abschaltet, könnte die Verbindung zu Nightscout und anderen Drittanbieter-Apps (incl. potenziell Glev) nicht mehr funktionieren.\n\nAktuell gibt es noch keine technische Lösung um die neue Verschlüsselung zu umgehen. Juggluco soll weiterhin funktionieren.\n\n## Was zu beobachten ist\n- Ob Abbott die alte API abschaltet (Timeline unbekannt)\n- Ob die Community eine Lösung findet (LibreLinkUp v5 reverse engineering)\n- Ob Juggluco eine Brückenlösung bietet\n\n## Implikation für Glev\nFalls betroffen: Libre-Nutzer könnten keine Echtzeit-CGM-Daten mehr in Glev sehen. Nightscout-Anbindung als Fallback prüfen.\n\n## Quelle\nCommunity-Post von Michael Pach (LibreLinkUp-Community), Mai 2026.\n\n## Status\nBeobachten — kein akuter Handlungsbedarf solange alte API aktiv ist."
-        },
-        {
-          "gid": "1214985739353276",
-          "name": "Telegram Bot: /api/telegram/webhook — Antwort empfangen + Whisper-Transkription",
-          "completed": false,
-          "due_on": null,
-          "assignee": null,
-          "section": "Unbenannter Abschnitt",
-          "notes": "## Replit-Prompt\n\n# Telegram-Bot Phase 2: Webhook-Receiver + Voice-Transkription\n\n## Ziel\nWenn Lucas im Telegram auf eine Replit-Frage antwortet (Text oder Sprachnachricht), landet die Antwort automatisch in der agent_messages-Tabelle — und Replit liest sie.\n\n## Was zu bauen ist\n\n### app/api/telegram/webhook/route.ts\n\nPOST-Endpoint der:\n1. Telegram-Update empfängt (Text oder Voice)\n2. Bei Voice: Audiodatei herunterladen → an OpenAI Whisper senden → Text zurückbekommen\n3. Antwort in agent_messages als 'inbound' eintragen\n4. task_id aus dem Reply-Context ermitteln: Telegram Reply enthält die Original-Nachricht, darin steht \"Task {TASK_ID}\" — per Regex extrahieren\n\n```typescript\n// Telegram sendet bei Reply: update.message.reply_to_message.text\n// Darin steckt z.B. \"🤖 Replit-Frage (Task 1214984553280798):\"\n// Regex: /Task (\\d+)/\n```\n\n### Environment Variables\n- TELEGRAM_BOT_TOKEN (bereits vorhanden)\n- OPENAI_API_KEY (für Whisper)\n- SUPABASE_SERVICE_ROLE_KEY (bereits vorhanden)\n\n### Webhook bei Telegram registrieren\nNach dem Deploy einmalig ausführen:\n```\ncurl -X POST \"https://api.telegram.org/bot{TOKEN}/setWebhook\" \\\n  -H \"Content-Type: application/json\" \\\n  -d '{\"url\": \"https://glev.app/api/telegram/webhook\"}'\n```\n\n## Fix-Report\nbash scripts/finalize-task.sh TASK_GID_HIER\nTask-GID: wird nach Erstellung bekannt"
-        },
-        {
-          "gid": "1214985739346044",
-          "name": "Telegram Bot: agent_messages Supabase-Tabelle + notify-telegram.mjs",
-          "completed": false,
-          "due_on": null,
-          "assignee": null,
-          "section": "Unbenannter Abschnitt",
-          "notes": "## Replit-Prompt\n\n# Telegram-Bot Phase 1: Message-Bus + Notify-Script\n\n## Ziel\nReplit kann dem User eine Frage über Telegram stellen und auf die Antwort warten — ohne dass der User Replit öffnen muss.\n\n## Teil 1: Supabase-Tabelle agent_messages\n\nFühre folgendes SQL in Supabase aus (oder lege eine Migration an):\n\n```sql\nCREATE TABLE IF NOT EXISTS public.agent_messages (\n  id BIGSERIAL PRIMARY KEY,\n  task_id TEXT NOT NULL,\n  direction TEXT NOT NULL CHECK (direction IN ('outbound', 'inbound')),\n  message TEXT NOT NULL,\n  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),\n  read_at TIMESTAMPTZ\n);\nCREATE INDEX agent_messages_task_idx ON public.agent_messages (task_id, created_at DESC);\nALTER TABLE public.agent_messages ENABLE ROW LEVEL SECURITY;\nCREATE POLICY \"service role only\" ON public.agent_messages USING (false);\n```\n\n## Teil 2: scripts/notify-telegram.mjs\n\nScript das:\n1. Eine Nachricht via Telegram Bot API sendet\n2. Dann alle 10 Sekunden die agent_messages-Tabelle pollt bis eine inbound-Antwort für dieselbe task_id ankommt\n3. Die Antwort in stdout ausgibt und beendet\n4. Nach 10 Minuten ohne Antwort mit Timeout-Meldung beendet\n\nVerwendung:\n```\nANTWORT=$(node scripts/notify-telegram.mjs \"TASK_GID\" \"Soll ich auch X anpassen?\")\necho \"User hat geantwortet: $ANTWORT\"\n```\n\nEnvironment Variables (bereits als Replit Secrets setzen):\n- TELEGRAM_BOT_TOKEN\n- TELEGRAM_CHAT_ID  \n- SUPABASE_URL\n- SUPABASE_SERVICE_ROLE_KEY\n\n```js\n// scripts/notify-telegram.mjs\nimport { createClient } from '@supabase/supabase-js';\n\nconst TASK_ID = process.argv[2];\nconst MESSAGE = process.argv[3];\nconst TOKEN = process.env.TELEGRAM_BOT_TOKEN;\nconst CHAT_ID = process.env.TELEGRAM_CHAT_ID;\nconst supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);\n\nasync function sendTelegram(text) {\n  await fetch(`https://api.telegram.org/bot${TOKEN}/sendMessage`, {\n    method: 'POST',\n    headers: { 'Content-Type': 'application/json' },\n    body: JSON.stringify({ chat_id: CHAT_ID, text })\n  });\n}\n\nasync function pollForReply(taskId, afterTime) {\n  const deadline = Date.now() + 10 * 60 * 1000; // 10 Minuten\n  while (Date.now() < deadline) {\n    await new Promise(r => setTimeout(r, 10000));\n    const { data } = await supabase\n      .from('agent_messages')\n      .select('message')\n      .eq('task_id', taskId)\n      .eq('direction', 'inbound')\n      .gt('created_at', afterTime)\n      .order('created_at', { ascending: true })\n      .limit(1);\n    if (data && data.length > 0) return data[0].message;\n  }\n  return null;\n}\n\nconst sentAt = new Date().toISOString();\nawait supabase.from('agent_messages').insert({ task_id: TASK_ID, direction: 'outbound', message: MESSAGE });\nawait sendTelegram(`🤖 Replit-Frage (Task ${TASK_ID}):\\n\\n${MESSAGE}\\n\\nBitte antworte direkt auf diese Nachricht.`);\n\nconst reply = await pollForReply(TASK_ID, sentAt);\nif (reply) {\n  console.log(reply);\n} else {\n  console.log('TIMEOUT');\n}\n```\n\n## Fix-Report\nbash scripts/finalize-task.sh TASK_GID_HIER\nTask-GID: wird nach Erstellung bekannt"
-        },
-        {
-          "gid": "1214984553280798",
-          "name": "Android App: Capacitor Android Platform einrichten + erster Build",
-          "completed": false,
-          "due_on": "2026-05-20",
-          "assignee": null,
-          "section": "Unbenannter Abschnitt",
-          "notes": "## Ziel\nDie bestehende Capacitor-App um die Android-Plattform erweitern, sodass ein signierbares AAB für den Google Play Store gebaut werden kann.\n\n## Replit-Part (was Replit macht)\n1. `npx cap add android` — Android-Plattform hinzufügen\n2. `capacitor.config.ts` prüfen: appId, appName, webDir korrekt\n3. `npx cap sync` — Web-Assets in Android-Projekt synchronisieren\n4. `android/app/src/main/AndroidManifest.xml` — nötige Permissions prüfen (INTERNET, CAMERA falls gebraucht, etc.)\n5. `android/app/build.gradle` — versionCode + versionName setzen\n6. Sicherstellen dass alle Capacitor-Plugins (HealthKit-Äquivalent für Android = Health Connect, Push Notifications, etc.) korrekt konfiguriert sind\n\n## Was Lucas danach lokal macht\n1. Android Studio öffnen → `android/` Ordner öffnen\n2. Keystore generieren (einmalig): `keytool -genkey -v -keystore glev.keystore -alias glev -keyalg RSA -keysize 2048 -validity 10000`\n3. In Android Studio: Build → Generate Signed Bundle/APK → AAB wählen → Keystore angeben → Release Build\n4. AAB hochladen auf Google Play Console\n\n## Fix-Report\nNach Abschluss: bash scripts/finalize-task.sh 1214984XXXXXXX\nTask-GID: wird nach Erstellung bekannt"
-        },
-        {
-          "gid": "1214952632474562",
-          "name": "Apple Health Integration — Replit Prompt ausführen",
-          "completed": false,
-          "due_on": null,
-          "assignee": {
-            "gid": "1213432759001229",
-            "name": "rave pickle"
-          },
-          "section": "Unbenannter Abschnitt",
-          "notes": "Implementierungsspezifikation liegt fertig vor unter Prompts/REPLIT_PROMPT_APPLE_HEALTH.md (312 Zeilen). Kein Code implementiert bisher.\n\nWas zu tun ist:\n- Capacitor-Plugin @capacitor-community/health-kit installieren\n- lib/cgm/appleHealth.ts erstellen\n- CGM-Dispatcher anpassen (lib/cgm/index.ts)\n- Supabase-Constraint für cgm_type = 'apple_health' setzen\n- Xcode: HealthKit Entitlement aktivieren\n- Test auf physischem Gerät\n\nPrompt direkt copy-paste in Replit Agent eingeben."
-        },
-        {
-          "gid": "1215000275059028",
-          "name": "GitHub Actions: Android AAB Release Pipeline",
-          "completed": false,
-          "due_on": "2026-05-21",
-          "assignee": null,
-          "section": "Unbenannter Abschnitt",
-          "notes": "Nach erstem erfolgreichem manuellem Play-Store-Upload umsetzen.\n\nWas zu bauen ist:\n- .github/workflows/android-release.yml — triggert auf push to main oder workflow_dispatch\n- ubuntu-latest Runner mit Java 17 + Android SDK\n- npx cap sync android, dann ./gradlew bundleRelease\n- Keystore als base64-encodiertes GitHub Secret, wird zur Build-Zeit dekodiert\n- Signiertes AAB wird als Workflow-Artifact hochgeladen\n- scripts/bump-android-version.mjs für automatischen versionCode-Bump\n\nRelevante Dateien: android/SIGNING_SETUP.md, android/app/build.gradle"
         },
         {
           "gid": "1214277574739094",
@@ -2056,15 +1885,6 @@
       "gid": "1214277743593557",
       "name": "Glev — Sprint 9: Soft-Launch-Vorbereitung",
       "tasks": [
-        {
-          "gid": "1215000275059028",
-          "name": "GitHub Actions: Android AAB Release Pipeline",
-          "completed": false,
-          "due_on": "2026-05-21",
-          "assignee": null,
-          "section": "Unbenannter Abschnitt",
-          "notes": "Nach erstem erfolgreichem manuellem Play-Store-Upload umsetzen.\n\nWas zu bauen ist:\n- .github/workflows/android-release.yml — triggert auf push to main oder workflow_dispatch\n- ubuntu-latest Runner mit Java 17 + Android SDK\n- npx cap sync android, dann ./gradlew bundleRelease\n- Keystore als base64-encodiertes GitHub Secret, wird zur Build-Zeit dekodiert\n- Signiertes AAB wird als Workflow-Artifact hochgeladen\n- scripts/bump-android-version.mjs für automatischen versionCode-Bump\n\nRelevante Dateien: android/SIGNING_SETUP.md, android/app/build.gradle"
-        },
         {
           "gid": "1214984555898741",
           "name": "Offline-First: SQLite lokaler Cache via Capacitor Plugin",
