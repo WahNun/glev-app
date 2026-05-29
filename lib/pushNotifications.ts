@@ -149,10 +149,20 @@ export async function initPushNotifications(): Promise<void> {
       if (token?.value) persistToken(token.value, platform);
     });
 
-    await PushNotifications.addListener("registrationError", () => {
-      // Most common cause on Android: missing / malformed
-      // google-services.json. Swallow silently — the WebView app keeps
-      // working without push.
+    await PushNotifications.addListener("registrationError", (err) => {
+      // Most common causes:
+      //   iOS: Push Notifications capability missing from App ID / provisioning profile
+      //   Android: missing / malformed google-services.json
+      // Store in localStorage so it's visible in DevTools even on device.
+      try {
+        const msg = typeof err === "object" && err !== null
+          ? JSON.stringify(err)
+          : String(err);
+        window.localStorage.setItem("glev_push_error", msg);
+        console.error("[glev] push registrationError:", msg);
+      } catch {
+        /* non-fatal */
+      }
     });
 
     await PushNotifications.register();
