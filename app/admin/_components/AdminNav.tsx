@@ -35,6 +35,12 @@ const GROUPS: ReadonlyArray<NavGroup> = [
       { href: "/admin/outbox", label: "Outbox" },
     ],
   },
+  {
+    label: "KI",
+    items: [
+      { href: "/admin/mistral", label: "Mistral TTS" },
+    ],
+  },
 ];
 
 function isItemActive(pathname: string, href: string) {

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { authedClient } from "@/app/api/insulin/_helpers";
+import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
 
 // Voxtral TTS model — matches what Mistral Studio uses.
 // Override via MISTRAL_TTS_MODEL env var if Mistral ships a newer model.
@@ -28,11 +29,24 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "text too long (max 1000 chars)" }, { status: 400 });
   }
 
-  // Voxtral TTS voices are named personas (e.g. "Oliver", "Amara") — not
-  // language codes like "de_female". Set MISTRAL_TTS_VOICE_ID in Vercel env to
-  // the exact name you picked in Mistral Studio. If unset, Mistral uses its
-  // default voice.
-  const voiceId = process.env.MISTRAL_TTS_VOICE_ID ?? "Jane";
+  // Load central voice config from admin_tts_config (service-role, fire-and-forget).
+  // Priority: ref_audio (admin upload) > voice_id (DB) > env var > Mistral default.
+  let refAudio: string | null = null;
+  let dbVoiceId: string | null = null;
+  try {
+    const sb = getSupabaseAdmin();
+    const { data: cfg } = await sb
+      .from("admin_tts_config")
+      .select("ref_audio, voice_id")
+      .eq("id", "singleton")
+      .maybeSingle();
+    refAudio = cfg?.ref_audio ?? null;
+    dbVoiceId = cfg?.voice_id ?? null;
+  } catch {
+    // Table may not exist yet in dev — fall back to env var below.
+  }
+
+  const voiceId = dbVoiceId ?? process.env.MISTRAL_TTS_VOICE_ID ?? "Jane";
 
   // Voxtral TTS is LLM-based and responds to speaking-style instructions
   // prepended to the input — same technique used in Mistral Studio.
@@ -43,7 +57,7 @@ export async function POST(req: NextRequest) {
     model: TTS_MODEL,
     input: styledInput,
     response_format: "mp3",
-    ...(voiceId ? { voice_id: voiceId } : {}),
+    ...(refAudio ? { ref_audio: refAudio } : { voice_id: voiceId }),
   };
 
   const upstream = await fetch("https://api.mistral.ai/v1/audio/speech", {
