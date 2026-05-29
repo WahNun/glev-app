@@ -30,6 +30,23 @@ Supabase Edge Function Secrets für hypo-check Edge Function:
 - APNS_KEY_P8, APNS_KEY_ID, APNS_TEAM_ID, APNS_BUNDLE_ID (iOS)
 → Supabase Dashboard → Project Settings → Edge Functions → Secrets
 
-## Status (2026-05-29)
-- Client-seitige Token-Registrierung: ❌ kein Token (Provisioning-Profil-Problem, neuer Build nötig)
-- Server-seitiger Hypo-Push (hypo-check Edge Function): ❓ ungetestet (erst wenn Token-Problem gelöst)
+## Echter Root Cause (gefunden 2026-05-30)
+**AppDelegate.swift fehlten zwei Pflichtmethoden** für Capacitor 4+:
+
+```swift
+func application(_ application: UIApplication, didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {
+    NotificationCenter.default.post(name: .capacitorDidRegisterForRemoteNotifications, object: deviceToken)
+}
+func application(_ application: UIApplication, didFailToRegisterForRemoteNotificationsWithError error: Error) {
+    NotificationCenter.default.post(name: .capacitorDidFailToRegisterForRemoteNotifications, object: error)
+}
+```
+
+Ohne diese leitet iOS den APNs-Token ans AppDelegate zurück, aber das Capacitor-Plugin empfängt ihn nie → `registration`- und `registrationError`-Events feuern nicht → JS hängt still nach `register() called`.
+
+**Fix:** Beide Methoden in `ios/App/App/AppDelegate.swift` ergänzt (2026-05-30). Neuen Build nötig.
+
+## Status (2026-05-30)
+- Root Cause: AppDelegate-Methoden fehlten → Fix committed
+- Client-seitige Token-Registrierung: ⏳ Fix deployed, neuer TestFlight-Build ausstehend
+- Server-seitiger Hypo-Push (hypo-check Edge Function): ❓ ungetestet (erst wenn Token funktioniert)
