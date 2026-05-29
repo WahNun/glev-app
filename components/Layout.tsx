@@ -13,7 +13,6 @@ import GlevAIButton from "@/components/GlevAIButton";
 import GlevAIConsentModal from "@/components/GlevAIConsentModal";
 import GlevAIChatSheet from "@/components/GlevAIChatSheet";
 import { useGlevAI } from "@/lib/useGlevAI";
-import ThemeToggle from "@/components/ThemeToggle";
 import { useFeatureFlag } from "@/lib/featureFlags";
 import { useScreenContext } from "@/hooks/useScreenContext";
 import { EngineHeaderProvider, useEngineHeader } from "@/lib/engineHeaderContext";
@@ -939,16 +938,6 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
         </nav>
 
         <div style={{ marginTop: 16, borderTop: `1px solid ${BORDER}`, paddingTop: 12, width: "100%", display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
-          <ThemeToggle
-            style={{
-              width: "100%",
-              borderRadius: 10,
-              height: 38,
-              border: "none",
-              background: "transparent",
-              color: "var(--text-ghost)",
-            }}
-          />
           <button
             aria-label={signOutConfirm ? "Confirm sign out" : "Sign out of Glev"}
             onClick={signOutConfirm ? handleSignOut : () => setSignOutConfirm(true)}

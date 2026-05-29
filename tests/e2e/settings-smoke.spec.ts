@@ -13,25 +13,21 @@
 //   layout regressions fail loudly here first, before any picker test runs.
 //
 // What this asserts:
-//   1. Every always-visible SettingsSection heading is rendered as an <h2>.
-//      Headings are matched against both the German default and the English
-//      variant (locale-agnostic, same technique as theme/carb/language picker
-//      specs) so the test is stable regardless of the active locale at
-//      runtime.
-//   2. One primary SettingsRow (or the Insulin expand button) per section is
-//      present and visible, matched by aria-label. If a row is accidentally
-//      removed, renamed, or hidden behind a broken gating condition, this is
-//      the single place that fails with a clear label instead of a timeout
-//      inside a deeper picker spec.
+//   1. Every SettingsSection heading is visible after navigating to its tab.
+//      The Settings page uses cluster meta tabs (Konto/Glukose/Insulin/CGM/
+//      App/Mehr) so headings are checked per-tab. Headings are matched
+//      against both the German and English variant (locale-agnostic).
+//   2. One primary SettingsRow (or the Insulin expand button) per section
+//      is present and visible after navigating to its tab.
+//
+// Note: Appearance and Goals are no longer separate SettingsSection headings
+//   — they are SettingsRows inside the App section since the settings tabs
+//   refactor. Their rows (ROW_APPEARANCE, ROW_MACROS) are still checked.
 //
 // Feature-gated sections (aiVoiceEnabled=Glev AI, plan==="plus"→Glev+) are
 // intentionally excluded — they are not rendered for the test user by
 // default, and asserting their absence would couple this test to plan/flag
 // state rather than page structure.
-//
-// We drive the test through the real login flow so the test covers the full
-// stack: login → middleware → settings page render. Same pattern as
-// theme-picker.spec.ts, carb-unit-picker.spec.ts, and language-picker.spec.ts.
 
 import { expect, test, type Page } from "@playwright/test";
 import fs from "node:fs";
@@ -56,8 +52,21 @@ async function loginAsTestUser(page: Page) {
 }
 
 // -------------------------------------------------------------------------
+// Tab button text regexes (locale-agnostic).
+// Tab labels: Konto/Account, Glukose/Glucose, Insulin, CGM, App, Mehr (hardcoded).
+// -------------------------------------------------------------------------
+const TAB_KONTO   = /^(Konto|Account)$/i;
+const TAB_GLUKOSE = /^(Glukose|Glucose)$/i;
+const TAB_INSULIN = /^Insulin$/i;
+const TAB_CGM     = /^CGM$/i;
+const TAB_APP     = /^App$/i;
+const TAB_MEHR    = /^Mehr$/i; // hardcoded in both locales
+
+// -------------------------------------------------------------------------
 // Section heading regexes (h2 text, locale-agnostic).
 // Each pattern accepts both the German default and the English variant.
+// Note: Appearance (Erscheinungsbild) and Goals (Ziele) are no longer
+//   separate section headings — they are rows inside the App section.
 // -------------------------------------------------------------------------
 const HEADING_ACCOUNT      = /^(Account|Konto)$/i;
 const HEADING_GLUCOSE      = /^(Glucose|Glukose)$/i;
@@ -65,42 +74,33 @@ const HEADING_INSULIN      = /^Insulin$/i;
 const HEADING_APPOINTMENTS = /^(Appointments|Termine)$/i;
 const HEADING_CGM          = /^CGM$/i;
 const HEADING_APP          = /^App$/i;
-const HEADING_APPEARANCE   = /^(Appearance|Erscheinungsbild)$/i;
-const HEADING_GOALS        = /^(Goals|Ziele)$/i;
 const HEADING_DATA         = /^(Data|Daten)$/i;
 const HEADING_INTEGRATIONS = /^(Integrations|Integrationen)$/i;
 const HEADING_SUPPORT      = /^(Help & Feedback|Hilfe & Feedback)$/i;
 
 // -------------------------------------------------------------------------
 // Primary row aria-label regexes (locale-agnostic).
-//
-// Row aria-labels follow one of two patterns:
-//   en:  "Open {label}"       (tSettings("row_open_aria", { label }))
-//   de:  "{label} öffnen"     (tSettings("row_open_aria", { label }))
-//
-// The Insulin section uses a plain button (not SettingsRow) with:
-//   en:  "Expand insulin settings"
-//   de:  "Insulin-Einstellungen aufklappen"
 // -------------------------------------------------------------------------
 const ROW_ACCOUNT       = /(Open Account|Konto öffnen)/i;
 const ROW_TARGET_RANGE  = /(Open Target range|Zielbereich öffnen)/i;
 const ROW_INSULIN       = /(Expand insulin settings|Insulin-Einstellungen aufklappen)/i;
 const ROW_APPOINTMENTS  = /(Open Doctor appointments|Arzttermine öffnen)/i;
-// row_libre2 is "FreeStyle Libre 2 / 3" in both locales — one regex covers both.
 const ROW_CGM           = /Open FreeStyle Libre 2 \/ 3|FreeStyle Libre 2 \/ 3 öffnen/i;
 const ROW_NOTIFICATIONS = /(Open Notifications|Benachrichtigungen öffnen)/i;
 const ROW_APPEARANCE    = /(Open Appearance|Erscheinungsbild öffnen)/i;
 const ROW_MACROS        = /(Open Daily Macro Targets|Tägliche Makro-Ziele öffnen)/i;
 const ROW_IMPORT        = /(Open Import data|Daten importieren öffnen)/i;
-// google_sheets_title is "Google Sheets" in both locales.
 const ROW_GOOGLE_SHEETS = /Open Google Sheets|Google Sheets öffnen/i;
 const ROW_SUPPORT       = /(Open Feature Requests|Feature-Wünsche öffnen)/i;
 
-// Short visible timeout for each structural assertion. The sections are
-// rendered synchronously with the initial server HTML (no async loading
-// needed for structure) so 5 s is generous. Keeping it short means the
-// spec fails fast when a section is missing instead of hanging.
+// Short visible timeout per assertion. Sections are SSR'd synchronously.
 const VISIBLE_TIMEOUT = 5_000;
+
+// Helper: click a tab button. Use .first() because the tab bar and the
+// section heading inside it can both match the same text pattern.
+async function clickTab(page: Page, pattern: RegExp) {
+  await page.getByRole("button", { name: pattern }).first().click();
+}
 
 test.describe("Settings page — structural smoke test", () => {
   test.beforeEach(async ({ page, context }) => {
@@ -108,55 +108,125 @@ test.describe("Settings page — structural smoke test", () => {
     await loginAsTestUser(page);
   });
 
-  test("every major SettingsSection heading is visible", async ({ page }) => {
+  test("every major SettingsSection heading is visible in its tab", async ({ page }) => {
     await page.goto("/settings");
 
-    // Assert all always-visible section headings in document order.
-    // Using `heading` role maps to the <h2> elements inside SettingsSection
-    // (components/SettingsRow.tsx → SettingsSection renders an <h2>).
-    for (const [label, pattern] of [
-      ["Account",      HEADING_ACCOUNT],
-      ["Glucose",      HEADING_GLUCOSE],
-      ["Insulin",      HEADING_INSULIN],
-      ["Appointments", HEADING_APPOINTMENTS],
-      ["CGM",          HEADING_CGM],
-      ["App",          HEADING_APP],
-      ["Appearance",   HEADING_APPEARANCE],
-      ["Goals",        HEADING_GOALS],
-      ["Data",         HEADING_DATA],
-      ["Integrations", HEADING_INTEGRATIONS],
-      ["Support",      HEADING_SUPPORT],
-    ] as const) {
-      await expect(
-        page.getByRole("heading", { name: pattern }),
-        `section heading "${label}" should be visible`,
-      ).toBeVisible({ timeout: VISIBLE_TIMEOUT });
-    }
+    // ── Konto tab (default, no click needed) ──────────────────────────
+    await expect(
+      page.getByRole("heading", { name: HEADING_ACCOUNT }),
+      'section heading "Account" should be visible in Konto tab',
+    ).toBeVisible({ timeout: VISIBLE_TIMEOUT });
+
+    // ── Glukose tab ───────────────────────────────────────────────────
+    await clickTab(page, TAB_GLUKOSE);
+    await expect(
+      page.getByRole("heading", { name: HEADING_GLUCOSE }),
+      'section heading "Glucose" should be visible in Glukose tab',
+    ).toBeVisible({ timeout: VISIBLE_TIMEOUT });
+    await expect(
+      page.getByRole("heading", { name: HEADING_APPOINTMENTS }),
+      'section heading "Appointments" should be visible in Glukose tab',
+    ).toBeVisible({ timeout: VISIBLE_TIMEOUT });
+
+    // ── Insulin tab ───────────────────────────────────────────────────
+    await clickTab(page, TAB_INSULIN);
+    await expect(
+      page.getByRole("heading", { name: HEADING_INSULIN }),
+      'section heading "Insulin" should be visible in Insulin tab',
+    ).toBeVisible({ timeout: VISIBLE_TIMEOUT });
+
+    // ── CGM tab ───────────────────────────────────────────────────────
+    await clickTab(page, TAB_CGM);
+    await expect(
+      page.getByRole("heading", { name: HEADING_CGM }),
+      'section heading "CGM" should be visible in CGM tab',
+    ).toBeVisible({ timeout: VISIBLE_TIMEOUT });
+
+    // ── App tab (Appearance + Goals merged as rows, not sections) ──────
+    await clickTab(page, TAB_APP);
+    await expect(
+      page.getByRole("heading", { name: HEADING_APP }),
+      'section heading "App" should be visible in App tab',
+    ).toBeVisible({ timeout: VISIBLE_TIMEOUT });
+
+    // ── Mehr tab ──────────────────────────────────────────────────────
+    await clickTab(page, TAB_MEHR);
+    await expect(
+      page.getByRole("heading", { name: HEADING_DATA }),
+      'section heading "Data" should be visible in Mehr tab',
+    ).toBeVisible({ timeout: VISIBLE_TIMEOUT });
+    await expect(
+      page.getByRole("heading", { name: HEADING_INTEGRATIONS }),
+      'section heading "Integrations" should be visible in Mehr tab',
+    ).toBeVisible({ timeout: VISIBLE_TIMEOUT });
+    await expect(
+      page.getByRole("heading", { name: HEADING_SUPPORT }),
+      'section heading "Support" should be visible in Mehr tab',
+    ).toBeVisible({ timeout: VISIBLE_TIMEOUT });
   });
 
-  test("every major section has its primary row visible", async ({ page }) => {
+  test("every major section has its primary row visible in its tab", async ({ page }) => {
     await page.goto("/settings");
 
-    // One primary row per section, matched by aria-label.
-    // If a row is removed, renamed, or hidden by a broken gating condition,
-    // this assertion fails with the row's name — no 15-second picker timeout.
-    for (const [label, pattern] of [
-      ["Account row",           ROW_ACCOUNT],
-      ["Target range row",      ROW_TARGET_RANGE],
-      ["Insulin expand button", ROW_INSULIN],
-      ["Appointments row",      ROW_APPOINTMENTS],
-      ["Libre 2/3 CGM row",     ROW_CGM],
-      ["Notifications row",     ROW_NOTIFICATIONS],
-      ["Appearance row",        ROW_APPEARANCE],
-      ["Macro targets row",     ROW_MACROS],
-      ["Import data row",       ROW_IMPORT],
-      ["Google Sheets row",     ROW_GOOGLE_SHEETS],
-      ["Feature Requests row",  ROW_SUPPORT],
-    ] as const) {
-      await expect(
-        page.getByRole("button", { name: pattern }),
-        `"${label}" should be visible`,
-      ).toBeVisible({ timeout: VISIBLE_TIMEOUT });
-    }
+    // ── Konto tab (default) ───────────────────────────────────────────
+    await expect(
+      page.getByRole("button", { name: ROW_ACCOUNT }),
+      '"Account row" should be visible in Konto tab',
+    ).toBeVisible({ timeout: VISIBLE_TIMEOUT });
+
+    // ── Glukose tab ───────────────────────────────────────────────────
+    await clickTab(page, TAB_GLUKOSE);
+    await expect(
+      page.getByRole("button", { name: ROW_TARGET_RANGE }),
+      '"Target range row" should be visible in Glukose tab',
+    ).toBeVisible({ timeout: VISIBLE_TIMEOUT });
+    await expect(
+      page.getByRole("button", { name: ROW_APPOINTMENTS }),
+      '"Appointments row" should be visible in Glukose tab',
+    ).toBeVisible({ timeout: VISIBLE_TIMEOUT });
+
+    // ── Insulin tab ───────────────────────────────────────────────────
+    await clickTab(page, TAB_INSULIN);
+    await expect(
+      page.getByRole("button", { name: ROW_INSULIN }),
+      '"Insulin expand button" should be visible in Insulin tab',
+    ).toBeVisible({ timeout: VISIBLE_TIMEOUT });
+
+    // ── CGM tab ───────────────────────────────────────────────────────
+    await clickTab(page, TAB_CGM);
+    await expect(
+      page.getByRole("button", { name: ROW_CGM }),
+      '"Libre 2/3 CGM row" should be visible in CGM tab',
+    ).toBeVisible({ timeout: VISIBLE_TIMEOUT });
+
+    // ── App tab ───────────────────────────────────────────────────────
+    await clickTab(page, TAB_APP);
+    await expect(
+      page.getByRole("button", { name: ROW_NOTIFICATIONS }),
+      '"Notifications row" should be visible in App tab',
+    ).toBeVisible({ timeout: VISIBLE_TIMEOUT });
+    await expect(
+      page.getByRole("button", { name: ROW_APPEARANCE }),
+      '"Appearance row" should be visible in App tab',
+    ).toBeVisible({ timeout: VISIBLE_TIMEOUT });
+    await expect(
+      page.getByRole("button", { name: ROW_MACROS }),
+      '"Macro targets row" should be visible in App tab',
+    ).toBeVisible({ timeout: VISIBLE_TIMEOUT });
+
+    // ── Mehr tab ──────────────────────────────────────────────────────
+    await clickTab(page, TAB_MEHR);
+    await expect(
+      page.getByRole("button", { name: ROW_IMPORT }),
+      '"Import data row" should be visible in Mehr tab',
+    ).toBeVisible({ timeout: VISIBLE_TIMEOUT });
+    await expect(
+      page.getByRole("button", { name: ROW_GOOGLE_SHEETS }),
+      '"Google Sheets row" should be visible in Mehr tab',
+    ).toBeVisible({ timeout: VISIBLE_TIMEOUT });
+    await expect(
+      page.getByRole("button", { name: ROW_SUPPORT }),
+      '"Feature Requests row" should be visible in Mehr tab',
+    ).toBeVisible({ timeout: VISIBLE_TIMEOUT });
   });
 });
