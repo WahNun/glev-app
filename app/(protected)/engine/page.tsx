@@ -847,6 +847,11 @@ export default function EnginePage() {
   // Confirm-Log + integrated chat state. mealTime defaults to "now"; insulin
   // is left blank until a recommendation arrives or the user types one in.
   const [mealTime,    setMealTime]    = useState<string>(() => nowLocalDateTime());
+  // Ref that always holds the latest mealTime value — lets async callbacks
+  // (e.g. handlePullCgm) read the *current* meal time without being stale
+  // closures over the render-time value.
+  const mealTimeRef = useRef<string>(mealTime);
+  useEffect(() => { mealTimeRef.current = mealTime; }, [mealTime]);
   const [insulin,     setInsulin]     = useState("");
   const [confirming,  setConfirming]  = useState(false);
   const [confirmErr,  setConfirmErr]  = useState("");
@@ -994,7 +999,15 @@ export default function EnginePage() {
 
     if (nowMs - mealMs < PAST_THRESHOLD_MS) return; // "now" or future — skip
 
-    if (trendSamples.length === 0) return; // no CGM data yet
+    // If we have no trend samples yet, trigger a fresh fetch and wait for it.
+    // The effect will re-run automatically once trendSamples is populated
+    // (it's in the dep array), so we'll find the historical reading on the
+    // next pass without any extra wiring.
+    if (trendSamples.length === 0) {
+      // eslint-disable-next-line @typescript-eslint/no-floating-promises
+      refreshTrendSamples();
+      return;
+    }
 
     // Find the sample closest to mealMs within ±15 min.
     let best: { value: number; delta: number } | null = null;
@@ -1459,7 +1472,7 @@ export default function EnginePage() {
       // over the deterministic classifyMeal fallback. Validate against the
       // four canonical labels so a malformed response can't slip through.
       const aiCls = pData.mealType;
-      if (typeof aiCls === "string" && ["FAST_CARBS", "HIGH_FAT", "HIGH_PROTEIN", "BALANCED"].includes(aiCls)) {
+      if (typeof aiCls === "string" && ["FAST_CARBS", "HIGH_FAT", "HIGH_PROTEIN", "BALANCED", "HIGH_FIBER"].includes(aiCls)) {
         setAiMealType(aiCls);
       } else {
         setAiMealType(null);
@@ -1555,6 +1568,19 @@ export default function EnginePage() {
   // field always reflects the user's level at meal time.
   async function handlePullCgm() {
     if (cgmPulling) return;
+    // Race-guard: if the user has already set a past meal time (> 5 min ago)
+    // AND the historical auto-fill has already populated the glucose field,
+    // don't overwrite it with the current live reading.  handlePullCgm fires
+    // fire-and-forget after voice parsing (which assumes "now"), but by the
+    // time the response arrives the user may have shifted to a past time.
+    // We read mealTimeRef (not the closure-captured mealTime) so we see the
+    // value the user *currently* has selected, not the one at call-time.
+    {
+      const currentMealMs = Date.parse(mealTimeRef.current);
+      const mealIsPast =
+        Number.isFinite(currentMealMs) && Date.now() - currentMealMs > 5 * 60_000;
+      if (mealIsPast && glucoseProvenanceRef.current === "historical") return;
+    }
     setCgmPulling(true);
     try {
       // Step 1 — try a recent fingerstick. Non-fatal on failure: fall through
