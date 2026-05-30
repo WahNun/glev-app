@@ -76,7 +76,8 @@ function LegalPageInner() {
             <div className="contact-block">
               <strong>Lucas Wahnon</strong><br />
               Einzelunternehmer (Freiberufler / Recibo Verde)<br />
-              Lissabon, Portugal<br />
+              Rua Frei Amador Arrais 13<br />
+              1700-202 Lissabon, Portugal<br />
               E-Mail: <a href="mailto:info@glev.app">info@glev.app</a><br />
               Website: <a href="https://glev.app" target="_blank" rel="noopener">glev.app</a>
             </div>
@@ -300,7 +301,8 @@ function LegalPageInner() {
             <div className="contact-block">
               <strong>Lucas Wahnon</strong><br />
               Einzelunternehmer (Freiberufler / Recibo Verde)<br />
-              Lissabon, Portugal<br />
+              Rua Frei Amador Arrais 13<br />
+              1700-202 Lissabon, Portugal<br />
               E-Mail: <a href="mailto:info@glev.app">info@glev.app</a><br />
               Website: <a href="https://glev.app" target="_blank" rel="noopener">glev.app</a>
             </div>
