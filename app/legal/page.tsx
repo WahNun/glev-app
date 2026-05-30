@@ -74,7 +74,7 @@ function LegalPageInner() {
             <h2><span className="num">1</span> Verantwortlicher</h2>
             <p>Verantwortlicher im Sinne der DSGVO ist:</p>
             <div className="contact-block">
-              <strong>Lucas Rolleke Pinto Wahnon</strong><br />
+              <strong>Lucas Wahnon</strong><br />
               Einzelunternehmer (Freiberufler / Recibo Verde)<br />
               Lissabon, Portugal<br />
               E-Mail: <a href="mailto:info@glev.app">info@glev.app</a><br />
@@ -201,7 +201,7 @@ function LegalPageInner() {
           <section id="dse-10">
             <h2><span className="num">10</span> Datenschutzbehörde &amp; Kontakt</h2>
             <div className="contact-block">
-              <strong>Lucas Rolleke Pinto Wahnon</strong><br />
+              <strong>Lucas Wahnon</strong><br />
               E-Mail: <a href="mailto:info@glev.app">info@glev.app</a><br />
               Website: <a href="https://glev.app" target="_blank" rel="noopener">glev.app</a>
             </div>
@@ -298,7 +298,7 @@ function LegalPageInner() {
             <h2><span className="num">1</span> Anbieter &amp; Vertragsgegenstand</h2>
             <p>Anbieter der Glev App ist:</p>
             <div className="contact-block">
-              <strong>Lucas Rolleke Pinto Wahnon</strong><br />
+              <strong>Lucas Wahnon</strong><br />
               Einzelunternehmer (Freiberufler / Recibo Verde)<br />
               Lissabon, Portugal<br />
               E-Mail: <a href="mailto:info@glev.app">info@glev.app</a><br />
@@ -467,7 +467,7 @@ function LegalPageInner() {
       </div>
 
       <footer className="legal-footer">
-        © 2026 Lucas Rolleke Pinto Wahnon · Glev App ·{" "}
+        © 2026 Lucas Wahnon · Glev App ·{" "}
         <a href="mailto:info@glev.app">info@glev.app</a>
         <span className="legal-footer-sep"> · </span>
         <Link href="/" className="legal-back-link">Zurück zur Startseite</Link>
