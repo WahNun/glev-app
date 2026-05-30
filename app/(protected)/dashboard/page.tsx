@@ -160,7 +160,7 @@ function RateTripletCard({ cards }: { cards: CardData[] }) {
   return (
     <div
       onClick={() => setFlipped(f => !f)}
-      style={{ position: "relative", perspective: 1200, cursor: "pointer", minHeight: 120 }}
+      style={{ position: "relative", perspective: 1200, cursor: "pointer", height: 96 }}
     >
       <div
         style={{
@@ -699,12 +699,15 @@ export default function DashboardPage() {
       title: t("cluster_insulin"),
       cards: [
         { id: "iob",         node: <IOBCard insulin={insulin} insulinType={insulinType} meals={meals} currentBg={latestCgmBg} onLogBasal={() => setBasalSheetOpen(true)} /> },
-        // Gated adapt-score sits right after the IOB/bolus card so it
-        // is reachable via a single swipe but doesn't dominate the view.
-        ...(controlScoreGated ? [{ id: "control-score", node: controlScoreNode }] : []),
         { id: "iob-history", node: <IOBHistoryChart insulin={insulin} insulinType={insulinType} meals={meals} /> },
       ],
     },
+    // Gated adapt-score: standalone cluster below insulin (not in same swipe pager).
+    // Pro/Smart-unlocked: already in control cluster above.
+    ...(controlScoreGated
+      ? [{ id: "adapt-score-gated", title: t("cluster_control"), cards: [{ id: "control-score", node: controlScoreNode }] }]
+      : []
+    ),
     {
       id: "recents",
       title: t("cluster_recents"),
