@@ -12,6 +12,7 @@
 
 import { cookies } from "next/headers";
 import { createHmac, timingSafeEqual } from "crypto";
+import { authenticator } from "otplib";
 
 export const ADMIN_COOKIE = "glev_ops_token";
 const COOKIE_PATH       = "/glev-ops";
@@ -54,7 +55,6 @@ export async function verifyAdminCredentials(
   const emailOk    = safeEqual(email.toLowerCase().trim(), expectedEmail);
   const passwordOk = safeEqual(password, expectedPassword);
 
-  const { authenticator } = await import("otplib");
   const totpOk = authenticator.verify({ token: totp.trim(), secret: totpSecret });
 
   return emailOk && passwordOk && totpOk;
