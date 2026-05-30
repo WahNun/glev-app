@@ -183,9 +183,38 @@ export default function SettingsPage() {
         {row(GREEN,
           <svg {...ip}><rect x="3" y="3" width="18" height="18" rx="2" /><line x1="3" y1="9" x2="21" y2="9" /><line x1="3" y1="15" x2="21" y2="15" /><line x1="9" y1="3" x2="9" y2="21" /><line x1="15" y1="3" x2="15" y2="21" /></svg>,
           t("section_integrations"), "/settings/integrationen")}
-        {row(PURPLE,
-          <svg {...ip}><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" /></svg>,
-          "Hilfe", "/settings/hilfe")}
+      </NavSection>
+
+      <p style={{ fontSize: 12, fontWeight: 600, color: "var(--text-faint)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6, marginTop: 4 }}>
+        Featurewünsche und Hilfe
+      </p>
+      <NavSection>
+        <button
+          type="button"
+          onClick={() => window.open("https://glev.featurebase.app/", "_blank", "noopener,noreferrer")}
+          style={{ width: "100%", display: "flex", alignItems: "center", gap: 14, padding: "12px 14px", background: "transparent", border: "none", cursor: "pointer", textAlign: "left", color: "inherit" }}
+        >
+          <span aria-hidden style={{ width: 32, height: 32, borderRadius: 8, flexShrink: 0, background: `${PURPLE}18`, color: PURPLE, display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <svg {...ip}><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" /></svg>
+          </span>
+          <span style={{ flex: 1, fontSize: 14, fontWeight: 500, color: "var(--text-strong)", lineHeight: 1.25 }}>
+            {t("row_feature_requests")}
+          </span>
+          <span aria-hidden style={{ flexShrink: 0, color: "var(--text-faint)", fontSize: 18, lineHeight: 1 }}>›</span>
+        </button>
+        <button
+          type="button"
+          onClick={() => router.push("/settings/help/cgm-quellen")}
+          style={{ width: "100%", display: "flex", alignItems: "center", gap: 14, padding: "12px 14px", background: "transparent", border: "none", cursor: "pointer", textAlign: "left", color: "inherit", borderTop: "1px solid var(--border)" }}
+        >
+          <span aria-hidden style={{ width: 32, height: 32, borderRadius: 8, flexShrink: 0, background: `${ACCENT}18`, color: ACCENT, display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <svg {...ip}><path d="M21 12a9 9 0 1 1-3.5-7.1L21 3v6h-6" /><path d="M8 12h.01M12 12h.01M16 12h.01" /></svg>
+          </span>
+          <span style={{ flex: 1, fontSize: 14, fontWeight: 500, color: "var(--text-strong)", lineHeight: 1.25 }}>
+            {t("row_help_cgm_sources")}
+          </span>
+          <span aria-hidden style={{ flexShrink: 0, color: "var(--text-faint)", fontSize: 18, lineHeight: 1 }}>›</span>
+        </button>
       </NavSection>
 
       <div style={{ marginTop: 32, marginBottom: 8 }}>
