@@ -143,30 +143,9 @@ export default function SettingsPage() {
       </div>
 
       <NavSection>
-        {row(ACCENT,
-          <svg {...ip}><circle cx="12" cy="8" r="4" /><path d="M4 21c0-4 4-7 8-7s8 3 8 7" /></svg>,
-          t("section_account"), "/settings/konto", true)}
-        {row(GREEN,
-          <svg {...ip}><path d="M12 2C8 8 6 12 6 15a6 6 0 0 0 12 0c0-3-2-7-6-13z" /></svg>,
-          t("section_glucose"), "/settings/glukose")}
-        {row(ACCENT,
-          <svg {...ip}><rect x="3" y="4" width="18" height="18" rx="2" /><line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" /></svg>,
-          t("section_appointments"), "/settings/termine")}
-        {row(ACCENT,
-          <svg {...ip}><path d="M18 6L6 18" /><path d="M14 4l6 6" /><path d="M4 14l6 6" /></svg>,
-          t("section_insulin"), "/settings/insulin")}
-        {row(ACCENT,
-          <svg {...ip}><path d="M4 12h3l2-6 4 12 2-6h5" /></svg>,
-          "CGM", "/settings/cgm")}
         {row(PURPLE,
-          <svg {...ip}><circle cx="12" cy="12" r="9" /><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18" /></svg>,
-          t("section_app"), "/settings/app")}
-        {row(GREEN,
-          <svg {...ip}><path d="M12 21V9" /><path d="M6 13l6-6 6 6" /><path d="M4 3h16" /></svg>,
-          t("section_data"), "/settings/daten")}
-        {row(GREEN,
-          <svg {...ip}><rect x="3" y="3" width="18" height="18" rx="2" /><line x1="3" y1="9" x2="21" y2="9" /><line x1="3" y1="15" x2="21" y2="15" /><line x1="9" y1="3" x2="9" y2="21" /><line x1="15" y1="3" x2="15" y2="21" /></svg>,
-          t("section_integrations"), "/settings/integrationen")}
+          <svg {...ip}><circle cx="12" cy="12" r="3" /><path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83" /></svg>,
+          "App & Konto", "/settings/app-konto", true)}
       </NavSection>
 
       <p style={{ fontSize: 12, fontWeight: 600, color: "var(--text-faint)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6, marginTop: 4 }}>
@@ -194,6 +173,24 @@ export default function SettingsPage() {
             {referralSharing ? "…" : "›"}
           </span>
         </button>
+      </NavSection>
+
+      <NavSection>
+        {row(GREEN,
+          <svg {...ip}><rect x="3" y="4" width="18" height="18" rx="2" /><line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" /></svg>,
+          "Für den Arzt", "/settings/fuer-den-arzt", true)}
+        {row(ACCENT,
+          <svg {...ip}><path d="M12 2a10 10 0 1 0 10 10" /><path d="M12 12l8-8" /><path d="M18 2h4v4" /></svg>,
+          "Glev Engine", "/settings/glev-engine")}
+        {row(ACCENT,
+          <svg {...ip}><circle cx="12" cy="8" r="4" /><path d="M4 21c0-4 4-7 8-7s8 3 8 7" /></svg>,
+          "Mein Körper", "/settings/mein-koerper")}
+        {row(ACCENT,
+          <svg {...ip}><path d="M18 6L6 18" /><path d="M14 4l6 6" /><path d="M4 14l6 6" /></svg>,
+          "Meine Therapie", "/settings/insulin")}
+        {row(ACCENT,
+          <svg {...ip}><path d="M4 12h3l2-6 4 12 2-6h5" /></svg>,
+          "Sensor & Alarme", "/settings/sensor-alarme")}
       </NavSection>
 
       <p style={{ fontSize: 12, fontWeight: 600, color: "var(--text-faint)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6, marginTop: 4 }}>
