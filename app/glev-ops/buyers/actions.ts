@@ -1,7 +1,7 @@
 "use server";
 
 import { redirect } from "next/navigation";
-import { verifyAdminCredentials, setAdminCookie, clearAdminCookie } from "@/lib/adminAuth";
+import { verifyAdminCredentials, setAdminCookie, clearAdminCookie, isAdminAuthed } from "@/lib/adminAuth";
 
 
 export async function loginAction(formData: FormData): Promise<void> {
