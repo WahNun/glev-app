@@ -2,6 +2,8 @@
 
 import { redirect } from "next/navigation";
 import { verifyAdminCredentials, setAdminCookie, clearAdminCookie, isAdminAuthed } from "@/lib/adminAuth";
+import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
+import { scheduleTrialEmails } from "@/lib/emails/drip-scheduler";
 
 
 export async function loginAction(formData: FormData): Promise<void> {
@@ -31,9 +33,6 @@ export async function logoutAction(): Promise<void> {
  * (kein zweites Invite).
  */
 export async function createMetaLeadAction(formData: FormData): Promise<void> {
-  const { getSupabaseAdmin } = await import("@/lib/supabaseAdmin");
-  const { scheduleTrialEmails } = await import("@/lib/emails/drip-scheduler");
-
   const authed = await isAdminAuthed();
   if (!authed) redirect("/glev-ops/buyers?err=bad");
 

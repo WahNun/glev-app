@@ -2,6 +2,8 @@
 
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
+import { cookies } from "next/headers";
+import { verifyAdminCredentials, setAdminCookie, clearAdminCookie, isAdminAuthed, ADMIN_COOKIE } from "@/lib/adminAuth";
 
 import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
 import { getStripe } from "@/lib/stripeServer";
@@ -34,7 +36,6 @@ import type { EmailLocale } from "@/lib/emails/beta-welcome";
 
 
 export async function loginAction(formData: FormData): Promise<void> {
-  const { verifyAdminCredentials, setAdminCookie } = await import("@/lib/adminAuth");
   const email    = String(formData.get("email")    ?? "");
   const password = String(formData.get("password") ?? "");
   const totp     = String(formData.get("totp")     ?? "");
@@ -45,7 +46,6 @@ export async function loginAction(formData: FormData): Promise<void> {
 }
 
 export async function logoutAction(): Promise<void> {
-  const { clearAdminCookie } = await import("@/lib/adminAuth");
   await clearAdminCookie();
   redirect("/glev-ops/users");
 }
@@ -54,10 +54,8 @@ export async function logoutAction(): Promise<void> {
  * Returns the session token (HMAC) for audit logging if authenticated, else throws.
  */
 async function requireAdminToken(): Promise<string> {
-  const { isAdminAuthed: check, ADMIN_COOKIE } = await import("@/lib/adminAuth");
-  const ok = await check();
+  const ok = await isAdminAuthed();
   if (!ok) throw new Error("nicht eingeloggt");
-  const { cookies } = await import("next/headers");
   const store = await cookies();
   return store.get(ADMIN_COOKIE)?.value ?? "authenticated";
 }
