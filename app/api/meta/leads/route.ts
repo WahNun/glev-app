@@ -24,6 +24,7 @@
 
 import { createClient } from "@supabase/supabase-js";
 import crypto from "node:crypto";
+import { provisionMetaLead } from "@/lib/meta-lead-provisioning";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -179,6 +180,18 @@ async function processChange(value: any, pageId: string) {
     .from("meta_leads")
     .upsert(row, { onConflict: "leadgen_id", ignoreDuplicates: true });
   if (error) throw error;
+
+  // Test-Leads (Meta-Testformular) nicht provisionieren.
+  if (!mapped.is_test && mapped.email) {
+    const locale = /^de/i.test(lead.locale ?? "") ? "de" : "de";
+    const result = await provisionMetaLead(mapped.email, mapped.full_name || null, locale);
+    if (!result.ok) {
+      console.error("[meta/leads] provisionMetaLead failed:", result.reason, mapped.email);
+    } else {
+      console.log("[meta/leads] provisioned:", mapped.email, "created:", result.created);
+    }
+  }
+
   if (NOTIFY_WEBHOOK) {
     const text = `Neuer Meta Lead\nName: ${row.full_name || "-"}\nE-Mail: ${row.email || "-"}\nTelefon: ${row.phone || "-"}\nLead-ID: ${row.leadgen_id}`;
     fetch(NOTIFY_WEBHOOK, {
