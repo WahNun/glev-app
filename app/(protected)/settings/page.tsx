@@ -90,10 +90,12 @@ export default function SettingsPage() {
   const router = useRouter();
   const [referralSharing, setReferralSharing] = useState(false);
   const [referralCopied, setReferralCopied] = useState(false);
+  const [referralError, setReferralError] = useState(false);
 
   const handleShareReferral = useCallback(async () => {
     if (referralSharing) return;
     setReferralSharing(true);
+    setReferralError(false);
     try {
       const res = await fetch("/api/me/referral", { credentials: "include" });
       if (!res.ok) throw new Error("api_error");
@@ -102,20 +104,26 @@ export default function SettingsPage() {
       const title = t("referral_share_title");
       const text = t("referral_share_text", { url: shareUrl });
 
+      let shared = false;
       try {
         const { Share } = await import("@capacitor/share");
         const { value: canShare } = await Share.canShare();
-        if (canShare) { await Share.share({ title, text, url: shareUrl, dialogTitle: title }); return; }
+        if (canShare) { await Share.share({ title, text, url: shareUrl, dialogTitle: title }); shared = true; }
       } catch { /* fallthrough */ }
 
-      if (typeof navigator !== "undefined" && navigator.share) {
-        await navigator.share({ title, text, url: shareUrl }); return;
+      if (!shared && typeof navigator !== "undefined" && navigator.share) {
+        try { await navigator.share({ title, text, url: shareUrl }); shared = true; } catch { /* fallthrough */ }
       }
 
-      await navigator.clipboard.writeText(shareUrl);
-      setReferralCopied(true);
-      setTimeout(() => setReferralCopied(false), 2500);
-    } catch { /* ignore */ } finally {
+      if (!shared) {
+        await navigator.clipboard.writeText(shareUrl);
+        setReferralCopied(true);
+        setTimeout(() => setReferralCopied(false), 2500);
+      }
+    } catch {
+      setReferralError(true);
+      setTimeout(() => setReferralError(false), 3000);
+    } finally {
       setReferralSharing(false);
     }
   }, [referralSharing, t]);
@@ -138,30 +146,6 @@ export default function SettingsPage() {
         {row(ACCENT,
           <svg {...ip}><circle cx="12" cy="8" r="4" /><path d="M4 21c0-4 4-7 8-7s8 3 8 7" /></svg>,
           t("section_account"), "/settings/konto", true)}
-        <button
-          type="button"
-          onClick={handleShareReferral}
-          style={{
-            width: "100%", display: "flex", alignItems: "center", gap: 14,
-            padding: "12px 14px", background: "transparent", border: "none",
-            cursor: referralSharing ? "wait" : "pointer", textAlign: "left", color: "inherit",
-            borderTop: "1px solid var(--border)",
-          }}
-        >
-          <span aria-hidden style={{
-            width: 32, height: 32, borderRadius: 8, flexShrink: 0,
-            background: `${GREEN}18`, color: GREEN,
-            display: "flex", alignItems: "center", justifyContent: "center",
-          }}>
-            <svg {...ip}><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8" /><polyline points="16 6 12 2 8 6" /><line x1="12" y1="2" x2="12" y2="15" /></svg>
-          </span>
-          <span style={{ flex: 1, fontSize: 14, fontWeight: 500, color: "var(--text-strong)", lineHeight: 1.25 }}>
-            {referralCopied ? t("referral_share_copy_success") : t("row_referral")}
-          </span>
-          <span aria-hidden style={{ flexShrink: 0, color: "var(--text-faint)", fontSize: 18, lineHeight: 1 }}>
-            {referralSharing ? "…" : "›"}
-          </span>
-        </button>
         {row(GREEN,
           <svg {...ip}><path d="M12 2C8 8 6 12 6 15a6 6 0 0 0 12 0c0-3-2-7-6-13z" /></svg>,
           t("section_glucose"), "/settings/glukose")}
@@ -183,6 +167,33 @@ export default function SettingsPage() {
         {row(GREEN,
           <svg {...ip}><rect x="3" y="3" width="18" height="18" rx="2" /><line x1="3" y1="9" x2="21" y2="9" /><line x1="3" y1="15" x2="21" y2="15" /><line x1="9" y1="3" x2="9" y2="21" /><line x1="15" y1="3" x2="15" y2="21" /></svg>,
           t("section_integrations"), "/settings/integrationen")}
+      </NavSection>
+
+      <p style={{ fontSize: 12, fontWeight: 600, color: "var(--text-faint)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6, marginTop: 4 }}>
+        Freunde einladen
+      </p>
+      <NavSection>
+        <button
+          type="button"
+          onClick={handleShareReferral}
+          disabled={referralSharing}
+          style={{ width: "100%", display: "flex", alignItems: "center", gap: 14, padding: "12px 14px", background: "transparent", border: "none", cursor: referralSharing ? "wait" : "pointer", textAlign: "left", color: "inherit" }}
+        >
+          <span aria-hidden style={{ width: 32, height: 32, borderRadius: 8, flexShrink: 0, background: `${GREEN}18`, color: referralError ? "#EF4444" : GREEN, display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <svg {...ip}><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8" /><polyline points="16 6 12 2 8 6" /><line x1="12" y1="2" x2="12" y2="15" /></svg>
+          </span>
+          <span style={{ flex: 1, lineHeight: 1.25 }}>
+            <span style={{ display: "block", fontSize: 14, fontWeight: 500, color: referralError ? "#EF4444" : "var(--text-strong)" }}>
+              {referralError ? "Fehler — bitte nochmal versuchen" : referralCopied ? t("referral_share_copy_success") : t("row_referral")}
+            </span>
+            <span style={{ display: "block", fontSize: 12, color: "var(--text-faint)", marginTop: 1 }}>
+              {t("subtitle_referral")}
+            </span>
+          </span>
+          <span aria-hidden style={{ flexShrink: 0, color: "var(--text-faint)", fontSize: 18, lineHeight: 1 }}>
+            {referralSharing ? "…" : "›"}
+          </span>
+        </button>
       </NavSection>
 
       <p style={{ fontSize: 12, fontWeight: 600, color: "var(--text-faint)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6, marginTop: 4 }}>
