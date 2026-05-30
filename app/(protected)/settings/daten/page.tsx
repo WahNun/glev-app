@@ -5,13 +5,14 @@ import { useState, useCallback, type ReactNode } from "react";
 import { useTranslations } from "next-intl";
 import { reloadHistoricalEntries } from "@/lib/meals";
 import ImportPanel from "@/components/ImportPanel";
+import ExportPanel from "@/components/ExportPanel";
 import BottomSheet from "@/components/BottomSheet";
 import { SettingsSection, SettingsRow } from "@/components/SettingsRow";
 
 const ACCENT = "#4F6EF7", GREEN = "#22D3A0", PINK = "#FF2D78", BORDER = "var(--border)";
 const iconProps = { width: 16, height: 16, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: 2, strokeLinecap: "round" as const, strokeLinejoin: "round" as const };
 
-type SheetKey = "import" | "historical";
+type SheetKey = "import" | "historical" | "export";
 
 export default function DatenSettingsPage() {
   const t = useTranslations("settings");
@@ -43,6 +44,11 @@ export default function DatenSettingsPage() {
   );
 
   const sheetContent: Record<SheetKey, { title: string; body: ReactNode; footer: ReactNode }> = {
+    export: {
+      title: t("row_export"),
+      body: <ExportPanel />,
+      footer: closeFooter,
+    },
     import: {
       title: t("row_import"),
       body: <ImportPanel embedded />,
@@ -81,6 +87,13 @@ export default function DatenSettingsPage() {
       </div>
 
       <SettingsSection>
+        <SettingsRow
+          iconColor={ACCENT}
+          icon={<svg {...iconProps}><path d="M12 3v12" /><path d="M6 11l6 6 6-6" /><path d="M4 21h16" /></svg>}
+          label={t("row_export")}
+          ariaLabel={t("row_open_aria", { label: t("row_export") })}
+          onClick={() => setOpenSheet("export")}
+        />
         <SettingsRow
           iconColor={GREEN}
           icon={<svg {...iconProps}><path d="M12 21V9" /><path d="M6 13l6-6 6 6" /><path d="M4 3h16" /></svg>}

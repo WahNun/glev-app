@@ -42,14 +42,6 @@ export default function FuerDenArztPage() {
           ariaLabel="Integrationen öffnen"
           onClick={() => router.push("/settings/integrationen")}
         />
-        <SettingsRow
-          iconColor={ACCENT}
-          icon={<svg {...ip}><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" /></svg>}
-          label="Historischer Reload"
-          subtitle="Vergangene Daten neu laden"
-          ariaLabel="Historischer Reload öffnen"
-          onClick={() => router.push("/settings/daten")}
-        />
       </SettingsSection>
     </div>
   );

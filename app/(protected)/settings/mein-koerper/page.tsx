@@ -19,14 +19,6 @@ export default function MeinKoerperPage() {
       </div>
       <SettingsSection>
         <SettingsRow
-          iconColor={ACCENT}
-          icon={<svg {...ip}><circle cx="12" cy="8" r="4" /><path d="M4 21c0-4 4-7 8-7s8 3 8 7" /></svg>}
-          label="Über mich"
-          subtitle="Geburtsjahr, Geschlecht, Diabetestyp"
-          ariaLabel="Über mich öffnen"
-          onClick={() => router.push("/settings/konto")}
-        />
-        <SettingsRow
           iconColor={PINK}
           icon={<svg {...ip}><circle cx="12" cy="12" r="9" /><path d="M12 3a9 9 0 0 1 0 18" /></svg>}
           label="Zyklusprotokoll"
@@ -40,7 +32,7 @@ export default function MeinKoerperPage() {
           label="Tagesmakros"
           subtitle="Ziel-KH, Protein und Fett"
           ariaLabel="Tagesmakros öffnen"
-          onClick={() => router.push("/settings/app")}
+          onClick={() => router.push("/settings/makros")}
         />
       </SettingsSection>
     </div>

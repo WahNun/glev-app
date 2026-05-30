@@ -29,25 +29,9 @@ export default function AppKontoPage() {
         <SettingsRow
           iconColor={PURPLE}
           icon={<svg {...ip}><circle cx="12" cy="12" r="3" /><path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83" /></svg>}
-          label="Darstellung & Sprache"
-          subtitle="Sprache, Zeitformat, Theme, Haptik"
+          label="App-Einstellungen"
+          subtitle="Darstellung, Sprache, Einheiten, Push"
           ariaLabel="App-Einstellungen öffnen"
-          onClick={() => router.push("/settings/app")}
-        />
-        <SettingsRow
-          iconColor={ACCENT}
-          icon={<svg {...ip}><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9" /><path d="M10 21a2 2 0 0 0 4 0" /></svg>}
-          label="Benachrichtigungen"
-          subtitle="Push, kritische Alarme"
-          ariaLabel="Benachrichtigungen öffnen"
-          onClick={() => router.push("/settings/app")}
-        />
-        <SettingsRow
-          iconColor={GREEN}
-          icon={<svg {...ip}><path d="M12 2v6" /><path d="M9 5l3 3 3-3" /><path d="M5 12c0-3 3-5 7-5s7 2 7 5c0 5-3 9-7 9s-7-4-7-9z" /></svg>}
-          label="Einheiten & Format"
-          subtitle="KE/g, mg/dL vs. mmol/L, Zeitformat"
-          ariaLabel="Einheiten öffnen"
           onClick={() => router.push("/settings/app")}
         />
       </SettingsSection>

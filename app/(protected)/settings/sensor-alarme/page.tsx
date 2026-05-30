@@ -29,17 +29,9 @@ export default function SensorAlarmePage() {
         <SettingsRow
           iconColor={GREEN}
           icon={<svg {...ip}><path d="M12 2C8 8 6 12 6 15a6 6 0 0 0 12 0c0-3-2-7-6-13z" /></svg>}
-          label="Zielbereich"
-          subtitle="Glukoseziel und Einheiten festlegen"
-          ariaLabel="Zielbereich öffnen"
-          onClick={() => router.push("/settings/glukose")}
-        />
-        <SettingsRow
-          iconColor={GREEN}
-          icon={<svg {...ip}><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9" /><path d="M10 21a2 2 0 0 0 4 0" /></svg>}
-          label="Hypo-Alarm"
-          subtitle="Schwellwert und Low-Alarm"
-          ariaLabel="Hypo-Alarm öffnen"
+          label="Glukose & Alarme"
+          subtitle="Zielbereich, Hypo-Alarm, Einheiten"
+          ariaLabel="Glukose & Alarme öffnen"
           onClick={() => router.push("/settings/glukose")}
         />
       </SettingsSection>

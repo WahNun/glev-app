@@ -5,10 +5,6 @@ import { useState, useCallback, useEffect, useMemo, useRef, type ReactNode } fro
 import { useTranslations, useLocale } from "next-intl";
 import { useRouter } from "next/navigation";
 import {
-  fetchMacroTargets, saveMacroTargets,
-  DEFAULT_MACRO_TARGETS, type MacroTargets,
-} from "@/lib/userSettings";
-import {
   fetchNotificationPrefs, saveNotificationPrefs,
   DEFAULT_NOTIFICATION_PREFS, type NotificationPrefs,
 } from "@/lib/notificationPrefs";
@@ -22,15 +18,13 @@ import { useCarbUnit } from "@/hooks/useCarbUnit";
 import type { CarbUnit } from "@/lib/carbUnits";
 import { useTimeFormat } from "@/hooks/useTimeFormat";
 import { isTimeFormatPref } from "@/lib/timeFormat";
-import ExportPanel from "@/components/ExportPanel";
 import BottomSheet from "@/components/BottomSheet";
 import { SettingsSection, SettingsRow } from "@/components/SettingsRow";
 
 const ACCENT = "#4F6EF7", PINK = "#FF2D78", PURPLE = "#A78BFA", BORDER = "var(--border)";
-const inp: React.CSSProperties = { background: "var(--input-bg)", border: `1px solid ${BORDER}`, borderRadius: 10, padding: "10px 14px", color: "var(--text)", fontSize: 14, outline: "none", width: "100%" };
 const iconProps = { width: 16, height: 16, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: 2, strokeLinecap: "round" as const, strokeLinejoin: "round" as const };
 
-type SheetKey = "notifications" | "cycleLogging" | "language" | "timeFormat" | "carbUnit" | "export" | "onboarding" | "appearance" | "macros";
+type SheetKey = "notifications" | "cycleLogging" | "language" | "timeFormat" | "carbUnit" | "onboarding" | "appearance";
 
 function PushDebugSection() {
   const [token, setToken] = useState<string | null>(null);
@@ -105,18 +99,15 @@ function PushDebugSection() {
 export default function AppSettingsPage() {
   const t = useTranslations("settings");
   const tCommon = useTranslations("common");
-  const tFoodHistory = useTranslations("foodHistory");
   const router = useRouter();
   const uiLocale = useLocale();
   const { choice: themeChoice, setChoice: setThemeChoice } = useTheme();
   const carbUnit = useCarbUnit();
   const timeFormat = useTimeFormat();
 
-  const macrosTouchedRef = useRef(false);
   const notifTouchedRef = useRef(false);
 
   const [openSheet, setOpenSheet] = useState<SheetKey | null>(null);
-  const [macroTargets, setMacroTargets] = useState<MacroTargets>(DEFAULT_MACRO_TARGETS);
   const [notifPrefs, setNotifPrefs] = useState<NotificationPrefs>(DEFAULT_NOTIFICATION_PREFS);
   const [cycleLoggingEnabled, setCycleLoggingEnabled] = useState(false);
   const [hapticsEnabled, setHapticsEnabled] = useState(true);
@@ -126,13 +117,11 @@ export default function AppSettingsPage() {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [saveError, setSaveError] = useState("");
-  const [draftMacros, setDraftMacros] = useState<MacroTargets | null>(null);
   const [draftNotif, setDraftNotif] = useState<NotificationPrefs | null>(null);
 
   useEffect(() => {
     const fromCookie = readLocaleCookie();
     if (fromCookie) setCurrentLocale(fromCookie);
-    fetchMacroTargets().then((m) => { if (!macrosTouchedRef.current) setMacroTargets(m); }).catch(() => {}).finally(() => { macrosTouchedRef.current = false; });
     fetchNotificationPrefs().then((p) => { if (!notifTouchedRef.current) setNotifPrefs(p); }).catch(() => {}).finally(() => { notifTouchedRef.current = false; });
     fetchCycleLoggingEnabled().then(setCycleLoggingEnabled).catch(() => {});
     fetchHapticsEnabled().then(setHapticsEnabled).catch(() => {});
@@ -140,34 +129,25 @@ export default function AppSettingsPage() {
   }, []);
 
   const openSheetWith = useCallback((id: SheetKey) => {
-    macrosTouchedRef.current = true;
     notifTouchedRef.current = true;
     setSaveError("");
-    setDraftMacros({ ...macroTargets });
     setDraftNotif({ ...notifPrefs });
     setPendingLocale(null);
     setOpenSheet(id);
-  }, [macroTargets, notifPrefs]);
+  }, [notifPrefs]);
 
   const closeSheet = useCallback(() => {
-    if (draftMacros) setMacroTargets(draftMacros);
     if (draftNotif) setNotifPrefs(draftNotif);
-    setDraftMacros(null);
     setDraftNotif(null);
     setPendingLocale(null);
     setSaveError("");
     setOpenSheet(null);
-  }, [draftMacros, draftNotif]);
+  }, [draftNotif]);
 
   function updNotif<K extends keyof NotificationPrefs>(key: K, val: NotificationPrefs[K]) {
     notifTouchedRef.current = true;
     setNotifPrefs((prev) => ({ ...prev, [key]: val }));
   }
-  function updMacro<K extends keyof MacroTargets>(key: K, val: MacroTargets[K]) {
-    macrosTouchedRef.current = true;
-    setMacroTargets((prev) => ({ ...prev, [key]: val }));
-  }
-
   const toggleHapticsEnabled = useCallback(async (next: boolean) => {
     const prev = hapticsEnabled;
     setHapticsEnabled(next);
@@ -186,17 +166,6 @@ export default function AppSettingsPage() {
     try {
       await saveNotificationPrefs(notifPrefs);
       setDraftNotif(null);
-      setSaved(true); setTimeout(() => setSaved(false), 1800);
-      return true;
-    } catch (e) { setSaveError(e instanceof Error ? e.message : t("save_failed")); return false; }
-    finally { setSaving(false); }
-  }
-
-  async function saveMacrosAction(): Promise<boolean> {
-    setSaving(true); setSaveError("");
-    try {
-      await saveMacroTargets(macroTargets);
-      setDraftMacros(null);
       setSaved(true); setTimeout(() => setSaved(false), 1800);
       return true;
     } catch (e) { setSaveError(e instanceof Error ? e.message : t("save_failed")); return false; }
@@ -225,7 +194,6 @@ export default function AppSettingsPage() {
   const cycleLoggingSub = cycleLoggingEnabled ? t("subtitle_cycle_logging_on") : t("subtitle_cycle_logging_off");
   const localeSub = currentLocale === "de" ? t("subtitle_language_de") : t("subtitle_language_en");
   const timeFormatSub = timeFormat.pref === "24h" ? t("subtitle_time_format_24h") : timeFormat.pref === "12h" ? t("subtitle_time_format_12h") : t("subtitle_time_format_auto");
-  const macroSub = t("subtitle_macros", { carbs: macroTargets.carbs, protein: macroTargets.protein, fat: macroTargets.fat, fiber: macroTargets.fiber });
   const themeSub = useMemo(() => themeChoice === "dark" ? t("theme_dark") : themeChoice === "light" ? t("theme_light") : t("theme_system"), [themeChoice, t]);
 
   const sheetContent: Record<SheetKey, { title: string; body: ReactNode; footer: ReactNode }> = {
@@ -256,9 +224,9 @@ export default function AppSettingsPage() {
             <div style={{ fontSize: 13, color: "var(--text-faint)", marginBottom: 10 }}>{t("notif_quiet_desc")}</div>
             <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
               <span style={{ fontSize: 13, color: "var(--text-body)" }}>{t("notif_quiet_from")}</span>
-              <input type="time" value={notifPrefs.quietStart} onChange={(e) => updNotif("quietStart", e.target.value)} style={{ ...inp, width: "auto", padding: "6px 10px", fontSize: 14 }} />
+              <input type="time" value={notifPrefs.quietStart} onChange={(e) => updNotif("quietStart", e.target.value)} style={{ background: "var(--input-bg)", border: `1px solid ${BORDER}`, borderRadius: 10, padding: "6px 10px", color: "var(--text)", fontSize: 14, outline: "none", width: "auto" }} />
               <span style={{ fontSize: 13, color: "var(--text-body)" }}>{t("notif_quiet_to")}</span>
-              <input type="time" value={notifPrefs.quietEnd} onChange={(e) => updNotif("quietEnd", e.target.value)} style={{ ...inp, width: "auto", padding: "6px 10px", fontSize: 14 }} />
+              <input type="time" value={notifPrefs.quietEnd} onChange={(e) => updNotif("quietEnd", e.target.value)} style={{ background: "var(--input-bg)", border: `1px solid ${BORDER}`, borderRadius: 10, padding: "6px 10px", color: "var(--text)", fontSize: 14, outline: "none", width: "auto" }} />
             </div>
           </div>
         </div>
@@ -336,11 +304,6 @@ export default function AppSettingsPage() {
       ),
       footer: closeFooter,
     },
-    export: {
-      title: t("row_export"),
-      body: <ExportPanel />,
-      footer: closeFooter,
-    },
     onboarding: {
       title: t("onboarding_replay_title"),
       body: (
@@ -380,28 +343,6 @@ export default function AppSettingsPage() {
       ),
       footer: closeFooter,
     },
-    macros: {
-      title: t("daily_macros_title"),
-      body: (
-        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-          <div style={{ fontSize: 13, color: "var(--text-dim)", lineHeight: 1.5 }}>{t("daily_macros_desc")}</div>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
-            {([
-              { key: "carbs", label: t("macro_carbs_label"), def: 250, max: 2000 },
-              { key: "protein", label: t("macro_protein_label"), def: 120, max: 2000 },
-              { key: "fat", label: t("macro_fat_label"), def: 80, max: 2000 },
-              { key: "fiber", label: t("macro_fiber_label"), def: 30, max: 200 },
-            ] as Array<{ key: keyof MacroTargets; label: string; def: number; max: number }>).map((target) => (
-              <div key={target.key}>
-                <label style={{ fontSize: 13, color: "var(--text-dim)", display: "block", marginBottom: 6 }}>{target.label}</label>
-                <input style={inp} type="number" min={0} max={target.max} value={macroTargets[target.key]} onChange={(e) => { const n = parseInt(e.target.value); updMacro(target.key, Number.isFinite(n) ? Math.max(0, Math.min(target.max, n)) : target.def); }} />
-              </div>
-            ))}
-          </div>
-        </div>
-      ),
-      footer: <SaveFooter onSave={saveMacrosAction} />,
-    },
   };
 
   const active = openSheet ? sheetContent[openSheet] : null;
@@ -436,11 +377,8 @@ export default function AppSettingsPage() {
         <SettingsRow iconColor={ACCENT} icon={<svg {...iconProps}><circle cx="12" cy="12" r="9" /><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18" /></svg>} label={t("row_language")} subtitle={localeSub} ariaLabel={t("row_open_aria", { label: t("row_language") })} onClick={() => openSheetWith("language")} />
         <SettingsRow iconColor={ACCENT} icon={<svg {...iconProps}><circle cx="12" cy="12" r="9" /><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18" /></svg>} label={t("row_time_format")} subtitle={timeFormatSub} ariaLabel={t("row_open_aria", { label: t("row_time_format") })} onClick={() => openSheetWith("timeFormat")} />
         <SettingsRow iconColor={ACCENT} icon={<svg {...iconProps}><path d="M12 2v6" /><path d="M9 5l3 3 3-3" /><path d="M5 12c0-3 3-5 7-5s7 2 7 5c0 5-3 9-7 9s-7-4-7-9z" /></svg>} label={t("row_carb_unit")} subtitle={carbUnit.label} ariaLabel={t("row_open_aria", { label: t("row_carb_unit") })} onClick={() => openSheetWith("carbUnit")} />
-        <SettingsRow iconColor={ACCENT} icon={<svg {...iconProps}><path d="M12 2v6" /><path d="M9 5l3 3 3-3" /><path d="M5 12c0-3 3-5 7-5s7 2 7 5c0 5-3 9-7 9s-7-4-7-9z" /></svg>} label={tFoodHistory("page_title")} subtitle={tFoodHistory("page_subtitle")} ariaLabel={t("row_open_aria", { label: tFoodHistory("page_title") })} onClick={() => router.push("/settings/food-history")} />
-        <SettingsRow iconColor={ACCENT} icon={<svg {...iconProps}><path d="M12 3v12" /><path d="M6 11l6 6 6-6" /><path d="M4 21h16" /></svg>} label={t("row_export")} ariaLabel={t("row_open_aria", { label: t("row_export") })} onClick={() => openSheetWith("export")} />
         <SettingsRow iconColor={ACCENT} icon={<svg {...iconProps}><rect x="3" y="3" width="18" height="18" rx="2" /><line x1="3" y1="9" x2="21" y2="9" /><line x1="3" y1="15" x2="21" y2="15" /><line x1="9" y1="3" x2="9" y2="21" /><line x1="15" y1="3" x2="15" y2="21" /></svg>} label={t("onboarding_replay_title")} subtitle={t("onboarding_replay_desc")} ariaLabel={t("row_open_aria", { label: t("onboarding_replay_title") })} onClick={() => openSheetWith("onboarding")} />
         <SettingsRow iconColor={PURPLE} icon={<svg {...iconProps}><circle cx="12" cy="12" r="4" /><path d="M12 2v2M12 20v2M2 12h2M20 12h2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41" /></svg>} label={t("appearance")} subtitle={themeSub} ariaLabel={t("row_open_aria", { label: t("appearance") })} onClick={() => openSheetWith("appearance")} />
-        <SettingsRow iconColor={ACCENT} icon={<svg {...iconProps}><circle cx="12" cy="12" r="9" /><circle cx="12" cy="12" r="5" /><circle cx="12" cy="12" r="1.5" /></svg>} label={t("daily_macros_title")} subtitle={macroSub} ariaLabel={t("row_open_aria", { label: t("daily_macros_title") })} onClick={() => openSheetWith("macros")} />
       </SettingsSection>
 
       <PushDebugSection />
