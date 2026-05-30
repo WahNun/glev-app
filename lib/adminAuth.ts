@@ -4,19 +4,71 @@
  * Three-factor login:
  *   1. E-Mail        (ADMIN_EMAIL env var)
  *   2. Passwort      (ADMIN_API_SECRET env var)
- *   3. TOTP-Code     (ADMIN_TOTP_SECRET env var — base32, used by Google Authenticator etc.)
+ *   3. TOTP-Code     (ADMIN_TOTP_SECRET env var — base32, compatible with Google Authenticator)
  *
  * The session cookie stores an HMAC of the secret rather than the raw secret
  * so the plaintext never lives in the browser.
+ *
+ * TOTP is implemented natively via Node crypto (RFC 6238 / RFC 4226).
+ * No external library needed — avoids Turbopack static-export issues with otplib.
  */
 
 import { cookies } from "next/headers";
 import { createHmac, timingSafeEqual } from "crypto";
-import { authenticator } from "otplib";
 
 export const ADMIN_COOKIE = "glev_ops_token";
 const COOKIE_PATH       = "/glev-ops";
 const SESSION_HMAC_KEY  = "glev-ops-session-v2";
+
+// ---------------------------------------------------------------------------
+// Native TOTP (RFC 6238 / RFC 4226) — no external library
+// ---------------------------------------------------------------------------
+
+function base32Decode(encoded: string): Buffer {
+  const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
+  const str = encoded.toUpperCase().replace(/=+$/, "").replace(/\s/g, "");
+  const bits: number[] = [];
+  for (const char of str) {
+    const val = alphabet.indexOf(char);
+    if (val === -1) continue;
+    for (let i = 4; i >= 0; i--) bits.push((val >> i) & 1);
+  }
+  const bytes: number[] = [];
+  for (let i = 0; i + 8 <= bits.length; i += 8) {
+    bytes.push(bits.slice(i, i + 8).reduce((acc, b) => (acc << 1) | b, 0));
+  }
+  return Buffer.from(bytes);
+}
+
+function hotp(key: Buffer, counter: number): string {
+  const buf = Buffer.alloc(8);
+  buf.writeUInt32BE(Math.floor(counter / 0x100000000), 0);
+  buf.writeUInt32BE(counter >>> 0, 4);
+  const hmac  = createHmac("sha1", key).update(buf).digest();
+  const offset = hmac[hmac.length - 1] & 0xf;
+  const code =
+    ((hmac[offset]     & 0x7f) << 24) |
+    ((hmac[offset + 1] & 0xff) << 16) |
+    ((hmac[offset + 2] & 0xff) << 8)  |
+     (hmac[offset + 3] & 0xff);
+  return (code % 1_000_000).toString().padStart(6, "0");
+}
+
+function verifyTotp(token: string, secret: string): boolean {
+  const t = token.trim().replace(/\s/g, "");
+  if (!/^\d{6}$/.test(t)) return false;
+  const key     = base32Decode(secret);
+  const counter = Math.floor(Date.now() / 30_000);
+  // Accept ±1 window (30 s clock drift tolerance)
+  for (let drift = -1; drift <= 1; drift++) {
+    if (hotp(key, counter + drift) === t) return true;
+  }
+  return false;
+}
+
+// ---------------------------------------------------------------------------
+// Session helpers
+// ---------------------------------------------------------------------------
 
 function computeSessionToken(): string {
   const secret = process.env.ADMIN_API_SECRET ?? "";
@@ -32,6 +84,10 @@ function safeEqual(a: string, b: string): boolean {
   }
   return timingSafeEqual(aBuf, bBuf);
 }
+
+// ---------------------------------------------------------------------------
+// Public API
+// ---------------------------------------------------------------------------
 
 /**
  * Verify all three credentials.
@@ -54,8 +110,7 @@ export async function verifyAdminCredentials(
 
   const emailOk    = safeEqual(email.toLowerCase().trim(), expectedEmail);
   const passwordOk = safeEqual(password, expectedPassword);
-
-  const totpOk = authenticator.verify({ token: totp.trim(), secret: totpSecret });
+  const totpOk     = verifyTotp(totp, totpSecret);
 
   return emailOk && passwordOk && totpOk;
 }
