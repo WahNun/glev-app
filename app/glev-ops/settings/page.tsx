@@ -1,5 +1,5 @@
+import { isAdminAuthed } from "@/lib/adminAuth";
 import {
-  isAdminAuthed,
   loginAction,
   backfillCurrencyCountryAction,
 } from "../users/actions";

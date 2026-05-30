@@ -3,7 +3,6 @@
 import { redirect } from "next/navigation";
 import { verifyAdminCredentials, setAdminCookie, clearAdminCookie } from "@/lib/adminAuth";
 
-export { isAdminAuthed } from "@/lib/adminAuth";
 
 export async function loginAction(formData: FormData): Promise<void> {
   const email    = String(formData.get("email")    ?? "");

@@ -4,7 +4,8 @@ import {
   type DripCounts,
   type DripScheduleRow,
 } from "@/lib/emails/drip-status";
-import { isAdminAuthed, loginAction } from "./actions";
+import { isAdminAuthed } from "@/lib/adminAuth";
+import { loginAction } from "./actions";
 import DripDashboard from "./DripDashboard";
 import AdminLoginForm from "../_components/AdminLoginForm";
 

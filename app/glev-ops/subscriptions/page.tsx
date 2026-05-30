@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
-import { isAdminAuthed, loginAction } from "../users/actions";
+import { isAdminAuthed } from "@/lib/adminAuth";
+import { loginAction } from "../users/actions";
 import AdminLoginForm from "../_components/AdminLoginForm";
 import CancelButton from "./CancelButton";
 

@@ -29,7 +29,8 @@ import {
   trialWelcomeHtml,
   trialWelcomeSubject,
 } from "@/lib/emails/trial-welcome";
-import { isAdminAuthed, loginAction } from "./actions";
+import { isAdminAuthed } from "@/lib/adminAuth";
+import { loginAction } from "./actions";
 import AdminLoginForm from "../_components/AdminLoginForm";
 import EmailPreview, { type TemplateOption } from "./EmailPreview";
 

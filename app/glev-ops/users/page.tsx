@@ -1,10 +1,10 @@
 import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
 import {
-  isAdminAuthed,
   loginAction,
   grantPlanByEmailAction,
   grantBetaFreeYearAction,
 } from "./actions";
+import { isAdminAuthed } from "@/lib/adminAuth";
 import UsersTable, { type UserRow } from "./UsersTable";
 import Link from "next/link";
 import { computeEffectivePlan } from "@/lib/admin/effectivePlan";

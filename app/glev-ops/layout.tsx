@@ -1,4 +1,4 @@
-import { isAdminAuthed } from "./buyers/actions";
+import { isAdminAuthed } from "@/lib/adminAuth";
 import AdminNav from "./_components/AdminNav";
 
 export const runtime = "nodejs";

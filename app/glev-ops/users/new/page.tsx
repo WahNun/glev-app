@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { isAdminAuthed, createUserAction } from "../actions";
+import { isAdminAuthed } from "@/lib/adminAuth";
+import { createUserAction } from "../actions";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";

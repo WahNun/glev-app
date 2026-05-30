@@ -11,7 +11,6 @@ import {
 } from "@/lib/emails/drip-templates";
 import { verifyAdminCredentials, setAdminCookie, clearAdminCookie, isAdminAuthed } from "@/lib/adminAuth";
 
-export { isAdminAuthed } from "@/lib/adminAuth";
 
 /** Maximale Zeichenlänge für `last_error` — identisch zum Cron-Worker. */
 const MAX_ERROR_LENGTH = 500;

@@ -1,5 +1,6 @@
 import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
-import { isAdminAuthed, loginAction } from "../buyers/actions";
+import { isAdminAuthed } from "@/lib/adminAuth";
+import { loginAction } from "../buyers/actions";
 import AdminLoginForm from "../_components/AdminLoginForm";
 import PraxisClient, { type Practice } from "./PraxisClient";
 

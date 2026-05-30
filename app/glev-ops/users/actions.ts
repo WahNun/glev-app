@@ -32,7 +32,6 @@ import type { EmailLocale } from "@/lib/emails/beta-welcome";
 // Login / logout / auth probe
 // ---------------------------------------------------------------------------
 
-export { isAdminAuthed } from "@/lib/adminAuth";
 
 export async function loginAction(formData: FormData): Promise<void> {
   const { verifyAdminCredentials, setAdminCookie } = await import("@/lib/adminAuth");

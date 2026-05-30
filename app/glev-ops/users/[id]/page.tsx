@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
-import { isAdminAuthed } from "../actions";
+import { isAdminAuthed } from "@/lib/adminAuth";
 import { computeEffectivePlan, planColor, planLabel } from "@/lib/admin/effectivePlan";
 import { loadAuditLogForUser } from "@/lib/admin/audit";
 import UserActions from "./UserActions";

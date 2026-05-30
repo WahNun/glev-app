@@ -1,5 +1,5 @@
 import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
-import { isAdminAuthed } from "../buyers/actions";
+import { isAdminAuthed } from "@/lib/adminAuth";
 import type { BetaRow, ProRow } from "../buyers/BuyersTables";
 import FaelleClient from "./FaelleClient";
 import { redirect } from "next/navigation";

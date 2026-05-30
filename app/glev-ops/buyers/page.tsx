@@ -1,5 +1,6 @@
 import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
-import { isAdminAuthed, loginAction, createMetaLeadAction } from "./actions";
+import { isAdminAuthed } from "@/lib/adminAuth";
+import { loginAction, createMetaLeadAction } from "./actions";
 import AdminLoginForm from "../_components/AdminLoginForm";
 import BuyersTables, { type BetaRow, type ProRow } from "./BuyersTables";
 import DuplicateSignups from "./DuplicateSignups";

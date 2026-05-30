@@ -1,5 +1,6 @@
 import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
-import { isAdminAuthed, loginAction } from "./actions";
+import { isAdminAuthed } from "@/lib/adminAuth";
+import { loginAction } from "./actions";
 import OutboxDashboard from "./OutboxDashboard";
 import AdminLoginForm from "../_components/AdminLoginForm";
 
