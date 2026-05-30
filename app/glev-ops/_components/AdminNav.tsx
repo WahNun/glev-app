@@ -41,6 +41,12 @@ const GROUPS: ReadonlyArray<NavGroup> = [
       { href: "/glev-ops/mistral", label: "Mistral TTS" },
     ],
   },
+  {
+    label: "App",
+    items: [
+      { href: "/glev-ops/trial-ui", label: "Trial-UI" },
+    ],
+  },
 ];
 
 function isItemActive(pathname: string, href: string) {
