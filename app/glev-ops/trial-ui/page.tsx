@@ -410,13 +410,11 @@ export default async function TrialUiPreviewPage() {
 
         {/* ─── 4. TrialExpiredModal ─────────────────────────────────────────── */}
         <Section title="4 · TrialExpiredModal" subtitle="Ab Tag 8 — erscheint beim nächsten App-Öffnen wenn trial_end_at in der Vergangenheit liegt UND Plan = free. Nicht schließbar, kein Dismiss. Verschwindet sofort nach erfolgreichem Upgrade (Plan ≠ free).">
-          {/* Simulated modal preview in a bounded box */}
           <div
             style={{
               background: "rgba(10,10,15,0.92)",
-              backdropFilter: "blur(12px)",
               borderRadius: 14,
-              padding: "32px 24px",
+              padding: "40px 24px 32px",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
@@ -428,14 +426,14 @@ export default async function TrialUiPreviewPage() {
                 background: SURFACE,
                 border: `1px solid ${BORDER}`,
                 borderRadius: 20,
-                padding: "36px 32px",
+                padding: "36px 28px 28px",
                 maxWidth: 360,
                 width: "100%",
                 textAlign: "center",
                 display: "flex",
                 flexDirection: "column",
                 alignItems: "center",
-                gap: 16,
+                gap: 14,
               }}
             >
               <div
@@ -455,7 +453,7 @@ export default async function TrialUiPreviewPage() {
               </div>
               <h2
                 style={{
-                  fontSize: 22,
+                  fontSize: 21,
                   fontWeight: 700,
                   color: TEXT,
                   margin: 0,
@@ -465,48 +463,85 @@ export default async function TrialUiPreviewPage() {
               >
                 Deine Testphase ist abgelaufen
               </h2>
-              <p
-                style={{
-                  fontSize: 15,
-                  color: TEXT_MUTED,
-                  margin: 0,
-                  lineHeight: 1.6,
-                }}
-              >
-                Um Glev weiter zu nutzen, wähle ein Abo. Deine Daten bleiben
-                vollständig erhalten.
+              <p style={{ fontSize: 14, color: TEXT_MUTED, margin: 0, lineHeight: 1.6 }}>
+                Deine Daten bleiben vollständig erhalten.
+                Wähle ein Abo um weiterzumachen.
               </p>
-              <div
-                style={{
-                  display: "block",
-                  width: "100%",
-                  background: ACCENT,
-                  color: "#fff",
-                  borderRadius: 12,
-                  padding: "16px 24px",
-                  fontSize: 16,
-                  fontWeight: 600,
-                  textAlign: "center",
-                  boxSizing: "border-box",
-                  marginTop: 4,
-                }}
-              >
-                Jetzt Pro werden →
+
+              {/* Plan cards */}
+              <div style={{ width: "100%", display: "flex", flexDirection: "column", gap: 10, marginTop: 4 }}>
+
+                {/* Pro — empfohlen */}
+                <div style={{ position: "relative" }}>
+                  <span
+                    style={{
+                      position: "absolute",
+                      top: -10,
+                      left: "50%",
+                      transform: "translateX(-50%)",
+                      background: ACCENT,
+                      border: `2px solid ${SURFACE}`,
+                      color: "#fff",
+                      fontSize: 10,
+                      fontWeight: 700,
+                      letterSpacing: "0.06em",
+                      textTransform: "uppercase",
+                      padding: "2px 10px",
+                      borderRadius: 20,
+                      whiteSpace: "nowrap",
+                      zIndex: 1,
+                    }}
+                  >
+                    Empfohlen
+                  </span>
+                  <div
+                    style={{
+                      width: "100%",
+                      background: ACCENT,
+                      color: "#fff",
+                      borderRadius: 13,
+                      padding: "18px 20px 14px",
+                      textAlign: "left",
+                      boxSizing: "border-box",
+                    }}
+                  >
+                    <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 2 }}>
+                      Pro — Wie im Trial weiter →
+                    </div>
+                    <div style={{ fontSize: 12, opacity: 0.85 }}>
+                      Voller Funktionsumfang · alle Features entsperrt
+                    </div>
+                  </div>
+                </div>
+
+                {/* Smart — Einstieg */}
+                <div
+                  style={{
+                    width: "100%",
+                    background: "transparent",
+                    border: `1px solid ${BORDER}`,
+                    borderRadius: 13,
+                    padding: "14px 20px",
+                    textAlign: "left",
+                    boxSizing: "border-box",
+                  }}
+                >
+                  <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 2, color: TEXT }}>
+                    Smart — Einsteigen →
+                  </div>
+                  <div style={{ fontSize: 12, color: TEXT_MUTED }}>
+                    Kernfeatures · ideal zum Einstieg
+                  </div>
+                </div>
               </div>
-              <span
-                style={{
-                  fontSize: 13,
-                  color: TEXT_FAINT,
-                  cursor: "default",
-                  padding: "4px 8px",
-                }}
-              >
+
+              <span style={{ fontSize: 13, color: TEXT_FAINT, padding: "4px 8px" }}>
                 Abmelden
               </span>
             </div>
           </div>
           <p style={{ fontSize: 12, color: TEXT_FAINT, margin: "10px 0 0", textAlign: "center" }}>
-            Im echten App: Vollbild, kein Schließen-Button, Hintergrund geblurrt
+            Im echten App: Vollbild, kein Schließen-Button, Hintergrund geblurrt · Pro startet Stripe Checkout direkt
           </p>
         </Section>
 
