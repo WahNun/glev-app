@@ -5,6 +5,8 @@
  * Result: 32^7 = ~34 billion unique codes — collision-safe for our scale.
  */
 
+import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
+
 const CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 
 /** Generate a random 7-char referral code. Call server-side only. */
@@ -19,7 +21,6 @@ export function generateReferralCode(): string {
  * Uses the Supabase Admin client — call from API routes only.
  */
 export async function getOrCreateReferralCode(userId: string): Promise<string> {
-  const { getSupabaseAdmin } = await import("@/lib/supabaseAdmin");
   const sb = getSupabaseAdmin();
 
   const { data } = await sb
