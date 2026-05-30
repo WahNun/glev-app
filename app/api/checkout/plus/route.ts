@@ -104,6 +104,16 @@ export async function POST(req: NextRequest) {
           optional: false,
         },
       ],
+      consent_collection: {
+        terms_of_service: "required",
+      },
+      custom_text: {
+        terms_of_service_acceptance: {
+          message: useUsd
+            ? 'I agree to the <a href="https://glev.app/legal?tab=agb">Terms of Service</a>.'
+            : 'Ich stimme den <a href="https://glev.app/legal?tab=agb">Allgemeinen Geschäftsbedingungen</a> zu.',
+        },
+      },
     };
 
     if (email) {

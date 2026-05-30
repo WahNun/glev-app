@@ -64,7 +64,7 @@ function LegalPageInner() {
         role="tabpanel"
         aria-labelledby="tab-dse"
       >
-        <div className="meta-strip">Stand: Mai 2026 &nbsp;·&nbsp; DSGVO-konform</div>
+        <div className="meta-strip">Stand: Juni 2026 &nbsp;·&nbsp; DSGVO-konform</div>
         <div className="container">
           <div className="intro-box">
             Der Schutz deiner persönlichen Daten – insbesondere deiner Gesundheitsdaten – ist uns ein zentrales Anliegen. Diese Datenschutzerklärung informiert dich darüber, welche Daten wir erheben, wie wir sie verarbeiten und welche Rechte du hast.
@@ -107,6 +107,9 @@ function LegalPageInner() {
 
             <h3>2.4 Technische Verbindungsdaten</h3>
             <p>Beim Aufruf der App werden technisch notwendige Verbindungsdaten (IP-Adresse, Zeitstempel) von unseren Hosting-Diensten kurzzeitig verarbeitet. Diese werden nicht für Tracking oder Analyse genutzt.</p>
+
+            <h3>2.5 Lead-Daten aus Meta-Werbung</h3>
+            <p>Wenn du dich über ein Werbeformular auf Facebook oder Instagram für Glev interessierst und deine Kontaktdaten im Formular einträgst, übermittelt Meta Platforms Ireland Ltd. uns deinen <strong>Namen und deine E-Mail-Adresse</strong>. Diese Daten werden ausschließlich genutzt, um dir einen Zugang zu Glev einzurichten und dich im Rahmen der Vertragsanbahnung zu kontaktieren. Eine Weitergabe an Dritte findet nicht statt. Rechtsgrundlage ist Art. 6 Abs. 1 lit. b DSGVO (Vertragsanbahnung) sowie deine ausdrückliche Einwilligung durch Absenden des Formulars.</p>
           </section>
 
           <section id="dse-3">
@@ -118,6 +121,7 @@ function LegalPageInner() {
                 <tr><td>Zahlungsabwicklung via Stripe</td><td>Art. 6 Abs. 1 lit. b DSGVO – Vertragserfüllung</td></tr>
                 <tr><td>Gesundheitsdaten (Glukose, Symptome, Mahlzeiten)</td><td>Art. 9 Abs. 2 lit. a DSGVO – Ausdrückliche Einwilligung</td></tr>
                 <tr><td>Technische Verbindungsdaten</td><td>Art. 6 Abs. 1 lit. f DSGVO – Berechtigte Interessen (sicherer Betrieb)</td></tr>
+                <tr><td>Lead-Daten aus Meta-Werbung (Name, E-Mail)</td><td>Art. 6 Abs. 1 lit. b DSGVO – Vertragsanbahnung + Einwilligung via Formular</td></tr>
               </tbody>
             </table>
           </section>
@@ -132,6 +136,7 @@ function LegalPageInner() {
                 <tr><td><strong>Vercel, Inc.</strong></td><td>Hosting, Deployment (Next.js)</td><td>Primär EU, ggf. USA</td><td><span className="badge warning">USA möglich</span></td></tr>
                 <tr><td><strong>Stripe, Inc.</strong></td><td>Zahlungsabwicklung</td><td>USA / EU</td><td><span className="badge warning">USA möglich</span></td></tr>
                 <tr><td><strong>Mistral AI SAS</strong></td><td>KI-Sprachmodell (Sprachassistent, Mahlzeiten-Parsing, Chat, Text-to-Speech)</td><td>EU (Frankreich)</td><td><span className="badge">EU-Region</span></td></tr>
+                <tr><td><strong>Meta Platforms Ireland Ltd.</strong></td><td>Übermittlung von Lead-Daten aus Facebook/Instagram-Werbeformularen</td><td>EU (Irland)</td><td><span className="badge">EU-Region</span></td></tr>
               </tbody>
             </table>
             <p>Wir haben für Supabase bewusst die <strong>EU-Region Irland</strong> gewählt, damit alle Gesundheits- und Kontodaten innerhalb der Europäischen Union gespeichert und verarbeitet werden. Es findet <strong>keine Spiegelung in Drittländer</strong> statt – die Datenbank-Replikation bleibt vollständig innerhalb der EU.</p>
@@ -146,7 +151,7 @@ function LegalPageInner() {
           <section id="dse-5">
             <h2><span className="num">5</span> Cookies, Tracking &amp; Werbung</h2>
             <p>Glev verwendet <strong>keine</strong> Werbe-Cookies, kein Web-Tracking und keine Analyse-Tools. Es werden ausschließlich <strong>technisch notwendige Session-Tokens</strong> eingesetzt, die keine gesonderte Einwilligung erfordern (§ 25 Abs. 2 TTDSG).</p>
-            <p>Es gibt <strong>keine Werbeanzeigen</strong> in der Glev App.</p>
+            <p>Es gibt <strong>keine Werbeanzeigen innerhalb der Glev App</strong>. Glev wirbt extern auf Plattformen wie Facebook und Instagram, um Interessierte auf das Angebot aufmerksam zu machen. Dabei erheben wir keine Nutzungsdaten aus der App für Werbezwecke und setzen kein Pixel-Tracking ein.</p>
           </section>
 
           <section id="dse-6">
@@ -283,7 +288,7 @@ function LegalPageInner() {
         role="tabpanel"
         aria-labelledby="tab-agb"
       >
-        <div className="meta-strip">Stand: Mai 2026 &nbsp;·&nbsp; Gültig für glev.app</div>
+        <div className="meta-strip">Stand: Juni 2026 &nbsp;·&nbsp; Gültig für glev.app</div>
         <div className="container">
           <div className="intro-box">
             Diese Allgemeinen Geschäftsbedingungen (AGB) gelten für die Nutzung der Glev App und alle damit verbundenen Dienste. Bitte lies sie sorgfältig, bevor du ein Konto erstellst oder ein Abonnement abschließt.
@@ -364,7 +369,8 @@ function LegalPageInner() {
             <p>Monatliche Abonnements verlängern sich automatisch um jeweils einen Monat, sofern sie nicht vor Ende der laufenden Abrechnungsperiode gekündigt werden. Die Kündigung ist jederzeit <strong>innerhalb der App unter Kontoeinstellungen</strong> möglich.</p>
 
             <h3>Kündigungsfrist</h3>
-            <p>Die Kündigung wird zum Ende des aktuellen Abrechnungszeitraums wirksam. Eine Rückerstattung bereits bezahlter Zeiträume erfolgt nicht, es sei denn, ein gesetzlicher Anspruch (z. B. Widerrufsrecht, s. § 5) besteht.</p>
+            <p>Die Kündigung muss spätestens <strong>5 Tage vor dem nächsten Abrechnungsdatum</strong> eingehen. Geht die Kündigung weniger als 5 Tage vor der Verlängerung ein, verlängert sich das Abonnement um einen weiteren Monat und endet danach automatisch — es erfolgt keine weitere Verlängerung. Eine Rückerstattung bereits bezahlter Zeiträume erfolgt nicht, es sei denn, ein gesetzlicher Anspruch (z. B. Widerrufsrecht, s. § 5) besteht.</p>
+            <p>Das genaue nächste Abrechnungsdatum ist jederzeit in den Kontoeinstellungen unter „Abonnement" einsehbar.</p>
 
             <h3>Kündigung durch den Anbieter</h3>
             <p>Der Anbieter kann ein Konto bei schwerwiegendem Verstoß gegen diese AGB mit sofortiger Wirkung kündigen. In allen anderen Fällen gilt eine Frist von 30 Tagen. Bei Kündigung durch den Anbieter ohne wichtigen Grund wird der anteilige Betrag des verbleibenden Abrechnungszeitraums erstattet.</p>
@@ -450,7 +456,7 @@ function LegalPageInner() {
           <section id="agb-10">
             <h2><span className="num">10</span> Änderungen der AGB</h2>
             <p>Der Anbieter behält sich vor, diese AGB anzupassen. Änderungen werden registrierten Nutzern mindestens <strong>30 Tage vor Inkrafttreten</strong> per E-Mail mitgeteilt. Widersprichst du den geänderten AGB nicht innerhalb dieser Frist, gelten sie als akzeptiert. Auf dieses Widerspruchsrecht wird in der Änderungsmitteilung ausdrücklich hingewiesen.</p>
-            <p><strong>Stand dieser AGB: Mai 2026</strong></p>
+            <p><strong>Stand dieser AGB: Juni 2026</strong></p>
           </section>
 
           <section id="agb-11">
