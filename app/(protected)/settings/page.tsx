@@ -148,9 +148,6 @@ export default function SettingsPage() {
           "App & Konto", "/settings/app-konto", true)}
       </NavSection>
 
-      <p style={{ fontSize: 12, fontWeight: 600, color: "var(--text-faint)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6, marginTop: 4 }}>
-        Freunde einladen
-      </p>
       <NavSection>
         <button
           type="button"
