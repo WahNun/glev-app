@@ -226,7 +226,7 @@ export default async function TrialUiPreviewPage() {
                   <span style={{ fontSize: 16 }}>⏳</span>
                   <span style={{ flex: 1, color: TEXT }}>
                     <strong style={{ color: ACCENT }}>{label}</strong> —{" "}
-                    danach läuft dein Konto im Free-Modus weiter.
+                    danach sind die meisten Funktionen gesperrt.
                   </span>
                   <span
                     style={{
