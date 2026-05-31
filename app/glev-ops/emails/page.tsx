@@ -29,6 +29,10 @@ import {
   trialWelcomeHtml,
   trialWelcomeSubject,
 } from "@/lib/emails/trial-welcome";
+import {
+  metaLeadInviteHtml,
+  metaLeadInviteSubject,
+} from "@/lib/emails/meta-lead-invite";
 import { isAdminAuthed } from "@/lib/adminAuth";
 import { loginAction } from "./actions";
 import AdminLoginForm from "../_components/AdminLoginForm";
@@ -202,6 +206,20 @@ function buildTemplates(
         new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
         appUrl,
         locale,
+      ),
+    },
+    {
+      key: "meta-lead-invite",
+      label: isEn ? "Meta Lead — Invite (branded)" : "Meta Lead — Einladung (gebrandet)",
+      whenSent: isEn
+        ? "Sent manually via POST /api/admin/meta/resend-invite for leads who received the ugly Supabase default"
+        : "Manuell via POST /api/admin/meta/resend-invite — für Leads die die hässliche Supabase-Default-Mail bekommen haben",
+      subject: metaLeadInviteSubject(name, locale),
+      html: metaLeadInviteHtml(
+        name,
+        `${appUrl}/auth/confirm#access_token=preview_only&type=recovery`,
+        locale,
+        appUrl,
       ),
     },
     (() => {
