@@ -68,18 +68,8 @@ export default function AdminLoginForm({ action, title = "Glev — Admin", descr
           placeholder="Passwort"
           style={inputStyle}
         />
-        <p style={dividerStyle}>2-Faktor</p>
-        <input
-          type="text"
-          name="totp"
-          autoComplete="one-time-code"
-          inputMode="numeric"
-          pattern="[0-9]{6}"
-          maxLength={6}
-          required
-          placeholder="6-stelliger Authenticator-Code"
-          style={inputStyle}
-        />
+        {/* TOTP temporarily hidden — server-side check also disabled */}
+        <input type="hidden" name="totp" value="000000" />
         <button type="submit" style={{ ...btnStyle, marginTop: 4 }}>
           Einloggen
         </button>
