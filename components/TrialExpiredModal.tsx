@@ -10,57 +10,89 @@
  * NULL trial_end_at = regular free/paid user → modal never shows.
  * Paid users (beta/pro/plus) → modal never shows even if trial_end_at is set.
  *
+ * Zeigt zwei Optionen: Smart (Einstieg) und Pro (empfohlen, wie im Trial).
  * Mounted in app/(protected)/layout.tsx after LowGlucoseAlarmTicker.
  */
 
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 
+const ACCENT = "#4F6EF7";
+
+async function startCheckout(tier: "smart" | "pro"): Promise<void> {
+  const endpoint = tier === "smart" ? "/api/checkout/beta" : "/api/checkout/pro";
+
+  let email: string | undefined;
+  let locale = "de";
+  try {
+    if (supabase) {
+      const { data } = await supabase.auth.getUser();
+      if (data.user?.email) email = data.user.email;
+    }
+    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    if (!tz.startsWith("Europe/") && !tz.startsWith("Atlantic/") && tz !== "UTC") {
+      locale = "en";
+    }
+  } catch {
+    // best-effort
+  }
+
+  try {
+    const res = await fetch(endpoint, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ locale, ...(email ? { email } : {}) }),
+    });
+    const data = (await res.json().catch(() => ({}))) as { url?: string };
+    if (data.url) window.location.href = data.url;
+  } catch {
+    // fallback
+    window.location.href = "/pro";
+  }
+}
+
 export default function TrialExpiredModal() {
   const [expired, setExpired] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [busySmart, setBusySmart] = useState(false);
+  const [busyPro, setBusyPro] = useState(false);
 
   useEffect(() => {
     async function check() {
       try {
         if (!supabase) return;
 
-        // 1. Get current user
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) return;
 
-        // 2. Fetch trial_end_at from profiles
         const { data: profile } = await supabase
           .from("profiles")
           .select("trial_end_at")
           .eq("user_id", user.id)
           .single();
 
-        // No trial = not a trial user, never show modal
         if (!profile?.trial_end_at) return;
 
         const trialEnd = new Date(profile.trial_end_at);
-        if (trialEnd > new Date()) return; // still within trial
+        if (trialEnd > new Date()) return;
 
-        // 3. Confirm plan is still "free" (not paid after trial)
         const res = await fetch("/api/me/plan");
         if (!res.ok) return;
         const { plan } = (await res.json()) as { plan?: string };
 
-        if (plan === "free") {
-          setExpired(true);
-        }
+        if (plan === "free") setExpired(true);
       } catch (e) {
         console.warn("[TrialExpiredModal] check failed silently:", e);
       } finally {
         setLoading(false);
       }
     }
-
     check();
   }, []);
 
   if (loading || !expired) return null;
+
+  const busy = busySmart || busyPro;
 
   return (
     <div
@@ -85,14 +117,14 @@ export default function TrialExpiredModal() {
           background: "var(--surface)",
           border: "1px solid var(--border)",
           borderRadius: 20,
-          padding: "36px 32px",
-          maxWidth: 400,
+          padding: "36px 28px 28px",
+          maxWidth: 380,
           width: "100%",
           textAlign: "center",
           display: "flex",
           flexDirection: "column",
           alignItems: "center",
-          gap: 16,
+          gap: 14,
         }}
       >
         {/* Icon */}
@@ -101,8 +133,8 @@ export default function TrialExpiredModal() {
             width: 56,
             height: 56,
             borderRadius: "50%",
-            background: "rgba(79,110,247,0.12)",
-            border: "1px solid rgba(79,110,247,0.3)",
+            background: `${ACCENT}1e`,
+            border: `1px solid ${ACCENT}4d`,
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
@@ -114,7 +146,7 @@ export default function TrialExpiredModal() {
 
         <h2
           style={{
-            fontSize: 22,
+            fontSize: 21,
             fontWeight: 700,
             color: "var(--text)",
             margin: 0,
@@ -127,36 +159,123 @@ export default function TrialExpiredModal() {
 
         <p
           style={{
-            fontSize: 15,
+            fontSize: 14,
             color: "var(--text-muted)",
             margin: 0,
             lineHeight: 1.6,
           }}
         >
-          Um Glev weiter zu nutzen, wähle ein Abo.
           Deine Daten bleiben vollständig erhalten.
+          Wähle ein Abo um weiterzumachen.
         </p>
 
-        {/* Primary CTA */}
-        <a
-          href="/pro"
+        {/* Plan cards */}
+        <div
           style={{
-            display: "block",
             width: "100%",
-            background: "#4F6EF7",
-            color: "var(--on-accent)",
-            textDecoration: "none",
-            borderRadius: 12,
-            padding: "16px 24px",
-            fontSize: 16,
-            fontWeight: 600,
-            textAlign: "center",
-            boxSizing: "border-box",
+            display: "flex",
+            flexDirection: "column",
+            gap: 10,
             marginTop: 4,
           }}
         >
-          Jetzt Pro werden →
-        </a>
+          {/* Pro — recommended */}
+          <button
+            type="button"
+            disabled={busy}
+            onClick={async () => {
+              if (busy) return;
+              setBusyPro(true);
+              await startCheckout("pro");
+              setBusyPro(false);
+            }}
+            style={{
+              position: "relative",
+              width: "100%",
+              background: busy ? `${ACCENT}88` : ACCENT,
+              color: "#fff",
+              border: "none",
+              borderRadius: 13,
+              padding: "18px 20px 14px",
+              cursor: busy ? "default" : "pointer",
+              textAlign: "left",
+              fontFamily: "inherit",
+              transition: "background 0.15s",
+            }}
+          >
+            {/* Recommended badge */}
+            <span
+              style={{
+                position: "absolute",
+                top: -10,
+                left: "50%",
+                transform: "translateX(-50%)",
+                background: ACCENT,
+                border: "2px solid var(--surface)",
+                color: "#fff",
+                fontSize: 10,
+                fontWeight: 700,
+                letterSpacing: "0.06em",
+                textTransform: "uppercase",
+                padding: "2px 10px",
+                borderRadius: 20,
+                whiteSpace: "nowrap",
+              }}
+            >
+              Empfohlen
+            </span>
+            <div
+              style={{
+                fontSize: 15,
+                fontWeight: 700,
+                marginBottom: 2,
+              }}
+            >
+              {busyPro ? "Weiterleitung …" : "Pro — Wie im Trial weiter →"}
+            </div>
+            <div style={{ fontSize: 12, opacity: 0.85 }}>
+              Voller Funktionsumfang · alle Features entsperrt
+            </div>
+          </button>
+
+          {/* Smart — entry option */}
+          <button
+            type="button"
+            disabled={busy}
+            onClick={async () => {
+              if (busy) return;
+              setBusySmart(true);
+              await startCheckout("smart");
+              setBusySmart(false);
+            }}
+            style={{
+              width: "100%",
+              background: "transparent",
+              color: "var(--text)",
+              border: "1px solid var(--border)",
+              borderRadius: 13,
+              padding: "14px 20px",
+              cursor: busy ? "default" : "pointer",
+              textAlign: "left",
+              fontFamily: "inherit",
+              transition: "border-color 0.15s",
+            }}
+          >
+            <div
+              style={{
+                fontSize: 15,
+                fontWeight: 700,
+                marginBottom: 2,
+                color: "var(--text)",
+              }}
+            >
+              {busySmart ? "Weiterleitung …" : "Smart — Einsteigen →"}
+            </div>
+            <div style={{ fontSize: 12, color: "var(--text-muted)" }}>
+              Kernfeatures · ideal zum Einstieg
+            </div>
+          </button>
+        </div>
 
         {/* Logout */}
         <button

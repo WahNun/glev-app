@@ -3,6 +3,7 @@
 import { useEffect, useRef } from "react";
 import { fetchMeals } from "@/lib/meals";
 import { restoreScheduledTimers, reconcilePendingMealsCgm } from "@/lib/postMealCgmAutoFill";
+import { usePlan } from "@/hooks/usePlan";
 
 // Apple Health sync cadence — every APPLE_HEALTH_INTERVAL_MS while the
 // app is open AND the user has cgm_source = 'apple_health'. iOS HealthKit
@@ -15,15 +16,26 @@ const APPLE_HEALTH_INTERVAL_MS = 5 * 60 * 1000;
 export default function CgmAutoFillProvider() {
   const ranRef = useRef(false);
   const reconcilingRef = useRef(false);
+  const { canAccess, loading } = usePlan();
 
   useEffect(() => {
+    // Wait for plan to resolve before arming any timers or fetches.
+    // This ensures we read the correct entitlements on first run.
+    if (loading) return;
     if (ranRef.current) return;
     ranRef.current = true;
+
+    // Capture plan access once so the async closures below use a
+    // consistent snapshot (plan cannot change mid-session without a reload).
+    const hasAutofill = canAccess("cgm_autofill");
+    const hasAppleHealth = canAccess("apple_health_sync");
 
     let cancelled = false;
     void restoreScheduledTimers();
 
     async function reconcile() {
+      // Plan gate: only Smart+ users get post-meal CGM autofill.
+      if (!hasAutofill) return;
       // In-flight guard: dev StrictMode + visibility/event listeners can
       // overlap reconcile calls. Coalesce them to a single round-trip.
       if (reconcilingRef.current) return;
@@ -52,11 +64,14 @@ export default function CgmAutoFillProvider() {
     }
     window.addEventListener("glev:meal-saved", onMealSaved);
 
-    // Apple Health sync (iOS-only). Mounted inside this provider because
-    // the provider already runs on every protected page after login —
-    // exactly when we want the sync to be live. The helper below owns
-    // its own teardown so the React effect just hands ownership over.
-    let teardownAppleHealth = startAppleHealthSync(() => cancelled);
+    // Apple Health sync (iOS-only, Smart+ plan required). Mounted inside
+    // this provider because the provider already runs on every protected
+    // page after login — exactly when we want the sync to be live. The
+    // helper below owns its own teardown so the React effect just hands
+    // ownership over.
+    let teardownAppleHealth = hasAppleHealth
+      ? startAppleHealthSync(() => cancelled)
+      : () => {};
 
     // Allow the Settings card to re-arm the sync when the user switches
     // CGM source mid-session. Without this, a user who picks Apple
@@ -64,6 +79,7 @@ export default function CgmAutoFillProvider() {
     // page reload — the original startAppleHealthSync call already
     // bailed because cgm_source was NULL at provider mount time.
     function onSourceChanged() {
+      if (!hasAppleHealth) return;
       teardownAppleHealth();
       teardownAppleHealth = startAppleHealthSync(() => cancelled);
     }
@@ -76,7 +92,8 @@ export default function CgmAutoFillProvider() {
       window.removeEventListener("glev:cgm-source-changed", onSourceChanged);
       teardownAppleHealth();
     };
-  }, []);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading]);
 
   return null;
 }

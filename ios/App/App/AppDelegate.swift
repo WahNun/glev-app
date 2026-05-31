@@ -21,7 +21,12 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         // on each launch; `enableBackgroundDelivery` is daemon-scoped
         // and idempotent so re-calling it is cheap.
         glucoseBackgroundSync.start()
-        return true
+        // IMPORTANT: Capacitor's ApplicationDelegateProxy MUST be called
+        // here so that Capacitor plugins (PushNotifications, etc.) can
+        // hook into the app lifecycle. Without this call, register() fires
+        // but neither `registration` nor `registrationError` ever fires
+        // because the plugin's native bridge is never initialised.
+        return ApplicationDelegateProxy.shared.application(application, didFinishLaunchingWithOptions: launchOptions)
     }
 
     func applicationWillResignActive(_ application: UIApplication) {
@@ -49,6 +54,21 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
 
     func applicationWillTerminate(_ application: UIApplication) {
         // Called when the application is about to terminate. Save data if appropriate. See also applicationDidEnterBackground:.
+    }
+
+    // MARK: - APNs token forwarding (required for Capacitor PushNotifications plugin)
+    //
+    // These two methods MUST be present. Without them, UIApplication calls
+    // registerForRemoteNotifications() internally when register() is called
+    // from JS, but the resulting token / error callbacks are never forwarded
+    // to the Capacitor plugin — causing `registration` and `registrationError`
+    // events to never fire on the JS side (silent hang after register() called).
+    func application(_ application: UIApplication, didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {
+        NotificationCenter.default.post(name: .capacitorDidRegisterForRemoteNotifications, object: deviceToken)
+    }
+
+    func application(_ application: UIApplication, didFailToRegisterForRemoteNotificationsWithError error: Error) {
+        NotificationCenter.default.post(name: .capacitorDidFailToRegisterForRemoteNotifications, object: error)
     }
 
     func application(_ app: UIApplication, open url: URL, options: [UIApplication.OpenURLOptionsKey: Any] = [:]) -> Bool {

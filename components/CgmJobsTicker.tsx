@@ -3,7 +3,7 @@
 import { useEffect, useRef } from "react";
 import { processPendingJobs } from "@/lib/cgmJobs";
 
-const TICK_MS = 5 * 60 * 1000; // 5 min
+const TICK_MS = 2 * 60 * 1000; // 2 min — matches server-side cgm-poll cron interval
 
 /**
  * Mounts once inside the protected layout. Runs the CGM job processor

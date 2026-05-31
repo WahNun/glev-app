@@ -183,6 +183,14 @@ export async function POST(req: NextRequest) {
             optional: false,
           },
         ],
+        consent_collection: {
+          terms_of_service: "required",
+        },
+        custom_text: {
+          terms_of_service_acceptance: {
+            message: 'Ich stimme den <a href="https://glev.app/legal?tab=agb">Allgemeinen Geschäftsbedingungen</a> zu.',
+          },
+        },
       });
     } catch (stripeErr) {
       // Full Stripe error (with code/param/request_id) is logged for ops.

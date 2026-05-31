@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef, useMemo } from "react";
-import { useSearchParams } from "next/navigation";
+import { useSearchParams, useRouter } from "next/navigation";
 import { useTranslations, useLocale } from "next-intl";
 import { localeToBcp47 } from "@/lib/time";
 import { fetchMealsForEngine, classifyMeal, computeCalories, saveMeal, deleteMeal, updateMeal, type Meal } from "@/lib/meals";
@@ -449,6 +449,7 @@ export default function EnginePage() {
   // on /engine still switches tabs — Next.js does NOT remount the
   // page when only the query string changes.
   const { canAccess } = usePlan();
+  const router = useRouter();
   const searchParams = useSearchParams();
   useEffect(() => {
     if (!searchParams) return;
@@ -542,6 +543,16 @@ export default function EnginePage() {
   const [iobDisplay, setIobDisplay] = useState<string | null>(null);
   const [insulinType, setInsulinType] = useState<InsulinType>('rapid');
   const [glucose, setGlucose] = useState("");
+  // Provenance of the current glucose value — used to decide whether a
+  // historical CGM auto-fill is allowed to overwrite it.
+  // "live"       = filled from live CGM on mount or via CGM button
+  // "historical" = filled by the past-mealTime auto-fill effect
+  // "manual"     = user typed it themselves → never overwrite
+  // null         = empty / not yet filled
+  const [glucoseProvenance, setGlucoseProvenance] = useState<"live" | "historical" | "manual" | null>(null);
+  // Ref mirrors the state so effects can read the current value without
+  // needing it in their dependency array (avoids re-run loops).
+  const glucoseProvenanceRef = useRef<"live" | "historical" | "manual" | null>(null);
   // The `carbs` form state holds the user-displayed value in their
   // chosen unit (g / BE / KE) — see useCarbUnit below. All persistence
   // (saveMeal, runGlevEngine, classifyMeal, computeCalories) operates
@@ -836,6 +847,11 @@ export default function EnginePage() {
   // Confirm-Log + integrated chat state. mealTime defaults to "now"; insulin
   // is left blank until a recommendation arrives or the user types one in.
   const [mealTime,    setMealTime]    = useState<string>(() => nowLocalDateTime());
+  // Ref that always holds the latest mealTime value — lets async callbacks
+  // (e.g. handlePullCgm) read the *current* meal time without being stale
+  // closures over the render-time value.
+  const mealTimeRef = useRef<string>(mealTime);
+  useEffect(() => { mealTimeRef.current = mealTime; }, [mealTime]);
   const [insulin,     setInsulin]     = useState("");
   const [confirming,  setConfirming]  = useState(false);
   const [confirmErr,  setConfirmErr]  = useState("");
@@ -898,6 +914,10 @@ export default function EnginePage() {
         if (cancelled) return;
         if (j.connected && typeof j.glucose === "number" && j.glucose > 0) {
           setGlucose(prev => prev === "" ? String(j.glucose) : prev);
+          if (glucoseProvenanceRef.current === null) {
+            glucoseProvenanceRef.current = "live";
+            setGlucoseProvenance("live");
+          }
         }
       } catch {
         // Spec: fail silently — CGM unavailability must never block manual entry.
@@ -979,7 +999,15 @@ export default function EnginePage() {
 
     if (nowMs - mealMs < PAST_THRESHOLD_MS) return; // "now" or future — skip
 
-    if (trendSamples.length === 0) return; // no CGM data yet
+    // If we have no trend samples yet, trigger a fresh fetch and wait for it.
+    // The effect will re-run automatically once trendSamples is populated
+    // (it's in the dep array), so we'll find the historical reading on the
+    // next pass without any extra wiring.
+    if (trendSamples.length === 0) {
+      // eslint-disable-next-line @typescript-eslint/no-floating-promises
+      refreshTrendSamples();
+      return;
+    }
 
     // Find the sample closest to mealMs within ±15 min.
     let best: { value: number; delta: number } | null = null;
@@ -993,8 +1021,15 @@ export default function EnginePage() {
     }
     if (!best) return; // nothing close enough
 
-    // Only auto-fill when glucose field is currently empty — respect manual input.
-    setGlucose((prev) => (prev === "" ? String(best!.value) : prev));
+    // Allow overwriting live/auto-filled values, but never overwrite what the
+    // user typed themselves. Use the ref so we read the current value without
+    // adding glucoseProvenance to the dependency array (that would re-trigger
+    // this effect each time provenance changes, causing a harmless but noisy loop).
+    if (glucoseProvenanceRef.current === "manual") return;
+
+    setGlucose(String(best.value));
+    glucoseProvenanceRef.current = "historical";
+    setGlucoseProvenance("historical");
   }, [mealTime, trendSamples]);
 
   // Hydrate the dismissed-suggestion cooldown map from localStorage. Each
@@ -1437,7 +1472,7 @@ export default function EnginePage() {
       // over the deterministic classifyMeal fallback. Validate against the
       // four canonical labels so a malformed response can't slip through.
       const aiCls = pData.mealType;
-      if (typeof aiCls === "string" && ["FAST_CARBS", "HIGH_FAT", "HIGH_PROTEIN", "BALANCED"].includes(aiCls)) {
+      if (typeof aiCls === "string" && ["FAST_CARBS", "HIGH_FAT", "HIGH_PROTEIN", "BALANCED", "HIGH_FIBER"].includes(aiCls)) {
         setAiMealType(aiCls);
       } else {
         setAiMealType(null);
@@ -1533,6 +1568,19 @@ export default function EnginePage() {
   // field always reflects the user's level at meal time.
   async function handlePullCgm() {
     if (cgmPulling) return;
+    // Race-guard: if the user has already set a past meal time (> 5 min ago)
+    // AND the historical auto-fill has already populated the glucose field,
+    // don't overwrite it with the current live reading.  handlePullCgm fires
+    // fire-and-forget after voice parsing (which assumes "now"), but by the
+    // time the response arrives the user may have shifted to a past time.
+    // We read mealTimeRef (not the closure-captured mealTime) so we see the
+    // value the user *currently* has selected, not the one at call-time.
+    {
+      const currentMealMs = Date.parse(mealTimeRef.current);
+      const mealIsPast =
+        Number.isFinite(currentMealMs) && Date.now() - currentMealMs > 5 * 60_000;
+      if (mealIsPast && glucoseProvenanceRef.current === "historical") return;
+    }
     setCgmPulling(true);
     try {
       // Step 1 — try a recent fingerstick. Non-fatal on failure: fall through
@@ -1543,6 +1591,8 @@ export default function EnginePage() {
         if (Number.isFinite(measuredMs) && (Date.now() - measuredMs) <= FS_OVERRIDE_WINDOW_MS) {
           const reading = Math.round(Number(fs.value_mg_dl));
           setGlucose(String(reading));
+          glucoseProvenanceRef.current = "live";
+          setGlucoseProvenance("live");
           const d = new Date(measuredMs);
           setLastReading(`${String(d.getHours()).padStart(2,"0")}:${String(d.getMinutes()).padStart(2,"0")} · FS`);
           logDebug("ENGINE.FS_USED", { reading, measured_at: fs.measured_at });
@@ -1555,6 +1605,8 @@ export default function EnginePage() {
       if (r.ok) {
         const reading = Math.round(r.value);
         setGlucose(String(reading));
+        glucoseProvenanceRef.current = "live";
+        setGlucoseProvenance("live");
         const tsMs = r.timestamp ? parseLluTs(r.timestamp) : null;
         const d = new Date(tsMs ?? Date.now());
         setLastReading(`${String(d.getHours()).padStart(2,"0")}:${String(d.getMinutes()).padStart(2,"0")}`);
@@ -2120,7 +2172,11 @@ export default function EnginePage() {
   //  - the form-mode "Cancel" button
   //  - all 3 decision buttons after their work is done
   function resetForm(opts: { keepGlucose?: boolean } = {}) {
-    if (!opts.keepGlucose) setGlucose("");
+    if (!opts.keepGlucose) {
+      setGlucose("");
+      glucoseProvenanceRef.current = null;
+      setGlucoseProvenance(null);
+    }
     setCarbs(""); setProtein(""); setFat(""); setFiber("");
     setDesc(""); setInsulin(""); setResult(null); setResultICRSource(null); setTranscript("");
     setAiMealType(null);
@@ -3138,7 +3194,11 @@ export default function EnginePage() {
                           type="number"
                           placeholder="—"
                           value={glucose}
-                          onChange={(e) => setGlucose(e.target.value)}
+                          onChange={(e) => {
+                            setGlucose(e.target.value);
+                            glucoseProvenanceRef.current = "manual";
+                            setGlucoseProvenance("manual");
+                          }}
                           aria-label={tEngine("glucose_before_label")}
                           style={{
                             background: "transparent", border: "none", outline: "none",
@@ -3167,9 +3227,37 @@ export default function EnginePage() {
                           {cgmPulling ? tEngine("cgm_pulling") : tEngine("cgm_button")}
                         </button>
                       </div>
-                      {/* Row 2: unit */}
-                      <div style={{ fontSize: 11, color: "var(--text-faint)", fontFamily: "var(--font-mono)", letterSpacing: "0.05em" }}>
-                        mg/dL
+                      {/* Row 2: unit + provenance chip */}
+                      <div style={{ display: "flex", alignItems: "center", gap: 6, justifyContent: "flex-end" }}>
+                        <div style={{ fontSize: 11, color: "var(--text-faint)", fontFamily: "var(--font-mono)", letterSpacing: "0.05em" }}>
+                          mg/dL
+                        </div>
+                        {glucose && glucoseProvenance === "historical" && (
+                          <div style={{
+                            fontSize: 10, fontWeight: 600,
+                            color: "var(--text-dim)",
+                            background: "var(--surface-raised, rgba(255,255,255,0.06))",
+                            border: "1px solid var(--border)",
+                            borderRadius: 5, padding: "1px 5px",
+                            letterSpacing: "0.03em",
+                            whiteSpace: "nowrap",
+                          }}>
+                            ⏱ Historisch
+                          </div>
+                        )}
+                        {glucose && glucoseProvenance === "live" && (
+                          <div style={{
+                            fontSize: 10, fontWeight: 600,
+                            color: GREEN,
+                            background: "var(--surface-raised, rgba(255,255,255,0.06))",
+                            border: `1px solid ${GREEN}44`,
+                            borderRadius: 5, padding: "1px 5px",
+                            letterSpacing: "0.03em",
+                            whiteSpace: "nowrap",
+                          }}>
+                            ● Live
+                          </div>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -3178,39 +3266,53 @@ export default function EnginePage() {
             </div>
 
             {/* ── Bolus-berechnen Toggle ─────────────────────────── */}
-            <UpgradeGate feature="engine_bolus_suggestion">
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: bolusEnabled ? 12 : 0, padding: "2px 0" }}>
-                <span style={{ fontSize: 13, fontWeight: 600, color: "var(--text-dim)", letterSpacing: "-0.01em" }}>
-                  {tEngine("bolus_toggle_label")}
-                </span>
-                <button
-                  type="button"
-                  role="switch"
-                  aria-checked={bolusEnabled}
-                  onClick={() => setBolusEnabled(v => !v)}
-                  style={{
-                    width: 44, height: 26, borderRadius: 13, border: "none",
-                    background: bolusEnabled ? ACCENT : "var(--border)",
-                    position: "relative", cursor: "pointer", flexShrink: 0,
-                    transition: "background 200ms ease",
-                    WebkitTapHighlightColor: "transparent",
-                  }}
-                >
-                  <span style={{
-                    position: "absolute", top: 3, borderRadius: "50%",
-                    width: 20, height: 20, background: "var(--text)",
-                    left: bolusEnabled ? 21 : 3,
-                    transition: "left 200ms ease",
-                    boxShadow: "0 1px 3px rgba(0,0,0,0.3)",
-                  }} />
-                </button>
-              </div>
+            {/* Toggle is always visible so users can discover the feature */}
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: bolusEnabled ? 12 : 0, padding: "2px 0" }}>
+              <span style={{ fontSize: 13, fontWeight: 600, color: "var(--text-dim)", letterSpacing: "-0.01em" }}>
+                {tEngine("bolus_toggle_label")}
+              </span>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={bolusEnabled}
+                onClick={() => {
+                  if (!canAccess("engine_bolus_suggestion")) {
+                    router.push("/pro");
+                    return;
+                  }
+                  setBolusEnabled(v => !v);
+                }}
+                style={{
+                  width: 44, height: 26, borderRadius: 13, border: "none",
+                  background: bolusEnabled ? ACCENT : "var(--border)",
+                  position: "relative", cursor: "pointer", flexShrink: 0,
+                  transition: "background 200ms ease",
+                  WebkitTapHighlightColor: "transparent",
+                }}
+              >
+                <span style={{
+                  position: "absolute", top: 3, borderRadius: "50%",
+                  width: 20, height: 20, background: "var(--text)",
+                  left: bolusEnabled ? 21 : 3,
+                  transition: "left 200ms ease",
+                  boxShadow: "0 1px 3px rgba(0,0,0,0.3)",
+                }} />
+              </button>
+            </div>
 
+            {/* ── Expanded bolus section — gated; only shown once the
+                toggle is on so the lock appears in context, not over
+                the toggle itself. blurPx/opacity kept at default
+                (2.5 / 0.6) — the larger content area already makes
+                the lock card clearly visible. ─────────────────────── */}
+            {bolusEnabled && (
+            <UpgradeGate feature="engine_bolus_suggestion">
+              <div>
               {/* ── Combined ICR+dose chips ──────────────────────────
                   Each chip shows label + ratio + dose in one block,
                   replacing the previous 4-element layout (2 ICR cards
                   + 2 separate dose chips). Manual override row below. */}
-              {bolusEnabled && (() => {
+              {(() => {
                 const showBoth = shouldShowBothChips({
                   icrSampleSize,
                   adaptedICR,
@@ -3329,9 +3431,11 @@ export default function EnginePage() {
                   </div>
                 );
               })()}
+              </div>
             </UpgradeGate>
+            )}
 
-              {/* ── Action row ─────────────────────────────────────────
+            {/* ── Action row ─────────────────────────────────────────
                   bolusEnabled=false → single "ohne Bolus" button.
                   bolusEnabled=true  → "Speichern — X IE" + Explainer link. */}
               <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>

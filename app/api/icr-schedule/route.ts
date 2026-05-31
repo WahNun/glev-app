@@ -14,6 +14,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { authenticate, errResponse } from "../cgm/_helpers";
+import { checkPlanAccess } from "@/lib/server/planAccess";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -37,6 +38,9 @@ function adminClient() {
 export async function GET(req: NextRequest) {
   const { user, error } = await authenticate(req);
   if (!user) return NextResponse.json({ error: error || "unauthorized" }, { status: 401 });
+  if (!(await checkPlanAccess(user.id, "icr_by_daytime"))) {
+    return NextResponse.json({ error: "plan_required", plan: "pro" }, { status: 403 });
+  }
   try {
     const db = adminClient();
 
@@ -72,6 +76,9 @@ export async function GET(req: NextRequest) {
 export async function PUT(req: NextRequest) {
   const { user, error } = await authenticate(req);
   if (!user) return NextResponse.json({ error: error || "unauthorized" }, { status: 401 });
+  if (!(await checkPlanAccess(user.id, "icr_by_daytime"))) {
+    return NextResponse.json({ error: "plan_required", plan: "pro" }, { status: 403 });
+  }
   try {
     const body = (await req.json()) as { enabled?: boolean; slots?: SlotPayload[] };
     const enabled = body.enabled === true;

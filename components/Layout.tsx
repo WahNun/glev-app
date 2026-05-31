@@ -13,10 +13,10 @@ import GlevAIButton from "@/components/GlevAIButton";
 import GlevAIConsentModal from "@/components/GlevAIConsentModal";
 import GlevAIChatSheet from "@/components/GlevAIChatSheet";
 import { useGlevAI } from "@/lib/useGlevAI";
-import ThemeToggle from "@/components/ThemeToggle";
 import { useFeatureFlag } from "@/lib/featureFlags";
 import { useScreenContext } from "@/hooks/useScreenContext";
 import { EngineHeaderProvider, useEngineHeader } from "@/lib/engineHeaderContext";
+import TrialCountdownBanner from "@/components/TrialCountdownBanner";
 import { EngineSourceHeaderProvider, useEngineSourceHeader } from "@/lib/engineSourceHeaderContext";
 import { EngineWizardStepProvider, useEngineWizardStep } from "@/lib/engineWizardStepContext";
 import { VoiceRecordingProvider, useVoiceRecording } from "@/lib/voiceRecordingContext";
@@ -137,6 +137,15 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
       router.push(path);
     },
   });
+  // Heartbeat: last_seen_at einmal pro Session aktualisieren (Re-Engagement-Tracking).
+  useEffect(() => {
+    const SESSION_KEY = "glev_heartbeat_sent";
+    if (typeof sessionStorage !== "undefined" && !sessionStorage.getItem(SESSION_KEY)) {
+      sessionStorage.setItem(SESSION_KEY, "1");
+      fetch("/api/me/heartbeat", { method: "POST", credentials: "include" }).catch(() => {});
+    }
+  }, []);
+
   // CGM-source for the "● Live" header pill on /dashboard.
   const [cgmSource, setCgmSource] = useState<string | null>(null);
   useEffect(() => {
@@ -236,36 +245,35 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
   // monotonic `vt` token that re-triggers auto-record even if the
   // user is already on /engine.
   const runFabShortTap = () => {
-    // If AI is not enabled, always fall through to quick-add sheet.
-    if (!aiVoiceEnabled) {
-      setQuickAddOpen(true);
-      return;
-    }
-    // If the chat sheet is already open, the FAB starts a new voice take
-    // regardless of the glev_fab_mode preference.
-    if (glevAi.sheetOpen) {
-      window.dispatchEvent(new CustomEvent("glev:voice-start"));
-      return;
-    }
-    let mode: "ai" | "voice" = "ai";
+    // Read user's explicit preference. Default is "voice" — the old
+    // Glev Engine voice input works for ALL users without any flag.
+    // Only "ai" + aiVoiceEnabled=true opens the AI chat sheet.
+    let storedMode: string | null = null;
     if (typeof window !== "undefined") {
-      try {
-        mode = window.localStorage.getItem("glev_fab_mode") === "voice" ? "voice" : "ai";
-      } catch { /* ignore — fall back to ai */ }
+      try { storedMode = window.localStorage.getItem("glev_fab_mode"); } catch { /* ignore */ }
     }
-    if (mode === "voice") {
-      router.push(`/engine?voice=1&vt=${Date.now()}`);
-    } else {
-      glevAi.openFromButton();
-      // If consent is already granted the chat sheet opens immediately.
-      // Dispatch a delayed voice-start so the sheet can animate in before
-      // we start recording — this enables tap-to-talk from any screen.
-      if (glevAi.consentGranted) {
-        window.setTimeout(() => {
-          window.dispatchEvent(new CustomEvent("glev:voice-start"));
-        }, 350);
+
+    // AI mode: only when user explicitly chose "ai", feature flag is on,
+    // AND consent has already been granted. Without consent the user would
+    // see the activation modal on every tap — instead fall through to voice
+    // so the FAB always does something useful without prompting.
+    if (storedMode === "ai" && aiVoiceEnabled && glevAi.consentGranted) {
+      // If the chat sheet is already open, start a new voice take.
+      if (glevAi.sheetOpen) {
+        window.dispatchEvent(new CustomEvent("glev:voice-start"));
+        return;
       }
+      glevAi.openFromButton();
+      // Delay voice-start so the sheet can animate in before recording.
+      window.setTimeout(() => {
+        window.dispatchEvent(new CustomEvent("glev:voice-start"));
+      }, 350);
+      return;
     }
+
+    // Default (and fallback when AI not available or consent not granted):
+    // open legacy voice input — works for ALL users.
+    router.push(`/engine?voice=1&vt=${Date.now()}`);
   };
 
   // Footer-nav helper: always navigate, but gracefully stop any active
@@ -929,16 +937,6 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
         </nav>
 
         <div style={{ marginTop: 16, borderTop: `1px solid ${BORDER}`, paddingTop: 12, width: "100%", display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
-          <ThemeToggle
-            style={{
-              width: "100%",
-              borderRadius: 10,
-              height: 38,
-              border: "none",
-              background: "transparent",
-              color: "var(--text-ghost)",
-            }}
-          />
           <button
             aria-label={signOutConfirm ? "Confirm sign out" : "Sign out of Glev"}
             onClick={signOutConfirm ? handleSignOut : () => setSignOutConfirm(true)}
@@ -963,6 +961,7 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
       </aside>
 
       <main ref={mainRef} className="glev-main" style={{ flex: 1, padding: "28px 32px", maxWidth: "100%", overflowX: "hidden", zoom: 1.12 }}>
+        <TrialCountdownBanner />
         {children}
       </main>
 
@@ -1037,7 +1036,7 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
         <MobileGlevFab
           label={tNav("glev")}
           active={quickAddOpen || voice.recording}
-          recording={voice.recording || aiThinking || (aiVoiceEnabled && glevAi.streaming)}
+          recording={!!(voice.recording || aiThinking || (aiVoiceEnabled && glevAi.streaming))}
           speaking={aiVoiceEnabled ? ttsSpeaking : false}
           sheetOpen={aiVoiceEnabled ? glevAi.sheetOpen : false}
           hasConversation={aiVoiceEnabled ? glevAi.messages.length > 0 && !glevAi.sheetOpen : false}

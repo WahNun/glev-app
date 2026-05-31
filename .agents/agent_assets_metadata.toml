@@ -156,3 +156,21 @@ id = "vXVA383jiWMpYksdoZL6Z"
 uri = "file://public/marketer-briefing.md"
 type = "text"
 title = "Marketer Briefing — korrigiert (Plattform-Status)"
+
+[[outputs]]
+id = "dhcoNr34oseiPEgfLGglX"
+uri = "file://docs/cgm-anbindungen-report.md"
+type = "text"
+title = "Glev CGM-Anbindungen — Technischer Report"
+
+[[outputs]]
+id = "ZlhWyhp0kS0WEBbLa90tj"
+uri = "file://exports/glev-diagnose-bolus-icr.txt"
+type = "text"
+title = "Glev Diagnose: Bolus & ICR (TXT)"
+
+[[outputs]]
+id = "VVrHiBJQ-lbZXn1sH1biO"
+uri = "file://docs/high-fiber-analysis.md"
+type = "text"
+title = "HIGH_FIBER Bolus-Diagnose"

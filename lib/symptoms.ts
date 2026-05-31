@@ -207,9 +207,13 @@ export async function fetchSymptomLogs(
   return (data || []) as SymptomLog[];
 }
 
-export async function fetchRecentSymptomLogs(days: number): Promise<SymptomLog[]> {
-  const fromIso = new Date(Date.now() - days * 86400000).toISOString();
-  return fetchSymptomLogs(fromIso);
+export async function fetchRecentSymptomLogs(
+  days: number,
+  options?: { before?: string },
+): Promise<SymptomLog[]> {
+  const toMs = options?.before ? new Date(options.before).getTime() : Date.now();
+  const fromIso = new Date(toMs - days * 86400000).toISOString();
+  return fetchSymptomLogs(fromIso, options?.before);
 }
 
 export async function deleteSymptomLog(id: string): Promise<void> {

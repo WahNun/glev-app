@@ -108,7 +108,7 @@ export default function CgmStep({
 
   return (
     <Shell
-      step={5}
+      step={6}
       onNext={onSkip}
       onBack={back}
       onSkip={onSkip}

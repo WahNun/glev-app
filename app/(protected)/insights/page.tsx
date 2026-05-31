@@ -1147,11 +1147,12 @@ export default function InsightsPage() {
   const icrScope = last7.filter(m=>m.carbs_grams&&m.insulin_units).map(m=>(m.carbs_grams||0)/(m.insulin_units||1));
   const estICR = icrScope.length ? Math.round(icrScope.reduce((a,b)=>a+b,0)/icrScope.length) : 15;
 
-  // Meal type breakdown (FAST_CARBS / HIGH_PROTEIN / HIGH_FAT / BALANCED)
+  // Meal type breakdown (FAST_CARBS / HIGH_PROTEIN / HIGH_FAT / HIGH_FIBER / BALANCED)
   const types: Record<string, {count:number; totalCarbs:number; totalInsulin:number; good:number}> = {
     FAST_CARBS:   {count:0,totalCarbs:0,totalInsulin:0,good:0},
     HIGH_PROTEIN: {count:0,totalCarbs:0,totalInsulin:0,good:0},
     HIGH_FAT:     {count:0,totalCarbs:0,totalInsulin:0,good:0},
+    HIGH_FIBER:   {count:0,totalCarbs:0,totalInsulin:0,good:0},
     BALANCED:     {count:0,totalCarbs:0,totalInsulin:0,good:0},
   };
   last7.forEach(m => {
@@ -1163,7 +1164,7 @@ export default function InsightsPage() {
       if (EVAL_NORM(unifiedOutcome(m))==="GOOD") types[t].good++;
     }
   });
-  const TYPE_ORDER = ["FAST_CARBS", "HIGH_PROTEIN", "HIGH_FAT", "BALANCED"] as const;
+  const TYPE_ORDER = ["FAST_CARBS", "HIGH_PROTEIN", "HIGH_FAT", "HIGH_FIBER", "BALANCED"] as const;
 
   // Time-of-day buckets
   const timeGroups: Record<string,{count:number;good:number}> = {
@@ -1486,7 +1487,7 @@ export default function InsightsPage() {
                 return readings14.filter(r => r.t >= s && r.t < s + 86400000 && r.v < HYPO_THRESHOLD_MGDL).length;
               });
               const lbls = Array.from({ length: 7 }, (_, i) => String(new Date(nowMs - (6 - i) * 86400000).getDate()));
-              return <InsightMicroBars values={vals} labels={lbls} color={PINK} title={tInsights("micro_trend_7d")} barHeight={90} />;
+              return <InsightMicroBars values={vals} labels={lbls} color={PINK} title={tInsights("micro_trend_7d")} barHeight={110} />;
             })()}
             {tirSelected != null && (() => {
                 const cfg =
@@ -1556,6 +1557,7 @@ export default function InsightsPage() {
       node: (
         <UpgradeGate feature="hba1c_gmi">
         <FlipCard
+          minHeight={CARD_MIN_H}
           accent={ACCENT}
           back={
             <FlipBack
@@ -1616,13 +1618,30 @@ export default function InsightsPage() {
               )}
             </div>
 
-            {/* Shared 7-day sparkline — full card width now that both
-                metrics live in the same chip. Reuses the same series
-                the Glucose Trend card derives from `last7Bg` (no extra
-                fetch). Hidden until we have at least 2 days of data. */}
+            {/* GMI = klinisch definiertes HbA1c-Äquivalent aus CGM-Daten.
+                Bergenstal et al., Diabetes Care 2018 (GMI = 3.31 + 0.02392 × avgBG).
+                Compliance: als Schätzwert rahmen, kein Laborwert. */}
+            {gmi != null && (
+              <div style={{
+                padding: "8px 10px",
+                background: `${ACCENT}08`,
+                borderRadius: 8,
+                border: `1px solid ${ACCENT}20`,
+              }}>
+                <div style={{ fontSize: 11, color: ACCENT, fontWeight: 700, marginBottom: 2 }}>
+                  Entspricht ca. HbA1c
+                </div>
+                <div style={{ fontSize: 10, color: "var(--text-ghost)", lineHeight: 1.5 }}>
+                  Schätzwert aus CGM-Daten — kein Laborwert. Kann vom Labor-HbA1c abweichen. Bitte mit Diabetologen besprechen.
+                </div>
+              </div>
+            )}
+
+            {/* Shared 7-day sparkline — fills remaining card height.
+                Grid lines give a BG scale at a glance. */}
             {trendHasData && trendValues.length >= 2 && (
-              <div style={{ opacity:0.85 }}>
-                <Sparkline values={trendValues.slice(-8)} color={ACCENT}/>
+              <div style={{ marginTop:4, opacity:0.9 }}>
+                <Sparkline values={trendValues.slice(-8)} color={ACCENT} height={170} showGrid />
               </div>
             )}
           </div>
@@ -1685,10 +1704,43 @@ export default function InsightsPage() {
           </div>
           {trendHasData ? (
             <>
-              <Sparkline values={trendValues} color={ACCENT} height={100}/>
-              <div style={{ display:"flex", justifyContent:"space-between", marginTop:4, fontSize:11, color:"var(--text-faint)" }}>
+              <Sparkline values={trendValues} color={ACCENT} height={210} showGrid />
+              <div style={{ display:"flex", justifyContent:"space-between", marginTop:6, fontSize:11, color:"var(--text-faint)" }}>
                 {trendDays.map((d, i) => <span key={i}>{d.label}</span>)}
               </div>
+              {/* Tag/Nacht-Split — nächtliche Hypos sind häufig unsichtbar */}
+              {(() => {
+                const dayR   = readings7.filter(r => { const h = new Date(r.t).getHours(); return h >= 6 && h < 22; });
+                const nightR = readings7.filter(r => { const h = new Date(r.t).getHours(); return h < 6 || h >= 22; });
+                const dayAvg   = dayR.length   >= 5 ? Math.round(dayR.reduce((s,r)=>s+r.v,0)/dayR.length)   : null;
+                const nightAvg = nightR.length >= 5 ? Math.round(nightR.reduce((s,r)=>s+r.v,0)/nightR.length) : null;
+                if (dayAvg == null && nightAvg == null) return null;
+                const col = (v: number) => v > tirHigh ? ORANGE : v < tirLow ? PINK : GREEN;
+                return (
+                  <div style={{ display:"flex", gap:8, marginTop:10 }}>
+                    {dayAvg != null && (
+                      <div style={{ flex:1, padding:"8px 10px", background:"rgba(255,255,255,0.04)", borderRadius:10, border:"1px solid var(--border-soft)" }}>
+                        <div style={{ fontSize:10, color:"var(--text-faint)", fontWeight:600, textTransform:"uppercase", letterSpacing:"0.06em" }}>☀ Tag</div>
+                        <div style={{ display:"flex", alignItems:"baseline", gap:3, marginTop:3 }}>
+                          <span style={{ fontSize:18, fontWeight:800, color:col(dayAvg), fontFamily:"var(--font-mono)" }}>{dayAvg}</span>
+                          <span style={{ fontSize:10, color:"var(--text-faint)" }}>mg/dL</span>
+                        </div>
+                        <div style={{ fontSize:9, color:"var(--text-ghost)", marginTop:1 }}>6–22 Uhr</div>
+                      </div>
+                    )}
+                    {nightAvg != null && (
+                      <div style={{ flex:1, padding:"8px 10px", background:"rgba(255,255,255,0.04)", borderRadius:10, border:"1px solid var(--border-soft)" }}>
+                        <div style={{ fontSize:10, color:"var(--text-faint)", fontWeight:600, textTransform:"uppercase", letterSpacing:"0.06em" }}>🌙 Nacht</div>
+                        <div style={{ display:"flex", alignItems:"baseline", gap:3, marginTop:3 }}>
+                          <span style={{ fontSize:18, fontWeight:800, color:col(nightAvg), fontFamily:"var(--font-mono)" }}>{nightAvg}</span>
+                          <span style={{ fontSize:10, color:"var(--text-faint)" }}>mg/dL</span>
+                        </div>
+                        <div style={{ fontSize:9, color:"var(--text-ghost)", marginTop:1 }}>22–6 Uhr</div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
             </>
           ) : (
             <div style={{
@@ -1795,6 +1847,46 @@ export default function InsightsPage() {
                 </div>
               </div>
             )}
+            {/* Tageszeit-Verteilung der Hypos — zeigt wann Hypos auftreten */}
+            {hypoEnough && hypoTotal7d > 0 && (() => {
+              const segs = [
+                { label:"Nacht",  sub:"22–6 h",  count:0 },
+                { label:"Morgen", sub:"6–10 h",  count:0 },
+                { label:"Tag",    sub:"10–18 h", count:0 },
+                { label:"Abend",  sub:"18–22 h", count:0 },
+              ];
+              readings7.filter(r => r.v < HYPO_THRESHOLD_MGDL).forEach(r => {
+                const h = new Date(r.t).getHours();
+                if (h >= 22 || h < 6)         segs[0].count++;
+                else if (h >= 6  && h < 10)   segs[1].count++;
+                else if (h >= 10 && h < 18)   segs[2].count++;
+                else                           segs[3].count++;
+              });
+              const maxC = Math.max(...segs.map(s => s.count), 1);
+              const hasAny = segs.some(s => s.count > 0);
+              if (!hasAny) return null;
+              return (
+                <div style={{ marginTop:12 }}>
+                  <div style={{ fontSize:10, color:"var(--text-faint)", fontWeight:600, textTransform:"uppercase", letterSpacing:"0.06em", marginBottom:6 }}>
+                    Tageszeit der Hypos
+                  </div>
+                  <div style={{ display:"flex", flexDirection:"column", gap:5 }}>
+                    {segs.map(seg => (
+                      <div key={seg.label} style={{ display:"flex", alignItems:"center", gap:8 }}>
+                        <div style={{ width:40, fontSize:10, color:seg.count>0?PINK:"var(--text-ghost)", fontWeight:600, flexShrink:0 }}>{seg.label}</div>
+                        <div style={{ flex:1, height:5, background:"var(--surface-soft)", borderRadius:99, overflow:"hidden" }}>
+                          {seg.count > 0 && <div style={{ height:"100%", width:`${(seg.count/maxC)*100}%`, background:PINK, borderRadius:99 }}/>}
+                        </div>
+                        <div style={{ width:18, textAlign:"right", fontSize:10, color:seg.count>0?PINK:"var(--text-ghost)", fontFamily:"var(--font-mono)", fontWeight:700 }}>
+                          {seg.count}
+                        </div>
+                        <div style={{ width:32, fontSize:9, color:"var(--text-ghost)" }}>{seg.sub}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })()}
             {/* 7-day daily hypo readings bar chart */}
             {hypoEnough && (() => {
               const nowMs = Date.now();
@@ -1803,7 +1895,7 @@ export default function InsightsPage() {
                 return readings14.filter(r => r.t >= s && r.t < s + 86400000 && r.v < HYPO_THRESHOLD_MGDL).length;
               });
               const lbls = Array.from({ length: 7 }, (_, i) => String(new Date(nowMs - (6 - i) * 86400000).getDate()));
-              return <InsightMicroBars values={vals} labels={lbls} color={accent} title={tInsights("micro_trend_7d")} barHeight={90} />;
+              return <InsightMicroBars values={vals} labels={lbls} color={accent} title={tInsights("micro_trend_7d")} barHeight={150} />;
             })()}
           </FlipCard>
           </UpgradeGate>
@@ -1856,6 +1948,29 @@ export default function InsightsPage() {
                 </div>
               </div>
             )}
+            {/* TAR + geschätzte Hyper-Dauer */}
+            {hyperEnough && (
+              <div style={{ display:"flex", gap:8, marginTop:10 }}>
+                <div style={{ flex:1, padding:"8px 10px", background:`${ORANGE}08`, borderRadius:10, border:`1px solid ${ORANGE}20` }}>
+                  <div style={{ fontSize:10, color:"var(--text-faint)", fontWeight:600, textTransform:"uppercase", letterSpacing:"0.06em" }}>TAR &gt;{tirHigh}</div>
+                  <div style={{ display:"flex", alignItems:"baseline", gap:3, marginTop:3 }}>
+                    <span style={{ fontSize:18, fontWeight:800, color:b7.hi > 25 ? ORANGE : GREEN, fontFamily:"var(--font-mono)" }}>{b7.hi}</span>
+                    <span style={{ fontSize:10, color:"var(--text-faint)" }}>%</span>
+                  </div>
+                  <div style={{ fontSize:9, color:"var(--text-ghost)", marginTop:1 }}>Ziel: &lt; 25 %</div>
+                </div>
+                {hyperCount7d > 0 && (
+                  <div style={{ flex:1, padding:"8px 10px", background:`${ORANGE}08`, borderRadius:10, border:`1px solid ${ORANGE}20` }}>
+                    <div style={{ fontSize:10, color:"var(--text-faint)", fontWeight:600, textTransform:"uppercase", letterSpacing:"0.06em" }}>≈ Dauer</div>
+                    <div style={{ display:"flex", alignItems:"baseline", gap:3, marginTop:3 }}>
+                      <span style={{ fontSize:18, fontWeight:800, color:ORANGE, fontFamily:"var(--font-mono)" }}>{(hyperCount7d * 5 / 60).toFixed(1)}</span>
+                      <span style={{ fontSize:10, color:"var(--text-faint)" }}>h / 7d</span>
+                    </div>
+                    <div style={{ fontSize:9, color:"var(--text-ghost)", marginTop:1 }}>bei 5-min CGM-Takt</div>
+                  </div>
+                )}
+              </div>
+            )}
             {/* 7-day daily hyper readings bar chart */}
             {hyperEnough && (() => {
               const nowMs = Date.now();
@@ -1864,7 +1979,7 @@ export default function InsightsPage() {
                 return readings14.filter(r => r.t >= s && r.t < s + 86400000 && r.v > HYPER_THRESHOLD_MGDL).length;
               });
               const lbls = Array.from({ length: 7 }, (_, i) => String(new Date(nowMs - (6 - i) * 86400000).getDate()));
-              return <InsightMicroBars values={vals} labels={lbls} color={accent} title={tInsights("micro_trend_7d")} barHeight={90} />;
+              return <InsightMicroBars values={vals} labels={lbls} color={accent} title={tInsights("micro_trend_7d")} barHeight={150} />;
             })()}
           </FlipCard>
           </UpgradeGate>
@@ -1929,6 +2044,38 @@ export default function InsightsPage() {
                 <span style={{ color:HIGH_YELLOW }}>{tInsights("cv_legend_medium")}</span>
                 <span style={{ color:PINK }}>{tInsights("cv_legend_unstable")}</span>
               </div>
+              {/* Glukose-Spannweite der 14 Tage + Ziel-Referenz */}
+              {readings14.length >= 5 && (() => {
+                const vals14 = readings14.map(r => r.v);
+                const minBg  = Math.min(...vals14);
+                const maxBg  = Math.max(...vals14);
+                return (
+                  <div style={{ display:"flex", gap:8, marginTop:10 }}>
+                    <div style={{ flex:1, padding:"8px 10px", background:"rgba(255,255,255,0.04)", borderRadius:10, border:"1px solid var(--border-soft)" }}>
+                      <div style={{ fontSize:10, color:"var(--text-faint)", fontWeight:600, textTransform:"uppercase", letterSpacing:"0.06em" }}>Min 14d</div>
+                      <div style={{ display:"flex", alignItems:"baseline", gap:3, marginTop:3 }}>
+                        <span style={{ fontSize:18, fontWeight:800, color:minBg < tirLow ? PINK : GREEN, fontFamily:"var(--font-mono)" }}>{minBg}</span>
+                        <span style={{ fontSize:10, color:"var(--text-faint)" }}>mg/dL</span>
+                      </div>
+                    </div>
+                    <div style={{ flex:1, padding:"8px 10px", background:"rgba(255,255,255,0.04)", borderRadius:10, border:"1px solid var(--border-soft)" }}>
+                      <div style={{ fontSize:10, color:"var(--text-faint)", fontWeight:600, textTransform:"uppercase", letterSpacing:"0.06em" }}>Max 14d</div>
+                      <div style={{ display:"flex", alignItems:"baseline", gap:3, marginTop:3 }}>
+                        <span style={{ fontSize:18, fontWeight:800, color:maxBg > tirHigh ? ORANGE : GREEN, fontFamily:"var(--font-mono)" }}>{maxBg}</span>
+                        <span style={{ fontSize:10, color:"var(--text-faint)" }}>mg/dL</span>
+                      </div>
+                    </div>
+                    <div style={{ flex:1, padding:"8px 10px", background:`${cvColor}08`, borderRadius:10, border:`1px solid ${cvColor}20` }}>
+                      <div style={{ fontSize:10, color:"var(--text-faint)", fontWeight:600, textTransform:"uppercase", letterSpacing:"0.06em" }}>Ziel</div>
+                      <div style={{ display:"flex", alignItems:"baseline", gap:2, marginTop:3 }}>
+                        <span style={{ fontSize:15, fontWeight:800, color:cvColor, fontFamily:"var(--font-mono)" }}>&lt; 36</span>
+                        <span style={{ fontSize:10, color:"var(--text-faint)" }}>%</span>
+                      </div>
+                      <div style={{ fontSize:9, color:"var(--text-ghost)", marginTop:1 }}>CV-Zielwert</div>
+                    </div>
+                  </div>
+                );
+              })()}
               {/* 14-day daily CV% bar chart */}
               {(() => {
                 const nowMs = Date.now();
@@ -1940,7 +2087,7 @@ export default function InsightsPage() {
                   const variance = dayVals.reduce((acc, v) => acc + (v - mean) ** 2, 0) / dayVals.length;
                   return +(Math.sqrt(variance) / mean * 100).toFixed(1);
                 });
-                return <InsightMicroBars values={cvVals} color={cvColor} title={tInsights("micro_trend_14d")} barHeight={80} />;
+                return <InsightMicroBars values={cvVals} color={cvColor} title={tInsights("micro_trend_14d")} barHeight={130} />;
               })()}
             </>
           )}
@@ -1990,6 +2137,38 @@ export default function InsightsPage() {
                   </div>
                 ))}
               </div>
+              {/* Bester / schlechtester Mahlzeittyp nach Trefferquote */}
+              {(() => {
+                const ranked = TYPE_ORDER
+                  .map(t => ({ t, d: types[t] }))
+                  .filter(e => e.d.count >= 2)
+                  .sort((a, b) => (b.d.good/b.d.count) - (a.d.good/a.d.count));
+                if (ranked.length < 2) return null;
+                const best  = ranked[0];
+                const worst = ranked[ranked.length - 1];
+                const label = (t: string) =>
+                  t === "FAST_CARBS"   ? "Schnelle KH"    :
+                  t === "HIGH_PROTEIN" ? "Protein"        :
+                  t === "HIGH_FAT"     ? "Fett"           :
+                  t === "HIGH_FIBER"   ? "Ballaststoffe"  : "Ausgewogen";
+                const pct = (e: typeof best) => Math.round(e.d.good / e.d.count * 100);
+                return (
+                  <div style={{ display:"flex", gap:8, marginTop:12 }}>
+                    <div style={{ flex:1, padding:"8px 10px", background:`${GREEN}08`, borderRadius:10, border:`1px solid ${GREEN}20` }}>
+                      <div style={{ fontSize:9, color:GREEN, fontWeight:700, textTransform:"uppercase", letterSpacing:"0.06em", marginBottom:2 }}>↑ Beste</div>
+                      <div style={{ fontSize:12, fontWeight:700, color:"var(--text)", lineHeight:1.2 }}>{label(best.t)}</div>
+                      <div style={{ fontSize:16, fontWeight:800, color:GREEN, fontFamily:"var(--font-mono)", marginTop:2 }}>{pct(best)} %</div>
+                      <div style={{ fontSize:9, color:"var(--text-ghost)", marginTop:1 }}>{best.d.count} Mahlzeiten</div>
+                    </div>
+                    <div style={{ flex:1, padding:"8px 10px", background:`${PINK}08`, borderRadius:10, border:`1px solid ${PINK}20` }}>
+                      <div style={{ fontSize:9, color:PINK, fontWeight:700, textTransform:"uppercase", letterSpacing:"0.06em", marginBottom:2 }}>↓ Schwächste</div>
+                      <div style={{ fontSize:12, fontWeight:700, color:"var(--text)", lineHeight:1.2 }}>{label(worst.t)}</div>
+                      <div style={{ fontSize:16, fontWeight:800, color:PINK, fontFamily:"var(--font-mono)", marginTop:2 }}>{pct(worst)} %</div>
+                      <div style={{ fontSize:9, color:"var(--text-ghost)", marginTop:1 }}>{worst.d.count} Mahlzeiten</div>
+                    </div>
+                  </div>
+                );
+              })()}
               {/* 7-day daily meal hit-rate bar chart */}
               {(() => {
                 const nowMs = Date.now();
@@ -2000,7 +2179,7 @@ export default function InsightsPage() {
                   return dayMeals.length > 0 ? Math.round((good / dayMeals.length) * 100) : 0;
                 });
                 const evalLabels = Array.from({ length: 7 }, (_, i) => String(new Date(nowMs - (6 - i) * 86400000).getDate()));
-                return <InsightMicroBars values={evalVals} labels={evalLabels} color={GREEN} title={tInsights("micro_hit_rate_7d")} barHeight={80} />;
+                return <InsightMicroBars values={evalVals} labels={evalLabels} color={GREEN} title={tInsights("micro_hit_rate_7d")} barHeight={120} />;
               })()}
             </>
           )}
@@ -2035,7 +2214,7 @@ export default function InsightsPage() {
           }
         }
 
-        const TYPE_ORDER = ["FAST_CARBS", "HIGH_PROTEIN", "HIGH_FAT", "BALANCED"] as const;
+        const TYPE_ORDER = ["FAST_CARBS", "HIGH_PROTEIN", "HIGH_FAT", "HIGH_FIBER", "BALANCED"] as const;
         const rows = TYPE_ORDER
           .filter(t => typeAgg.has(t))
           .map(t => {
@@ -2320,6 +2499,33 @@ export default function InsightsPage() {
                   <div style={{ fontSize:10, color:"var(--text-faint)", marginTop:2, opacity:0.8 }}>
                     {tInsights("engine_meals_in_range", { n: last7.length })}
                   </div>
+                  {/* Fortschritt bis TUNED — nur sichtbar wenn noch nicht TUNED */}
+                  {conf !== "high" && (() => {
+                    const TUNED_AT = 8;
+                    const filled = Math.min(enginePattern.sampleSize, TUNED_AT);
+                    const pctFilled = Math.round((filled / TUNED_AT) * 100);
+                    const needed = Math.max(0, TUNED_AT - enginePattern.sampleSize);
+                    return (
+                      <div style={{ marginTop:8 }}>
+                        <div style={{ display:"flex", justifyContent:"space-between", marginBottom:4 }}>
+                          <div style={{ fontSize:10, color:"var(--text-faint)", fontWeight:600, textTransform:"uppercase", letterSpacing:"0.06em" }}>
+                            Fortschritt bis TUNED
+                          </div>
+                          <div style={{ fontSize:10, color:statusColor, fontFamily:"var(--font-mono)", fontWeight:700 }}>
+                            {filled} / {TUNED_AT}
+                          </div>
+                        </div>
+                        <div style={{ height:5, borderRadius:99, background:"var(--surface-soft)", overflow:"hidden" }}>
+                          <div style={{ height:"100%", width:`${pctFilled}%`, background:statusColor, borderRadius:99, transition:"width 0.4s ease" }}/>
+                        </div>
+                        {needed > 0 && (
+                          <div style={{ fontSize:9, color:"var(--text-ghost)", marginTop:3 }}>
+                            Noch {needed} Mahlzeit{needed === 1 ? "" : "en"} bis TUNED
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()}
                   {/* Phase B3+B4 — per-window learned ICRs. Collapsed by
                       default so the card stays calm; only renders when
                       the schedule master toggle is on AND the engine
@@ -2746,6 +2952,41 @@ export default function InsightsPage() {
                   </div>
                 </div>
               )}
+              {/* ISF-Schätzwert (Walsh 1700er-Regel) + TDD-Trend vs. Vorwoche */}
+              {tddAvg7 != null && tddAvg7 > 0 && (() => {
+                const isfEst = Math.round(1700 / tddAvg7);
+                const prevMs = tddFromMs - (tddNowMs - tddFromMs);
+                const prevTddSum = insulinLogs
+                  .filter(il => { const t = parseDbTs(il.created_at); return t >= prevMs && t < tddFromMs; })
+                  .reduce((s, il) => s + (il.units ?? 0), 0);
+                const prevTddAvg = prevTddSum > 0 ? +(prevTddSum / rangeDays).toFixed(1) : null;
+                const tddTrend = prevTddAvg != null && prevTddAvg > 0
+                  ? Math.round(((tddAvg7 - prevTddAvg) / prevTddAvg) * 100)
+                  : null;
+                return (
+                  <div style={{ display:"flex", gap:8, marginTop:10, marginBottom:2 }}>
+                    <div style={{ flex:1, padding:"8px 10px", background:`${ACCENT}08`, borderRadius:10, border:`1px solid ${ACCENT}20` }}>
+                      <div style={{ fontSize:10, color:"var(--text-faint)", fontWeight:600, textTransform:"uppercase", letterSpacing:"0.06em" }}>≈ ISF</div>
+                      <div style={{ display:"flex", alignItems:"baseline", gap:3, marginTop:3 }}>
+                        <span style={{ fontSize:18, fontWeight:800, color:ACCENT, fontFamily:"var(--font-mono)" }}>{isfEst}</span>
+                        <span style={{ fontSize:10, color:"var(--text-faint)" }}>mg/dL / U</span>
+                      </div>
+                      <div style={{ fontSize:9, color:"var(--text-ghost)", marginTop:1 }}>1700 ÷ TDD</div>
+                    </div>
+                    {tddTrend != null && (
+                      <div style={{ flex:1, padding:"8px 10px", background:"rgba(255,255,255,0.04)", borderRadius:10, border:"1px solid var(--border-soft)" }}>
+                        <div style={{ fontSize:10, color:"var(--text-faint)", fontWeight:600, textTransform:"uppercase", letterSpacing:"0.06em" }}>Trend</div>
+                        <div style={{ display:"flex", alignItems:"baseline", gap:3, marginTop:3 }}>
+                          <span style={{ fontSize:18, fontWeight:800, color: tddTrend > 10 ? ORANGE : tddTrend < -10 ? GREEN : "var(--text)", fontFamily:"var(--font-mono)" }}>
+                            {tddTrend > 0 ? "+" : ""}{tddTrend}%
+                          </span>
+                        </div>
+                        <div style={{ fontSize:9, color:"var(--text-ghost)", marginTop:1 }}>vs. Vorwoche</div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
               <div style={{ marginTop:10, display:"flex", justifyContent:"space-between", alignItems:"center", padding:"8px 10px", background:`${ACCENT}10`, border:`1px solid ${ACCENT}25`, borderRadius:10 }}>
                 <div style={{ fontSize:12, color:"var(--text-muted)", fontWeight:600 }}>{tInsights("tdd_today")}</div>
                 <div style={{ display:"flex", alignItems:"baseline", gap:8 }}>
@@ -2786,7 +3027,7 @@ export default function InsightsPage() {
                   return b ? +(b.bolus + b.basal).toFixed(1) : 0;
                 });
                 const tddBarLabels = Array.from({ length: 7 }, (_, i) => String(new Date(nowMs - (6 - i) * 86400000).getDate()));
-                return <InsightMicroBars values={tddBarVals} labels={tddBarLabels} color={ACCENT} title={tInsights("micro_tdd_7d")} barHeight={80} />;
+                return <InsightMicroBars values={tddBarVals} labels={tddBarLabels} color={ACCENT} title={tInsights("micro_tdd_7d")} barHeight={100} />;
               })()}
             </>
           )}
@@ -2828,6 +3069,15 @@ export default function InsightsPage() {
                 </div>
               </div>
             ))}
+            {patterns.length === 0 && (
+              <div style={{ display:"flex", gap:10, padding:"12px 10px", background:`${GREEN}08`, border:`1px solid ${GREEN}25`, borderRadius:10, alignItems:"flex-start" }}>
+                <div style={{ width:22, height:22, borderRadius:99, background:`${GREEN}20`, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0, fontSize:14, color:GREEN, fontWeight:800 }}>✓</div>
+                <div>
+                  <div style={{ fontSize:13, fontWeight:700, color:GREEN, marginBottom:2 }}>Keine Auffälligkeiten</div>
+                  <div style={{ fontSize:12, color:"var(--text-dim)", lineHeight:1.45 }}>Alle BZ-Muster liegen im Zielbereich — weiter so!</div>
+                </div>
+              </div>
+            )}
           </div>
         </FlipCard>
         </UpgradeGate>
@@ -2871,6 +3121,23 @@ export default function InsightsPage() {
                 </div>
                 <div style={{ fontSize:13, color:"var(--text-dim)", fontWeight:600 }}>{tInsights("workout_outcomes_total_30d", { range: rangeLabel })}</div>
               </div>
+              {/* Dominantes Outcome — Überblick in einem Chip */}
+              {workoutClassifiedTotal > 0 && (() => {
+                const dom = RANKED_OUTCOMES.reduce((best, oc) =>
+                  workoutOutcomeCounts[oc] > workoutOutcomeCounts[best] ? oc : best, RANKED_OUTCOMES[0]);
+                const domPct = Math.round((workoutOutcomeCounts[dom] / workoutClassifiedTotal) * 100);
+                const domColor = OUTCOME_COLOR[dom];
+                const domLabel = tInsights(`workout_outcome_label_${dom.toLowerCase()}`);
+                return (
+                  <div style={{ marginBottom:10, padding:"8px 10px", background:`${domColor}08`, border:`1px solid ${domColor}20`, borderRadius:10, display:"flex", alignItems:"center", gap:10 }}>
+                    <div style={{ flex:1 }}>
+                      <div style={{ fontSize:10, color:"var(--text-faint)", fontWeight:600, textTransform:"uppercase", letterSpacing:"0.06em" }}>Häufigstes Outcome</div>
+                      <div style={{ fontSize:13, fontWeight:700, color:domColor, marginTop:2 }}>{domLabel}</div>
+                    </div>
+                    <div style={{ fontSize:22, fontWeight:800, color:domColor, fontFamily:"var(--font-mono)", lineHeight:1 }}>{domPct}<span style={{ fontSize:13, fontWeight:600 }}>%</span></div>
+                  </div>
+                );
+              })()}
               <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
                 {RANKED_OUTCOMES.map(oc => {
                   const n = workoutOutcomeCounts[oc];
@@ -2952,6 +3219,20 @@ export default function InsightsPage() {
                   </div>
                 );
               })}
+              {/* Stabilstes Training — das mit dem kleinsten absoluten BG-Delta */}
+              {bgResponseRows.length >= 2 && (() => {
+                const best = bgResponseRows.reduce((b, r) => Math.abs(r.avgDelta) < Math.abs(b.avgDelta) ? r : b);
+                return (
+                  <div style={{ marginTop:4, padding:"8px 10px", background:`${GREEN}08`, border:`1px solid ${GREEN}20`, borderRadius:10, display:"flex", alignItems:"center", gap:8 }}>
+                    <span style={{ fontSize:14 }}>🏅</span>
+                    <div>
+                      <div style={{ fontSize:10, color:"var(--text-faint)", fontWeight:600, textTransform:"uppercase", letterSpacing:"0.06em" }}>Stabilstes Training</div>
+                      <div style={{ fontSize:13, fontWeight:700, color:GREEN }}>{best.label}</div>
+                    </div>
+                    <div style={{ marginLeft:"auto", fontSize:14, fontWeight:800, color:GREEN, fontFamily:"var(--font-mono)" }}>±{Math.abs(best.avgDelta)}<span style={{ fontSize:10, fontWeight:500, marginLeft:2 }}>mg/dL</span></div>
+                  </div>
+                );
+              })()}
             </div>
           )}
         </FlipCard>
@@ -3054,6 +3335,26 @@ export default function InsightsPage() {
                 </div>
               );
             })}
+            {/* Höchstes Hypo-Risiko — Warnung wenn ≥ 25 % */}
+            {(() => {
+              const riskRows = exerciseTypeStatsRows
+                .filter(r => r.hypoRiskShare != null && r.hypoRiskShare >= 0.25)
+                .sort((a, b) => (b.hypoRiskShare ?? 0) - (a.hypoRiskShare ?? 0));
+              if (riskRows.length === 0) return null;
+              const top = riskRows[0];
+              return (
+                <div style={{ marginTop:4, padding:"8px 10px", background:`${PINK}08`, border:`1px solid ${PINK}25`, borderRadius:10, display:"flex", alignItems:"center", gap:8 }}>
+                  <span style={{ fontSize:16 }}>⚠</span>
+                  <div>
+                    <div style={{ fontSize:10, color:PINK, fontWeight:700, textTransform:"uppercase", letterSpacing:"0.06em" }}>Höchstes Hypo-Risiko</div>
+                    <div style={{ fontSize:13, fontWeight:700, color:"var(--text)" }}>{exTypeLabel(top.type)}</div>
+                  </div>
+                  <div style={{ marginLeft:"auto", fontSize:16, fontWeight:800, color:PINK, fontFamily:"var(--font-mono)" }}>
+                    {Math.round((top.hypoRiskShare ?? 0) * 100)}<span style={{ fontSize:10, fontWeight:500, marginLeft:1 }}>%</span>
+                  </div>
+                </div>
+              );
+            })()}
           </div>
         </FlipCard>
       ) : null,
@@ -3098,9 +3399,9 @@ export default function InsightsPage() {
               const barCol = !has ? "var(--border-strong)" : successPct>=70?GREEN:successPct>=50?ORANGE:PINK;
               return (
                 <div key={type} style={{ background:`${col}08`, border:`1px solid ${col}20`, borderRadius:10, padding:"8px 10px", opacity: has ? 1 : 0.55 }}>
-                  <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:6, gap:4 }}>
-                    <div style={{ fontSize:11, fontWeight:700, color:col, letterSpacing:"0.06em", textTransform:"uppercase", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{chipLabels.typeLabel(type)}</div>
-                    <div style={{ fontSize:13, fontWeight:700, color:has?barCol:"var(--text-faint)", fontFamily:"var(--font-mono)" }}>
+                  <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:6, gap:4 }}>
+                    <div style={{ fontSize:11, fontWeight:700, color:col, letterSpacing:"0.04em", textTransform:"uppercase", lineHeight:1.25, flex:1, wordBreak:"break-word" }}>{chipLabels.typeLabel(type)}</div>
+                    <div style={{ fontSize:13, fontWeight:700, color:has?barCol:"var(--text-faint)", fontFamily:"var(--font-mono)", flexShrink:0 }}>
                       {has ? `${successPct}%` : "—"}
                     </div>
                   </div>
@@ -3116,6 +3417,29 @@ export default function InsightsPage() {
               );
             })}
           </div>
+          {/* Gesamtanzahl + häufigster Typ */}
+          {(() => {
+            const total = TYPE_ORDER.reduce((s, t) => s + types[t].count, 0);
+            if (total === 0) return null;
+            const dominant = TYPE_ORDER.reduce((best, t) => types[t].count > types[best].count ? t : best, TYPE_ORDER[0]);
+            const domPct = Math.round(types[dominant].count / total * 100);
+            const domCol = TYPE_COLORS[dominant];
+            return (
+              <div style={{ display:"flex", alignItems:"center", gap:8, marginTop:8, padding:"8px 10px", background:"rgba(255,255,255,0.04)", borderRadius:10, border:"1px solid var(--border-soft)" }}>
+                <div style={{ fontSize:12, color:"var(--text-faint)" }}>
+                  <span style={{ fontWeight:700, color:"var(--text)", fontFamily:"var(--font-mono)" }}>{total}</span> Mahlzeiten gesamt
+                </div>
+                <div style={{ marginLeft:"auto", display:"flex", flexDirection:"column", alignItems:"flex-end", gap:1 }}>
+                  <div style={{ fontSize:9, color:"var(--text-ghost)", textTransform:"uppercase", letterSpacing:"0.05em" }}>häufigster Typ</div>
+                  <div style={{ display:"flex", alignItems:"center", gap:4 }}>
+                    <div style={{ width:5, height:5, borderRadius:"50%", background:domCol }}/>
+                    <span style={{ fontSize:11, color:domCol, fontWeight:700 }}>{chipLabels.typeLabel(dominant)}</span>
+                    <span style={{ fontSize:11, color:"var(--text-faint)", fontFamily:"var(--font-mono)" }}>· {types[dominant].count}×</span>
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
         </FlipCard>
         </UpgradeGate>
       ),
@@ -3164,6 +3488,51 @@ export default function InsightsPage() {
               );
             })}
           </div>
+          {/* Beste Tageszeit — höchste Trefferquote + aktivstes Fenster */}
+          {(() => {
+            const scored = Object.entries(timeGroups)
+              .filter(([, d]) => d.count >= 2)
+              .map(([label, d]) => ({
+                label,
+                pct: Math.round(d.good / d.count * 100),
+                count: d.count,
+                i18nKey: label === "Morning (5–11)" ? "time_of_day_morning" : label === "Afternoon (11–17)" ? "time_of_day_afternoon" : label === "Evening (17–21)" ? "time_of_day_evening" : "time_of_day_night",
+              }))
+              .sort((a, b) => b.pct - a.pct);
+            if (scored.length < 2) return null;
+            const best  = scored[0];
+            const worst = scored[scored.length - 1];
+            const totalMeals = Object.values(timeGroups).reduce((s, d) => s + d.count, 0);
+            const mostActive = [...scored].sort((a, b) => b.count - a.count)[0];
+            return (
+              <>
+                <div style={{ display:"flex", gap:8, marginTop:8 }}>
+                  <div style={{ flex:1, padding:"8px 10px", background:`${GREEN}08`, borderRadius:10, border:`1px solid ${GREEN}20` }}>
+                    <div style={{ fontSize:9, color:GREEN, fontWeight:700, textTransform:"uppercase", letterSpacing:"0.06em", marginBottom:2 }}>↑ Beste Zeit</div>
+                    <div style={{ fontSize:12, fontWeight:700, color:"var(--text)" }}>{tInsights(best.i18nKey)}</div>
+                    <div style={{ fontSize:16, fontWeight:800, color:GREEN, fontFamily:"var(--font-mono)", marginTop:1 }}>{best.pct} %</div>
+                  </div>
+                  <div style={{ flex:1, padding:"8px 10px", background:`${PINK}08`, borderRadius:10, border:`1px solid ${PINK}20` }}>
+                    <div style={{ fontSize:9, color:PINK, fontWeight:700, textTransform:"uppercase", letterSpacing:"0.06em", marginBottom:2 }}>↓ Schwächste Zeit</div>
+                    <div style={{ fontSize:12, fontWeight:700, color:"var(--text)" }}>{tInsights(worst.i18nKey)}</div>
+                    <div style={{ fontSize:16, fontWeight:800, color:PINK, fontFamily:"var(--font-mono)", marginTop:1 }}>{worst.pct} %</div>
+                  </div>
+                </div>
+                {/* Aktivstes Fenster + Gesamtzahl */}
+                <div style={{ display:"flex", alignItems:"center", gap:8, marginTop:8, padding:"8px 10px", background:"rgba(255,255,255,0.03)", borderRadius:10, border:"1px solid var(--border-soft)" }}>
+                  <div style={{ fontSize:12, color:"var(--text-faint)" }}>
+                    <span style={{ fontWeight:700, color:"var(--text)", fontFamily:"var(--font-mono)" }}>{totalMeals}</span> Mahlzeiten
+                  </div>
+                  <div style={{ marginLeft:"auto", display:"flex", flexDirection:"column", alignItems:"flex-end", gap:1 }}>
+                    <div style={{ fontSize:9, color:"var(--text-ghost)", textTransform:"uppercase", letterSpacing:"0.05em" }}>aktivstes Fenster</div>
+                    <div style={{ fontSize:11, color:"var(--accent)", fontWeight:700 }}>
+                      {tInsights(mostActive.i18nKey)} · <span style={{ fontFamily:"var(--font-mono)" }}>{mostActive.count}×</span>
+                    </div>
+                  </div>
+                </div>
+              </>
+            );
+          })()}
         </FlipCard>
       ),
     },
@@ -3504,39 +3873,48 @@ export default function InsightsPage() {
     })(),
     {
       id: "performance-tiles",
-      node: (
-        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, minHeight: CARD_MIN_H }}>
-          {[
-            // Raw ICR moved to slot 0 (top-left) so it sits visually adjacent
-            // to the Adaptive Engine hero card directly above the grid —
-            // grouping both ICR-related views into one cluster. Color switched
-            // from ORANGE to ACCENT_SOFT (lighter sibling of the Adaptive
-            // Engine's ACCENT) to signal "same metric family, lower hierarchy".
-            // Color rules (page-wide, see Lucas' brief):
-            //   GREEN  → in-target metrics  (TIR, Trefferquote, Ø Glukose im Ziel)
-            //   text   → neutral data points (HbA1c/GMI, Ø Glukose vor Essen, Ø Insulin)
-            //   #A78BFA → raw / uncorrected   (Roher KH-Faktor)
-            { label:tInsights("tile_raw_icr_label"),      val:`1:${estICR}`,   sub:tInsights("tile_raw_icr_sub"), color:"#A78BFA",
-              formula:tInsights("tile_raw_icr_formula"),   explain:tInsights("tile_raw_icr_explain"),
-              infoBack: (
-                <IcrInfoBack
-                  heading={tInsights("raw_icr_info_heading")}
-                  accent="#A78BFA"
-                  body={tInsights("raw_icr_info_body")}
-                  subLine={tInsights("raw_icr_info_subline")}
-                />
-              ),
-            },
-            { label:tInsights("tile_avg_glucose_label"),  val:`${avgGlucose}`, sub:tInsights("tile_avg_glucose_sub"),           color:"var(--text)",
-              formula:tInsights("tile_avg_glucose_formula"),      explain:tInsights("tile_avg_glucose_explain") },
-            // Good rate (Trefferquote) — in-target metric → GREEN.
-            { label:tInsights("tile_good_rate_label"),    val:`${goodRate.toFixed(1)}%`,  sub:tInsights("tile_good_rate_sub", { good: goodAll, total: evaluatedCount }),   color:GREEN,
-              formula:tInsights("tile_good_rate_formula"),            explain:tInsights("tile_good_rate_explain") },
-            { label:tInsights("tile_avg_insulin_label"),  val:`${avgInsulin}u`, sub:tInsights("tile_avg_insulin_sub", { carbs: carbUnit.display(avgCarbs) }), color:"var(--text)",
-              formula:tInsights("tile_avg_insulin_formula"),               explain:tInsights("tile_avg_insulin_explain") },
-          ].map((t,i) => <InsightFlipTile key={i} tile={t}/>)}
-        </div>
-      ),
+      node: (() => {
+        // Dynamic colors for context-aware tiles.
+        // Ø pre-meal glucose: < 100 mg/dL excellent (GREEN), 100–130 ok (ORANGE), > 130 elevated (PINK).
+        const glucoseColor = avgGlucose < 100 ? GREEN : avgGlucose <= 130 ? ORANGE : PINK;
+        const glucoseSub   = avgGlucose < 100
+          ? tInsights("tile_avg_glucose_sub") + " ✓"
+          : tInsights("tile_avg_glucose_sub");
+        // Trefferquote dynamic color: ≥ 70 % → GREEN, ≥ 50 % → ORANGE, < 50 % → PINK.
+        const goodRateColor = goodRate >= 70 ? GREEN : goodRate >= 50 ? ORANGE : PINK;
+        return (
+          <div style={{ minHeight: CARD_MIN_H }}>
+            {/* Card header — gives the tile grid a title and tap-to-flip hint */}
+            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
+              <CardLabel text={tInsights("card_performance_title")} />
+              <div style={{ fontSize:10, color:"var(--text-ghost)", letterSpacing:"0.04em" }}>
+                {tInsights("card_performance_sub")}
+              </div>
+            </div>
+            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8 }}>
+              {[
+                { label:tInsights("tile_raw_icr_label"),     val:`1:${estICR}`,            sub:tInsights("tile_raw_icr_sub"),     color:"#A78BFA",
+                  formula:tInsights("tile_raw_icr_formula"),  explain:tInsights("tile_raw_icr_explain"),
+                  infoBack: (
+                    <IcrInfoBack
+                      heading={tInsights("raw_icr_info_heading")}
+                      accent="#A78BFA"
+                      body={tInsights("raw_icr_info_body")}
+                      subLine={tInsights("raw_icr_info_subline")}
+                    />
+                  ),
+                },
+                { label:tInsights("tile_avg_glucose_label"), val:`${avgGlucose}`,           sub:glucoseSub,                       color:glucoseColor,
+                  formula:tInsights("tile_avg_glucose_formula"), explain:tInsights("tile_avg_glucose_explain") },
+                { label:tInsights("tile_good_rate_label"),   val:`${goodRate.toFixed(1)}%`, sub:tInsights("tile_good_rate_sub", { good: goodAll, total: evaluatedCount }), color:goodRateColor,
+                  formula:tInsights("tile_good_rate_formula"),   explain:tInsights("tile_good_rate_explain") },
+                { label:tInsights("tile_avg_insulin_label"), val:`${avgInsulin}u`,           sub:tInsights("tile_avg_insulin_sub", { carbs: carbUnit.display(avgCarbs) }), color:"var(--text)",
+                  formula:tInsights("tile_avg_insulin_formula"), explain:tInsights("tile_avg_insulin_explain") },
+              ].map((t,i) => <InsightFlipTile key={i} tile={t}/>)}
+            </div>
+          </div>
+        );
+      })(),
     },
     // ── Daily Steps (Task #183) — hidden when no Apple-Health rows ──
     (() => {
@@ -5051,6 +5429,7 @@ function InsightMicroBars({
   barHeight?: number;
 }) {
   const max = Math.max(...values, 1);
+  const mid = Math.round(max / 2);
   return (
     <div style={{ marginTop: 16 }}>
       {title && (
@@ -5058,49 +5437,100 @@ function InsightMicroBars({
           {title}
         </div>
       )}
-      <div style={{ display: "flex", alignItems: "flex-end", gap: 3, height: barHeight }}>
-        {values.map((v, i) => (
-          <div key={i} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "flex-end", height: "100%", gap: 3 }}>
-            <div style={{
-              width: "100%",
-              height: v > 0 ? `${Math.max((v / max) * 100, 10)}%` : "5%",
-              background: v > 0 ? color : "var(--border-soft)",
-              borderRadius: "3px 3px 0 0",
-              transition: "height 0.5s ease",
-            }} />
-            {labels && (
-              <div style={{ fontSize: 8, color: "var(--text-faint)", lineHeight: 1, flexShrink: 0 }}>
-                {labels[i]}
-              </div>
-            )}
+      <div style={{ display: "flex", gap: 4 }}>
+        {/* Y-axis */}
+        <div style={{ display: "flex", flexDirection: "column", justifyContent: "space-between", paddingBottom: labels ? 14 : 2, width: 22, flexShrink: 0 }}>
+          <div style={{ fontSize: 8, color: "var(--text-ghost)", textAlign: "right", fontFamily: "var(--font-mono)", lineHeight: 1 }}>{max}</div>
+          {max >= 4 && <div style={{ fontSize: 8, color: "var(--text-ghost)", textAlign: "right", fontFamily: "var(--font-mono)", lineHeight: 1 }}>{mid}</div>}
+          <div style={{ fontSize: 8, color: "var(--text-ghost)", textAlign: "right", fontFamily: "var(--font-mono)", lineHeight: 1 }}>0</div>
+        </div>
+        <div style={{ flex: 1 }}>
+          {/* Grid lines */}
+          <div style={{ position: "relative", height: barHeight }}>
+            <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 1, background: "var(--border-soft)", opacity: 0.4 }} />
+            {max >= 4 && <div style={{ position: "absolute", top: "50%", left: 0, right: 0, height: 1, background: "var(--border-soft)", opacity: 0.25 }} />}
+            {/* Bars */}
+            <div style={{ display: "flex", alignItems: "flex-end", gap: 3, height: "100%" }}>
+              {values.map((v, i) => (
+                <div key={i} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "flex-end", height: "100%" }}>
+                  <div style={{
+                    width: "100%",
+                    height: v > 0 ? `${Math.max((v / max) * 100, 8)}%` : "4%",
+                    background: v > 0 ? color : "var(--border-soft)",
+                    borderRadius: "3px 3px 0 0",
+                    transition: "height 0.5s ease",
+                  }} />
+                </div>
+              ))}
+            </div>
           </div>
-        ))}
+          {/* X-axis baseline + labels */}
+          <div style={{ height: 1, background: "var(--border-soft)" }} />
+          {labels && (
+            <div style={{ display: "flex", gap: 3, marginTop: 3 }}>
+              {labels.map((l, i) => (
+                <div key={i} style={{ flex: 1, textAlign: "center", fontSize: 8, color: "var(--text-faint)", lineHeight: 1 }}>
+                  {l}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
 }
 
-/** Sparkline — ported 1:1 from `components/AppMockupPhone.tsx`. */
-function Sparkline({ values, color, height = 36 }: { values: number[]; color: string; height?: number }) {
-  const W = 268, H = height;
+/** Sparkline — enhanced with optional Y-axis grid lines and value labels.
+ *  `showGrid` adds 3 horizontal reference lines (max/mid/min) with labels.
+ *  `height` controls the SVG pixel height (default 80). */
+function Sparkline({ values, color, height = 80, showGrid = false }: {
+  values: number[]; color: string; height?: number; showGrid?: boolean;
+}) {
+  const VW = 268;
+  const LBL = showGrid ? 28 : 0;     // left margin reserved for Y-axis labels
+  const PAD_T = showGrid ? 8 : 0;    // top padding so top label isn't clipped
+  const PAD_B = showGrid ? 6 : 0;    // bottom padding
+  const VH = height;
+  const CW = VW - LBL;               // chart area width
+  const CH = VH - PAD_T - PAD_B;     // chart area height
+  const gradId = useId().replace(/[^a-zA-Z0-9]/g, "");
   const min = Math.min(...values), max = Math.max(...values);
   const span = max - min || 1;
-  const gradId = useId().replace(/[^a-zA-Z0-9]/g, "");
+  const toY = (v: number) => PAD_T + CH - ((v - min) / span) * CH;
   const pts = values.map((v, i) => {
-    const x = (i / Math.max(1, values.length - 1)) * W;
-    const y = H - ((v - min) / span) * H;
-    return `${x.toFixed(1)},${y.toFixed(1)}`;
+    const x = LBL + (i / Math.max(1, values.length - 1)) * CW;
+    return `${x.toFixed(1)},${toY(v).toFixed(1)}`;
   }).join(" ");
+  const yBot = PAD_T + CH;
+  const gridLevels = showGrid
+    ? [max, (min + max) / 2, min].map(v => ({ v, y: toY(v) }))
+    : [];
   return (
-    <svg width="100%" height={H} viewBox={`0 0 ${W} ${H}`} style={{ marginTop:8, display:"block" }} preserveAspectRatio="none">
+    <svg width="100%" height={VH} viewBox={`0 0 ${VW} ${VH}`}
+      style={{ display:"block", marginTop: showGrid ? 4 : 8 }} preserveAspectRatio="none">
       <defs>
         <linearGradient id={`spark-${gradId}`} x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor={color} stopOpacity="0.35"/>
+          <stop offset="0%" stopColor={color} stopOpacity="0.28"/>
           <stop offset="100%" stopColor={color} stopOpacity="0"/>
         </linearGradient>
       </defs>
-      <polyline points={`0,${H} ${pts} ${W},${H}`} fill={`url(#spark-${gradId})`} stroke="none"/>
-      <polyline points={pts} fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+      {gridLevels.map(({ v, y }, i) => (
+        <g key={i}>
+          <line x1={LBL} y1={y} x2={VW} y2={y}
+            stroke="rgba(255,255,255,0.07)" strokeWidth="0.7"
+            strokeDasharray={i === 1 ? "4,4" : undefined}
+          />
+          <text x={LBL - 2} y={y + 3.5} textAnchor="end" fontSize="7.5"
+            fill="rgba(255,255,255,0.3)" fontFamily="monospace">
+            {Math.round(v)}
+          </text>
+        </g>
+      ))}
+      <polyline points={`${LBL},${yBot} ${pts} ${LBL + CW},${yBot}`}
+        fill={`url(#spark-${gradId})`} stroke="none"/>
+      <polyline points={pts} fill="none" stroke={color}
+        strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
     </svg>
   );
 }
@@ -5388,22 +5818,13 @@ function InsightFlipTile({ tile }: { tile: InsightTile }) {
       tabIndex={0}
       aria-pressed={flipped}
       onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setFlipped(f => !f); } }}
-      style={{ cursor:"pointer", perspective:1000 }}
+      style={{ cursor:"pointer" }}
     >
-      {/* FLIP STAGE — CSS grid stacks front + back in the same cell so
-          each face is rendered exactly once. Card height = max(front, back). */}
-      <div style={{
-        display:"grid",
-        transformStyle:"preserve-3d",
-        transition:"transform 0.5s cubic-bezier(0.4,0,0.2,1)",
-        transform: flipped ? "rotateY(180deg)" : "rotateY(0deg)",
-      }}>
-        <div style={{ gridArea:"1/1", backfaceVisibility:"hidden", ...frontShell }}>
-          {frontContent}
-        </div>
-        <div style={{ gridArea:"1/1", backfaceVisibility:"hidden", transform:"rotateY(180deg)", ...backShell }}>
-          {backContent}
-        </div>
+      {/* Simple conditional render — CSS 3D preserve-3d on grid containers
+          is unreliable on iOS Safari (backfaceVisibility leaks through).
+          Fade-swap is reliable everywhere and keeps the ℹ interaction clear. */}
+      <div style={{ transition:"opacity 0.15s", ...(flipped ? backShell : frontShell) }}>
+        {flipped ? backContent : frontContent}
       </div>
     </div>
   );

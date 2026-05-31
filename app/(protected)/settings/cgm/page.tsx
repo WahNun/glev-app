@@ -1,0 +1,122 @@
+"use client";
+
+import Link from "next/link";
+import { useState, useEffect, useCallback, useRef } from "react";
+import { useTranslations } from "next-intl";
+import CgmSettingsCard from "@/components/CgmSettingsCard";
+import NightscoutSettingsCard from "@/components/NightscoutSettingsCard";
+import BottomSheet from "@/components/BottomSheet";
+import { SettingsSection, SettingsRow, ConnectedDot } from "@/components/SettingsRow";
+
+const ACCENT = "#4F6EF7", BORDER = "var(--border)";
+const iconProps = { width: 16, height: 16, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: 2, strokeLinecap: "round" as const, strokeLinejoin: "round" as const };
+
+function useCgmConnected(): boolean {
+  const [connected, setConnected] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/cgm/status", { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : Promise.reject()))
+      .then((data) => { if (!cancelled) setConnected(Boolean(data?.connected)); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, []);
+  return connected;
+}
+
+function useNightscoutConnected(): boolean {
+  const [connected, setConnected] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/cgm/nightscout/sync", { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : Promise.reject()))
+      .then((data) => { if (!cancelled) setConnected(Boolean(data?.connected)); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, []);
+  return connected;
+}
+
+type SheetKey = "libre2" | "nightscout" | "dexcom";
+
+export default function CgmSettingsPage() {
+  const t = useTranslations("settings");
+  const [openSheet, setOpenSheet] = useState<SheetKey | null>(null);
+  const cgmConnected = useCgmConnected();
+  const nightscoutConnected = useNightscoutConnected();
+  const cgmSetupHandledRef = useRef(false);
+
+  useEffect(() => {
+    if (cgmSetupHandledRef.current) return;
+    if (typeof window === "undefined") return;
+    const url = new URL(window.location.href);
+    const setup = url.searchParams.get("cgmSetup");
+    if (!setup) return;
+    cgmSetupHandledRef.current = true;
+    const sheet: SheetKey | null =
+      setup === "librelinkup"  ? "libre2"     :
+      setup === "apple_health" ? "libre2"     :
+      setup === "nightscout"   ? "nightscout" :
+      null;
+    url.searchParams.delete("cgmSetup");
+    window.history.replaceState({}, "", url.toString());
+    if (sheet) setTimeout(() => setOpenSheet(sheet), 0);
+  }, []);
+
+  const closeSheet = useCallback(() => setOpenSheet(null), []);
+
+  const closeFooter = (
+    <button type="button" onClick={closeSheet} style={{ width: "100%", padding: "12px 16px", borderRadius: 12, border: `1px solid ${BORDER}`, background: "var(--surface-soft)", color: "var(--text-strong)", fontSize: 14, fontWeight: 600, cursor: "pointer" }}>
+      {t("sheet_close")}
+    </button>
+  );
+
+  const sheetMap: Record<SheetKey, { title: string; body: React.ReactNode }> = {
+    libre2:    { title: t("row_libre2"),        body: <CgmSettingsCard /> },
+    nightscout:{ title: t("row_nightscout"),    body: <NightscoutSettingsCard /> },
+    dexcom:    { title: t("sheet_dexcom_title"), body: <p style={{ fontSize: 14, color: "var(--text-body)", lineHeight: 1.55, margin: 0 }}>{t("sheet_dexcom_body")}</p> },
+  };
+  const active = openSheet ? sheetMap[openSheet] : null;
+
+  return (
+    <div style={{ maxWidth: 720, margin: "0 auto" }}>
+      <div style={{ marginBottom: 20 }}>
+        <Link href="/settings" style={{ fontSize: 14, color: ACCENT, textDecoration: "none", display: "inline-flex", alignItems: "center", gap: 4, marginBottom: 12 }}>
+          ‹ {t("page_title")}
+        </Link>
+        <h1 style={{ fontSize: 22, fontWeight: 800, letterSpacing: "-0.03em", margin: 0 }}>CGM</h1>
+      </div>
+
+      <SettingsSection>
+        <SettingsRow
+          iconColor={ACCENT}
+          icon={<svg {...iconProps}><path d="M4 12h3l2-6 4 12 2-6h5" /></svg>}
+          label={t("row_libre2")}
+          rightAdornment={cgmConnected ? <ConnectedDot label={t("status_connected")} /> : undefined}
+          ariaLabel={t("row_open_aria", { label: t("row_libre2") })}
+          onClick={() => setOpenSheet("libre2")}
+        />
+        <SettingsRow
+          iconColor={ACCENT}
+          icon={<svg {...iconProps}><circle cx="12" cy="12" r="9" /><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18" /></svg>}
+          label={t("row_nightscout")}
+          rightAdornment={nightscoutConnected ? <ConnectedDot label={t("status_connected")} /> : undefined}
+          ariaLabel={t("row_open_aria", { label: t("row_nightscout") })}
+          onClick={() => setOpenSheet("nightscout")}
+        />
+        <SettingsRow
+          iconColor={ACCENT}
+          icon={<svg {...iconProps}><circle cx="12" cy="12" r="3" /><circle cx="12" cy="12" r="9" /></svg>}
+          label={t("row_cgm_dexcom")}
+          subtitle={t("subtitle_coming_soon")}
+          ariaLabel={t("row_open_aria", { label: t("row_cgm_dexcom") })}
+          onClick={() => setOpenSheet("dexcom")}
+        />
+      </SettingsSection>
+
+      <BottomSheet open={openSheet !== null} onClose={closeSheet} title={active?.title} footer={closeFooter}>
+        {active?.body}
+      </BottomSheet>
+    </div>
+  );
+}

@@ -353,6 +353,114 @@ test.describe("Settings → Language picker", () => {
     ).toBe("de");
   });
 
+  // ── Toast tests ──────────────────────────────────────────────────────────
+  //
+  // Task #900 added a success/failure toast rendered by LanguageSync after a
+  // language switch. The mechanism works in two phases:
+  //
+  //   Phase A (before reload): setLocale() writes NEXT_LOCALE cookie and sets
+  //     `sessionStorage["glev_lang_toast"] = "pending"`, then calls
+  //     window.location.reload().
+  //
+  //   Phase B (after reload): LanguageSync mounts, reads the flag, clears it,
+  //     calls persistLocaleToProfile(), and renders a <div role="status"> with
+  //     the success or error text depending on whether the Supabase PATCH
+  //     succeeded.
+  //
+  // The tests below guard against silent regressions in either phase.
+
+  test("shows a success toast after switching language", async ({ page, context, baseURL }) => {
+    // Start in German so the switch to English goes through the real path.
+    await context.clearCookies();
+    await pinStartingLocale(context, baseURL!, "de");
+    await loginAsTestUser(page, test.info().workerIndex);
+    await page.goto("/settings");
+    await expect(page.getByRole("heading", { name: APPEARANCE_HEADER_DE })).toBeVisible();
+
+    // Drive the picker: de → en.  switchLocaleViaPicker waits for the
+    // full post-Save reload to settle, so when it resolves LanguageSync
+    // has already mounted in the new document.
+    await switchLocaleViaPicker(page, "en");
+
+    // After the reload LanguageSync detects the pending sessionStorage flag,
+    // calls persistLocaleToProfile(), and renders the success toast.
+    // The toast element carries role="status" (aria-live="polite") so it is
+    // accessible and unambiguously selectable.
+    const toast = page.getByRole("status");
+    await expect(toast).toBeVisible({ timeout: 8_000 });
+    await expect(toast).toContainText(
+      /Language saved to your account|Sprache in deinem Konto gespeichert/,
+    );
+  });
+
+  test("shows an error toast when the Supabase write fails", async ({ page, context, baseURL }) => {
+    // Scenario: the network request that persists the chosen locale to
+    // profiles.language returns a server error.  LanguageSync must still show
+    // the "saved on this device only" error toast so the user knows the
+    // cross-device sync did not complete.
+    //
+    // We intercept *before* clicking Save so the route is already active when
+    // the reloaded document runs LanguageSync.  Two Supabase calls hit the
+    // profiles table in LanguageSync:
+    //
+    //   1. PATCH (persistLocaleToProfile) — we return 500 to simulate failure.
+    //   2. GET  (Step 2 cross-device reconcile) — we return [{language:"en"}]
+    //      so the cookie and DB appear in sync; without this, Step 2 would
+    //      detect a mismatch (cookie="en", DB still="de") and trigger a second
+    //      reload that would dismiss the toast before our assertion fires.
+    await context.clearCookies();
+    await pinStartingLocale(context, baseURL!, "de");
+    await loginAsTestUser(page, test.info().workerIndex);
+    await page.goto("/settings");
+    await expect(page.getByRole("heading", { name: APPEARANCE_HEADER_DE })).toBeVisible();
+
+    // Open the language sheet and stage the change — stop short of clicking
+    // Save so the route is in place before the reload fires.
+    await page.getByRole("button", { name: LANGUAGE_ROW_ARIA }).click();
+    const sheet = page.getByRole("dialog", { name: LANGUAGE_SHEET_LABEL });
+    await expect(sheet).toBeVisible();
+    await sheet.locator("select").selectOption("en");
+
+    // Intercept all /rest/v1/profiles* calls for this page (persists across
+    // the upcoming reload because route interceptors are page-level).
+    await page.route("**/rest/v1/profiles*", async (route) => {
+      if (route.request().method() === "PATCH") {
+        // Simulate DB failure for the persistLocaleToProfile call.
+        await route.fulfill({
+          status: 500,
+          contentType: "application/json",
+          body: JSON.stringify({ message: "Internal Server Error" }),
+        });
+      } else if (route.request().method() === "GET") {
+        // Return the NEW locale so Step 2 (cross-device reconcile) treats
+        // cookie and DB as in sync and does not trigger a second reload.
+        // Supabase REST returns an array; maybeSingle() takes the first item.
+        await route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify([{ language: "en" }]),
+        });
+      } else {
+        await route.continue();
+      }
+    });
+
+    // Click Save → setLocale() → sets sessionStorage flag → reload.
+    const navigationPromise = page.waitForEvent("framenavigated");
+    await sheet.getByRole("button", { name: SAVE_BUTTON }).click();
+    await navigationPromise;
+    await page.waitForLoadState("load");
+
+    // After the reload LanguageSync fires, the PATCH is intercepted and
+    // returns 500, so persistLocaleToProfile returns { ok: false }.
+    // The error toast must appear.
+    const toast = page.getByRole("status");
+    await expect(toast).toBeVisible({ timeout: 8_000 });
+    await expect(toast).toContainText(
+      /Language saved on this device only|Sprache nur auf diesem Gerät gespeichert/,
+    );
+  });
+
   test("LanguageSync reconciles cookie ↔ DB and triggers reload when they disagree", async ({ page, context, baseURL }) => {
     // This test guards the read-side of the cross-device sync path:
     // `LanguageSync` (components/LanguageSync.tsx) is mounted inside the

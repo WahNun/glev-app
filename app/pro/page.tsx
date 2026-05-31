@@ -2,6 +2,8 @@
 
 import { Suspense, useEffect, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
+import { useSearchParams } from "next/navigation";
+import { supabase } from "@/lib/supabase";
 import Image from "next/image";
 import AppMockupPhone from "@/components/AppMockupPhone";
 import LandingFooter from "@/components/landing/Footer";
@@ -21,7 +23,7 @@ import {
  * /preview-pro — copy & layout preview of /pro.
  * Stripe wiring untouched: posts to /api/checkout/pro with locale.
  */
-function PreviewProCTA({ block = true }: { block?: boolean }) {
+function PreviewProCTA({ block = true, prefillEmail }: { block?: boolean; prefillEmail?: string }) {
   const t = useTranslations("previewPro");
   const locale = useLocale();
   const [hover, setHover] = useState(false);
@@ -37,11 +39,19 @@ function PreviewProCTA({ block = true }: { block?: boolean }) {
       (window as unknown as { fbq: (...args: unknown[]) => void }).fbq("track", "InitiateCheckout");
     }
 
+    let email: string | undefined = prefillEmail;
+    try {
+      if (supabase) {
+        const { data } = await supabase.auth.getUser();
+        if (data.user?.email) email = data.user.email;
+      }
+    } catch { /* best-effort */ }
+
     try {
       const res = await fetch("/api/checkout/pro", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ locale }),
+        body: JSON.stringify({ locale, ...(email ? { email } : {}) }),
       });
       const data = (await res.json().catch(() => ({}))) as { url?: string; error?: string };
       if (!res.ok || !data.url) {
@@ -117,6 +127,8 @@ const SECTION_WRAP_NARROW: React.CSSProperties = {
 
 function PreviewProContent() {
   const t = useTranslations("previewPro");
+  const searchParams = useSearchParams();
+  const prefillEmail = searchParams.get("email") ?? undefined;
 
   useEffect(() => {
     if (typeof window !== "undefined" && (window as unknown as { fbq?: (...args: unknown[]) => void }).fbq) {
@@ -154,6 +166,25 @@ function PreviewProContent() {
           .glev-hero-meta { justify-content: center !important; }
         }
       `}</style>
+
+      {/* ← Zurück zur App */}
+      <div style={{ width: "100%", maxWidth: 760, margin: "0 auto 8px", padding: "0 20px", boxSizing: "border-box" }}>
+        <a
+          href="/dashboard"
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 6,
+            fontSize: 13,
+            fontWeight: 500,
+            color: "rgba(255,255,255,0.55)",
+            textDecoration: "none",
+            padding: "4px 0",
+          }}
+        >
+          ← App
+        </a>
+      </div>
 
       {/* 1. HERO */}
       <section
@@ -201,7 +232,7 @@ function PreviewProContent() {
               className="glev-hero-form"
               style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 12 }}
             >
-              <PreviewProCTA />
+              <PreviewProCTA prefillEmail={prefillEmail} />
             </div>
 
             <div
@@ -400,7 +431,7 @@ function PreviewProContent() {
             ))}
           </ul>
           <div style={{ marginTop: 8 }}>
-            <PreviewProCTA />
+            <PreviewProCTA prefillEmail={prefillEmail} />
           </div>
           <div style={{ fontSize: 13, color: MINT, textAlign: "center", marginTop: 4 }}>
             {t("pricing_microcopy")}

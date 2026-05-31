@@ -508,6 +508,15 @@ export async function POST(req: NextRequest) {
           );
         }
 
+        // Reward the referrer when the new user's first payment comes in
+        // (payment_status === 'paid' = immediate charge, no trial = referred user).
+        if (session.payment_status === "paid" && email) {
+          rewardReferrerIfEligible(sb, email).catch((e) =>
+            // eslint-disable-next-line no-console
+            console.warn("[pro/webhook] referral reward failed (non-fatal):", e),
+          );
+        }
+
         return NextResponse.json({ received: true });
       }
 
@@ -707,6 +716,100 @@ export async function POST(req: NextRequest) {
     // Return 200 to avoid Stripe retry storms — signature has been verified.
     return NextResponse.json({ received: true, error: "unexpected" });
   }
+}
+
+/**
+ * Rewards the referrer when a referred user makes their first payment.
+ * Best-effort / non-fatal — called fire-and-forget from checkout.session.completed.
+ *
+ * Logic:
+ *   1. Find the user by email → get signup_source
+ *   2. If signup_source starts with "ref:", extract the code
+ *   3. Find the referrer by referral_code
+ *   4. If the referrals row has no rewarded_at yet → extend referrer plan +30 days
+ */
+async function rewardReferrerIfEligible(
+  sb: SupabaseClient,
+  email: string,
+): Promise<void> {
+  const userId = await findUserIdByEmail(sb, email);
+  if (!userId) return;
+
+  const { data: profile } = await sb
+    .from("profiles")
+    .select("signup_source")
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  const signupSource = (profile as { signup_source?: string | null } | null)?.signup_source ?? null;
+  if (!signupSource?.startsWith("ref:")) return;
+
+  const refCode = signupSource.slice(4);
+
+  const { data: referrerRow } = await sb
+    .from("profiles")
+    .select("user_id, manual_plan_override, manual_plan_expires_at")
+    .eq("referral_code", refCode)
+    .maybeSingle();
+
+  if (!referrerRow?.user_id || referrerRow.user_id === userId) return;
+
+  const { data: referralEntry } = await sb
+    .from("referrals")
+    .select("id, rewarded_at")
+    .eq("referred_user_id", userId)
+    .maybeSingle();
+
+  if ((referralEntry as { rewarded_at?: string | null } | null)?.rewarded_at) return;
+
+  const refData = referrerRow as {
+    user_id: string;
+    manual_plan_override?: string | null;
+    manual_plan_expires_at?: string | null;
+  };
+
+  const baseDate = (() => {
+    if (refData.manual_plan_expires_at) {
+      const d = new Date(refData.manual_plan_expires_at);
+      if (d > new Date()) return d;
+    }
+    return new Date();
+  })();
+  const newExpiry = new Date(baseDate.getTime() + 30 * 24 * 60 * 60 * 1000);
+
+  const skipOverride =
+    refData.manual_plan_override === "plus" || refData.manual_plan_override === "beta";
+
+  await sb
+    .from("profiles")
+    .update({
+      manual_plan_override: skipOverride ? refData.manual_plan_override : "pro",
+      manual_plan_expires_at: newExpiry.toISOString(),
+    })
+    .eq("user_id", refData.user_id);
+
+  const rewardedAt = new Date().toISOString();
+  if ((referralEntry as { id?: string } | null)?.id) {
+    await sb
+      .from("referrals")
+      .update({ status: "rewarded", rewarded_at: rewardedAt })
+      .eq("id", (referralEntry as { id: string }).id);
+  } else {
+    await sb.from("referrals").insert({
+      referrer_user_id: refData.user_id,
+      referred_user_id: userId,
+      referral_code: refCode,
+      status: "rewarded",
+      rewarded_at: rewardedAt,
+    });
+  }
+
+  // eslint-disable-next-line no-console
+  console.log("[pro/webhook] referral rewarded:", {
+    referrerId: refData.user_id,
+    referredId: userId,
+    newExpiry: newExpiry.toISOString(),
+  });
 }
 
 /**

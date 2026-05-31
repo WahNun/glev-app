@@ -6,23 +6,29 @@ import { supabase } from "./supabase";
 export type FeatureFlag = "ai_voice";
 
 /**
+ * Email address that is allowed to use the ai_voice feature.
+ *
+ * Glev AI (Mistral chat, AI settings page, AI FAB) is under active
+ * development and not yet ready for general users. Restricting it to
+ * this email keeps the feature invisible to everyone else while Lucas
+ * builds it out — exactly the same pattern as PlanSimulator's
+ * NEXT_PUBLIC_ADMIN_EMAIL guard.
+ */
+const AI_OWNER_EMAIL = "lucas@wahnon-connect.com";
+
+/**
  * Liest ein Feature-Flag für den eingeloggten User aus user_settings.feature_flags.
  * Gibt `null` zurück während geladen wird, `false` wenn kein Zugriff.
  *
- * Aktivieren für einen User:
+ * Aktivieren für einen User (Datenbank-Ebene, wirkt nur wenn Email-Guard passt):
  *   UPDATE user_settings
  *     SET feature_flags = jsonb_set(COALESCE(feature_flags,'{}'), '{ai_voice}', 'true')
  *   WHERE user_id = '<uuid>';
  *
- * Aktivieren für alle User auf einmal:
- *   UPDATE user_settings
- *     SET feature_flags = jsonb_set(COALESCE(feature_flags,'{}'), '{ai_voice}', 'true');
- *
  * Wieder deaktivieren (alle):
  *   UPDATE user_settings
  *     SET feature_flags = feature_flags - 'ai_voice';
- */
-/**
+ *
  * Returns the value of a feature flag for the currently logged-in user.
  *
  * In automated tests (Playwright) you can skip the async Supabase lookup by
@@ -39,7 +45,7 @@ export type FeatureFlag = "ai_voice";
 export function useFeatureFlag(flag: FeatureFlag): boolean | null {
   const [enabled, setEnabled] = useState<boolean | null>(() => {
     if (typeof window === "undefined") return null;
-    const overrides = (window as Record<string, unknown>).__GLEV_FEATURE_FLAGS__;
+    const overrides = (window as unknown as Record<string, unknown>).__GLEV_FEATURE_FLAGS__;
     if (overrides !== null && typeof overrides === "object" && flag in (overrides as object)) {
       return (overrides as Record<string, boolean>)[flag] ?? null;
     }
@@ -48,7 +54,7 @@ export function useFeatureFlag(flag: FeatureFlag): boolean | null {
 
   useEffect(() => {
     if (typeof window !== "undefined") {
-      const overrides = (window as Record<string, unknown>).__GLEV_FEATURE_FLAGS__;
+      const overrides = (window as unknown as Record<string, unknown>).__GLEV_FEATURE_FLAGS__;
       if (overrides !== null && typeof overrides === "object" && flag in (overrides as object)) {
         return;
       }
@@ -60,6 +66,12 @@ export function useFeatureFlag(flag: FeatureFlag): boolean | null {
     supabase.auth.getUser().then(({ data: { user } }) => {
       if (cancelled) return;
       if (!user) { setEnabled(false); return; }
+
+      if (flag === "ai_voice" && user.email !== AI_OWNER_EMAIL) {
+        setEnabled(false);
+        return;
+      }
+
       supabase!
         .from("user_settings")
         .select("feature_flags")

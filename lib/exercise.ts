@@ -190,10 +190,11 @@ export async function fetchExerciseLogs(
 
 export async function fetchRecentExerciseLogs(
   days: number,
-  options?: { source?: ExerciseSource | ExerciseSource[] },
+  options?: { source?: ExerciseSource | ExerciseSource[]; before?: string },
 ): Promise<ExerciseLog[]> {
-  const fromIso = new Date(Date.now() - days * 86400000).toISOString();
-  return fetchExerciseLogs(fromIso, undefined, options);
+  const toMs = options?.before ? new Date(options.before).getTime() : Date.now();
+  const fromIso = new Date(toMs - days * 86400000).toISOString();
+  return fetchExerciseLogs(fromIso, options?.before, options);
 }
 
 export async function deleteExerciseLog(id: string): Promise<void> {

@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations, useLocale } from "next-intl";
 import { usePlan } from "@/hooks/usePlan";
+import { getHistoryCutoffISO, clampFromToPlan } from "@/lib/historyLimit";
 import UpgradeGate from "@/components/UpgradeGate";
 import { supabase } from "@/lib/supabase";
 import {
@@ -315,7 +316,8 @@ const ROWS: RowSpec[] = [
  * so other rows stay enabled during a long meals export.
  */
 export default function ExportPanel() {
-  const { canAccess } = usePlan();
+  const { canAccess, plan, trialActive } = usePlan();
+  const planCutoff = getHistoryCutoffISO(plan, trialActive);
   const router = useRouter();
   const t = useTranslations("export");
   const bcp47 = localeToBcp47(useLocale());
@@ -622,7 +624,10 @@ export default function ExportPanel() {
     // would silently fall through resolveRange's "lastAppointment"
     // branch with a `null` argument and degrade to "all", showing
     // an inflated count vs what the export would actually emit.
-    const { window } = resolveRange(rangePreset, customFrom, customTo, lastAppointment);
+    const { window: rawCountWindow } = resolveRange(rangePreset, customFrom, customTo, lastAppointment);
+    const window: DateWindow | undefined = rawCountWindow
+      ? { ...rawCountWindow, from: clampFromToPlan(rawCountWindow.from, planCutoff) }
+      : planCutoff ? { from: planCutoff } : undefined;
     countAllInWindow(window)
       .then((next) => {
         if (cancelled) return;
@@ -658,7 +663,13 @@ export default function ExportPanel() {
       const stamp = todayStamp();
       // Resolve the picker once per export so a single user click
       // produces one consistent window across the fetch + filename.
-      const { window } = resolveRange(rangePreset, customFrom, customTo, lastAppointment);
+      const { window: rawWindow } = resolveRange(rangePreset, customFrom, customTo, lastAppointment);
+      // Clamp window.from to the plan cutoff so Free/Pro users cannot
+      // export data older than their plan allows, even when they pick
+      // "all time" or a very long custom range.
+      const window: DateWindow | undefined = rawWindow
+        ? { ...rawWindow, from: clampFromToPlan(rawWindow.from, planCutoff) }
+        : planCutoff ? { from: planCutoff } : undefined;
       const suffix = rangeFilenameSuffix(window);
       let count = 0;
       if (kind === "meals") {
@@ -694,7 +705,10 @@ export default function ExportPanel() {
     setMsg(null);
     try {
       const stamp = todayStamp();
-      const { window } = resolveRange(rangePreset, customFrom, customTo, lastAppointment);
+      const { window: rawWindow } = resolveRange(rangePreset, customFrom, customTo, lastAppointment);
+      const window: DateWindow | undefined = rawWindow
+        ? { ...rawWindow, from: clampFromToPlan(rawWindow.from, planCutoff) }
+        : planCutoff ? { from: planCutoff } : undefined;
       const suffix = rangeFilenameSuffix(window);
       // Fetch only the kinds the user has opted into. Skipped kinds
       // resolve to an empty array without touching the database — no
@@ -740,7 +754,10 @@ export default function ExportPanel() {
     setBusy("pdf");
     setMsg(null);
     try {
-      const { window, display } = resolveRange(rangePreset, customFrom, customTo, lastAppointment);
+      const { window: rawWindow, display } = resolveRange(rangePreset, customFrom, customTo, lastAppointment);
+      const window: DateWindow | undefined = rawWindow
+        ? { ...rawWindow, from: clampFromToPlan(rawWindow.from, planCutoff) }
+        : planCutoff ? { from: planCutoff } : undefined;
       const suffix = rangeFilenameSuffix(window);
       const [meals, insulin, exercise, fs] = await Promise.all([
         fetchAllMeals(window),

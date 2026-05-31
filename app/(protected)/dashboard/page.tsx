@@ -13,6 +13,7 @@ import IOBHistoryChart from "@/components/IOBHistoryChart";
 import { fetchRecentExerciseLogs, type ExerciseLog } from "@/lib/exercise";
 import { evaluateExercise, exerciseTypeLabelI18n, exerciseTypeGlyph } from "@/lib/exerciseEval";
 import { fetchMacroTargets, DEFAULT_MACRO_TARGETS, type MacroTargets, getTargetRange, fetchTargetRange, type TargetRange, fetchInsulinType } from "@/lib/userSettings";
+import GlucoseTrendFront from "@/components/GlucoseTrendChart";
 import { fetchCgmSamples } from "@/lib/cgmSamplesClient";
 import { TYPE_COLORS, getEvalColor, chipLabelsFrom } from "@/lib/mealTypes";
 import DashboardQuickAddSheet from "@/components/DashboardQuickAddSheet";
@@ -22,7 +23,6 @@ import MealEntryCardCollapsed from "@/components/MealEntryCardCollapsed";
 import MealEntryLightExpand from "@/components/MealEntryLightExpand";
 import PendingGlucoseStrip from "@/components/PendingGlucoseStrip";
 import CurrentDayGlucoseCard from "@/components/CurrentDayGlucoseCard";
-import GlucoseTrendFront from "@/components/GlucoseTrendChart";
 import MacroRing from "@/components/MacroRing";
 import SkeletonBlock from "@/components/SkeletonBlock";
 import GlevLogo from "@/components/GlevLogo";
@@ -51,6 +51,8 @@ import { CSS } from "@dnd-kit/utilities";
 import { useCardOrder } from "@/lib/cardOrder";
 import PagerIndicator from "@/components/PagerIndicator";
 import { useEngineHeader } from "@/lib/engineHeaderContext";
+import UpgradeGate from "@/components/UpgradeGate";
+import { usePlan } from "@/hooks/usePlan";
 
 // Four-cluster cockpit layout (replaces the earlier 5-cluster "widget
 // wall"). Order is intentionally staged: Glucose is the primary
@@ -158,7 +160,7 @@ function RateTripletCard({ cards }: { cards: CardData[] }) {
   return (
     <div
       onClick={() => setFlipped(f => !f)}
-      style={{ position: "relative", perspective: 1200, cursor: "pointer", minHeight: 140 }}
+      style={{ position: "relative", perspective: 1200, cursor: "pointer", height: 96 }}
     >
       <div
         style={{
@@ -167,16 +169,15 @@ function RateTripletCard({ cards }: { cards: CardData[] }) {
           transformStyle: "preserve-3d",
           transition: "transform 0.55s cubic-bezier(0.4,0,0.2,1)",
           transform: flipped ? "rotateY(180deg)" : "rotateY(0deg)",
-          minHeight: 140,
         }}
       >
         {/* ── FRONT ── */}
         <div
           className="glev-stat-card"
           style={{
-            background: SURFACE, border: `1px solid ${BORDER}`, borderRadius: 14,
-            padding: 10, boxSizing: "border-box",
-            display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8,
+            background: "transparent", border: "none",
+            padding: 0, boxSizing: "border-box",
+            display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10,
             position: "absolute", inset: 0,
             backfaceVisibility: "hidden",
           }}
@@ -184,23 +185,26 @@ function RateTripletCard({ cards }: { cards: CardData[] }) {
           {cards.map(c => (
             <div key={c.key} style={{
               background: "var(--surface-soft)", border: `1px solid ${BORDER}`,
-              borderRadius: 12, padding: "12px 12px 10px", boxSizing: "border-box",
+              borderRadius: 14,
+              padding: "14px clamp(10px,3vw,14px) 12px",
+              boxSizing: "border-box",
               display: "flex", flexDirection: "column", gap: 6, minWidth: 0,
             }}>
               <div style={{
                 fontSize: 10, color: "var(--text-dim)", letterSpacing: "0.08em",
                 fontWeight: 700, textTransform: "uppercase", lineHeight: 1.2,
+                overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
               }}>{c.label}</div>
               <div style={{ display: "flex", alignItems: "baseline", gap: 2 }}>
                 <span style={{
-                  fontSize: 30, fontWeight: 800, color: c.color,
+                  fontSize: "clamp(24px,6vw,32px)", fontWeight: 800, color: c.color,
                   letterSpacing: "-0.02em", lineHeight: 1,
                   fontFamily: "var(--font-mono)",
                 }}>{c.value}</span>
                 <span style={{ fontSize: 12, color: "var(--text-faint)" }}>{c.unit}</span>
               </div>
               <div style={{
-                fontSize: 11, color: "var(--text-faint)", lineHeight: 1.25,
+                fontSize: "clamp(10px,2.5vw,12px)", color: "var(--text-faint)", lineHeight: 1.25,
               }}>{c.sub}</div>
             </div>
           ))}
@@ -295,23 +299,13 @@ function FlipCard({ card }: { card: CardData }) {
   );
 }
 
+
 function TrendChart({ meals }: { meals: Meal[] }) {
   const DAYS = 14;
   const [flipped, setFlipped] = useState(false);
   const t = useTranslations("dashboard");
-  // Personal TIR band (user_settings.target_min_mgdl /
-  // target_max_mgdl, Migration 20260517). Was hardcoded 80–180 here,
-  // which mismatched Insights + Today's Summary (both 70–180) so the
-  // same user saw three different TIR percentages on three cards. Now
-  // every card reads the same user-saved band.
   const [trendRange, setTrendRange] = useState<TargetRange>(() => getTargetRange());
   useEffect(() => { fetchTargetRange().then(setTrendRange).catch(() => {}); }, []);
-  // CGM samples for the last 7 days — these are the dense readings the
-  // Insights TIR card already uses (288/day vs ~3 meal pre-glucose
-  // values/day), so anchoring TIR here on them brings the Dashboard
-  // Trend Breakdown into agreement with Insights. Falls back to the
-  // sparse meal pre-glucose set when the user has no CGM connected so
-  // the tile never reads "—%" for non-CGM users.
   const [cgm7d, setCgm7d] = useState<Array<{ v: number }>>([]);
   useEffect(() => {
     const to = Date.now();
@@ -329,17 +323,11 @@ function TrendChart({ meals }: { meals: Meal[] }) {
     if (d in buckets && m.glucose_before) buckets[d].push(m.glucose_before);
   });
   const points = Object.values(buckets).map(arr => arr.length ? arr.reduce((a,b)=>a+b,0)/arr.length : null);
-
-  // Front-face hi/lo + 7-day stats are also rendered by the shared
-  // GlucoseTrendFront, but we recompute them here for the BACK face's
-  // "Trend Breakdown" tiles.
   type Pt = { i: number; v: number };
   const realPts: Pt[] = [];
   points.forEach((v, i) => { if (v != null) realPts.push({ i, v }); });
   const hiPt: Pt | null = realPts.length ? realPts.reduce((a, b) => (b.v > a.v ? b : a)) : null;
   const loPt: Pt | null = realPts.length ? realPts.reduce((a, b) => (b.v < a.v ? b : a)) : null;
-
-  // Back: weekday averages + 7-day trend slope
   const weekdayBuckets: number[][] = Array.from({ length: 7 }, () => []);
   const weekdayLabels = [
     t("weekday_short_sun"), t("weekday_short_mon"), t("weekday_short_tue"),
@@ -367,12 +355,6 @@ function TrendChart({ meals }: { meals: Meal[] }) {
   }
   const recentAvg = last7.length ? Math.round(last7.reduce((s, p) => s + p.v, 0) / last7.length) : null;
   const overallAvg = real.length ? Math.round(real.reduce((s, p) => s + p.v, 0) / real.length) : null;
-  // Prefer dense CGM samples (288/day) for the TIR percentage when
-  // the user has a CGM connected — this matches Insights so the two
-  // surfaces now agree. Fall back to the **raw** 7-day meal
-  // pre-glucose readings (not the daily-averaged `real` series — that
-  // would silently smooth out a single in-range day across many spikes
-  // and inflate TIR) so non-CGM users still see a meaningful number.
   const rawMealPreGlu7d: number[] = [];
   meals.forEach(m => {
     if (typeof m.glucose_before !== "number") return;
@@ -384,9 +366,6 @@ function TrendChart({ meals }: { meals: Meal[] }) {
   const tirDenom  = tirSource.length;
   const tirInRange = tirSource.filter(v => v >= trendRange.low && v <= trendRange.high).length;
   const tirPct = tirDenom > 0 ? Math.round((tirInRange / tirDenom) * 100) : 0;
-
-  // Card height: a bit taller on mobile so the chart stays comfortably
-  // readable when stacked under the stat tiles.
   return (
     <div
       onClick={() => setFlipped(f => !f)}
@@ -395,16 +374,12 @@ function TrendChart({ meals }: { meals: Meal[] }) {
     >
       <style>{`
         .glev-trend-card { height: 240px; }
-        @media (max-width: 768px) {
-          .glev-trend-card { height: 220px; }
-        }
+        @media (max-width: 768px) { .glev-trend-card { height: 220px; } }
       `}</style>
       <div style={{ position:"absolute", inset:0, transformStyle:"preserve-3d", transition:"transform 0.55s cubic-bezier(0.4,0,0.2,1)", transform:flipped ? "rotateY(180deg)" : "rotateY(0deg)" }}>
-        {/* FRONT */}
         <div style={{ position:"absolute", inset:0, backfaceVisibility:"hidden", background:SURFACE, border:`1px solid ${BORDER}`, borderRadius:16, padding:"20px 24px", boxSizing:"border-box", display:"flex", flexDirection:"column", overflow:"hidden" }}>
           <GlucoseTrendFront meals={meals} />
         </div>
-        {/* BACK */}
         <div style={{ position:"absolute", inset:0, backfaceVisibility:"hidden", transform:"rotateY(180deg)", background:`linear-gradient(145deg, ${ACCENT}10, ${SURFACE} 65%)`, border:`1px solid ${ACCENT}33`, borderRadius:16, padding:"20px 24px", boxSizing:"border-box", display:"flex", flexDirection:"column", gap:14, overflow:"hidden" }}>
           <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between" }}>
             <div style={{ fontSize:13, color:ACCENT, fontWeight:700, letterSpacing:"0.06em", textTransform:"uppercase" }}>{t("trend_breakdown")}</div>
@@ -539,6 +514,7 @@ export default function DashboardPage() {
   const t = useTranslations("dashboard");
   const tQuick = useTranslations("quickAdd");
   const engineHdr = useEngineHeader();
+  const { canAccess } = usePlan();
   const [meals, setMeals]     = useState<Meal[]>([]);
   const [insulin, setInsulin] = useState<InsulinLog[]>([]);
   const [exercise, setExercise] = useState<ExerciseLog[]>([]);
@@ -551,7 +527,6 @@ export default function DashboardPage() {
   const [insulinType, setInsulinType]   = useState<InsulinType>("rapid");
   // Latest CGM reading — used by IOBCard to show expected BG drop.
   // Fetched independently here so DashboardPage owns the value;
-  // TrendChart has its own copy for TIR calculation (no prop-drilling).
   const [latestCgmBg, setLatestCgmBg] = useState<number | undefined>(undefined);
   // Bottom-sheet/modal listing all quick-log entry points (mirrors the
   // header "+" QuickAddMenu). Opened by the dashboard hero "+" button.
@@ -677,40 +652,61 @@ export default function DashboardPage() {
   //
   // Reordering still works via the grip handle in each cluster header;
   // persisted per user via `useCardOrder("dashboard", …)`.
+  // When the Adapt Score (control_score) is gated: show the rate triplet
+  // first in the control cluster so the initial dashboard view shows live
+  // data instead of a blurry paywall card. The gated card moves into the
+  // insulin cluster right after the IOB (bolus) card — lower in the page,
+  // discoverable but not blocking. For Pro users (canAccess = true) the
+  // classic order [adapt-score, rate-triplet] is preserved.
+  const controlScoreGated = !canAccess("control_score");
+  const controlScoreNode = (
+    <UpgradeGate feature="control_score"><ControlScoreCard meals={meals}/></UpgradeGate>
+  );
+
   const clusters: Array<{ id: string; title: string; cards: ClusterCard[] }> = [
     {
       id: "glucose",
       title: t("cluster_glucose"),
       cards: [
         { id: "today-glucose", node: <CurrentDayGlucoseCard showMealNodes={engineHdr.visible} /> },
-        { id: "glucose-trend", node: <TrendChart meals={meals}/> },
       ],
     },
     {
       id: "metabolic",
       title: t("cluster_metabolic"),
       cards: [
-        { id: "today-macros", node: <DailyMacrosCard meals={meals} targets={macroTargets}/> },
-        { id: "outcome-dist", node: <OutcomeChart meals={meals}/> },
+        { id: "today-macros",   node: <DailyMacrosCard meals={meals} targets={macroTargets}/> },
+        { id: "outcome-dist",   node: <OutcomeChart meals={meals}/> },
+        { id: "glucose-trend",  node: <TrendChart meals={meals}/> },
       ],
     },
     {
       id: "control",
       title: t("cluster_control"),
-      cards: [
-        { id: "control-score", node: <ControlScoreCard meals={meals}/> },
-        // rateCards = buildCards(...) minus the "control" entry —
-        // shown as a single compact 3-up triplet (Good / Spike / Hypo)
-        // so the breakdown is glanceable beneath the headline Control
-        // Score without forcing the user to swipe one card at a time.
-        { id: "rate-triplet", node: <RateTripletCard cards={rateCards}/> },
-      ],
+      // Gated: triplet first (live data visible without swiping),
+      // adapt-score moved to insulin cluster below.
+      // Unlocked: adapt-score first, triplet second (current spec).
+      cards: controlScoreGated
+        ? [{ id: "rate-triplet", node: <RateTripletCard cards={rateCards}/> }]
+        : [
+            { id: "control-score", node: controlScoreNode },
+            { id: "rate-triplet",  node: <RateTripletCard cards={rateCards}/> },
+          ],
     },
     {
       id: "insulin",
       title: t("cluster_insulin"),
+      // Gated (free/smart): adapt-score UpgradeGate sits between the bolus
+      // card (iob) and the history chart (iob-history) so it's discoverable
+      // right below the bolus card and above the entry card.
+      // Unlocked (pro/plus): no gate needed here — adapt-score is already
+      // in the control cluster above.
       cards: [
         { id: "iob",         node: <IOBCard insulin={insulin} insulinType={insulinType} meals={meals} currentBg={latestCgmBg} onLogBasal={() => setBasalSheetOpen(true)} /> },
+        ...(controlScoreGated
+          ? [{ id: "control-score", node: controlScoreNode }]
+          : []
+        ),
         { id: "iob-history", node: <IOBHistoryChart insulin={insulin} insulinType={insulinType} meals={meals} /> },
       ],
     },
@@ -784,13 +780,10 @@ export default function DashboardPage() {
           .glev-macros-front   { padding: 12px !important; }
         }
         /* Extra squeeze for very small phones (iPhone 13 mini 375×812,
-           SE 375×667). At 430px the Adapt Score card is borderline
-           visible; at 375px it can fall almost completely off screen.
-           We trim cluster gap + glucose card height a bit more so the
-           control cluster's top edge lifts into comfortable view. */
+           SE 375×667). Trim cluster gap so the control cluster's top
+           edge lifts into comfortable view. */
         @media (max-width: 375px) {
           .glev-cluster-stack  { gap: 10px !important; }
-          .glev-trend-card     { height: 195px !important; }
         }
       `}</style>
 

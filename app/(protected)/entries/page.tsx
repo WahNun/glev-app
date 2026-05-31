@@ -3,7 +3,8 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import RefreshingBar from "@/components/RefreshingBar";
 import { useTranslations, useLocale } from "next-intl";
-import { fetchMeals, deleteMeal, updateMeal, FETCH_MEALS_DEFAULT_SINCE_DAYS, type Meal } from "@/lib/meals";
+import { fetchMeals, deleteMeal, updateMeal, type Meal } from "@/lib/meals";
+import { MEALS_INITIAL_DAYS, MEALS_PAGE_SIZE, FETCH_MEALS_DEFAULT_SINCE_DAYS, executeInitialMealFetch, executeLoadMoreFetch } from "./constants";
 import { supabase } from "@/lib/supabase";
 import { fetchRecentInsulinLogs, deleteInsulinLog, updateInsulinReadings, updateInsulinLogLink, updateInsulinEntry, type InsulinLog } from "@/lib/insulin";
 import { fetchRecentExerciseLogs, deleteExerciseLog, updateExerciseLog, type ExerciseLog, type ExerciseType, type ExerciseIntensity } from "@/lib/exercise";
@@ -43,6 +44,8 @@ import { fetchInsulinType, getInsulinSettings } from "@/lib/userSettings";
 import { parseDbDate, parseDbTs, parseLluTs } from "@/lib/time";
 import { useCarbUnit } from "@/hooks/useCarbUnit";
 import { useTimeFormat } from "@/hooks/useTimeFormat";
+import { usePlan } from "@/hooks/usePlan";
+import { getHistoryCutoffISO } from "@/lib/historyLimit";
 import { formatICR } from "@/lib/carbUnits";
 import {
   readEntriesCache,
@@ -96,7 +99,7 @@ function AppleHealthBadge({ label, compact = false }: { label: string; compact?:
 // within a section. Meal-kind / outcome implicitly restrict to meal rows;
 // exercise-kind implicitly restricts to exercise rows.
 type EntryTypeKey   = "meal" | "bolus" | "basal" | "exercise" | "cycle" | "symptoms" | "influences";
-type MealKindKey    = "FAST_CARBS" | "HIGH_PROTEIN" | "HIGH_FAT" | "BALANCED";
+type MealKindKey    = "FAST_CARBS" | "HIGH_PROTEIN" | "HIGH_FAT" | "HIGH_FIBER" | "BALANCED";
 type ExerciseKindKey = "cardio" | "hypertrophy";
 type OutcomeKey     = "GOOD" | "UNDERDOSE" | "OVERDOSE" | "SPIKE";
 type DateRangeKey   = "all" | "today" | "7d" | "30d" | "custom";
@@ -129,6 +132,7 @@ const MEAL_KIND_OPTIONS: { value: MealKindKey; label: string }[] = [
   { value: "FAST_CARBS",   label: "Fast Carbs" },
   { value: "HIGH_PROTEIN", label: "High Protein" },
   { value: "HIGH_FAT",     label: "High Fat" },
+  { value: "HIGH_FIBER",   label: "High Fiber" },
   { value: "BALANCED",     label: "Balanced" },
 ];
 const EXERCISE_KIND_OPTIONS: { value: ExerciseKindKey; label: string }[] = [
@@ -349,6 +353,11 @@ export default function EntriesPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [locale],
   );
+  const { plan, trialActive } = usePlan();
+  // History cutoff derived from the user's plan. null = unlimited (Plus).
+  // Used as the lower-bound for paginated "Load more" fetches so Free
+  // users never scroll back more than 60 days, Pro ≤ 90 days.
+  const historyLimitISO = getHistoryCutoffISO(plan, trialActive);
   const [meals, setMeals]     = useState<Meal[]>([]);
   const [insulin, setInsulin] = useState<InsulinLog[]>([]);
   const [exercise, setExercise] = useState<ExerciseLog[]>([]);
@@ -358,13 +367,24 @@ export default function EntriesPage() {
   const [loading, setLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   // Pagination state for the meals list. We initially load only
-  // MEALS_INITIAL_DAYS days of meals; older entries are fetched on
-  // demand via the "Weitere laden" / "Load more" button.
+  // MEALS_INITIAL_DAYS days of meals; older entries are fetched
+  // automatically as the user scrolls down (IntersectionObserver).
   const [hasMoreMeals, setHasMoreMeals] = useState(false);
+  // Independent flag for non-meal types — stays true until a full
+  // NON_MEAL_PAGE_DAYS slab returns no results from ALL five non-meal
+  // tables. Decoupled from hasMoreMeals so users with sparse meal
+  // history but dense insulin/exercise/etc. logs keep scrolling.
+  const [hasMoreNonMeals, setHasMoreNonMeals] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const oldestMealCreatedAt = useRef<string | null>(null);
-  const MEALS_INITIAL_DAYS = 30;
-  const MEALS_PAGE_SIZE = 50;
+  // Sentinel element watched by the IntersectionObserver for infinite scroll.
+  const sentinelRef = useRef<HTMLDivElement>(null);
+  // Cursor for non-meal type pagination. Tracks the ISO boundary of the
+  // oldest slab already loaded; each scroll-trigger fetches the next
+  // NON_MEAL_PAGE_DAYS slab before this point.
+  const oldestNonMealIso = useRef<string | null>(null);
+  const NON_MEAL_INITIAL_DAYS = 30;
+  const NON_MEAL_PAGE_DAYS = 30;
   const [filters, setFilters] = useState<FilterState>(EMPTY_FILTERS);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [search, setSearch]   = useState("");
@@ -379,6 +399,10 @@ export default function EntriesPage() {
   const [manualOpen, setManualOpen] = useState(false);
   const [currentIndex, setCurrentIndex] = useState(0);
   const _anchoredRef = useRef(false);
+  // Month-jump strip: null = "recent" mode (default last-30d load)
+  // "YYYY-MM" = jumped to that calendar month
+  const [jumpedToMonth, setJumpedToMonth] = useState<string | null>(null);
+  const [jumpLoading, setJumpLoading] = useState(false);
   const filtersWrapRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => { fetchInsulinType().then(setInsType).catch(() => {}); }, []);
@@ -579,13 +603,16 @@ export default function EntriesPage() {
       try {
         // Initial fetch covers the last MEALS_INITIAL_DAYS (30) days.
         // Older rows are loaded on demand via the "Weitere laden" button.
+        // Non-meal types also start with NON_MEAL_INITIAL_DAYS (30) days
+        // and paginate in sync with each "load more" click.
+        const nonMealFrom = new Date(Date.now() - NON_MEAL_INITIAL_DAYS * 86400000).toISOString();
         const [m, ins, ex, cy, sy, inf] = await Promise.all([
-          fetchMeals({ sinceDays: MEALS_INITIAL_DAYS, limit: Infinity }),
-          fetchRecentInsulinLogs(60).catch(() => []),
-          fetchRecentExerciseLogs(60).catch(() => []),
-          fetchRecentMenstrualLogs(120).catch(() => [] as MenstrualLog[]),
-          fetchRecentSymptomLogs(120).catch(() => [] as SymptomLog[]),
-          fetchRecentInfluenceLogs(120).catch(() => [] as InfluenceLog[]),
+          executeInitialMealFetch(fetchMeals),
+          fetchRecentInsulinLogs(NON_MEAL_INITIAL_DAYS).catch(() => []),
+          fetchRecentExerciseLogs(NON_MEAL_INITIAL_DAYS).catch(() => []),
+          fetchRecentMenstrualLogs(NON_MEAL_INITIAL_DAYS).catch(() => [] as MenstrualLog[]),
+          fetchRecentSymptomLogs(NON_MEAL_INITIAL_DAYS).catch(() => [] as SymptomLog[]),
+          fetchRecentInfluenceLogs(NON_MEAL_INITIAL_DAYS).catch(() => [] as InfluenceLog[]),
         ]);
         if (!cancelled) {
           setMeals(m);
@@ -596,12 +623,19 @@ export default function EntriesPage() {
           setInfluences(inf);
           // Track the oldest loaded meal for keyset pagination.
           oldestMealCreatedAt.current = m.length > 0 ? m[m.length - 1].created_at : null;
-          // Show the "Load more" button whenever there's a chance of
-          // older rows within the 365-day window. We can't know for
-          // sure without a COUNT query, so we always show it on
-          // initial load and hide it only after a load-more page
+          // Track the lower boundary of non-meal data already loaded.
+          // Each "load more" click fetches the next NON_MEAL_PAGE_DAYS
+          // slab before this cursor.
+          oldestNonMealIso.current = nonMealFrom;
+          // Show the sentinel / spinner whenever there's a chance of
+          // older rows. We can't know for sure without a COUNT query,
+          // so we show it on initial load and hide only after a page
           // returns empty.
           setHasMoreMeals(m.length > 0);
+          // Non-meal flag: assume there's more data whenever we loaded
+          // any non-meal row. Cleared by scroll-triggered load-more
+          // once a full slab returns empty across all five types.
+          setHasMoreNonMeals(ins.length > 0 || ex.length > 0 || cy.length > 0 || sy.length > 0 || inf.length > 0);
         }
         // Persist to localStorage (with TTL) so the next visit is instant,
         // including after a native-app restart or TestFlight force-quit.
@@ -651,30 +685,182 @@ export default function EntriesPage() {
     };
   }, []);
 
-  async function loadMoreMeals() {
-    if (!oldestMealCreatedAt.current || loadingMore || !hasMoreMeals) return;
+  const loadMoreMeals = useCallback(async () => {
+    // Allow trigger when EITHER meals OR non-meals may still have older
+    // data — decoupled so users with sparse meal history but dense
+    // insulin/exercise/etc. logs keep loading after meals exhaust.
+    if (loadingMore || (!hasMoreMeals && !hasMoreNonMeals)) return;
     setLoadingMore(true);
     try {
-      const more = await fetchMeals({
-        before: oldestMealCreatedAt.current,
-        sinceDays: FETCH_MEALS_DEFAULT_SINCE_DAYS,
-        limit: MEALS_PAGE_SIZE,
-      });
-      if (more.length === 0) {
-        setHasMoreMeals(false);
-      } else {
-        setMeals(prev => {
-          const ids = new Set(prev.map(m => m.id));
-          return [...prev, ...more.filter(m => !ids.has(m.id))];
+      // Fetch the next page of meals (only when not exhausted) and a
+      // matching slab of every other entry type in parallel.
+      // For Plus (historyLimitISO === null) use Infinity so pagination
+      // continues from a month-jump that landed beyond the 365-day window.
+      // For Free/Pro the sinceIso guard enforces the plan limit correctly.
+      const sinceDays = historyLimitISO === null ? Infinity : FETCH_MEALS_DEFAULT_SINCE_DAYS;
+      const beforeCursor = oldestNonMealIso.current;
+      const [more, moreIns, moreEx, moreCy, moreSy, moreInf] = await Promise.all([
+        hasMoreMeals && oldestMealCreatedAt.current
+          ? fetchMeals({
+              before: oldestMealCreatedAt.current,
+              sinceDays,
+              sinceIso: historyLimitISO ?? undefined,    // plan cap wins when more restrictive
+              limit: MEALS_PAGE_SIZE,
+            })
+          : Promise.resolve([] as Awaited<ReturnType<typeof fetchMeals>>),
+        beforeCursor && hasMoreNonMeals
+          ? fetchRecentInsulinLogs(NON_MEAL_PAGE_DAYS, { before: beforeCursor }).catch(() => [] as InsulinLog[])
+          : Promise.resolve([] as InsulinLog[]),
+        beforeCursor && hasMoreNonMeals
+          ? fetchRecentExerciseLogs(NON_MEAL_PAGE_DAYS, { before: beforeCursor }).catch(() => [] as ExerciseLog[])
+          : Promise.resolve([] as ExerciseLog[]),
+        beforeCursor && hasMoreNonMeals
+          ? fetchRecentMenstrualLogs(NON_MEAL_PAGE_DAYS, { before: beforeCursor }).catch(() => [] as MenstrualLog[])
+          : Promise.resolve([] as MenstrualLog[]),
+        beforeCursor && hasMoreNonMeals
+          ? fetchRecentSymptomLogs(NON_MEAL_PAGE_DAYS, { before: beforeCursor }).catch(() => [] as SymptomLog[])
+          : Promise.resolve([] as SymptomLog[]),
+        beforeCursor && hasMoreNonMeals
+          ? fetchRecentInfluenceLogs(NON_MEAL_PAGE_DAYS, { before: beforeCursor }).catch(() => [] as InfluenceLog[])
+          : Promise.resolve([] as InfluenceLog[]),
+      ]);
+
+      // Advance the non-meal cursor and update its "has more" flag.
+      // The slab is considered exhausted only when ALL five types returned
+      // empty — a user may have insulin logs but no exercise logs for a
+      // given period, and that should not stop the cursor.
+      if (beforeCursor && hasMoreNonMeals) {
+        const nonMealSlab = moreIns.length + moreEx.length + moreCy.length + moreSy.length + moreInf.length;
+        oldestNonMealIso.current = new Date(
+          new Date(beforeCursor).getTime() - NON_MEAL_PAGE_DAYS * 86400000,
+        ).toISOString();
+        // If the slab was entirely empty, stop paging non-meal types.
+        if (nonMealSlab === 0) setHasMoreNonMeals(false);
+      }
+
+      // Append non-meal results (deduplicated by id).
+      if (moreIns.length > 0) {
+        setInsulin(prev => {
+          const ids = new Set(prev.map(x => x.id));
+          return [...prev, ...moreIns.filter(x => !ids.has(x.id))];
         });
-        if (more.length < MEALS_PAGE_SIZE) {
+      }
+      if (moreEx.length > 0) {
+        setExercise(prev => {
+          const ids = new Set(prev.map(x => x.id));
+          return [...prev, ...moreEx.filter(x => !ids.has(x.id))];
+        });
+      }
+      if (moreCy.length > 0) {
+        setCycle(prev => {
+          const ids = new Set(prev.map(x => x.id));
+          return [...prev, ...moreCy.filter(x => !ids.has(x.id))];
+        });
+      }
+      if (moreSy.length > 0) {
+        setSymptoms(prev => {
+          const ids = new Set(prev.map(x => x.id));
+          return [...prev, ...moreSy.filter(x => !ids.has(x.id))];
+        });
+      }
+      if (moreInf.length > 0) {
+        setInfluences(prev => {
+          const ids = new Set(prev.map(x => x.id));
+          return [...prev, ...moreInf.filter(x => !ids.has(x.id))];
+        });
+      }
+
+      // Update the meal cursor and visibility flag.
+      if (hasMoreMeals) {
+        if (more.length === 0) {
           setHasMoreMeals(false);
+        } else {
+          setMeals(prev => {
+            const ids = new Set(prev.map(m => m.id));
+            return [...prev, ...more.filter(m => !ids.has(m.id))];
+          });
+          if (more.length < MEALS_PAGE_SIZE) {
+            setHasMoreMeals(false);
+          }
+          oldestMealCreatedAt.current = more[more.length - 1].created_at;
         }
-        oldestMealCreatedAt.current = more[more.length - 1].created_at;
       }
     } catch (e) { console.error(e); }
     finally { setLoadingMore(false); }
-  }
+  }, [loadingMore, hasMoreMeals, hasMoreNonMeals, historyLimitISO]);
+
+  // Jump the list to a specific calendar month. Passing null resets to the
+  // default "recent" view (last MEALS_INITIAL_DAYS days). Selecting a month
+  // resets the meal list and starts keyset pagination from the end of that
+  // month, so the user can keep scrolling back from there.
+  const jumpToMonth = useCallback(async (ym: string | null) => {
+    setJumpedToMonth(ym);
+    setJumpLoading(true);
+    try {
+      if (ym === null) {
+        // Reset to default: last 30 days
+        const m = await fetchMeals({ sinceDays: MEALS_INITIAL_DAYS, limit: Infinity });
+        setMeals(m);
+        oldestMealCreatedAt.current = m.length > 0 ? m[m.length - 1].created_at : null;
+        setHasMoreMeals(m.length > 0);
+      } else {
+        // ym is "YYYY-MM"; set `before` to the first moment of next month so
+        // we load all entries UP TO (and including) the last day of ym.
+        const [yr, mo] = ym.split("-").map(Number);
+        const nextYr  = mo === 12 ? yr + 1 : yr;
+        const nextMo  = mo === 12 ? 1 : mo + 1;
+        const before  = `${nextYr}-${String(nextMo).padStart(2, "0")}-01T00:00:00.000Z`;
+        // For Plus (historyLimitISO === null) there is no plan-imposed
+        // cutoff, so we must NOT apply the 365-day practical cap — that
+        // would make month chips older than ~12 months show as dead. Use
+        // Infinity so the server window matches the UI's available months.
+        // For Free/Pro the sinceIso guard already enforces the plan limit.
+        const sinceDays = historyLimitISO === null ? Infinity : FETCH_MEALS_DEFAULT_SINCE_DAYS;
+        const m = await fetchMeals({
+          before,
+          sinceDays,
+          sinceIso: historyLimitISO ?? undefined,
+          limit: MEALS_PAGE_SIZE,
+        });
+        setMeals(m);
+        oldestMealCreatedAt.current = m.length > 0 ? m[m.length - 1].created_at : null;
+        setHasMoreMeals(m.length >= MEALS_PAGE_SIZE);
+      }
+    } catch (e) { console.error(e); }
+    finally { setJumpLoading(false); }
+  }, [historyLimitISO]);
+
+  // Available months for the jump strip, newest first, up to the plan cutoff.
+  // Plus users see up to 24 months (2 years); Free/Pro are naturally limited
+  // by their 60- or 90-day window.
+  const availableMonths = useMemo<string[]>(() => {
+    const now = new Date();
+    const cutoff = historyLimitISO
+      ? new Date(historyLimitISO)
+      : new Date(Date.now() - 365 * 2 * 86_400_000); // 2-year cap for Plus
+    const months: string[] = [];
+    // Start from first day of current month, walk backwards
+    let d = new Date(Date.UTC(now.getFullYear(), now.getMonth(), 1));
+    const cutoffMonth = new Date(Date.UTC(cutoff.getFullYear(), cutoff.getMonth(), 1));
+    while (d >= cutoffMonth && months.length < 24) {
+      months.push(`${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`);
+      d = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() - 1, 1));
+    }
+    return months;
+  }, [historyLimitISO]);
+
+  // Automatically load the next page when the sentinel div scrolls into view.
+  // Fires when EITHER meals OR non-meal types still have older data.
+  useEffect(() => {
+    const el = sentinelRef.current;
+    if (!el || (!hasMoreMeals && !hasMoreNonMeals)) return;
+    const observer = new IntersectionObserver(
+      (entries) => { if (entries[0].isIntersecting) loadMoreMeals(); },
+      { rootMargin: "200px" }
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [loadMoreMeals, hasMoreMeals, hasMoreNonMeals]);
 
   async function handleDelete(id: string) {
     if (!confirm("Delete this entry? This cannot be undone.")) return;
@@ -1063,6 +1249,93 @@ export default function EntriesPage() {
         </div>
         <input style={{ ...inp, width:"100%", boxSizing:"border-box" }} placeholder={tx("search_placeholder")} value={search} onChange={e => setSearch(e.target.value)}/>
       </div>
+
+      {/* MONTH-JUMP STRIP — only render when there's more than one month
+          in the user's history window. Free users with <60 days often have
+          only one month so the strip would show a single "Recent" pill and
+          a single month pill, which is not worth the chrome. */}
+      {availableMonths.length > 1 && (
+        <div
+          role="navigation"
+          aria-label={tHistory("jump_strip_aria")}
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 6,
+            overflowX: "auto",
+            scrollbarWidth: "none",
+            marginBottom: 14,
+            paddingBottom: 2, // keeps focus ring from clipping
+          }}
+        >
+          <style>{`.glev-month-strip::-webkit-scrollbar{display:none}`}</style>
+          {/* "Recent" reset chip */}
+          <button
+            onClick={() => { if (jumpedToMonth !== null) jumpToMonth(null); }}
+            disabled={jumpLoading}
+            aria-pressed={jumpedToMonth === null}
+            style={{
+              flexShrink: 0,
+              padding: "5px 12px",
+              borderRadius: 99,
+              border: `1px solid ${jumpedToMonth === null ? ACCENT + "80" : BORDER}`,
+              background: jumpedToMonth === null ? `${ACCENT}20` : "transparent",
+              color: jumpedToMonth === null ? ACCENT : "var(--text-muted)",
+              fontSize: 12,
+              fontWeight: jumpedToMonth === null ? 700 : 500,
+              cursor: jumpLoading ? "wait" : jumpedToMonth === null ? "default" : "pointer",
+              letterSpacing: "0.02em",
+              whiteSpace: "nowrap",
+              transition: "background 0.12s, color 0.12s, border-color 0.12s",
+            }}
+          >
+            {tHistory("jump_recent")}
+          </button>
+          {/* Separator */}
+          <div style={{ width: 1, height: 16, background: "var(--border)", flexShrink: 0 }} aria-hidden="true" />
+          {/* Month chips */}
+          {availableMonths.map(ym => {
+            const [yr, mo] = ym.split("-").map(Number);
+            const date = new Date(yr, mo - 1, 1);
+            const now = new Date();
+            const isCurrentYear = yr === now.getFullYear();
+            const monthLabel = date.toLocaleDateString(locale, { month: "short" });
+            const label = isCurrentYear ? monthLabel : `${monthLabel} ${String(yr).slice(2)}`;
+            const isActive = jumpedToMonth === ym;
+            return (
+              <button
+                key={ym}
+                onClick={() => { if (!isActive) jumpToMonth(ym); }}
+                disabled={jumpLoading}
+                aria-pressed={isActive}
+                title={date.toLocaleDateString(locale, { month: "long", year: "numeric" })}
+                style={{
+                  flexShrink: 0,
+                  padding: "5px 12px",
+                  borderRadius: 99,
+                  border: `1px solid ${isActive ? ACCENT + "80" : BORDER}`,
+                  background: isActive ? `${ACCENT}20` : "transparent",
+                  color: isActive ? ACCENT : "var(--text-muted)",
+                  fontSize: 12,
+                  fontWeight: isActive ? 700 : 500,
+                  cursor: jumpLoading ? "wait" : isActive ? "default" : "pointer",
+                  letterSpacing: "0.02em",
+                  whiteSpace: "nowrap",
+                  transition: "background 0.12s, color 0.12s, border-color 0.12s",
+                }}
+              >
+                {label}
+              </button>
+            );
+          })}
+          {/* Loading spinner inside the strip */}
+          {jumpLoading && (
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={ACCENT} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ flexShrink: 0, animation: "glevSpin 0.8s linear infinite" }}>
+              <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
+            </svg>
+          )}
+        </div>
+      )}
 
       {/* CARD STACK */}
       {filtered.length === 0 ? (
@@ -1600,51 +1873,22 @@ export default function EntriesPage() {
         </div>
       )}
 
-      {/* LOAD MORE — appears when the server likely has older meals
-          within the 365-day window that weren't part of the initial
-          30-day fetch. Hidden once a page returns empty (hasMoreMeals
-          flips to false). */}
-      {!loading && hasMoreMeals && (
-        <div style={{ display:"flex", justifyContent:"center", marginTop:12, marginBottom:4 }}>
-          <button
-            onClick={loadMoreMeals}
-            disabled={loadingMore}
-            style={{
-              padding:"10px 28px",
-              borderRadius:99,
-              border:`1px solid ${BORDER}`,
-              background:"transparent",
-              color: loadingMore ? "var(--text-ghost)" : "var(--text-muted)",
-              fontSize:14,
-              fontWeight:600,
-              cursor: loadingMore ? "wait" : "pointer",
-              display:"inline-flex",
-              alignItems:"center",
-              gap:8,
-              letterSpacing:"0.02em",
-              transition:"color 0.15s, border-color 0.15s",
-            }}
-          >
-            {loadingMore ? (
-              <>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ animation:"glevSpin 0.8s linear infinite" }}>
-                  <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
-                </svg>
-                <style>{`@keyframes glevSpin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}`}</style>
-                {tHistory("load_more_loading")}
-              </>
-            ) : (
-              <>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                  <polyline points="6 9 12 15 18 9"/>
-                </svg>
-                {tHistory("load_more_btn")}
-              </>
-            )}
-          </button>
+      {/* Sentinel — IntersectionObserver triggers automatic pagination when
+          this div scrolls into view. Visible while meals OR non-meal
+          types (insulin, exercise, etc.) may still have older data. */}
+      {!loading && (hasMoreMeals || hasMoreNonMeals) && (
+        <div ref={sentinelRef} style={{ height:1 }} aria-hidden="true" />
+      )}
+      {/* Spinner shown while the next page is being fetched. */}
+      {loadingMore && (
+        <div style={{ display:"flex", justifyContent:"center", alignItems:"center", padding:"14px 0" }} aria-label={tHistory("load_more_loading")}>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--text-ghost)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ animation:"glevSpin 0.8s linear infinite" }}>
+            <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
+          </svg>
+          <style>{`@keyframes glevSpin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}`}</style>
         </div>
       )}
-      {!loading && !hasMoreMeals && meals.length > 0 && (
+      {!loading && !hasMoreMeals && !hasMoreNonMeals && meals.length > 0 && (
         <div style={{ textAlign:"center", color:"var(--text-ghost)", fontSize:12, padding:"12px 0 4px", letterSpacing:"0.02em" }}>
           {tHistory("no_more_entries")}
         </div>

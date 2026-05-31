@@ -131,10 +131,14 @@ export interface SaveMealInput {
  *                       gemischte Mahlzeiten mit dominantem Protein —
  *                       Schwelle von 25g auf 20g gesenkt 2026-05-04 weil
  *                       ein 24g-Whey-Shake intuitiv HIGH_PROTEIN ist)
- *   BALANCED      → otherwise (no dominant macro). The legacy HIGH_FIBER
- *                   bucket has been removed — high-fiber meals now fall
- *                   through to BALANCED (and the lifecycle absorption
- *                   curve handles the slower rise on its own).
+ *   HIGH_FIBER    → fiber >= 7g  AND  fiber/carbs >= 0.20
+ *                   (≥ 20 % Faserquote bei mind. 7g Absolutwert:
+ *                   Linsen, Bohnen, Kichererbsen, Vollkornbrot,
+ *                   faserreiches Gemüse). Klinisch: Ballaststoffe
+ *                   verlangsamen und dämpfen die Glukoseresorption
+ *                   ähnlich wie Fett, aber ohne den Delayed-Rise-Effekt.
+ *                   Spike-Cutoff liegt bei 40 mg/dL (= HIGH_FAT-Niveau).
+ *   BALANCED      → otherwise (no dominant macro).
  *
  * `sugars` is optional so existing call sites (historical seeds, Sheets
  * import) that don't track sugars-of-which keep working — they get the
@@ -163,6 +167,10 @@ export function classifyMeal(
   if (carbs < 5 && fat < 5 && protein > 0) return "HIGH_PROTEIN";
   // (b) Standard-Fall: Protein dominant + nennenswerte Menge.
   if (protein > carbs && protein > fat && protein >= 20) return "HIGH_PROTEIN";
+  // HIGH_FIBER: mind. 7g Ballaststoffe UND mind. 20% der KH-Menge.
+  // Kommt nach Fett/Protein damit Fettdominanz und Proteindominanz
+  // Vorrang behalten — HIGH_FIBER greift nur bei echter Fasermahlzeit.
+  if (carbs > 0 && fiber >= 7 && fiber / carbs >= 0.20) return "HIGH_FIBER";
   return "BALANCED";
 }
 
@@ -656,8 +664,19 @@ export interface FetchMealsOptions {
    * (`fetchMealsForEngine`) passes 90 explicitly. Pass `Infinity` to
    * skip the filter entirely (only used by tests / one-off exports
    * that explicitly opt out).
+   *
+   * When `sinceIso` is also set, the **later** (more restrictive) of the
+   * two cutoffs wins — this lets callers enforce a plan-based limit
+   * without recomputing days.
    */
   sinceDays?: number;
+  /**
+   * Optional ISO-8601 cutoff string (e.g. from `getHistoryCutoffISO()`).
+   * When set, takes precedence over `sinceDays` if it resolves to a
+   * **later** date — i.e. plan limits always win over time-window presets.
+   * Pass `undefined` to fall back to `sinceDays`.
+   */
+  sinceIso?: string;
   /**
    * Hard cap on number of rows. Defaults to
    * {@link FETCH_MEALS_DEFAULT_LIMIT} (50) so an unbounded `SELECT`
@@ -696,9 +715,16 @@ export async function fetchMeals(opts: FetchMealsOptions = {}): Promise<Meal[]> 
   // Cutoff is computed once per call and applied via PostgREST `gte`
   // on `created_at`. Using `Infinity` (or any non-finite value) skips
   // the filter so callers can intentionally pull everything.
-  const cutoffIso = Number.isFinite(sinceDays)
+  const daysCutoff = Number.isFinite(sinceDays)
     ? new Date(Date.now() - sinceDays * 86_400_000).toISOString()
     : null;
+  // Plan-based cutoff (sinceIso) wins if it is more restrictive (later date).
+  const cutoffIso = (() => {
+    if (!opts.sinceIso && !daysCutoff) return null;
+    if (!opts.sinceIso) return daysCutoff;
+    if (!daysCutoff)    return opts.sinceIso;
+    return opts.sinceIso > daysCutoff ? opts.sinceIso : daysCutoff;
+  })();
 
   const applyCutoff = <T extends { gte: (col: string, val: string) => T }>(q: T): T =>
     cutoffIso ? q.gte("created_at", cutoffIso) : q;

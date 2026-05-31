@@ -1036,3 +1036,104 @@ test.describe("Settings → Arzttermine note round-trip", () => {
     expect(capturedProps!.appointmentNote).toBeUndefined();
   });
 });
+
+// -----------------------------------------------------------------------
+// Lock-icon gate test (Task #969)
+// -----------------------------------------------------------------------
+// Why this test exists:
+//   The row-variant lock (UpgradeGate variant="row") in the Appointments
+//   SettingsSection is new and has no automated test coverage. A regression
+//   that removes the lock icon, makes it point to the wrong URL, or
+//   accidentally opens the sheet for gated users would only be caught
+//   visually without this spec.
+//
+// Plan context:
+//   `doctor_appointment_tracker` is a "plus"-tier feature. The e2e test
+//   users (playwright-e2e-{n}@glev.test) are provisioned without any
+//   Stripe subscription, so /api/me/plan returns plan="free". After the
+//   plan fetch resolves, UpgradeGate renders the 🔒 link and the row's
+//   onClick becomes a no-op.
+//
+// What this asserts:
+//   1. The "Termine" / Appointments section is visible on /settings.
+//   2. The Appointments row button is visible inside it.
+//   3. A lock icon <Link href="/pro"> with aria-label "Glev+ erforderlich"
+//      is visible as the rightAdornment once the plan has loaded.
+//   4. Clicking the row itself does NOT open the appointments sheet
+//      (the date input that only renders inside the open sheet must be
+//      absent after the click).
+//   5. Clicking the lock icon navigates to /pro (client-side routing).
+
+test.describe("Settings → Arzttermine row lock-icon (free-plan gate)", () => {
+  let testUser: TestUser;
+
+  test.beforeAll(() => {
+    testUser = loadTestUserByIndex(test.info().workerIndex);
+  });
+
+  test.beforeEach(async ({ context }) => {
+    await context.clearCookies();
+    // No appointments needed for this spec — clear them so the subtitle
+    // of the row doesn't affect any assertion.
+    await resetAppointments(testUser.userId);
+  });
+
+  test.afterAll(async () => {
+    await resetAppointments(testUser.userId);
+  });
+
+  test(
+    "lock icon is visible in the Appointments row; " +
+    "clicking the row is a no-op; " +
+    "clicking the lock navigates to /pro",
+    async ({ page }) => {
+      await loginAsTestUser(page, test.info().workerIndex);
+      await page.goto("/settings");
+
+      // ---- 1. APPOINTMENTS SECTION IS VISIBLE ---------------------------
+      // The section heading is "Termine" (DE) or "Appointments" (EN).
+      // We match the SettingsSection title text — it is always rendered as
+      // a visible heading regardless of plan.
+      const SECTION_TITLE_RE = /^(Termine|Appointments)$/;
+      await expect(page.getByText(SECTION_TITLE_RE).first()).toBeVisible();
+
+      // ---- 2. APPOINTMENTS ROW BUTTON IS VISIBLE -------------------------
+      // APPTS_ROW_ARIA is the same locale-agnostic regex used in the other
+      // describe blocks above: "Open Doctor appointments | Arzttermine öffnen" etc.
+      const apptsRow = page.getByRole("button", { name: APPTS_ROW_ARIA });
+      await expect(apptsRow).toBeVisible();
+
+      // ---- 3. LOCK ICON LINK IS VISIBLE ----------------------------------
+      // UpgradeGate variant="row" renders:
+      //   <Link href="/pro" aria-label="Glev+ erforderlich">🔒</Link>
+      // The aria-label is built from requiredPlanLabel("plus") = "Glev+".
+      // We wait for this element to become visible — this implicitly waits
+      // for the /api/me/plan fetch to complete and the gate to re-render
+      // from its fail-open (loading=true → no gate) state to the locked
+      // state (loading=false, canAccess=false → gate shown).
+      const lockLink = page.getByRole("link", { name: "Glev+ erforderlich" });
+      await expect(lockLink).toBeVisible({ timeout: 15_000 });
+      await expect(lockLink).toHaveAttribute("href", "/pro");
+
+      // ---- 4. CLICKING THE ROW DOES NOT OPEN A SHEET --------------------
+      // The SettingsRow onClick is `() => {}` when the user lacks access.
+      // The appointment sheet body contains an `input[type="date"]` (the
+      // add-form's date field) — it only renders when the sheet is open.
+      // After a no-op click, no date input should appear.
+      await apptsRow.click();
+      // Short wait to give any potential sheet animation time to complete.
+      await page.waitForTimeout(500);
+      await expect(page.locator('input[type="date"]')).toHaveCount(0);
+
+      // ---- 5. CLICKING THE LOCK ICON NAVIGATES TO /PRO ------------------
+      // Navigate back to /settings first (the row click above stayed on the
+      // same page, but the sheet might have changed focus — reload is clean).
+      await page.goto("/settings");
+      // Wait for the lock icon to be visible again after the re-navigation.
+      await expect(lockLink).toBeVisible({ timeout: 15_000 });
+      // Click the lock link and assert the URL changes to /pro.
+      await lockLink.click();
+      await page.waitForURL(/\/pro/, { timeout: 10_000 });
+    },
+  );
+});

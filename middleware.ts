@@ -112,6 +112,12 @@ export function middleware(req: NextRequest) {
     return NextResponse.next({ request: { headers: requestHeaders } });
   }
 
+  // Redirect legacy /admin/* to /glev-ops/* so bookmarks don't 404.
+  if (pathname === "/admin" || pathname.startsWith("/admin/")) {
+    const rest = pathname.slice("/admin".length) || "/";
+    return NextResponse.redirect(new URL("/glev-ops" + rest, req.url));
+  }
+
   // `/` is the public marketing homepage — let it render for everyone.
   if (PROTECTED.some(p => pathname === p || pathname.startsWith(p + "/")) && !isAuthed) {
     const res = NextResponse.redirect(new URL("/login", req.url));

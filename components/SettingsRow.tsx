@@ -6,7 +6,7 @@ const BORDER = "var(--border)";
 const SURFACE = "var(--surface)";
 
 interface SettingsSectionProps {
-  title: string;
+  title?: string;
   children: ReactNode;
 }
 
@@ -26,18 +26,20 @@ export function SettingsSection({ title, children }: SettingsSectionProps) {
   // edge instead of looking visually pushed in.
   return (
     <section style={{ marginBottom: 16 }}>
-      <h2
-        style={{
-          fontSize: 13,
-          fontWeight: 600,
-          color: "var(--text-faint)",
-          letterSpacing: "0.08em",
-          textTransform: "uppercase",
-          margin: "0 0 8px 0",
-        }}
-      >
-        {title}
-      </h2>
+      {title && (
+        <h2
+          style={{
+            fontSize: 13,
+            fontWeight: 600,
+            color: "var(--text-faint)",
+            letterSpacing: "0.08em",
+            textTransform: "uppercase",
+            margin: "0 0 8px 0",
+          }}
+        >
+          {title}
+        </h2>
+      )}
       <div
         style={{
           background: SURFACE,

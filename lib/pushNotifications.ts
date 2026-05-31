@@ -31,6 +31,11 @@
 type PushModule = typeof import("@capacitor/push-notifications");
 
 let initStarted = false;
+
+/** Resets the init guard so initPushNotifications() can be called again. */
+export function resetPushInit(): void {
+  initStarted = false;
+}
 let isNativeCache: boolean | undefined;
 
 function isBrowser(): boolean {
@@ -130,33 +135,68 @@ export async function initPushNotifications(): Promise<void> {
 
   const { PushNotifications } = mod;
 
+  function writeDebug(key: string, value: string): void {
+    try { window.localStorage.setItem(key, value); } catch { /* non-fatal */ }
+  }
+
   try {
+    writeDebug("glev_push_step", "checkPermissions");
     let perm = await PushNotifications.checkPermissions();
+    writeDebug("glev_push_perm", perm.receive);
+
     if (perm.receive === "prompt" || perm.receive === "prompt-with-rationale") {
+      writeDebug("glev_push_step", "requestPermissions");
       perm = await PushNotifications.requestPermissions();
+      writeDebug("glev_push_perm", perm.receive);
     }
+
     if (perm.receive !== "granted") {
       // User declined — nothing more to do. They can re-enable in OS
       // settings; the next app launch will re-check and re-register.
+      writeDebug("glev_push_error", `Permission denied: ${perm.receive}. Go to iOS Settings → Glev → Notifications and enable them manually.`);
+      writeDebug("glev_push_step", "denied");
       return;
     }
 
+    writeDebug("glev_push_step", "addListeners");
     // Listeners must be attached BEFORE register() so the very first
     // `registration` event (delivered synchronously on some Android
     // OEMs) is not lost.
     const platform = detectPlatform();
     await PushNotifications.addListener("registration", (token) => {
-      if (token?.value) persistToken(token.value, platform);
+      if (token?.value) {
+        writeDebug("glev_push_step", "registered");
+        persistToken(token.value, platform);
+      }
     });
 
-    await PushNotifications.addListener("registrationError", () => {
-      // Most common cause on Android: missing / malformed
-      // google-services.json. Swallow silently — the WebView app keeps
-      // working without push.
+    await PushNotifications.addListener("registrationError", (err) => {
+      // Most common causes:
+      //   iOS: Push Notifications capability missing from App ID / provisioning profile
+      //        OR aps-environment entitlement missing (requires new build)
+      //   Android: missing / malformed google-services.json
+      try {
+        const msg = typeof err === "object" && err !== null
+          ? JSON.stringify(err)
+          : String(err);
+        writeDebug("glev_push_error", msg);
+        writeDebug("glev_push_step", "registrationError");
+        console.error("[glev] push registrationError:", msg);
+      } catch {
+        /* non-fatal */
+      }
     });
 
+    writeDebug("glev_push_step", "register() called");
     await PushNotifications.register();
-  } catch {
-    /* Plugin not available on this platform — non-fatal. */
+  } catch (e) {
+    // This catches plugin-load failures or unexpected throws.
+    // Write to localStorage so the debug section can show it.
+    try {
+      const msg = e instanceof Error ? e.message : String(e);
+      writeDebug("glev_push_error", `catch: ${msg}`);
+      writeDebug("glev_push_step", "caught");
+      console.error("[glev] push init caught:", msg);
+    } catch { /* non-fatal */ }
   }
 }

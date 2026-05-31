@@ -49,9 +49,10 @@ export const HYPO_THRESHOLD = 70;
 export const SPIKE_CUTOFF_FAST_CARBS   = 70;
 export const SPIKE_CUTOFF_HIGH_FAT     = 40;
 export const SPIKE_CUTOFF_HIGH_PROTEIN = 50;
+export const SPIKE_CUTOFF_HIGH_FIBER   = 40;
 export const SPIKE_CUTOFF_BALANCED     = 55;
 
-export type Classification = "FAST_CARBS" | "HIGH_PROTEIN" | "HIGH_FAT" | "BALANCED" | null | undefined;
+export type Classification = "FAST_CARBS" | "HIGH_PROTEIN" | "HIGH_FAT" | "HIGH_FIBER" | "BALANCED" | null | undefined;
 
 export interface EvaluateEntryInput {
   carbs: number;
@@ -131,6 +132,7 @@ function classKey(cls: Classification): string {
     case "FAST_CARBS":   return "engine_class_fast_carbs";
     case "HIGH_PROTEIN": return "engine_class_high_protein";
     case "HIGH_FAT":     return "engine_class_high_fat";
+    case "HIGH_FIBER":   return "engine_class_high_fiber";
     default:             return "engine_class_balanced";
   }
 }
@@ -207,6 +209,7 @@ function classReasoning(cls: Classification): string {
   if (cls === "FAST_CARBS")   return "fast-carb meals";
   if (cls === "HIGH_FAT")     return "high-fat meals";
   if (cls === "HIGH_PROTEIN") return "high-protein meals";
+  if (cls === "HIGH_FIBER")   return "high-fiber meals";
   return "balanced meals";
 }
 
@@ -369,6 +372,7 @@ export function evaluateEntry(input: EvaluateEntryInput): EvaluateEntryResult {
     cls === "FAST_CARBS"   ? SPIKE_CUTOFF_FAST_CARBS   :
     cls === "HIGH_FAT"     ? SPIKE_CUTOFF_HIGH_FAT      :
     cls === "HIGH_PROTEIN" ? SPIKE_CUTOFF_HIGH_PROTEIN  :
+    cls === "HIGH_FIBER"   ? SPIKE_CUTOFF_HIGH_FIBER    :
     SPIKE_CUTOFF_BALANCED;
 
   // Curve-aware + sparse-hypo decisions. A meal must NEVER be labelled

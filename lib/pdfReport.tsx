@@ -43,7 +43,7 @@ import type { Meal } from "@/lib/meals";
 import type { InsulinLog } from "@/lib/insulin";
 import type { ExerciseLog } from "@/lib/exercise";
 import type { FingerstickReading } from "@/lib/fingerstick";
-import { formatCarbs, formatICR, gToUnit, type CarbUnit } from "@/lib/carbUnits";
+import { formatCarbs, formatICR, gToUnit, icrToUnit, type CarbUnit } from "@/lib/carbUnits";
 import { EVAL_COLORS, EVAL_LABELS } from "@/lib/mealTypes";
 
 /* ──────────────────────────────────────────────────────────────────

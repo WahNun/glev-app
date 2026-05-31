@@ -42,6 +42,7 @@ import { authenticate, errResponse } from "../../_helpers";
 import { adminClient } from "@/lib/cgm/supabase";
 import { getSyncStatus } from "@/lib/cgm/appleHealth";
 import { fillNearbyChecks } from "@/lib/mealTimelineChecks";
+import { checkPlanAccess } from "@/lib/server/planAccess";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -147,6 +148,10 @@ export async function POST(req: NextRequest) {
       { error: authErr || "unauthorized" },
       { status: 401 }
     );
+  }
+
+  if (!(await checkPlanAccess(user.id, "apple_health_sync"))) {
+    return NextResponse.json({ error: "plan_required", plan: "smart" }, { status: 403 });
   }
 
   let body: { samples?: unknown; source?: unknown };

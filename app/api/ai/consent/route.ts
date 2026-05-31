@@ -22,6 +22,7 @@ import { authedClient } from "@/app/api/insulin/_helpers";
  * optimistically flip its local consent state without a separate read.
  */
 const CONSENT_VERSION = "v1.0";
+const AI_OWNER_EMAIL = "lucas@wahnon-connect.com";
 
 type Scope = "glucose" | "iob" | "history";
 const SCOPE_COLUMN: Record<Scope, "ai_consent_glucose_at" | "ai_consent_iob_at" | "ai_consent_history_at"> = {
@@ -36,6 +37,10 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "not authenticated" }, { status: 401 });
   }
   const { sb, user } = auth;
+
+  if (user.email !== AI_OWNER_EMAIL) {
+    return NextResponse.json({ error: "not available" }, { status: 403 });
+  }
 
   // Optional sub-scope toggle. Body parse is best-effort: a missing or
   // malformed body falls back to the legacy "grant master consent"

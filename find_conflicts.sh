@@ -1,2 +1,2 @@
 #!/bin/bash
-grep -nE "<<<<<<<|=======|>>>>>>>" DECISIONS.md
+grep -nE "^<<<<<<<|^=======|^>>>>>>>" DECISIONS.md

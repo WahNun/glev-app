@@ -33,6 +33,7 @@ import {
   type ChecksByMeal,
 } from "@/lib/mealTimelineChecks";
 import { scheduleCheckReminder } from "@/lib/mealCheckReminders";
+import { usePlan } from "@/hooks/usePlan";
 import MealNodeCluster, {
   CLUSTER_OVERLAP_PX,
   CLUSTER_STAGGER_Y_PX,
@@ -110,11 +111,28 @@ export default function CurrentDayGlucoseCard({ showMealNodes = false }: { showM
     window.localStorage.getItem("glev_test_show_meal_nodes") === "1";
   const effectiveShowMealNodes = showMealNodes || forceMealNodes;
 
+  const { canAccess } = usePlan();
+  const hasCgmAccess = canAccess("cgm_sync");
+
   const [s, setS] = useState<State>({ kind: "loading" });
   const [flipped, setFlipped] = useState(false);
 
   const loadHistory = useCallback(async (signal?: { cancelled: boolean }) => {
     try {
+      // Free plan (or simulator set to Free): skip CGM fetch entirely —
+      // show fingersticks only, just like a real Free user would see.
+      if (!hasCgmAccess) {
+        const fsResult = await fetchRecentFingersticks(24).catch(() => [] as FingerstickReading[]);
+        const now = Date.now();
+        const twentyFourHoursAgo = now - 24 * 60 * 60 * 1000;
+        const fingersticks = fsResult
+          .map((r) => ({ t: new Date(r.measured_at).getTime(), v: Number(r.value_mg_dl) }))
+          .filter((r) => Number.isFinite(r.t) && Number.isFinite(r.v) && r.t >= twentyFourHoursAgo && r.t <= now)
+          .sort((a, b) => a.t - b.t);
+        if (!signal?.cancelled) setS({ kind: "ok", cgm: [], fingersticks, cgmCurrent: null });
+        return;
+      }
+
       // Fetch CGM history and recent fingersticks in parallel. FS failure
       // is non-fatal — we degrade to CGM-only rather than block the card.
       const [data, fsResult] = await Promise.all([
@@ -172,7 +190,7 @@ export default function CurrentDayGlucoseCard({ showMealNodes = false }: { showM
     } catch (e) {
       if (!signal?.cancelled) setS({ kind: "error", msg: e instanceof Error ? e.message : "fetch failed" });
     }
-  }, []);
+  }, [hasCgmAccess]);
 
   useEffect(() => {
     const signal = { cancelled: false };

@@ -2,6 +2,7 @@
 
 import { Suspense, useEffect, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
+import { supabase } from "@/lib/supabase";
 import AppMockupPhone from "@/components/AppMockupPhone";
 import LandingFooter from "@/components/landing/Footer";
 import CGMCompatibility from "@/components/landing/CGMCompatibility";
@@ -33,11 +34,19 @@ function PreviewBetaCTA({ block = true }: { block?: boolean }) {
       (window as unknown as { fbq: (...args: unknown[]) => void }).fbq("track", "InitiateCheckout");
     }
 
+    let email: string | undefined;
+    try {
+      if (supabase) {
+        const { data } = await supabase.auth.getUser();
+        if (data.user?.email) email = data.user.email;
+      }
+    } catch { /* best-effort */ }
+
     try {
       const res = await fetch("/api/checkout/beta", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ locale }),
+        body: JSON.stringify({ locale, ...(email ? { email } : {}) }),
       });
       const data = (await res.json().catch(() => ({}))) as { url?: string; error?: string };
       if (!res.ok || !data.url) {

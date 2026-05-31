@@ -260,6 +260,8 @@ async function loadUserMemoryBlock(
   return ["Was du über diesen User weißt:", ...lines].join("\n");
 }
 
+const AI_OWNER_EMAIL = "lucas@wahnon-connect.com";
+
 export async function POST(req: NextRequest) {
   // 1. Auth
   const auth = await authedClient(req);
@@ -267,6 +269,11 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "not authenticated" }, { status: 401 });
   }
   const { user, sb } = auth;
+
+  // 1a. Glev AI is owner-only while under development
+  if (user.email !== AI_OWNER_EMAIL) {
+    return NextResponse.json({ error: "not available" }, { status: 403 });
+  }
 
   // 2. Consent — master flag + granular sub-scopes (Task #664). The
   // sub-scope timestamps gate which fields end up in the contextPreamble

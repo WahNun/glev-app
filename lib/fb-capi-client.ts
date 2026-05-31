@@ -12,7 +12,7 @@
 declare global {
   interface Window {
     fbq?: (...args: unknown[]) => void;
-    __consent?: { marketing?: boolean };
+    __consent?: { marketing?: boolean; analytics?: boolean };
   }
 }
 
