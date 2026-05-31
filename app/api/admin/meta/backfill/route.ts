@@ -72,6 +72,17 @@ export async function POST(req: Request) {
       return Response.json({ error: "unauthorized" }, { status: 401 });
     }
 
+    // Manueller Modus: { email, name } im Body → direkt provisionieren ohne Meta API
+    const body = await req.json().catch(() => null);
+    if (body?.email) {
+      const result = await provisionMetaLead(
+        String(body.email).trim().toLowerCase(),
+        body.name ? String(body.name).trim() : null,
+        "de",
+      );
+      return Response.json({ ok: true, mode: "manual", email: body.email, provision: result });
+    }
+
     const PAGE_ACCESS_TOKEN = process.env.META_PAGE_ACCESS_TOKEN ?? "";
     const PAGE_ID = (process.env.META_PAGE_ID ?? "").split(",")[0].trim();
     const GRAPH = `https://graph.facebook.com/${process.env.GRAPH_API_VERSION ?? "v23.0"}`;
