@@ -34,6 +34,7 @@ const ITEMS: ReadonlyArray<{ href: string; label: string }> = [
   { href: "/admin/outbox", label: "Mail-Outbox" },
   { href: "/admin/praxis", label: "Praxen" },
   { href: "/admin/settings", label: "Einstellungen" },
+  { href: "/admin/dev-cockpit", label: "Dev Cockpit" },
 ];
 
 export default function AdminNav() {
