@@ -70,7 +70,7 @@ function buildUrl(q: string, page: number): string {
   if (q) params.set("q", q);
   if (page > 1) params.set("page", String(page));
   const qs = params.toString();
-  return qs ? `/admin/buyers?${qs}` : "/glev-ops/buyers";
+  return qs ? `/glev-ops/buyers?${qs}` : "/glev-ops/buyers";
 }
 
 export default function BuyersTables({ beta, pro, betaTotal, proTotal, pageLimit, page, q }: Props) {

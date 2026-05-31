@@ -1,1 +1,2 @@
 - [Push-Notifications iOS Debug](push-notifications-ios.md) — register() fired, permission granted, aber kein Token — Ursache & nächste Schritte dokumentiert
+- [Admin Panel Paths](admin-paths.md) — /admin/* existiert nicht mehr, alles unter /glev-ops/* — falsche Pfade brechen Navigation und revalidatePath

@@ -158,7 +158,7 @@ function buildHref(current: DripFilters, override: Partial<DripFilters>): string
   if (merged.tier !== "all") params.set("tier", merged.tier);
   if (merged.type !== "all") params.set("type", merged.type);
   const qs = params.toString();
-  return qs ? `/admin/drip?${qs}` : "/glev-ops/drip";
+  return qs ? `/glev-ops/drip?${qs}` : "/glev-ops/drip";
 }
 
 function StatusBadge({ status }: { status: DripStatus }) {

@@ -112,7 +112,7 @@ export function dripSpikeAlertHtml(
           <!-- CTA -->
           <tr>
             <td style="padding:0 28px 24px;">
-              <a href="${APP_URL}/admin/drip-stats" style="display:inline-block;background:#09090b;color:#fff;text-decoration:none;font-size:13px;font-weight:600;padding:10px 20px;border-radius:8px;">
+              <a href="${APP_URL}/glev-ops/drip-stats" style="display:inline-block;background:#09090b;color:#fff;text-decoration:none;font-size:13px;font-weight:600;padding:10px 20px;border-radius:8px;">
                 Drip-Stats öffnen →
               </a>
             </td>

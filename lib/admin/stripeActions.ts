@@ -53,8 +53,8 @@ async function requireAdminToken(): Promise<string> {
 }
 
 function revalidateAdminPaths(): void {
-  revalidatePath("/admin/buyers");
-  revalidatePath("/admin/users");
+  revalidatePath("/glev-ops/buyers");
+  revalidatePath("/glev-ops/users");
 }
 
 // ---------------------------------------------------------------------------
