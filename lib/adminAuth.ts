@@ -106,7 +106,7 @@ export async function verifyAdminCredentials(
 
   if (!expectedPassword || expectedPassword.length < 16) return false;
   if (!expectedEmail)  return false;
-  if (!totpSecret)     return false;
+  // ADMIN_TOTP_SECRET check skipped while 2FA is temporarily disabled
 
   const emailOk    = safeEqual(email.toLowerCase().trim(), expectedEmail);
   const passwordOk = safeEqual(password, expectedPassword);
