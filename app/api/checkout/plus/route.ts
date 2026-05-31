@@ -49,12 +49,9 @@ export async function POST(req: NextRequest) {
 
     const appUrl = process.env.NEXT_PUBLIC_APP_URL.replace(/\/$/, "");
 
-    const nowMs = Date.now();
-    const trialEndMs = PLUS_TRIAL_END * 1000;
-    const trialIsViable = trialEndMs - nowMs >= STRIPE_TRIAL_MIN_LEAD_MS;
-
     // Referred users get 50% off their first month instead of the free trial.
     let isReferred = false;
+    let personalTrialEndSec: number | null = null;
     try {
       const supabaseUrl  = process.env.SUPABASE_URL  || process.env.NEXT_PUBLIC_SUPABASE_URL  || "";
       const supabaseAnon = process.env.SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
@@ -69,16 +66,30 @@ export async function POST(req: NextRequest) {
           const sbAdmin = getSupabaseAdmin();
           const { data: profile } = await sbAdmin
             .from("profiles")
-            .select("signup_source")
+            .select("signup_source, trial_end_at")
             .eq("user_id", user.id)
             .maybeSingle();
-          isReferred = (profile as { signup_source?: string | null } | null)
+          isReferred = (profile as { signup_source?: string | null; trial_end_at?: string | null } | null)
             ?.signup_source?.startsWith("ref:") ?? false;
+          const rawTrialEnd = (profile as { trial_end_at?: string | null } | null)?.trial_end_at;
+          if (rawTrialEnd) {
+            const ms = new Date(rawTrialEnd).getTime();
+            if (Number.isFinite(ms) && ms > Date.now()) {
+              personalTrialEndSec = Math.floor(ms / 1000);
+            }
+          }
         }
       }
     } catch {
-      // Non-fatal — no coupon applied
+      // Non-fatal — no coupon applied, no personal trial end
     }
+
+    // Use the later of the user's personal trial end and the fixed launch date.
+    const effectiveTrialEnd = personalTrialEndSec
+      ? Math.max(personalTrialEndSec, PLUS_TRIAL_END)
+      : PLUS_TRIAL_END;
+    const effectiveTrialIsViable =
+      effectiveTrialEnd * 1000 - Date.now() >= STRIPE_TRIAL_MIN_LEAD_MS;
 
     const sessionParams: Stripe.Checkout.SessionCreateParams = {
       mode: "subscription",
@@ -86,7 +97,7 @@ export async function POST(req: NextRequest) {
       payment_method_collection: "always",
       ...(isReferred ? { discounts: [{ coupon: "glev_referral_50" }] } : {}),
       subscription_data: {
-        ...(!isReferred && trialIsViable ? { trial_end: PLUS_TRIAL_END } : {}),
+        ...(!isReferred && effectiveTrialIsViable ? { trial_end: effectiveTrialEnd } : {}),
         metadata: { feature: "plus_subscription", plan_name: "Glev+", plan_id: "glev-plus-monthly" },
       },
       metadata: { feature: "plus_subscription", plan_name: "Glev+", plan_id: "glev-plus-monthly" },

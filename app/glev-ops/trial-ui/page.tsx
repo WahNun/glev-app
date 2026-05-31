@@ -226,7 +226,7 @@ export default async function TrialUiPreviewPage() {
                   <span style={{ fontSize: 16 }}>⏳</span>
                   <span style={{ flex: 1, color: TEXT }}>
                     <strong style={{ color: ACCENT }}>{label}</strong> —{" "}
-                    danach sind die meisten Funktionen gesperrt.
+                    Jetzt upgraden und Glev nach dem Trial voll weiternutzen.
                   </span>
                   <span
                     style={{

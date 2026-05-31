@@ -58,6 +58,7 @@ export async function POST(req: NextRequest) {
 
     // Referred users get 50% off their first month instead of the free trial.
     let isReferred = false;
+    let personalTrialEndSec: number | null = null;
     try {
       const supabaseUrl  = process.env.SUPABASE_URL  || process.env.NEXT_PUBLIC_SUPABASE_URL  || '';
       const supabaseAnon = process.env.SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
@@ -72,16 +73,32 @@ export async function POST(req: NextRequest) {
           const sbAdmin = getSupabaseAdmin();
           const { data: profile } = await sbAdmin
             .from('profiles')
-            .select('signup_source')
+            .select('signup_source, trial_end_at')
             .eq('user_id', user.id)
             .maybeSingle();
-          isReferred = (profile as { signup_source?: string | null } | null)
+          isReferred = (profile as { signup_source?: string | null; trial_end_at?: string | null } | null)
             ?.signup_source?.startsWith('ref:') ?? false;
+          const rawTrialEnd = (profile as { trial_end_at?: string | null } | null)?.trial_end_at;
+          if (rawTrialEnd) {
+            const ms = new Date(rawTrialEnd).getTime();
+            if (Number.isFinite(ms) && ms > Date.now()) {
+              personalTrialEndSec = Math.floor(ms / 1000);
+            }
+          }
         }
       }
     } catch {
-      // Non-fatal — no coupon applied
+      // Non-fatal — no coupon applied, no personal trial end
     }
+
+    // Use the later of the user's personal trial end and the billing anchor,
+    // so upgrading early still lets the user enjoy the full 7-day trial.
+    const STRIPE_TRIAL_MIN_LEAD_MS = 48 * 60 * 60 * 1000 + 60 * 60 * 1000;
+    const effectiveTrialEnd = personalTrialEndSec
+      ? Math.max(personalTrialEndSec, trialEnd)
+      : trialEnd;
+    const effectiveTrialIsViable =
+      effectiveTrialEnd * 1000 - Date.now() >= STRIPE_TRIAL_MIN_LEAD_MS;
 
     const sessionParams: Stripe.Checkout.SessionCreateParams = {
       mode: 'subscription',
@@ -91,15 +108,13 @@ export async function POST(req: NextRequest) {
           quantity: 1,
         },
       ],
-      // Karte heute hinterlegen, erste Abbuchung am Launch-Tag.
+      // Karte heute hinterlegen, erste Abbuchung am Trial-Ende.
       payment_method_collection: 'always',
       ...(isReferred ? { discounts: [{ coupon: 'glev_referral_50' }] } : {}),
       subscription_data: {
-        // Trial bis zum Launch-Datum (z.B. 1. Juli 2026 00:00 UTC). Karte
-        // wird heute hinterlegt, erste Abbuchung am Trial-Ende. Stripe
-        // verlangt mind. 48h Vorlauf — STRIPE_BILLING_ANCHOR muss in der
-        // Zukunft liegen.
-        trial_end: trialEnd,
+        // Trial bis zum späteren von: persönlichem Trial-Ende oder Billing-Anchor.
+        // Stripe verlangt mind. 48h Vorlauf — falls nicht erfüllt, kein Trial.
+        ...(effectiveTrialIsViable ? { trial_end: effectiveTrialEnd } : {}),
         metadata: { feature: 'beta_subscription' },
       },
       metadata: { feature: 'beta_subscription' },

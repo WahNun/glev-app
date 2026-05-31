@@ -53,7 +53,7 @@ export default function TrialCountdownBanner() {
       <span style={{ fontSize: 16 }}>⏳</span>
       <span style={{ flex: 1, color: "var(--text)" }}>
         <strong style={{ color: "#4F6EF7" }}>{label}</strong> —{" "}
-        danach sind die meisten Funktionen gesperrt.
+        Jetzt upgraden und Glev nach dem Trial voll weiternutzen.
       </span>
       <a
         href={UPGRADE_URL}

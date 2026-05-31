@@ -76,13 +76,9 @@ export async function POST(req: NextRequest) {
 
     const appUrl = process.env.NEXT_PUBLIC_APP_URL.replace(/\/$/, "");
 
-    // Trial nur setzen wenn Launch-Datum noch genug Vorlauf hat (Stripe-Constraint).
-    const nowMs = Date.now();
-    const trialEndMs = PRO_TRIAL_END * 1000;
-    const trialIsViable = trialEndMs - nowMs >= STRIPE_TRIAL_MIN_LEAD_MS;
-
     // Referred users get 50% off their first month instead of the free trial.
     let isReferred = false;
+    let personalTrialEndSec: number | null = null;
     try {
       const supabaseUrl  = process.env.SUPABASE_URL  || process.env.NEXT_PUBLIC_SUPABASE_URL  || "";
       const supabaseAnon = process.env.SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
@@ -97,16 +93,32 @@ export async function POST(req: NextRequest) {
           const sbAdmin = getSupabaseAdmin();
           const { data: profile } = await sbAdmin
             .from("profiles")
-            .select("signup_source")
+            .select("signup_source, trial_end_at")
             .eq("user_id", user.id)
             .maybeSingle();
-          isReferred = (profile as { signup_source?: string | null } | null)
+          isReferred = (profile as { signup_source?: string | null; trial_end_at?: string | null } | null)
             ?.signup_source?.startsWith("ref:") ?? false;
+          const rawTrialEnd = (profile as { trial_end_at?: string | null } | null)?.trial_end_at;
+          if (rawTrialEnd) {
+            const ms = new Date(rawTrialEnd).getTime();
+            if (Number.isFinite(ms) && ms > Date.now()) {
+              personalTrialEndSec = Math.floor(ms / 1000);
+            }
+          }
         }
       }
     } catch {
-      // Non-fatal — no coupon applied
+      // Non-fatal — no coupon applied, no personal trial end
     }
+
+    // Use the later of the user's personal trial end and the fixed launch date,
+    // so upgrading on day 2 still lets the user enjoy the full 7-day trial.
+    const effectiveTrialEnd = personalTrialEndSec
+      ? Math.max(personalTrialEndSec, PRO_TRIAL_END)
+      : PRO_TRIAL_END;
+    const effectiveTrialEndMs = effectiveTrialEnd * 1000;
+    const effectiveTrialIsViable =
+      effectiveTrialEndMs - Date.now() >= STRIPE_TRIAL_MIN_LEAD_MS;
 
     const sessionParams: Stripe.Checkout.SessionCreateParams = {
       mode: "subscription",
@@ -116,14 +128,14 @@ export async function POST(req: NextRequest) {
           quantity: 1,
         },
       ],
-      // "Karte heute hinterlegen, keine Buchung bis Launch" — payment_method
+      // "Karte heute hinterlegen, keine Buchung bis Trial-Ende" — payment_method
       // wird IMMER eingesammelt (Default bei Trials wäre "if_required").
       payment_method_collection: "always",
       // Referred users skip the trial — the 50% coupon is the benefit instead.
       ...(isReferred ? { discounts: [{ coupon: "glev_referral_50" }] } : {}),
       subscription_data: {
-        // Trial only when launch is far enough out AND user is not referred.
-        ...(!isReferred && trialIsViable ? { trial_end: PRO_TRIAL_END } : {}),
+        // Trial only when viable AND user is not referred.
+        ...(!isReferred && effectiveTrialIsViable ? { trial_end: effectiveTrialEnd } : {}),
         // Stamp the subscription so the webhook + downstream tooling can
         // tell apart Pro from Beta even without looking at the price id.
         metadata: { feature: "pro_subscription", plan_name: "Glev Pro", plan_id: "glev-pro-monthly" },
