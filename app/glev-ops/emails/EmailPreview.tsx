@@ -220,7 +220,7 @@ function buildHref(
   if (name) sp.set("name", name);
   if (email) sp.set("email", email);
   sp.set("lang", locale);
-  return `/admin/emails?${sp.toString()}`;
+  return `/glev-ops/emails?${sp.toString()}`;
 }
 
 const langBtnStyle: React.CSSProperties = {
