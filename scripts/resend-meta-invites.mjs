@@ -19,9 +19,10 @@ if (!SECRET) {
 
 // ── Leads hier eintragen ──────────────────────────────────────────────────────
 const LEADS = [
-  { email: "mg1963@me.com",             name: "Marco",  locale: "de" },
-  { email: "thohempel@googlemail.com",  name: "Thomas", locale: "de" },
-  { email: "georgwiese9@gmail.com",     name: "Georg",  locale: "de" },
+  // Marco, Thomas, Georg haben bereits heute eine gebrandete Email bekommen.
+  { email: "susannegoll19691@web.de",   name: "Susanne", locale: "de" },
+  { email: "tsonioivanov654@gmail.com", name: "Tsonuy",  locale: "de" },
+  { email: "hcmohr@mac.com",            name: "H_C_M",   locale: "de" },
 ];
 // ─────────────────────────────────────────────────────────────────────────────
 

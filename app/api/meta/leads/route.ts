@@ -184,7 +184,7 @@ async function processChange(value: any, pageId: string) {
   // Test-Leads (Meta-Testformular) nicht provisionieren.
   if (!mapped.is_test && mapped.email) {
     const locale = /^de/i.test(lead.locale ?? "") ? "de" : "de";
-    const result = await provisionMetaLead(mapped.email, mapped.full_name || null, locale);
+    const result = await provisionMetaLead(mapped.email, mapped.full_name || null, locale, mapped.phone || null);
     if (!result.ok) {
       console.error("[meta/leads] provisionMetaLead failed:", result.reason, mapped.email);
     } else {
