@@ -54,8 +54,6 @@ export function metaLeadInviteHtml(
     ? `<strong>Hinweis:</strong> Glev ist ein Dokumentations- und Auswertungstool und ersetzt keine ärztliche Beratung. Therapieentscheidungen triffst du gemeinsam mit deinem Behandlungsteam.`
     : `<strong>Note:</strong> Glev is a documentation and analysis tool and does not replace medical advice. Treatment decisions should be made together with your care team.`;
 
-  void base;
-
   return `<!DOCTYPE html>
 <html lang="${de ? "de" : "en"}">
 <head>
