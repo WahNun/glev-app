@@ -40,6 +40,26 @@ REAL blockers — put a concise question in "questions" and set ready_to_build =
 - the user must choose between several strongly different product directions
 - the task cannot be analyzed at all without external credentials/secrets
 
+⛔ SAFETY OVERRIDE — this takes ABSOLUTE PRECEDENCE over the "default to planning" guidance above. NEVER treat the following as a normal assumption. If the task involves ANY of these, you MUST set ready_to_build = false and put concrete, specific safety questions in "questions" (unless the task ALREADY spells out the exact safety details — criteria, scope, dry-run, backup, batching, audit, authorization):
+- deleting users or accounts
+- deleting database rows / records / entries
+- any irreversible or destructive data change
+- billing- or subscription-based deletion logic
+- changes to auth.users
+- destructive SQL (DELETE, DROP, TRUNCATE, bulk UPDATE)
+- bulk delete / mass update of data
+
+For such a task, "questions" MUST contain the still-open safety questions, e.g. (for user/billing deletion):
+- What exactly counts as "no active payment" / an inactive user?
+- Should a dry run / preview of the affected rows be produced first?
+- Which tables are allowed to be affected?
+- Should a backup/export be created before deletion?
+- Should the action run in batches?
+- Should an audit log be created?
+- Who is allowed to trigger this action?
+
+Do NOT conclude "ready to build" for a destructive task while these are unanswered. The summary should frame it as: needs a security sign-off / exact definition before build.
+
 Respond with a SINGLE JSON object and nothing else, matching exactly this schema:
 {
   "summary": string,            // 2-4 sentences: what is to be built, in your own words
@@ -115,6 +135,55 @@ function normalizePlan(raw: unknown): BuildPlan {
   return { summary, affected_areas, likely_files, assumptions, risks, questions, ready_to_build };
 }
 
+// ── Destructive-task safety net ──────────────────────────────────────────────
+//
+// Belt-and-suspenders on top of the SAFETY OVERRIDE in the system prompt: if
+// the task text clearly describes a destructive data operation, we never let
+// the analysis come back "ready to build" with no questions. This guarantees
+// the block even if the model wavers. Patterns are intentionally strong-signal
+// (delete/drop/truncate/bulk + users/rows/billing/auth) to avoid blocking
+// benign UI tasks like "add a delete button for a single item".
+const DESTRUCTIVE_PATTERNS: RegExp[] = [
+  /\bdelete\s+(all\s+|every\s+)?(users?|accounts?|rows?|records?|entries|customers?|subscriptions?)/i,
+  /\b(lösch|loesch|entfern)\w*\s+(alle\s+|sämtliche\s+|saemtliche\s+)?(nutzer|user|accounts?|konten|kunden|einträge|eintraege|datensätze|datensaetze|zeilen|abos?|subscriptions?)/i,
+  /\bdrop\s+(table|column|database|schema)\b/i,
+  /\btruncate\b/i,
+  /\bdelete\s+from\b/i,
+  /\b(bulk|mass)\s+(delete|deletion|update)\b/i,
+  /\bauth\.users\b/i,
+  /\b(destructive|irreversible|unwiederbringlich|unwiederruflich)\b/i,
+  /\b(subscription|billing|payment|zahlung|abo)\w*\b[^.\n]{0,40}\b(delete|lösch|loesch|remove|entfern|cancel|kündig|kuendig)/i,
+  /\b(delete|lösch|loesch|remove|entfern)\w*\b[^.\n]{0,40}\b(subscription|billing|payment|zahlung|abo|nutzer ohne)/i,
+];
+
+// German fallback safety questions, used only when the model returned a
+// destructive plan with NO questions. Normally the model produces these
+// itself (in the user's language) per the SAFETY OVERRIDE.
+const FALLBACK_SAFETY_QUESTIONS: string[] = [
+  "Was zählt exakt als Lösch-Kriterium (z. B. keine aktive Zahlung / inaktiver Nutzer)?",
+  "Soll zuerst ein Dry Run / Preview der betroffenen Datensätze erstellt werden?",
+  "Welche Tabellen dürfen betroffen sein?",
+  "Soll vor der Löschung ein Backup/Export erstellt werden?",
+  "Soll die Aktion batchweise laufen?",
+  "Soll ein Audit-Log erstellt werden?",
+  "Wer darf diese Aktion auslösen (Berechtigung)?",
+];
+
+function isDestructive(text: string): boolean {
+  return DESTRUCTIVE_PATTERNS.some((re) => re.test(text));
+}
+
+/**
+ * Enforce the destructive-task safety gate. If the task text is destructive,
+ * the plan can never be "ready to build" without open safety questions.
+ */
+function enforceSafetyBlock(plan: BuildPlan, taskText: string): BuildPlan {
+  if (!isDestructive(taskText)) return plan;
+  if (!plan.ready_to_build && plan.questions.length > 0) return plan; // already blocked properly
+  const questions = plan.questions.length ? plan.questions : [...FALLBACK_SAFETY_QUESTIONS];
+  return { ...plan, questions, ready_to_build: false };
+}
+
 function extractText(content: unknown): string {
   if (typeof content === "string") return content;
   // Mistral may return content as an array of chunks.
@@ -168,7 +237,10 @@ export async function runDevCockpitAnalysis(input: {
     parsed = JSON.parse(match[0]);
   }
 
-  return normalizePlan(parsed);
+  const plan = normalizePlan(parsed);
+  // Safety net: destructive tasks must never come back ready-to-build silently.
+  const taskText = [input.title, input.prompt, ...input.queuedNotes].join("\n");
+  return enforceSafetyBlock(plan, taskText);
 }
 
 /**
@@ -209,7 +281,7 @@ export function formatPlanMessage(plan: BuildPlan): string {
     "",
     plan.ready_to_build
       ? "✅ Bereit für Start Build — bitte beantworte ggf. Rückfragen, sonst kann gestartet werden."
-      : "⏳ Ich benötige noch zusätzliche Informationen — bitte beantworte die offenen Fragen und starte dann Re-Analyze.",
+      : "🔒 Benötigt Sicherheitsfreigabe / Definition vor Build — bitte beantworte die offenen Fragen und starte dann Re-Analyze.",
   );
 
   return lines.join("\n");

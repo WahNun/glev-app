@@ -43,6 +43,20 @@ keine DB-Migration). Antwortsprache folgt dem User (DE bei DE, EN bei EN). Build
 Reihenfolge: Summary · Betroffene Bereiche · Vermutete Dateien · Annahmen · Risiken ·
 Offene Fragen (nur falls echter Blocker).
 
+### Nachbesserung (2026-06-02): Destructive/Billing-Safety-Gate
+
+Gegenstück zur Annahmen-Lockerung: **destruktive Tasks müssen immer blocken.**
+Ein **SAFETY OVERRIDE** im System-Prompt (Vorrang vor „default to planning")
+erzwingt `ready_to_build = false` + konkrete Sicherheitsfragen bei: User-/Account-
+Löschung, Löschen von DB-Zeilen/Datensätzen, irreversiblen Datenänderungen,
+Billing-/Subscription-Löschlogik, `auth.users`-Änderungen, destructive SQL
+(DELETE/DROP/TRUNCATE/bulk UPDATE), bulk delete / mass update — solange keine
+expliziten Sicherheitsdetails vorliegen. Zusätzlich ein **serverseitiges
+Sicherheitsnetz** (`isDestructive()` + `enforceSafetyBlock()` in
+`devCockpitAnalysis.ts`): erkennt destruktive Muster im Task-Text und erzwingt das
+Blocken (inkl. Fallback-Pflichtfragen), falls das Modell schwankt. Die „nicht
+bereit"-Message lautet jetzt „🔒 Benötigt Sicherheitsfreigabe / Definition vor Build".
+
 ## 2. Neue Dateien
 
 - `lib/ai/devCockpitAnalysis.ts` — Mistral-Analyse-Engine: System-Prompt, JSON-Parsing/Normalisierung, `runDevCockpitAnalysis()` + `formatPlanMessage()`
