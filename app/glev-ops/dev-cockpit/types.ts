@@ -92,6 +92,22 @@ export interface DevQueueNote {
   updated_at: string;
 }
 
+// ── Build Plan (Phase 3 — Mistral analysis result) ──────────────────────────
+
+/**
+ * Structured output of `analyzeTask()`. Mistral returns exactly this shape as
+ * JSON; it is stored (stringified) in `dev_cockpit_tasks.plan_text` and
+ * rendered as the "Build Plan" card (never shown as raw JSON).
+ */
+export interface BuildPlan {
+  summary: string;
+  affected_areas: string[];
+  likely_files: string[];
+  risks: string[];
+  questions: string[];
+  ready_to_build: boolean;
+}
+
 // ── Sidebar filters ─────────────────────────────────────────────────────────
 
 export type TaskFilter =

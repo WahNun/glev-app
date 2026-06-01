@@ -25,6 +25,8 @@ import {
   addQueueNote,
   discardQueueNote,
   listAttachments,
+  addMessage,
+  analyzeTask,
 } from "./actions";
 import {
   STATUS_LABEL,
@@ -37,7 +39,26 @@ import {
   type DevAttachment,
   type TaskStatus,
   type TaskFilter,
+  type BuildPlan,
 } from "./types";
+
+// Parse a task's stored plan_text (JSON) into a BuildPlan, or null if none/invalid.
+function parsePlan(planText: string | null): BuildPlan | null {
+  if (!planText) return null;
+  try {
+    const p = JSON.parse(planText) as Partial<BuildPlan>;
+    return {
+      summary: typeof p.summary === "string" ? p.summary : "",
+      affected_areas: Array.isArray(p.affected_areas) ? p.affected_areas : [],
+      likely_files: Array.isArray(p.likely_files) ? p.likely_files : [],
+      risks: Array.isArray(p.risks) ? p.risks : [],
+      questions: Array.isArray(p.questions) ? p.questions : [],
+      ready_to_build: p.ready_to_build === true,
+    };
+  } catch {
+    return null;
+  }
+}
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -274,6 +295,55 @@ function SummaryChip({
   );
 }
 
+// One titled list block inside the Build Plan card. Hidden when empty.
+function PlanSection({
+  title,
+  items,
+  mono,
+  accent,
+}: {
+  title: string;
+  items: string[];
+  mono?: boolean;
+  accent?: string;
+}) {
+  if (!items || items.length === 0) return null;
+  return (
+    <div style={{ marginBottom: 14 }}>
+      <div
+        style={{
+          fontSize: 11,
+          fontWeight: 700,
+          textTransform: "uppercase",
+          letterSpacing: 0.5,
+          color: accent ?? "#6b7280",
+          marginBottom: 6,
+        }}
+      >
+        {title}
+      </div>
+      <ul style={{ margin: 0, padding: "0 0 0 18px", display: "flex", flexDirection: "column", gap: 4 }}>
+        {items.map((it, i) => (
+          <li
+            key={i}
+            style={{
+              fontSize: 13,
+              lineHeight: 1.45,
+              color: "#111",
+              fontFamily: mono
+                ? "ui-monospace, SFMono-Regular, Menlo, monospace"
+                : undefined,
+              wordBreak: mono ? "break-all" : "normal",
+            }}
+          >
+            {it}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 function fmtDate(iso: string): string {
   try {
     return new Date(iso).toLocaleDateString("de-DE", {
@@ -290,6 +360,8 @@ const ERR_LABEL: Record<string, string> = {
   auth: "Session abgelaufen — bitte neu einloggen.",
   "building-cannot-archive":
     "Ein laufender Build kann nicht archiviert werden. Erst abbrechen (Cancel).",
+  "analysis-failed":
+    "Mistral-Analyse fehlgeschlagen. Status unverändert — siehe System-Nachricht im Chat.",
 };
 function errText(code: string): string {
   return ERR_LABEL[code] ?? `Fehler: ${code}`;
@@ -305,6 +377,7 @@ export default function DevCockpit({ initialTasks }: { initialTasks: DevTask[] }
   );
   const [promptText, setPromptText] = useState("");
   const [queueText, setQueueText] = useState("");
+  const [answerText, setAnswerText] = useState("");
 
   const [messages, setMessages] = useState<DevMessage[]>([]);
   const [queue, setQueue] = useState<DevQueueNote[]>([]);
@@ -324,6 +397,7 @@ export default function DevCockpit({ initialTasks }: { initialTasks: DevTask[] }
   const promptRef = useRef<HTMLTextAreaElement>(null);
 
   const selectedTask = tasks.find((t) => t.id === selectedId) ?? null;
+  const plan = selectedTask ? parsePlan(selectedTask.plan_text) : null;
 
   // ── Data loading ────────────────────────────────────────────────────────────
 
@@ -440,6 +514,52 @@ export default function DevCockpit({ initialTasks }: { initialTasks: DevTask[] }
       if (listRes.ok) setTasks(listRes.data);
       setSelectedId(res.data.id);
       refreshSummary();
+    });
+  }
+
+  // Phase 3 — Analyze Task with Mistral (plan only, no build).
+  function handleAnalyze() {
+    if (!selectedTask) {
+      setError("Erst eine Task auswählen.");
+      return;
+    }
+    const id = selectedTask.id;
+    setNotice("Analysiere mit Mistral…");
+    startTransition(async () => {
+      const res = await analyzeTask(id);
+      if (!res.ok) {
+        setError(errText(res.error));
+        // Reload so the persisted "Mistral analysis failed." system message shows.
+        loadTaskDetail(id);
+        return;
+      }
+      // Reflect the new status + plan_text on the task in the list.
+      setTasks((prev) => prev.map((t) => (t.id === res.data.task.id ? res.data.task : t)));
+      loadTaskDetail(id);
+      refreshSummary();
+      setNotice(
+        res.data.plan.ready_to_build
+          ? "Analyse fertig — bereit für Start Build."
+          : "Analyse fertig — Rückfragen offen.",
+      );
+    });
+  }
+
+  // Phase 3 — user answers a follow-up question; stored as a user message.
+  function handleSendAnswer() {
+    if (!selectedTask) return;
+    const text = answerText.trim();
+    if (!text) return;
+    const id = selectedTask.id;
+    startTransition(async () => {
+      const res = await addMessage(id, "user", text);
+      if (!res.ok) {
+        setError(errText(res.error));
+        return;
+      }
+      setMessages((prev) => [...prev, res.data]);
+      setAnswerText("");
+      setNotice("Antwort gespeichert — jetzt Re-Analyze.");
     });
   }
 
@@ -631,7 +751,7 @@ export default function DevCockpit({ initialTasks }: { initialTasks: DevTask[] }
                   </span>
                 </div>
                 <div style={detailRowStyle}>
-                  <span style={detailLabelStyle}>Status</span>
+                  <span style={detailLabelStyle}>Current Status</span>
                   <StatusBadge status={selectedTask.status} />
                 </div>
                 <div style={detailRowStyle}>
@@ -640,6 +760,18 @@ export default function DevCockpit({ initialTasks }: { initialTasks: DevTask[] }
                     {fmtDate(selectedTask.created_at)}
                   </span>
                 </div>
+
+                {/* Status hint banners (Phase 3) */}
+                {selectedTask.status === "waiting_for_input" && (
+                  <div style={bannerWaitingInput}>
+                    ⏳ Agent benötigt zusätzliche Informationen.
+                  </div>
+                )}
+                {selectedTask.status === "waiting_for_start" && (
+                  <div style={bannerWaitingStart}>
+                    ✅ Plan abgeschlossen. Bereit für Start Build.
+                  </div>
+                )}
 
                 {/* Chat / message history */}
                 {messages.length === 0 ? (
@@ -656,6 +788,40 @@ export default function DevCockpit({ initialTasks }: { initialTasks: DevTask[] }
                     ))}
                   </div>
                 )}
+
+                {/* Follow-up answer + Analyze / Re-Analyze (Phase 3) */}
+                <div style={{ marginTop: 14 }}>
+                  <textarea
+                    style={{ ...textareaStyle, minHeight: 0 }}
+                    placeholder="Antwort an den Agent schreiben (wird als Nachricht gespeichert)…  (⌘/Strg+Enter)"
+                    value={answerText}
+                    onChange={(e) => setAnswerText(e.target.value)}
+                    onKeyDown={(e) => {
+                      if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+                        e.preventDefault();
+                        if (!isPending) handleSendAnswer();
+                      }
+                    }}
+                    rows={2}
+                  />
+                  <div style={buttonGroupStyle}>
+                    <button
+                      style={btnSecondaryStyle}
+                      onClick={handleSendAnswer}
+                      disabled={isPending}
+                    >
+                      Antwort senden
+                    </button>
+                    <button
+                      style={btnPrimaryStyle}
+                      onClick={handleAnalyze}
+                      disabled={isPending}
+                      title="Mistral analysiert die Aufgabe (nur Planung, kein Build)"
+                    >
+                      {plan ? "Re-Analyze" : "Analyze Task"}
+                    </button>
+                  </div>
+                </div>
               </>
             ) : (
               <p style={{ color: "#9ca3af", fontSize: 14, margin: 0 }}>
@@ -663,6 +829,50 @@ export default function DevCockpit({ initialTasks }: { initialTasks: DevTask[] }
               </p>
             )}
           </section>
+
+          {/* Build Plan card (Phase 3) — rendered from plan_text, never as JSON */}
+          {selectedTask && plan && (
+            <section style={cardStyle}>
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  margin: "0 0 14px",
+                  paddingBottom: 10,
+                  borderBottom: "1px solid #f3f4f6",
+                }}
+              >
+                <h2 style={{ ...cardTitleStyle, margin: 0, padding: 0, border: "none" }}>
+                  Build Plan
+                </h2>
+                <span style={plan.ready_to_build ? readyPill : notReadyPill}>
+                  {plan.ready_to_build ? "Ready To Build" : "Rückfragen offen"}
+                </span>
+              </div>
+
+              {plan.summary && (
+                <p style={{ margin: "0 0 14px", fontSize: 14, lineHeight: 1.5, color: "#111", whiteSpace: "pre-wrap" }}>
+                  {plan.summary}
+                </p>
+              )}
+
+              <PlanSection title="Betroffene Bereiche" items={plan.affected_areas} />
+              <PlanSection title="Vermutete Dateien" items={plan.likely_files} mono />
+              <PlanSection title="Risiken" items={plan.risks} />
+              <PlanSection title="Offene Fragen" items={plan.questions} accent="#92400e" />
+
+              {plan.affected_areas.length === 0 &&
+                plan.likely_files.length === 0 &&
+                plan.risks.length === 0 &&
+                plan.questions.length === 0 &&
+                !plan.summary && (
+                  <p style={{ color: "#9ca3af", fontSize: 13, margin: 0 }}>
+                    Noch kein Analyse-Inhalt.
+                  </p>
+                )}
+            </section>
+          )}
 
           {/* Prompt area */}
           <section style={cardStyle}>
@@ -693,10 +903,7 @@ export default function DevCockpit({ initialTasks }: { initialTasks: DevTask[] }
               >
                 Create Task
               </button>
-              <button style={btnDisabledStyle} disabled title="Phase 3">
-                Analyze Task
-              </button>
-              <button style={btnDisabledStyle} disabled title="Phase 3">
+              <button style={btnDisabledStyle} disabled title="Phase 4">
                 Start Build
               </button>
               <button
@@ -714,10 +921,10 @@ export default function DevCockpit({ initialTasks }: { initialTasks: DevTask[] }
               >
                 Evaluate Queue
               </button>
-              <button style={{ ...btnDisabledStyle, color: "#9ca3af" }} disabled title="Phase 3">
+              <button style={{ ...btnDisabledStyle, color: "#9ca3af" }} disabled title="Phase 4+">
                 Apply Changes
               </button>
-              <button style={{ ...btnDisabledStyle, color: "#9ca3af" }} disabled title="Phase 3">
+              <button style={{ ...btnDisabledStyle, color: "#9ca3af" }} disabled title="Phase 4+">
                 Reject
               </button>
             </div>
@@ -1141,6 +1348,50 @@ const chatPlaceholderStyle: React.CSSProperties = {
   textAlign: "center",
   color: "#9ca3af",
   fontSize: 13,
+};
+
+// Phase 3 — status hint banners.
+const bannerBase: React.CSSProperties = {
+  marginTop: 6,
+  marginBottom: 4,
+  padding: "9px 12px",
+  borderRadius: 8,
+  fontSize: 13,
+  fontWeight: 600,
+};
+const bannerWaitingInput: React.CSSProperties = {
+  ...bannerBase,
+  background: "#fef9c3",
+  color: "#854d0e",
+  border: "1px solid #fde047",
+};
+const bannerWaitingStart: React.CSSProperties = {
+  ...bannerBase,
+  background: "#dcfce7",
+  color: "#166534",
+  border: "1px solid #86efac",
+};
+
+// Build Plan readiness pill.
+const pillBase: React.CSSProperties = {
+  display: "inline-block",
+  padding: "2px 10px",
+  borderRadius: 12,
+  fontSize: 11,
+  fontWeight: 700,
+  whiteSpace: "nowrap",
+};
+const readyPill: React.CSSProperties = {
+  ...pillBase,
+  background: "#dcfce7",
+  color: "#166534",
+  border: "1px solid #86efac",
+};
+const notReadyPill: React.CSSProperties = {
+  ...pillBase,
+  background: "#fef9c3",
+  color: "#854d0e",
+  border: "1px solid #fde047",
 };
 
 const chatListStyle: React.CSSProperties = {

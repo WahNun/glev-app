@@ -30,7 +30,9 @@ import {
   type TaskFilter,
   type MessageRole,
   type QueueStatus,
+  type BuildPlan,
 } from "./types";
+import { runDevCockpitAnalysis, formatPlanMessage } from "@/lib/ai/devCockpitAnalysis";
 
 // ── Result envelope ─────────────────────────────────────────────────────────
 
@@ -49,8 +51,8 @@ function fail(error: string): { ok: false; error: string } {
 // Valid status values, mirrored from the DB CHECK constraint, so a bad value
 // from the client is rejected before it ever hits the database.
 const ALL_STATUSES: TaskStatus[] = [
-  "draft", "planning", "waiting_for_start", "building", "preview_ready",
-  "applied", "rejected", "cancelled", "archived", "backlog",
+  "draft", "planning", "waiting_for_start", "waiting_for_input", "building",
+  "preview_ready", "applied", "rejected", "cancelled", "archived", "backlog",
 ];
 
 // ── Tasks ────────────────────────────────────────────────────────────────────
@@ -203,6 +205,92 @@ export async function archiveTask(id: string): Promise<Result<DevTask>> {
 
 export async function moveTaskToBacklog(id: string): Promise<Result<DevTask>> {
   return updateTaskStatus(id, "backlog");
+}
+
+// ── Analyze (Phase 3 — Mistral planning) ─────────────────────────────────────
+
+/**
+ * Analyze a task with Mistral and produce a structured BuildPlan.
+ *
+ * Phase 3 scope: thinking + planning ONLY — no builds, branches, commits,
+ * diffs, code changes, previews. The flow is:
+ *   1. gather context: task prompt + title + full chat history + queued notes
+ *      (status='queued' only — discarded/other notes are ignored)
+ *   2. call Mistral (server-side; key never leaves the server)
+ *   3. on success: persist plan to `plan_text`, switch status
+ *        ready_to_build === true  → waiting_for_start
+ *        ready_to_build === false → waiting_for_input
+ *      and append a human-readable `assistant` message
+ *   4. on failure: status stays UNCHANGED, append a `system` message
+ *      "Mistral analysis failed." and return an error
+ *
+ * Re-Analyze is just calling this again — the model always sees the full,
+ * updated chat history (including the user's answers to its questions).
+ */
+export async function analyzeTask(
+  taskId: string,
+): Promise<Result<{ task: DevTask; plan: BuildPlan }>> {
+  if (!(await requireAdmin())) return fail("auth");
+  if (!taskId) return fail("missing-id");
+
+  const sb = getSupabaseAdmin();
+
+  // 1. Context gathering
+  const taskRes = await getTask(taskId);
+  if (!taskRes.ok) return taskRes;
+  const task = taskRes.data;
+
+  const msgRes = await listMessages(taskId);
+  const history = msgRes.ok
+    ? msgRes.data.map((m) => ({ role: m.role, content: m.content }))
+    : [];
+
+  const queueRes = await listQueueNotes(taskId);
+  const queuedNotes = queueRes.ok
+    ? queueRes.data.filter((n) => n.status === "queued").map((n) => n.content)
+    : [];
+
+  // 2. Mistral analysis
+  let plan: BuildPlan;
+  try {
+    plan = await runDevCockpitAnalysis({
+      title: task.title,
+      prompt: task.prompt ?? "",
+      history,
+      queuedNotes,
+    });
+  } catch {
+    // Failure path: leave status untouched, log a system message. We do NOT
+    // surface the raw error (no secrets / stack traces to the client).
+    await sb.from("dev_cockpit_messages").insert({
+      task_id: taskId,
+      role: "system",
+      content: "Mistral analysis failed.",
+    });
+    return fail("analysis-failed");
+  }
+
+  // 3a. Persist plan + status transition
+  const nextStatus: TaskStatus = plan.ready_to_build
+    ? "waiting_for_start"
+    : "waiting_for_input";
+
+  const { data: updated, error: upErr } = await sb
+    .from("dev_cockpit_tasks")
+    .update({ status: nextStatus, plan_text: JSON.stringify(plan) })
+    .eq("id", taskId)
+    .select(TASK_COLUMNS)
+    .single();
+  if (upErr) return fail(upErr.message);
+
+  // 3b. Human-readable assistant message (persistent)
+  await sb.from("dev_cockpit_messages").insert({
+    task_id: taskId,
+    role: "assistant",
+    content: formatPlanMessage(plan),
+  });
+
+  return { ok: true, data: { task: updated as DevTask, plan } };
 }
 
 // ── Messages ─────────────────────────────────────────────────────────────────
