@@ -333,14 +333,15 @@ export default function IOBCard({ insulin, insulinType, meals, currentBg, onLogB
             </>
           ) : (
             <>
-              {/* Basal gauge — always full ring (fraction={1}).
-                  basalFraction is used only in the expanded coverage bar below.
-                  The ring itself must never shrink — it is a presence indicator,
-                  not a depletion meter. See Task #712 + regression guard #717. */}
+              {/* Basal gauge — shrinks with elapsed Wirkdauer.
+                  fraction prop is bound to basalFraction so the ring acts as a
+                  depletion meter: full = fresh injection, empty = window expired.
+                  The number inside always shows the originally injected dose
+                  (lastBasal.units), not a residual value. */}
               <div style={{ position: "relative", flexShrink: 0 }}>
                 <CircleGauge
                   iob={0} color={lastBasal ? basalColor : "var(--text-ghost)"}
-                  cleared={!lastBasal} fraction={1}
+                  cleared={!lastBasal} fraction={basalFraction}
                 />
                 <div style={{
                   position: "absolute", inset: 0,
@@ -472,7 +473,7 @@ export default function IOBCard({ insulin, insulinType, meals, currentBg, onLogB
               <>
                 {/* Coverage bar: left = elapsed (dim), right = remaining (indigo) */}
                 {(() => {
-                  const elapsedPct = Math.min(100, (1 - basalFraction) * 100);
+                  const elapsedPct = Math.min(100, (basalElapsedMin ?? 0) / BASAL_WINDOW_MIN * 100);
                   return (
                     <div style={{ position: "relative", height: 10, borderRadius: 99, background: "var(--surface-soft)", overflow: "visible" }}>
                       {/* elapsed portion */}

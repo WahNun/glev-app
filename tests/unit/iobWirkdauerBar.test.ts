@@ -61,41 +61,42 @@ function makeMeal(overrides: Partial<MealLike> & { id: string }): MealLike {
   };
 }
 
-// ── Section 1: Basal CircleGauge — always fraction={1} ───────────────────────
+// ── Section 1: Basal CircleGauge — fraction={basalFraction} (depletion meter) ──
 //
-// Task #712 fixed the basal ring from a decaying fill (fraction={basalFraction})
-// to an always-full ring (fraction={1}). The ring is a presence indicator, not
-// a depletion meter. Task #717 cements this with an automated guard.
+// The basal ring is a Wirkdauer depletion meter: it shrinks as time elapses.
+// fraction={basalFraction} is passed to CircleGauge so the ring reflects the
+// pharmacokinetic model (plateau + tail decay). The number inside always shows
+// the originally injected dose — not a residual value.
 //
 // We read the source file directly so the test fails the moment someone
-// reverts the prop value — no component mount required, zero false-confidence.
+// reverts to the old presence-indicator approach (fraction={1}).
 
-test("basal CircleGauge prop: component source passes fraction={1}, not fraction={basalFraction}", () => {
+test("basal CircleGauge prop: component source passes fraction={basalFraction}, not fraction={1}", () => {
   const srcPath = path.resolve("components/IOBCard.tsx");
   const src = fs.readFileSync(srcPath, "utf-8");
 
-  // The basal view CircleGauge must use the literal {1}.
+  // The basal view CircleGauge must use the dynamic basalFraction prop.
   // We locate the prop on the line that follows the basal gauge comment.
-  // The comment "Basal gauge — always full ring" is the anchor; the next
-  // CircleGauge prop block must contain `fraction={1}`.
+  // The comment "Basal gauge — shrinks with elapsed Wirkdauer" is the anchor;
+  // the next CircleGauge prop block must contain `fraction={basalFraction}`.
   const basalGaugeSection = src.slice(
-    src.indexOf("Basal gauge — always full ring"),
+    src.indexOf("Basal gauge — shrinks with elapsed Wirkdauer"),
     src.indexOf("Basal info"),
   );
 
-  expect(basalGaugeSection).toContain("fraction={1}");
-  expect(basalGaugeSection).not.toContain("fraction={basalFraction}");
+  expect(basalGaugeSection).toContain("fraction={basalFraction}");
+  expect(basalGaugeSection).not.toContain("fraction={1}");
 });
 
-test("basal CircleGauge prop: component source does NOT pass fraction={basalFraction} to the collapsed ring", () => {
+test("basal CircleGauge prop: component source uses fraction={basalFraction} exactly once for the collapsed ring", () => {
   const srcPath = path.resolve("components/IOBCard.tsx");
   const src = fs.readFileSync(srcPath, "utf-8");
 
-  // basalFraction is legitimately used for the expanded COVERAGE BAR.
-  // Count occurrences: there must be no occurrence of `fraction={basalFraction}`.
-  // (basalFraction itself will still appear — but only in bar calc contexts.)
+  // fraction={basalFraction} appears once: on the CircleGauge in the basal view.
+  // The expanded COVERAGE BAR uses basalFraction only inside an arithmetic
+  // expression (elapsedPct = …), never as a bare `fraction={basalFraction}` prop.
   const fractionBasalCount = (src.match(/fraction=\{basalFraction\}/g) ?? []).length;
-  expect(fractionBasalCount).toBe(0);
+  expect(fractionBasalCount).toBe(1);
 });
 
 // ── Section 2: cleared threshold — IOB library invariants ────────────────────
