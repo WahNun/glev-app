@@ -5,6 +5,7 @@ import { loginAction, createMetaLeadAction } from "./actions";
 import AdminLoginForm from "../_components/AdminLoginForm";
 import BuyersTables, { type BetaRow, type ProRow } from "./BuyersTables";
 import DuplicateSignups from "./DuplicateSignups";
+import BulkSmsButton from "./BulkSmsButton";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -188,12 +189,15 @@ export default async function AdminBuyersPage({
 
       {/* ── 7-Tage-Trial — CRM ───────────────────────────────── */}
       <section style={{ marginBottom: 40 }}>
-        <h2 style={{ fontSize: 17, fontWeight: 700, margin: "0 0 10px" }}>
-          7-Tage Trial{" "}
-          <span style={{ fontSize: 13, fontWeight: 400, color: "#666" }}>
-            ({trialUsers.length} Einträge)
-          </span>
-        </h2>
+        <div style={{ display: "flex", alignItems: "baseline", gap: 16, marginBottom: 10 }}>
+          <h2 style={{ fontSize: 17, fontWeight: 700, margin: 0 }}>
+            7-Tage Trial{" "}
+            <span style={{ fontSize: 13, fontWeight: 400, color: "#666" }}>
+              ({trialUsers.length} Einträge)
+            </span>
+          </h2>
+        </div>
+        <BulkSmsButton />
         {trialUsers.length === 0 ? (
           <p style={{ color: "#888", fontSize: 14 }}>Noch keine Trial-User.</p>
         ) : (
