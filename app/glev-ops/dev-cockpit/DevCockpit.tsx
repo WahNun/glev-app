@@ -60,6 +60,220 @@ function StatusBadge({ status }: { status: TaskStatus }) {
   );
 }
 
+// ── Status indicator (left of the title in the sidebar) ─────────────────────
+//
+// CSS keyframes are injected once via <KeyframeStyles/> at the top of the
+// component tree (this file uses inline styles, no global stylesheet). The
+// animation names are dc-prefixed to avoid collisions.
+
+function KeyframeStyles() {
+  return (
+    <style>{`
+      @keyframes dc-spin { to { transform: rotate(360deg); } }
+      @keyframes dc-pulse { 0%,100% { opacity: 1; transform: scale(1); } 50% { opacity: .4; transform: scale(.72); } }
+      @keyframes dc-pulse-slow { 0%,100% { opacity: 1; transform: scale(1); } 50% { opacity: .35; transform: scale(.78); } }
+      @keyframes dc-glow {
+        0%,100% { box-shadow: 0 0 0 0 rgba(34,197,94,.0); }
+        50%     { box-shadow: 0 0 6px 2px rgba(34,197,94,.6); }
+      }
+    `}</style>
+  );
+}
+
+const indicatorBox: React.CSSProperties = {
+  width: 14,
+  height: 14,
+  flexShrink: 0,
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+};
+
+function Dot({ color, anim }: { color: string; anim?: string }) {
+  return (
+    <span style={indicatorBox}>
+      <span
+        style={{
+          width: 9,
+          height: 9,
+          borderRadius: "50%",
+          background: color,
+          animation: anim,
+        }}
+      />
+    </span>
+  );
+}
+
+const ICON = { width: 12, height: 12 } as const;
+
+/** Small status glyph shown left of each sidebar task title. */
+function StatusIndicator({ status }: { status: TaskStatus }) {
+  switch (status) {
+    case "building":
+      // Small circular spinner — gentle ~1s rotation, clearly visible.
+      return (
+        <span style={indicatorBox} title="Agent arbeitet gerade" aria-label="building">
+          <span
+            style={{
+              width: 12,
+              height: 12,
+              borderRadius: "50%",
+              border: "2px solid #fed7aa",
+              borderTopColor: "#ea580c",
+              animation: "dc-spin 0.9s linear infinite",
+            }}
+          />
+        </span>
+      );
+    case "planning":
+      // Blue pulsing dot — "Analyse läuft".
+      return <Dot color="#2563eb" anim="dc-pulse 1.4s ease-in-out infinite" />;
+    case "waiting_for_input":
+      // Yellow slow-pulsing dot — "Agent benötigt Antwort des Users" (Phase 3).
+      return <Dot color="#eab308" anim="dc-pulse-slow 2.2s ease-in-out infinite" />;
+    case "preview_ready":
+      // Green dot with a soft glow — "Build fertig, wartet auf Apply".
+      return (
+        <span style={indicatorBox} title="Build fertig — Apply Changes" aria-label="preview_ready">
+          <span
+            style={{
+              width: 10,
+              height: 10,
+              borderRadius: "50%",
+              background: "#22c55e",
+              animation: "dc-glow 1.8s ease-in-out infinite",
+            }}
+          />
+        </span>
+      );
+    case "waiting_for_start":
+      // Amber pause glyph, no animation — "Plan fertig, wartet auf Start Build".
+      return (
+        <span style={indicatorBox} title="Plan fertig — wartet auf Start Build" aria-label="waiting_for_start">
+          <svg {...ICON} viewBox="0 0 24 24" fill="none" stroke="#b45309" strokeWidth={2.6} strokeLinecap="round">
+            <line x1="9" y1="6" x2="9" y2="18" />
+            <line x1="15" y1="6" x2="15" y2="18" />
+          </svg>
+        </span>
+      );
+    case "applied":
+      return (
+        <span style={indicatorBox} title="Angewendet" aria-label="applied">
+          <svg {...ICON} viewBox="0 0 24 24" fill="none" stroke="#16a34a" strokeWidth={3} strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="20 6 9 17 4 12" />
+          </svg>
+        </span>
+      );
+    case "rejected":
+      return (
+        <span style={indicatorBox} title="Abgelehnt" aria-label="rejected">
+          <svg {...ICON} viewBox="0 0 24 24" fill="none" stroke="#dc2626" strokeWidth={3} strokeLinecap="round">
+            <line x1="6" y1="6" x2="18" y2="18" />
+            <line x1="18" y1="6" x2="6" y2="18" />
+          </svg>
+        </span>
+      );
+    case "cancelled":
+      return (
+        <span style={indicatorBox} title="Abgebrochen" aria-label="cancelled">
+          <svg {...ICON} viewBox="0 0 24 24" fill="#9ca3af">
+            <rect x="6" y="6" width="12" height="12" rx="2" />
+          </svg>
+        </span>
+      );
+    case "archived":
+      return (
+        <span style={indicatorBox} title="Archiviert" aria-label="archived">
+          <svg {...ICON} viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+            <rect x="3" y="4" width="18" height="4" rx="1" />
+            <path d="M5 8v11a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8" />
+            <line x1="10" y1="12" x2="14" y2="12" />
+          </svg>
+        </span>
+      );
+    case "backlog":
+      return (
+        <span style={indicatorBox} title="Backlog" aria-label="backlog">
+          <svg {...ICON} viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+            <path d="M22 12h-6l-2 3h-4l-2-3H2" />
+            <path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z" />
+          </svg>
+        </span>
+      );
+    case "draft":
+    default:
+      // Neutral grey dot keeps every row's indicator slot aligned.
+      return <Dot color="#cbd5e1" />;
+  }
+}
+
+// Counts of the three "needs-attention" statuses, for the summary chips.
+type Summary = { building: number; waiting_for_input: number; preview_ready: number };
+function countSummary(list: DevTask[]): Summary {
+  const c: Summary = { building: 0, waiting_for_input: 0, preview_ready: 0 };
+  for (const t of list) {
+    if (t.status === "building") c.building++;
+    else if (t.status === "waiting_for_input") c.waiting_for_input++;
+    else if (t.status === "preview_ready") c.preview_ready++;
+  }
+  return c;
+}
+
+function SummaryChip({
+  label,
+  count,
+  palette,
+  onClick,
+}: {
+  label: string;
+  count: number;
+  palette: { bg: string; color: string; border: string };
+  onClick?: () => void;
+}) {
+  const active = count > 0;
+  return (
+    <button
+      onClick={onClick}
+      title={`${label}: ${count}`}
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 5,
+        padding: "3px 8px",
+        borderRadius: 999,
+        fontSize: 11,
+        fontWeight: 700,
+        cursor: "pointer",
+        fontFamily: "system-ui, -apple-system, sans-serif",
+        background: active ? palette.bg : "#f9fafb",
+        color: active ? palette.color : "#9ca3af",
+        border: `1px solid ${active ? palette.border : "#e5e7eb"}`,
+        opacity: active ? 1 : 0.7,
+      }}
+    >
+      {label}
+      <span
+        style={{
+          display: "inline-flex",
+          alignItems: "center",
+          justifyContent: "center",
+          minWidth: 16,
+          height: 16,
+          padding: "0 4px",
+          borderRadius: 8,
+          background: active ? palette.color : "#d1d5db",
+          color: "#fff",
+          fontSize: 10,
+          fontWeight: 700,
+        }}
+      >
+        {count}
+      </span>
+    </button>
+  );
+}
+
 function fmtDate(iso: string): string {
   try {
     return new Date(iso).toLocaleDateString("de-DE", {
@@ -102,12 +316,24 @@ export default function DevCockpit({ initialTasks }: { initialTasks: DevTask[] }
     null,
   );
 
+  // Summary chip counts — seeded from the initial (active) load so there's no
+  // flash, then kept globally accurate via refreshSummary() (all statuses).
+  const [summary, setSummary] = useState<Summary>(() => countSummary(initialTasks));
+
   const [isPending, startTransition] = useTransition();
   const promptRef = useRef<HTMLTextAreaElement>(null);
 
   const selectedTask = tasks.find((t) => t.id === selectedId) ?? null;
 
   // ── Data loading ────────────────────────────────────────────────────────────
+
+  // Recompute the summary chips from ALL tasks (not just the current filter),
+  // so the at-a-glance counts stay correct regardless of which filter is open.
+  // Uses the existing listTasks action — no new server action.
+  async function refreshSummary() {
+    const res = await listTasks("all");
+    if (res.ok) setSummary(countSummary(res.data));
+  }
 
   function refreshList(nextFilter: TaskFilter) {
     startTransition(async () => {
@@ -148,6 +374,12 @@ export default function DevCockpit({ initialTasks }: { initialTasks: DevTask[] }
     loadTaskDetail(selectedId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedId]);
+
+  // Keep the summary chips globally accurate on mount.
+  useEffect(() => {
+    refreshSummary();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Close the context menu on any outside click / escape.
   useEffect(() => {
@@ -207,6 +439,7 @@ export default function DevCockpit({ initialTasks }: { initialTasks: DevTask[] }
       const listRes = await listTasks("active");
       if (listRes.ok) setTasks(listRes.data);
       setSelectedId(res.data.id);
+      refreshSummary();
     });
   }
 
@@ -265,6 +498,7 @@ export default function DevCockpit({ initialTasks }: { initialTasks: DevTask[] }
             : listRes.data[0]?.id ?? null,
         );
       }
+      refreshSummary();
     });
   }
 
@@ -272,6 +506,7 @@ export default function DevCockpit({ initialTasks }: { initialTasks: DevTask[] }
 
   return (
     <div style={pageStyle}>
+      <KeyframeStyles />
       {/* ── Page heading ── */}
       <div style={pageHeaderStyle}>
         <h1 style={headingStyle}>Dev Cockpit</h1>
@@ -306,6 +541,29 @@ export default function DevCockpit({ initialTasks }: { initialTasks: DevTask[] }
             <button style={newTaskBtnStyle} onClick={handleStartCompose}>
               + New Task
             </button>
+          </div>
+
+          {/* Summary chips — at-a-glance "needs attention" counts (global).
+              Click jumps to the Active view where these statuses live. */}
+          <div style={summaryRowStyle}>
+            <SummaryChip
+              label="Building"
+              count={summary.building}
+              palette={{ bg: "#ffedd5", color: "#9a3412", border: "#fed7aa" }}
+              onClick={() => handleFilterChange("active")}
+            />
+            <SummaryChip
+              label="Waiting"
+              count={summary.waiting_for_input}
+              palette={{ bg: "#fef9c3", color: "#854d0e", border: "#fde047" }}
+              onClick={() => handleFilterChange("active")}
+            />
+            <SummaryChip
+              label="Ready"
+              count={summary.preview_ready}
+              palette={{ bg: "#dcfce7", color: "#166534", border: "#86efac" }}
+              onClick={() => handleFilterChange("active")}
+            />
           </div>
 
           {/* Filter chips */}
@@ -345,7 +603,10 @@ export default function DevCockpit({ initialTasks }: { initialTasks: DevTask[] }
                       : taskItemStyle
                   }
                 >
-                  <span style={taskTitleTextStyle}>{task.title}</span>
+                  <div style={taskTitleRowStyle}>
+                    <StatusIndicator status={task.status} />
+                    <span style={taskTitleTextStyle}>{task.title}</span>
+                  </div>
                   <div style={taskMetaStyle}>
                     <StatusBadge status={task.status} />
                     <span style={taskDateTextStyle}>{fmtDate(task.created_at)}</span>
@@ -742,6 +1003,15 @@ const newTaskBtnStyle: React.CSSProperties = {
   fontFamily: FONT,
 };
 
+const summaryRowStyle: React.CSSProperties = {
+  display: "flex",
+  flexWrap: "wrap",
+  gap: 6,
+  padding: "10px 10px",
+  borderBottom: "1px solid #e5e7eb",
+  background: "#fff",
+};
+
 const filterRowStyle: React.CSSProperties = {
   display: "flex",
   flexWrap: "wrap",
@@ -796,11 +1066,19 @@ const taskItemActiveStyle: React.CSSProperties = {
   borderLeftColor: "#4F6EF7",
 };
 
+const taskTitleRowStyle: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  gap: 8,
+  minWidth: 0,
+};
+
 const taskTitleTextStyle: React.CSSProperties = {
   fontSize: 13,
   fontWeight: 600,
   color: "#111",
   lineHeight: 1.3,
+  minWidth: 0,
 };
 
 const taskMetaStyle: React.CSSProperties = {

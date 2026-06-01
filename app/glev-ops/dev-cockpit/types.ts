@@ -11,6 +11,7 @@ export type TaskStatus =
   | "draft"
   | "planning"
   | "waiting_for_start"
+  | "waiting_for_input"
   | "building"
   | "preview_ready"
   | "applied"
@@ -18,6 +19,12 @@ export type TaskStatus =
   | "cancelled"
   | "archived"
   | "backlog";
+
+// NOTE: `waiting_for_input` is a UI-prepared status for Phase 3 (agent asks
+// the user a question). It is NOT yet in the DB CHECK constraint nor in the
+// server-side ALL_STATUSES validator — nothing writes it in Phase 2. Before
+// any task is actually set to it (Phase 3), add it to the CHECK via a small
+// migration and to actions.ts ALL_STATUSES.
 
 export interface DevTask {
   id: string;
@@ -105,6 +112,7 @@ export const ACTIVE_STATUSES: TaskStatus[] = [
   "draft",
   "planning",
   "waiting_for_start",
+  "waiting_for_input",
   "building",
   "preview_ready",
 ];
@@ -145,7 +153,8 @@ export const FILTER_ORDER: TaskFilter[] = [
 export const STATUS_LABEL: Record<TaskStatus, string> = {
   draft: "Entwurf",
   planning: "Planung",
-  waiting_for_start: "Wartet",
+  waiting_for_start: "Wartet auf Start",
+  waiting_for_input: "Wartet auf Input",
   building: "Building",
   preview_ready: "Preview bereit",
   applied: "Angewendet",
@@ -159,6 +168,7 @@ export const STATUS_STYLE: Record<TaskStatus, React.CSSProperties> = {
   draft: { background: "#f3f4f6", color: "#374151", border: "1px solid #d1d5db" },
   planning: { background: "#dbeafe", color: "#1e40af", border: "1px solid #93c5fd" },
   waiting_for_start: { background: "#fef9c3", color: "#854d0e", border: "1px solid #fde047" },
+  waiting_for_input: { background: "#fef3c7", color: "#92400e", border: "1px solid #fcd34d" },
   building: { background: "#ffedd5", color: "#9a3412", border: "1px solid #fed7aa" },
   preview_ready: { background: "#f3e8ff", color: "#6b21a8", border: "1px solid #d8b4fe" },
   applied: { background: "#dcfce7", color: "#166534", border: "1px solid #86efac" },
