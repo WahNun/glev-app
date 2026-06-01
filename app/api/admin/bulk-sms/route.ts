@@ -95,10 +95,10 @@ export async function POST() {
       continue;
     }
 
-    const shortUrl = await shortenUrl(inviteUrl);
+    const shortUrl = await shortenUrl(inviteUrl, "sms_bulk");
     const body =
       `Willkommen bei Glev! Aktiviere deinen kostenlosen 7-Tage-Test: ${shortUrl}\n\n` +
-      `Alternativ kannst du dich auch per E-Mail anmelden – bitte prüfe ggf. auch deinen Spam-Ordner.`;
+      `Alternativ kannst du dich auch per E-Mail anmelden – bitte prüfe ggf. auch deinen Spam-Ordner auf eine E-Mail von info@glev.app.`;
 
     const smsResult = await sendSms(phone, body);
     results.push({

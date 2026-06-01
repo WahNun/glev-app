@@ -7,6 +7,7 @@ import BuyersTables, { type BetaRow, type ProRow } from "./BuyersTables";
 import DuplicateSignups from "./DuplicateSignups";
 import BulkSmsButton from "./BulkSmsButton";
 import ActivatePendingButton from "./ActivatePendingButton";
+import ReminderButton from "./ReminderButton";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -22,6 +23,7 @@ export type TrialRow = {
   trialEndAt: string | null;
   signupSource: string | null;
   createdAt: string | null;
+  onboardingCompletedAt: string | null;
 };
 
 export default async function AdminBuyersPage({
@@ -83,7 +85,7 @@ export default async function AdminBuyersPage({
     })(),
     sb
       .from("profiles")
-      .select("user_id, trial_start_at, trial_end_at, signup_source, created_at")
+      .select("user_id, trial_start_at, trial_end_at, signup_source, created_at, onboarding_completed_at")
       .or("trial_end_at.not.is.null,signup_source.eq.meta_lead")
       .order("created_at", { ascending: false })
       .limit(200),
@@ -111,6 +113,7 @@ export default async function AdminBuyersPage({
       trialEndAt: p.trial_end_at as string | null,
       signupSource: p.signup_source as string | null,
       createdAt: (u?.created_at ?? p.created_at) as string | null,
+      onboardingCompletedAt: p.onboarding_completed_at as string | null,
     };
   });
 
@@ -199,6 +202,7 @@ export default async function AdminBuyersPage({
           </h2>
         </div>
         <ActivatePendingButton />
+        <ReminderButton />
         <BulkSmsButton />
         {trialUsers.length === 0 ? (
           <p style={{ color: "#888", fontSize: 14 }}>Noch keine Trial-User.</p>
@@ -215,6 +219,7 @@ export default async function AdminBuyersPage({
                   <Th>Trial endet</Th>
                   <Th>Tage übrig</Th>
                   <Th>Status</Th>
+                  <Th>Onboarding</Th>
                   <Th>Angelegt</Th>
                   <Th>{""}</Th>
                 </tr>
@@ -268,6 +273,15 @@ export default async function AdminBuyersPage({
                           <span style={badgeExpired}>Abgelaufen</span>
                         ) : (
                           <span style={badgeActive}>Aktiv</span>
+                        )}
+                      </Td>
+                      <Td>
+                        {u.onboardingCompletedAt ? (
+                          <span style={badgeActive}>✓ Abgeschlossen</span>
+                        ) : u.trialStartAt ? (
+                          <span style={badgePending}>Ausstehend</span>
+                        ) : (
+                          <span style={{ color: "#d1d5db", fontSize: 12 }}>—</span>
                         )}
                       </Td>
                       <Td>{fmtDate(u.createdAt)}</Td>

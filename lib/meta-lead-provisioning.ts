@@ -45,8 +45,8 @@ async function sendTwilioSms(phone: string, inviteUrl: string): Promise<void> {
     return;
   }
 
-  // Kürze den langen Supabase-Magic-Link → glev.app/s/XXXXXX
-  const shortUrl = await shortenUrl(inviteUrl);
+  // Separate Short-Links für SMS und Email — ermöglicht Click-Tracking pro Kanal.
+  const shortUrl = await shortenUrl(inviteUrl, "sms");
   const body = `Willkommen bei Glev! Aktiviere deinen kostenlosen 7-Tage-Test: ${shortUrl}\n\nAlternativ kannst du dich auch per E-Mail anmelden – bitte prüfe ggf. auch deinen Spam-Ordner auf eine E-Mail von info@glev.app.`;
   const formData = new URLSearchParams({ From: from, To: phone, Body: body });
 
@@ -182,7 +182,7 @@ export async function provisionMetaLead(
           from: FROM,
           to: email,
           subject: metaLeadInviteSubject(first, effectiveLocale),
-          html: metaLeadInviteHtml(first, inviteUrl, effectiveLocale, APP_URL),
+          html: metaLeadInviteHtml(first, await shortenUrl(inviteUrl, "email"), effectiveLocale, APP_URL),
         })
         .then(() => {
           // eslint-disable-next-line no-console

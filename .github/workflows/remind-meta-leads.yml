@@ -1,0 +1,55 @@
+name: Remind Meta Leads (24h)
+
+# Schickt täglich um 10:00 UTC einen Reminder an Meta-Leads
+# die nach 24h ihren Trial noch nicht aktiviert haben.
+# Benötigt dieselben GitHub Secrets wie flush-outbox:
+#   CRON_SECRET — muss mit Vercel-Env-Var übereinstimmen.
+
+on:
+  schedule:
+    - cron: "0 10 * * *"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: remind-meta-leads
+  cancel-in-progress: false
+
+jobs:
+  remind:
+    name: Remind
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Hit /api/cron/remind-meta-leads
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          PROD_APP_URL: ${{ vars.PROD_APP_URL || 'https://glev.app' }}
+        run: |
+          set -u
+          if [ -z "${CRON_SECRET}" ]; then
+            echo "::error::Repo secret CRON_SECRET not set."
+            exit 1
+          fi
+
+          url="${PROD_APP_URL%/}/api/cron/remind-meta-leads"
+          echo "POST -> ${url}"
+
+          response_file="$(mktemp)"
+          status=$(curl -sS -X POST \
+            -H "Authorization: Bearer ${CRON_SECRET}" \
+            -H "Accept: application/json" \
+            -o "${response_file}" \
+            -w "%{http_code}" \
+            --max-time 60 \
+            "${url}" || echo "000")
+
+          echo "HTTP ${status}"
+          cat "${response_file}" || true
+
+          if [ "${status}" != "200" ]; then
+            echo "::error::remind-meta-leads returned HTTP ${status}"
+            exit 1
+          fi
