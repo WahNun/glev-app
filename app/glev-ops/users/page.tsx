@@ -67,7 +67,6 @@ export default async function AdminUsersPage({
       last_sign_in_at: u.last_sign_in_at,
       email_confirmed_at: u.email_confirmed_at,
       banned_until: (u as { banned_until?: string | null }).banned_until,
-      user_metadata: (u.user_metadata ?? {}) as Record<string, unknown>,
     }));
   } catch (e) {
     authErr = e instanceof Error ? e.message : String(e);
@@ -253,7 +252,6 @@ export default async function AdminUsersPage({
       profile_trial_end_at: p?.trial_end_at ?? null,
       profile_trial_start_at: p?.trial_start_at ?? null,
       signup_source: p?.signup_source ?? null,
-      phone: (u.user_metadata?.phone as string | null) ?? null,
       beta_status: beta?.status ?? null,
       // Currency + Land für den Filter — Pro hat Vorrang (Subscription
       // läuft ja noch, ist relevanter als eine evtl. ältere Beta-

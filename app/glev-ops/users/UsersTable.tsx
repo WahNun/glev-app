@@ -31,8 +31,6 @@ export type UserRow = {
   profile_trial_start_at: string | null;
   /** profiles.signup_source — z.B. "meta_lead". */
   signup_source: string | null;
-  /** user_metadata.phone — Twilio-Nummer für SMS. */
-  phone: string | null;
   /** beta_reservations.status — typisch "fulfilled" wenn bezahlt + freigeschaltet, "pending" während Checkout. */
   beta_status: string | null;
   /** profiles.subscription_status='beta' — alte Beta-Käufer:innen (vor 25.04.2026) hatten kein beta_reservations-Eintrag. */
