@@ -135,53 +135,115 @@ function normalizePlan(raw: unknown): BuildPlan {
   return { summary, affected_areas, likely_files, assumptions, risks, questions, ready_to_build };
 }
 
-// ── Destructive-task safety net ──────────────────────────────────────────────
+// ── Deterministic destructive-task safety gate ───────────────────────────────
 //
-// Belt-and-suspenders on top of the SAFETY OVERRIDE in the system prompt: if
-// the task text clearly describes a destructive data operation, we never let
-// the analysis come back "ready to build" with no questions. This guarantees
-// the block even if the model wavers. Patterns are intentionally strong-signal
-// (delete/drop/truncate/bulk + users/rows/billing/auth) to avoid blocking
-// benign UI tasks like "add a delete button for a single item".
-const DESTRUCTIVE_PATTERNS: RegExp[] = [
-  /\bdelete\s+(all\s+|every\s+)?(users?|accounts?|rows?|records?|entries|customers?|subscriptions?)/i,
-  /\b(lösch|loesch|entfern)\w*\s+(alle\s+|sämtliche\s+|saemtliche\s+)?(nutzer|user|accounts?|konten|kunden|einträge|eintraege|datensätze|datensaetze|zeilen|abos?|subscriptions?)/i,
-  /\bdrop\s+(table|column|database|schema)\b/i,
-  /\btruncate\b/i,
-  /\bdelete\s+from\b/i,
-  /\b(bulk|mass)\s+(delete|deletion|update)\b/i,
-  /\bauth\.users\b/i,
-  /\b(destructive|irreversible|unwiederbringlich|unwiederruflich)\b/i,
-  /\b(subscription|billing|payment|zahlung|abo)\w*\b[^.\n]{0,40}\b(delete|lösch|loesch|remove|entfern|cancel|kündig|kuendig)/i,
-  /\b(delete|lösch|loesch|remove|entfern)\w*\b[^.\n]{0,40}\b(subscription|billing|payment|zahlung|abo|nutzer ohne)/i,
+// HARD, model-independent gate. The system-prompt SAFETY OVERRIDE is advisory;
+// this is the guarantee. Rule (per spec): if the combined text (task title +
+// prompt + ENTIRE chat history + queued notes) contains BOTH a destructive verb
+// AND a sensitive target, ready_to_build can NEVER be true. Plus an explicit
+// hardcoded phrase that must always block.
+//
+// Verb-AND-target (rather than adjacency) is intentionally robust: it catches
+// "Lösche alle Nutzer ohne aktive Zahlung aus der Datenbank" regardless of word
+// order/separation. A lone verb with no sensitive target (e.g. "Delete-Button
+// für einzelne Notizen") does NOT auto-block.
+
+const DESTRUCTIVE_VERBS: string[] = [
+  "lösche", "löschen", "loesche", "loeschen", "entferne", "entfernen",
+  "delete", "remove", "drop", "truncate", "purge", "wipe",
 ];
 
-// German fallback safety questions, used only when the model returned a
-// destructive plan with NO questions. Normally the model produces these
-// itself (in the user's language) per the SAFETY OVERRIDE.
-const FALLBACK_SAFETY_QUESTIONS: string[] = [
-  "Was zählt exakt als Lösch-Kriterium (z. B. keine aktive Zahlung / inaktiver Nutzer)?",
-  "Soll zuerst ein Dry Run / Preview der betroffenen Datensätze erstellt werden?",
+const SENSITIVE_TARGETS: string[] = [
+  "nutzer", "user", "users", "account", "accounts", "auth.users",
+  "datenbank", "database", "db", "zahlung", "zahlungen", "payment",
+  "payments", "subscription", "subscriptions", "abo", "abos", "billing",
+  "kunde", "kunden", "customer", "customers",
+];
+
+// Phrases that must ALWAYS hard-block, normalized (lowercase, collapsed spaces).
+const HARDCODED_BLOCK_PHRASES: string[] = [
+  "lösche alle nutzer ohne aktive zahlung aus der datenbank",
+  "loesche alle nutzer ohne aktive zahlung aus der datenbank",
+];
+
+// Mandatory safety questions injected on every hard block (spec Pflichtfragen).
+const MANDATORY_SAFETY_QUESTIONS: string[] = [
+  "Was zählt exakt als „keine aktive Zahlung“?",
+  "Soll zuerst ein Dry Run / Preview erstellt werden?",
   "Welche Tabellen dürfen betroffen sein?",
-  "Soll vor der Löschung ein Backup/Export erstellt werden?",
+  "Soll ein Backup/Export vor Löschung erstellt werden?",
   "Soll die Aktion batchweise laufen?",
-  "Soll ein Audit-Log erstellt werden?",
-  "Wer darf diese Aktion auslösen (Berechtigung)?",
+  "Soll ein Audit Log erstellt werden?",
+  "Wer darf diese Aktion auslösen?",
 ];
 
-function isDestructive(text: string): boolean {
-  return DESTRUCTIVE_PATTERNS.some((re) => re.test(text));
+function normalizeText(s: string): string {
+  return (s ?? "").toLowerCase().replace(/\s+/g, " ").trim();
+}
+
+// True when `token` appears as a standalone word in already-lowercased text.
+// German letters + the dot in "auth.users" are treated as word chars so the
+// token isn't matched inside a larger word (avoids "db" hitting "feedback").
+function wordPresent(lowerText: string, token: string): boolean {
+  const esc = token.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const re = new RegExp(`(?<![a-z0-9äöüß.])${esc}(?![a-z0-9äöüß])`, "i");
+  return re.test(lowerText);
+}
+
+/** Deterministic destructive detection: hardcoded phrase OR (verb AND target). */
+export function isTaskDestructive(text: string): boolean {
+  const norm = normalizeText(text);
+  if (!norm) return false;
+  if (HARDCODED_BLOCK_PHRASES.some((p) => norm.includes(p))) return true;
+  const hasVerb = DESTRUCTIVE_VERBS.some((v) => wordPresent(norm, v));
+  const hasTarget = SENSITIVE_TARGETS.some((t) => wordPresent(norm, t));
+  return hasVerb && hasTarget;
+}
+
+function dedupeQuestions(list: string[]): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const q of list) {
+    const key = q.trim().toLowerCase();
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    out.push(q.trim());
+  }
+  return out;
 }
 
 /**
- * Enforce the destructive-task safety gate. If the task text is destructive,
- * the plan can never be "ready to build" without open safety questions.
+ * Enforce the hard safety gate. If the combined task text is destructive, the
+ * plan is FORCED to ready_to_build=false and the mandatory safety questions are
+ * guaranteed present (merged with any the model already produced). This is
+ * deterministic and independent of the model output.
  */
-function enforceSafetyBlock(plan: BuildPlan, taskText: string): BuildPlan {
-  if (!isDestructive(taskText)) return plan;
-  if (!plan.ready_to_build && plan.questions.length > 0) return plan; // already blocked properly
-  const questions = plan.questions.length ? plan.questions : [...FALLBACK_SAFETY_QUESTIONS];
+export function enforceSafetyBlock(plan: BuildPlan, taskText: string): BuildPlan {
+  if (!isTaskDestructive(taskText)) return plan;
+  const questions = dedupeQuestions([...plan.questions, ...MANDATORY_SAFETY_QUESTIONS]);
   return { ...plan, questions, ready_to_build: false };
+}
+
+/**
+ * Internal self-test for the safety gate. Returns one row per case with the
+ * expected vs actual block decision. Pure + side-effect free — call it from a
+ * script or log it to verify the gate without a test runner.
+ */
+export function runSafetyGateSelfTest(): Array<{
+  input: string;
+  expectedBlocked: boolean;
+  blocked: boolean;
+  pass: boolean;
+}> {
+  const cases: Array<{ input: string; expectedBlocked: boolean }> = [
+    { input: "Lösche alle Nutzer ohne aktive Zahlung aus der Datenbank", expectedBlocked: true },
+    { input: "Delete all inactive users from the database", expectedBlocked: true },
+    { input: "Füge einen Delete-Button für einzelne Notizen hinzu", expectedBlocked: false },
+  ];
+  return cases.map((c) => {
+    const blocked = isTaskDestructive(c.input);
+    return { input: c.input, expectedBlocked: c.expectedBlocked, blocked, pass: blocked === c.expectedBlocked };
+  });
 }
 
 function extractText(content: unknown): string {
@@ -238,8 +300,14 @@ export async function runDevCockpitAnalysis(input: {
   }
 
   const plan = normalizePlan(parsed);
-  // Safety net: destructive tasks must never come back ready-to-build silently.
-  const taskText = [input.title, input.prompt, ...input.queuedNotes].join("\n");
+  // Hard safety gate: scan title + prompt + ENTIRE chat history + queued notes.
+  // Destructive tasks can never come back ready-to-build, regardless of model.
+  const taskText = [
+    input.title,
+    input.prompt,
+    ...input.history.map((h) => h.content),
+    ...input.queuedNotes,
+  ].join("\n");
   return enforceSafetyBlock(plan, taskText);
 }
 

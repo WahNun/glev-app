@@ -46,16 +46,24 @@ Offene Fragen (nur falls echter Blocker).
 ### Nachbesserung (2026-06-02): Destructive/Billing-Safety-Gate
 
 Gegenstück zur Annahmen-Lockerung: **destruktive Tasks müssen immer blocken.**
-Ein **SAFETY OVERRIDE** im System-Prompt (Vorrang vor „default to planning")
-erzwingt `ready_to_build = false` + konkrete Sicherheitsfragen bei: User-/Account-
-Löschung, Löschen von DB-Zeilen/Datensätzen, irreversiblen Datenänderungen,
-Billing-/Subscription-Löschlogik, `auth.users`-Änderungen, destructive SQL
-(DELETE/DROP/TRUNCATE/bulk UPDATE), bulk delete / mass update — solange keine
-expliziten Sicherheitsdetails vorliegen. Zusätzlich ein **serverseitiges
-Sicherheitsnetz** (`isDestructive()` + `enforceSafetyBlock()` in
-`devCockpitAnalysis.ts`): erkennt destruktive Muster im Task-Text und erzwingt das
-Blocken (inkl. Fallback-Pflichtfragen), falls das Modell schwankt. Die „nicht
-bereit"-Message lautet jetzt „🔒 Benötigt Sicherheitsfreigabe / Definition vor Build".
+Ein **SAFETY OVERRIDE** im System-Prompt (Vorrang vor „default to planning") plus
+ein **harter, deterministischer serverseitiger Gate** in `devCockpitAnalysis.ts`,
+der **unabhängig vom Modelloutput** greift (nach dem Mistral-Call als Post-Processing):
+
+- `isTaskDestructive(text)` blockt, wenn der **gesamte Text** (Titel + Prompt +
+  **komplette Chat-History** + Queue-Notes) **(destructive verb) UND (sensitive
+  target)** enthält — verb/target-Listen wortgenau (Lookbehind verhindert z. B.
+  „db" in „feedback"). Zusätzlich **hardcoded** der Testfall „Lösche alle Nutzer
+  ohne aktive Zahlung aus der Datenbank".
+- `enforceSafetyBlock(plan, text)` erzwingt dann `ready_to_build = false`
+  (→ `waiting_for_input`) und merged die **Pflicht-Sicherheitsfragen** in `questions`.
+- Assistant-Message enthält „🔒 Benötigt Sicherheitsfreigabe / Definition vor Build"
+  und **nie** „Bereit für Start Build".
+- `runSafetyGateSelfTest()` (exportiert) prüft verifizierbar: destruktiv DE/EN →
+  blocked, „Delete-Button für einzelne Notizen" → nicht blocked.
+
+Bewusst eng: ein Verb **ohne** sensibles Target (z. B. „Delete-Button für Notizen")
+blockt nicht.
 
 ## 2. Neue Dateien
 
