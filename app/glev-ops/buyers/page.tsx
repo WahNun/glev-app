@@ -185,6 +185,7 @@ export default async function AdminBuyersPage({
                   <Th>Quelle</Th>
                   <Th>Trial gestartet</Th>
                   <Th>Trial endet</Th>
+                  <Th>Tage übrig</Th>
                   <Th>Status</Th>
                   <Th>Angelegt</Th>
                 </tr>
@@ -219,13 +220,24 @@ export default async function AdminBuyersPage({
                       <Td>{end ? fmtDate(u.trialEndAt) : "—"}</Td>
                       <Td>
                         {notYetActivated ? (
+                          <span style={badgePending}>—</span>
+                        ) : expired ? (
+                          <span style={badgeExpired}>0 Tage</span>
+                        ) : daysLeft !== null ? (
+                          <span style={daysLeft <= 2 ? badgeExpired : daysLeft <= 4 ? badgeWarn : badgeActive}>
+                            {daysLeft} {daysLeft === 1 ? "Tag" : "Tage"}
+                          </span>
+                        ) : (
+                          "—"
+                        )}
+                      </Td>
+                      <Td>
+                        {notYetActivated ? (
                           <span style={badgePending}>Wartet</span>
                         ) : expired ? (
                           <span style={badgeExpired}>Abgelaufen</span>
-                        ) : daysLeft !== null ? (
-                          <span style={badgeActive}>Aktiv · noch {daysLeft}d</span>
                         ) : (
-                          "—"
+                          <span style={badgeActive}>Aktiv</span>
                         )}
                       </Td>
                       <Td>{fmtDate(u.createdAt)}</Td>
@@ -373,4 +385,14 @@ const badgePending: React.CSSProperties = {
   borderRadius: 4,
   padding: "2px 7px",
   fontSize: 11,
+};
+
+const badgeWarn: React.CSSProperties = {
+  background: "#fff7ed",
+  color: "#9a3412",
+  border: "1px solid #fed7aa",
+  borderRadius: 4,
+  padding: "2px 7px",
+  fontSize: 11,
+  fontWeight: 600,
 };
