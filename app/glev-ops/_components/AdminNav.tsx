@@ -18,6 +18,7 @@ const GROUPS: ReadonlyArray<NavGroup> = [
   {
     label: "Nutzer & Accounts",
     items: [
+      { href: "/glev-ops/crm", label: "CRM" },
       { href: "/glev-ops/users", label: "Nutzer" },
       { href: "/glev-ops/subscriptions", label: "Abos" },
       { href: "/glev-ops/buyers", label: "Käufer" },
