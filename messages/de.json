@@ -1242,6 +1242,7 @@
     "macro_fat_label": "Fett (g)",
     "macro_fiber_label": "Ballaststoffe (g)",
     "save_button_idle": "Einstellungen speichern",
+    "save_button_label": "Speichern",
     "save_button_busy": "Speichere…",
     "save_button_done": "✓ Gespeichert!",
     "reset_button": "Zurücksetzen",

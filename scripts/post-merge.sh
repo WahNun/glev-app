@@ -14,13 +14,22 @@
 # the user as documented in the project goal.
 set -e
 
-if npm ci --no-audit --no-fund --prefer-offline; then
-  echo "[post-merge] npm ci succeeded"
-else
-  echo "[post-merge] npm ci failed (likely lockfile out of sync) — falling back to npm install"
-  npm install --no-audit --no-fund
-  echo "[post-merge] npm install succeeded — pnpm-lock.json may need to be committed"
-fi
+install_deps() {
+  if npm ci --no-audit --no-fund --prefer-offline 2>/dev/null; then
+    echo "[post-merge] npm ci succeeded"
+    return 0
+  fi
+  echo "[post-merge] npm ci failed — falling back to npm install"
+  if npm install --no-audit --no-fund 2>/dev/null; then
+    echo "[post-merge] npm install succeeded"
+    return 0
+  fi
+  echo "[post-merge] npm install failed (peer dep conflict) — retrying with --legacy-peer-deps"
+  npm install --no-audit --no-fund --legacy-peer-deps
+  echo "[post-merge] npm install --legacy-peer-deps succeeded"
+}
+
+install_deps
 
 # Verify that every column referenced by the lib/*.ts column lists
 # exists in the live Supabase tables. Several helpers silently fall

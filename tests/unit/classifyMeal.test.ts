@@ -44,9 +44,9 @@ test("classifyMeal: FAST_CARBS wins over HIGH_FAT when both rules match", () => 
 
 test("classifyMeal: sugarShare exactly 0.5 → NOT FAST_CARBS (strict greater-than)", () => {
   // 50g carbs, 10g fiber (fiber>=5), 25g sugar → sugarShare = 0.5,
-  // which is NOT > 0.5. Both FAST_CARBS sub-conditions fail → falls
-  // through to the macro tests (BALANCED here).
-  expect(classifyMeal(50, 5, 5, 10, 25)).toBe("BALANCED");
+  // which is NOT > 0.5. Both FAST_CARBS sub-conditions fail.
+  // fiber=10 >= 7 AND fiber/carbs = 0.2 → HIGH_FIBER bucket applies.
+  expect(classifyMeal(50, 5, 5, 10, 25)).toBe("HIGH_FIBER");
 });
 
 test("classifyMeal: fiber exactly 5g → NOT FAST_CARBS (strict less-than)", () => {
@@ -186,11 +186,10 @@ test("classifyMeal: BALANCED when no dominant macro and not a fast-carb load", (
   expect(classifyMeal(30, 10, 5, 3)).toBe("BALANCED");
 });
 
-test("classifyMeal: high-fiber high-carb meal → BALANCED (legacy HIGH_FIBER bucket removed)", () => {
-  // 60g carbs but 12g fiber → fiber>=5; no sugars → sugarShare null.
-  // Spec: HIGH_FIBER bucket was removed in Task #15, so this lands
-  // in BALANCED rather than its own bucket.
-  expect(classifyMeal(60, 5, 5, 12)).toBe("BALANCED");
+test("classifyMeal: high-fiber high-carb meal → HIGH_FIBER", () => {
+  // 60g carbs, 12g fiber → fiber>=7 AND fiber/carbs=0.20 → HIGH_FIBER.
+  // HIGH_FIBER bucket is active (lentils, beans, chickpeas, whole grain).
+  expect(classifyMeal(60, 5, 5, 12)).toBe("HIGH_FIBER");
 });
 
 test("classifyMeal: zero macros across the board → BALANCED (no division by zero)", () => {

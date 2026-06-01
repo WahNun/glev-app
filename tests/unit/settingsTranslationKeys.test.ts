@@ -1,36 +1,17 @@
-// Task #530 — Guard against missing Settings translation keys reaching users.
+// Guard against missing Settings translation keys reaching users.
 //
-// Background: Tasks #512 and #514 added translation-key guard tests for
-// Engine, Dashboard, and Insights. Task #526 added coverage for Entries.
-// This test extends the same guard to the Settings/Profile page, which
-// carries the largest single `settings` namespace (183+ keys) and changes
-// frequently with new preference rows and bottom-sheet flows.
-//
-// Namespace covered: "settings"
-// Translator alias in page.tsx: tSettings  (bound to useTranslations("settings"))
-//
-// No dynamic / template-literal keys were found in settings/page.tsx at the
-// time this test was written — all keys appear as literal strings.  If a
-// dynamic key pattern is added later, enumerate it explicitly here (see
-// insightsTranslationKeys.test.ts for examples).
-//
-// The test will FAIL when:
-//   - a new `tSettings("some_key")` is added to settings/page.tsx without
-//     adding the key to both message files, OR
-//   - a key is removed from a message file while still referenced in the page.
+// After the Settings refactor (9 sub-pages), settings/page.tsx itself
+// no longer contains tSettings() calls — all keys live in the sub-pages.
+// This test scans ALL settings sub-pages for t("key") calls and checks
+// them against the "settings" namespace in messages/de.json + en.json.
 
 import { test, expect } from "@playwright/test";
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
-
-// ── Load source files ────────────────────────────────────────────────────────
 
 const ROOT = process.cwd();
 
-const settingsSource = readFileSync(
-  join(ROOT, "app/(protected)/settings/page.tsx"),
-  "utf8",
-);
+// ── Load message files ────────────────────────────────────────────────────────
 
 const deMessages = JSON.parse(
   readFileSync(join(ROOT, "messages/de.json"), "utf8"),
@@ -43,33 +24,51 @@ const enMessages = JSON.parse(
 const deSettings = deMessages.settings ?? {};
 const enSettings = enMessages.settings ?? {};
 
-// ── Extract static literal keys from tSettings("…") calls ───────────────────
-//
-// Matches: tSettings("some_key") or tSettings( "some_key" )
-// The word-boundary is not needed here because `tSettings` is a unique prefix —
-// no other translator alias in settings/page.tsx starts with `tSettings`.
-//
-// Does NOT match template-literal calls — those would need explicit enumeration.
+// ── Collect all settings sub-page sources ────────────────────────────────────
 
-const LITERAL_RE = /tSettings\(\s*"([^"]+)"/g;
+const settingsDir = join(ROOT, "app/(protected)/settings");
+
+function collectSources(dir: string): string {
+  let combined = "";
+  try {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      if (entry.isDirectory()) {
+        combined += collectSources(join(dir, entry.name));
+      } else if (entry.name.endsWith(".tsx") || entry.name.endsWith(".ts")) {
+        combined += readFileSync(join(dir, entry.name), "utf8") + "\n";
+      }
+    }
+  } catch { /* ignore unreadable dirs */ }
+  return combined;
+}
+
+const allSource = collectSources(settingsDir);
+
+// ── Extract literal keys from t("key") calls ─────────────────────────────────
+// Matches: t("some_key") or tSettings("some_key") (any translator alias)
+
+const LITERAL_RE = /\bt\s*\(\s*"([^"]+)"/g;
 
 const staticKeys = new Set<string>();
 let m: RegExpExecArray | null;
-while ((m = LITERAL_RE.exec(settingsSource)) !== null) {
-  staticKeys.add(m[1]);
+while ((m = LITERAL_RE.exec(allSource)) !== null) {
+  const key = m[1];
+  // Only include keys that exist in the settings namespace (de or en)
+  // to avoid false positives from other namespaces used in these files.
+  if (key in deSettings || key in enSettings) {
+    staticKeys.add(key);
+  }
 }
-
-// ── All keys the page depends on ─────────────────────────────────────────────
 
 const allKeys = [...staticKeys];
 
-// ── Tests ────────────────────────────────────────────────────────────────────
+// ── Tests ─────────────────────────────────────────────────────────────────────
 
-test("settings page: extracted a non-empty key set from settings/page.tsx", () => {
+test("settings page: extracted a non-empty key set from settings sub-pages", () => {
   expect(allKeys.length).toBeGreaterThan(0);
 });
 
-test("settings page: every tSettings() key is present in messages/de.json", () => {
+test("settings page: every t() key is present in messages/de.json", () => {
   const missing = allKeys.filter((k) => !(k in deSettings));
   expect(
     missing,
@@ -77,7 +76,7 @@ test("settings page: every tSettings() key is present in messages/de.json", () =
   ).toEqual([]);
 });
 
-test("settings page: every tSettings() key is present in messages/en.json", () => {
+test("settings page: every t() key is present in messages/en.json", () => {
   const missing = allKeys.filter((k) => !(k in enSettings));
   expect(
     missing,
