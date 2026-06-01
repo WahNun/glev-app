@@ -103,7 +103,15 @@ export interface BuildPlan {
   summary: string;
   affected_areas: string[];
   likely_files: string[];
+  /**
+   * Plausible assumptions the architect made to keep planning instead of
+   * blocking. Normal uncertainties (unknown exact file, SQL-vs-TS, minor
+   * design details, …) land here — NOT in `questions` — so `ready_to_build`
+   * can stay true.
+   */
+  assumptions: string[];
   risks: string[];
+  /** Only REAL blockers (see system prompt). Empty unless a user answer is truly required. */
   questions: string[];
   ready_to_build: boolean;
 }

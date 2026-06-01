@@ -51,6 +51,7 @@ function parsePlan(planText: string | null): BuildPlan | null {
       summary: typeof p.summary === "string" ? p.summary : "",
       affected_areas: Array.isArray(p.affected_areas) ? p.affected_areas : [],
       likely_files: Array.isArray(p.likely_files) ? p.likely_files : [],
+      assumptions: Array.isArray(p.assumptions) ? p.assumptions : [],
       risks: Array.isArray(p.risks) ? p.risks : [],
       questions: Array.isArray(p.questions) ? p.questions : [],
       ready_to_build: p.ready_to_build === true,
@@ -859,11 +860,13 @@ export default function DevCockpit({ initialTasks }: { initialTasks: DevTask[] }
 
               <PlanSection title="Betroffene Bereiche" items={plan.affected_areas} />
               <PlanSection title="Vermutete Dateien" items={plan.likely_files} mono />
+              <PlanSection title="Annahmen" items={plan.assumptions} accent="#1e40af" />
               <PlanSection title="Risiken" items={plan.risks} />
               <PlanSection title="Offene Fragen" items={plan.questions} accent="#92400e" />
 
               {plan.affected_areas.length === 0 &&
                 plan.likely_files.length === 0 &&
+                plan.assumptions.length === 0 &&
                 plan.risks.length === 0 &&
                 plan.questions.length === 0 &&
                 !plan.summary && (

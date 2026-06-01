@@ -29,6 +29,20 @@ Ausschließlich: Prompt → Analyse → Plan → Rückfragen → Statuswechsel.
 
 Bestehende Phase-2-Funktionalität bleibt vollständig erhalten.
 
+### Nachbesserung (2026-06-02): Annahmen statt Blockieren
+
+`waiting_for_input` wird jetzt **nur bei echten Blockern** gesetzt (widersprüchliches
+Ziel, sicherheitsrelevante/destruktive/Billing-Entscheidung unklar, Wahl zwischen
+stark unterschiedlichen Produktrichtungen, fehlende externe Credentials). Normale
+Unklarheiten (genaue Datei unbekannt, SQL vs. TS, kleine Design-/Responsive-Details,
+Datenstruktur erst prüfen, optionale Zusatzanzeige) führen **nicht** mehr zu
+Rückfragen — der Agent trifft plausible **Annahmen**, listet sie im neuen Build-Plan-
+Abschnitt **„Annahmen"** und setzt trotzdem `ready_to_build = true` → `waiting_for_start`.
+`BuildPlan` hat dafür ein neues Feld `assumptions: string[]` (nur in `plan_text`-JSON,
+keine DB-Migration). Antwortsprache folgt dem User (DE bei DE, EN bei EN). Build-Plan-
+Reihenfolge: Summary · Betroffene Bereiche · Vermutete Dateien · Annahmen · Risiken ·
+Offene Fragen (nur falls echter Blocker).
+
 ## 2. Neue Dateien
 
 - `lib/ai/devCockpitAnalysis.ts` — Mistral-Analyse-Engine: System-Prompt, JSON-Parsing/Normalisierung, `runDevCockpitAnalysis()` + `formatPlanMessage()`
