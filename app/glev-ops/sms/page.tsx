@@ -3,7 +3,7 @@
 import { useState } from "react";
 
 const DEFAULT_MESSAGE =
-  "[TEST] Willkommen bei Glev! Aktiviere deinen kostenlosen 7-Tage-Test: https://glev.app/auth/confirm?token=TEST\n\nDu erhältst auch eine E-Mail von info@glev.app – bitte prüfe ggf. auch deinen Spam-Ordner.";
+  "[TEST] Willkommen bei Glev! Aktiviere deinen kostenlosen 7-Tage-Test: https://glev.app/auth/confirm?token=TEST\n\nAlternativ kannst du dich auch per E-Mail anmelden – bitte prüfe ggf. auch deinen Spam-Ordner auf eine E-Mail von info@glev.app.";
 
 type Result = {
   ok: boolean;
