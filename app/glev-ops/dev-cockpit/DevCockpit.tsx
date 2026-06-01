@@ -443,9 +443,19 @@ export default function DevCockpit({ initialTasks }: { initialTasks: DevTask[] }
             <textarea
               ref={promptRef}
               style={textareaStyle}
-              placeholder="Beschreibe die gewünschte Änderung..."
+              placeholder="Beschreibe die gewünschte Änderung…  (⌘/Strg+Enter zum Absenden)"
               value={promptText}
               onChange={(e) => setPromptText(e.target.value)}
+              onKeyDown={(e) => {
+                // Cmd/Ctrl+Enter submits; plain Enter stays a newline so the
+                // prompt can be multi-line.
+                if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+                  e.preventDefault();
+                  if (isPending) return;
+                  if (composeMode || !selectedTask) handleCreateTask();
+                  else handleSavePrompt();
+                }
+              }}
               rows={5}
             />
 
@@ -501,9 +511,15 @@ export default function DevCockpit({ initialTasks }: { initialTasks: DevTask[] }
             <div style={{ marginTop: 14 }}>
               <textarea
                 style={{ ...textareaStyle, minHeight: 0 }}
-                placeholder="Queue-Notiz hinzufügen (wird gespeichert, keine Bewertung in Phase 2)…"
+                placeholder="Queue-Notiz hinzufügen (gespeichert, keine Bewertung in Phase 2)…  (⌘/Strg+Enter)"
                 value={queueText}
                 onChange={(e) => setQueueText(e.target.value)}
+                onKeyDown={(e) => {
+                  if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+                    e.preventDefault();
+                    if (!isPending) handleAddToQueue();
+                  }
+                }}
                 rows={2}
               />
             </div>
