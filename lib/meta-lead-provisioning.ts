@@ -88,12 +88,24 @@ export async function provisionMetaLead(
         options: { redirectTo: `${APP_URL}/auth/confirm` },
       });
       inviteUrl = rec?.properties?.action_link ?? null;
+      if (!inviteUrl) {
+        // eslint-disable-next-line no-console
+        console.error(
+          `[meta-lead-provisioning] recovery generateLink returned no action_link for ${email} — invite email will NOT be sent`,
+        );
+      }
     } else {
       return { ok: false, reason: linkErr.message };
     }
   } else {
     userId = linkData!.user!.id;
     inviteUrl = linkData?.properties?.action_link ?? null;
+    if (!inviteUrl) {
+      // eslint-disable-next-line no-console
+      console.error(
+        `[meta-lead-provisioning] invite generateLink returned no action_link for ${email} — invite email will NOT be sent`,
+      );
+    }
   }
 
   await sb.from("profiles").upsert(

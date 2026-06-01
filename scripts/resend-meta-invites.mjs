@@ -17,16 +17,10 @@ if (!SECRET) {
   process.exit(1);
 }
 
-// ── Leads hier eintragen ──────────────────────────────────────────────────────
-const LEADS = [
-  // Marco, Thomas, Georg haben bereits heute eine gebrandete Email bekommen.
-  { email: "susannegoll19691@web.de",   name: "Susanne", locale: "de" },
-  { email: "tsonioivanov654@gmail.com", name: "Tsonuy",  locale: "de" },
-  { email: "hcmohr@mac.com",            name: "H_C_M",   locale: "de" },
-];
-// ─────────────────────────────────────────────────────────────────────────────
+// Leads werden ausschließlich als CLI-Argumente übergeben: "email:name:locale"
+// Dieses Array bleibt absichtlich leer — keine Leads hartkodieren.
+const LEADS = [];
 
-// Leads können auch als CLI-Argumente übergeben werden: "email:name:locale"
 const cliLeads = process.argv.slice(2).map((arg) => {
   const [email, name = "", locale = "de"] = arg.split(":");
   return { email: email.trim(), name: name.trim() || null, locale };
@@ -35,7 +29,8 @@ const cliLeads = process.argv.slice(2).map((arg) => {
 const allLeads = [...LEADS, ...cliLeads];
 
 if (allLeads.length === 0) {
-  console.error("❌  Keine Leads angegeben. Trag sie in LEADS[] ein oder übergib sie als Argumente.");
+  console.error("❌  Keine Leads angegeben. Übergib sie als CLI-Argumente: \"email:name:locale\"");
+  console.error("    Beispiel: node scripts/resend-meta-invites.mjs \"max@example.com:Max Mustermann:de\"");
   process.exit(1);
 }
 
