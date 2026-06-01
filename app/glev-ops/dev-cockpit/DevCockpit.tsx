@@ -1,105 +1,46 @@
 "use client";
 
-import { useState } from "react";
+// Dev Cockpit — Phase 2 (persistent task management).
+//
+// Keeps the entire Phase-1 layout (Task Sidebar, Task Detail, Prompt area,
+// Prompt Queue, Preview placeholder, Diff placeholder) but swaps the local
+// mock state for real persisted data via the server actions in ./actions.ts.
+//
+// In scope: persistence, task CRUD/status, sidebar filters, right-click
+// context menu (Cancel / Archive / Move to Backlog), prompt → task + first
+// message, queue notes. NOT in scope (later phases): AI calls, GitHub
+// branches, Vercel previews, diff fetching, voice, real file uploads, agent
+// execution — those controls stay visibly disabled / "coming".
 
-// ── Types ─────────────────────────────────────────────────────────────────────
+import { useEffect, useRef, useState, useTransition } from "react";
+import {
+  listTasks,
+  getTask,
+  createTask,
+  updateTask,
+  cancelTask,
+  archiveTask,
+  moveTaskToBacklog,
+  listMessages,
+  listQueueNotes,
+  addQueueNote,
+  discardQueueNote,
+  listAttachments,
+} from "./actions";
+import {
+  STATUS_LABEL,
+  STATUS_STYLE,
+  FILTER_ORDER,
+  FILTER_LABEL,
+  type DevTask,
+  type DevMessage,
+  type DevQueueNote,
+  type DevAttachment,
+  type TaskStatus,
+  type TaskFilter,
+} from "./types";
 
-type TaskStatus =
-  | "draft"
-  | "planning"
-  | "waiting_for_start"
-  | "building"
-  | "preview_ready"
-  | "applied"
-  | "rejected";
-
-interface DevTask {
-  id: string;
-  title: string;
-  status: TaskStatus;
-  createdAt: string;
-}
-
-interface QueueItem {
-  id: string;
-  text: string;
-}
-
-// ── Mock data ─────────────────────────────────────────────────────────────────
-
-const INITIAL_TASKS: DevTask[] = [
-  {
-    id: "1",
-    title: "Dark mode toggle implementieren",
-    status: "draft",
-    createdAt: "2026-05-30",
-  },
-  {
-    id: "2",
-    title: "Login-Redirect Bug fixen",
-    status: "building",
-    createdAt: "2026-05-29",
-  },
-  {
-    id: "3",
-    title: "Onboarding Flow neu gestalten",
-    status: "preview_ready",
-    createdAt: "2026-05-28",
-  },
-  {
-    id: "4",
-    title: "E-Mail Templates aktualisieren",
-    status: "applied",
-    createdAt: "2026-05-27",
-  },
-  {
-    id: "5",
-    title: "Export Feature",
-    status: "rejected",
-    createdAt: "2026-05-26",
-  },
-  {
-    id: "6",
-    title: "Admin Nav erweitern",
-    status: "planning",
-    createdAt: "2026-05-25",
-  },
-  {
-    id: "7",
-    title: "Supabase Migrations prüfen",
-    status: "waiting_for_start",
-    createdAt: "2026-05-24",
-  },
-];
-
-const INITIAL_QUEUE: QueueItem[] = [
-  { id: "q1", text: "Füge einen Tooltip für den Glucose-Chart hinzu" },
-  { id: "q2", text: "Optimiere die Ladezeit der Admin-Seiten" },
-];
-
-// ── Status config ─────────────────────────────────────────────────────────────
-
-const STATUS_LABEL: Record<TaskStatus, string> = {
-  draft: "Entwurf",
-  planning: "Planung",
-  waiting_for_start: "Wartet",
-  building: "Building",
-  preview_ready: "Preview bereit",
-  applied: "Angewendet",
-  rejected: "Abgelehnt",
-};
-
-const STATUS_STYLE: Record<TaskStatus, React.CSSProperties> = {
-  draft: { background: "#f3f4f6", color: "#374151", border: "1px solid #d1d5db" },
-  planning: { background: "#dbeafe", color: "#1e40af", border: "1px solid #93c5fd" },
-  waiting_for_start: { background: "#fef9c3", color: "#854d0e", border: "1px solid #fde047" },
-  building: { background: "#ffedd5", color: "#9a3412", border: "1px solid #fed7aa" },
-  preview_ready: { background: "#f3e8ff", color: "#6b21a8", border: "1px solid #d8b4fe" },
-  applied: { background: "#dcfce7", color: "#166534", border: "1px solid #86efac" },
-  rejected: { background: "#fee2e2", color: "#991b1b", border: "1px solid #fca5a5" },
-};
-
-// ── Sub-components ────────────────────────────────────────────────────────────
+// ── Helpers ───────────────────────────────────────────────────────────────────
 
 function StatusBadge({ status }: { status: TaskStatus }) {
   return (
@@ -132,81 +73,329 @@ function fmtDate(iso: string): string {
   }
 }
 
+const ERR_LABEL: Record<string, string> = {
+  auth: "Session abgelaufen — bitte neu einloggen.",
+  "building-cannot-archive":
+    "Ein laufender Build kann nicht archiviert werden. Erst abbrechen (Cancel).",
+};
+function errText(code: string): string {
+  return ERR_LABEL[code] ?? `Fehler: ${code}`;
+}
+
 // ── Main component ────────────────────────────────────────────────────────────
 
-export default function DevCockpit() {
-  const [tasks, setTasks] = useState<DevTask[]>(INITIAL_TASKS);
+export default function DevCockpit({ initialTasks }: { initialTasks: DevTask[] }) {
+  const [tasks, setTasks] = useState<DevTask[]>(initialTasks);
+  const [filter, setFilter] = useState<TaskFilter>("active");
   const [selectedId, setSelectedId] = useState<string | null>(
-    INITIAL_TASKS[0]?.id ?? null,
+    initialTasks[0]?.id ?? null,
   );
+  const [composeMode, setComposeMode] = useState<boolean>(
+    initialTasks.length === 0,
+  );
+
   const [promptText, setPromptText] = useState("");
-  const [queue, setQueue] = useState<QueueItem[]>(INITIAL_QUEUE);
+  const [queueText, setQueueText] = useState("");
+
+  const [messages, setMessages] = useState<DevMessage[]>([]);
+  const [queue, setQueue] = useState<DevQueueNote[]>([]);
+  const [attachments, setAttachments] = useState<DevAttachment[]>([]);
+
+  const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [menu, setMenu] = useState<{ task: DevTask; x: number; y: number } | null>(
+    null,
+  );
+
+  const [isPending, startTransition] = useTransition();
+  const promptRef = useRef<HTMLTextAreaElement>(null);
 
   const selectedTask = tasks.find((t) => t.id === selectedId) ?? null;
 
-  function handleNewTask() {
-    const id = String(Date.now());
-    const task: DevTask = {
-      id,
-      title: "Neue Task",
-      status: "draft",
-      createdAt: new Date().toISOString().slice(0, 10),
-    };
-    setTasks((prev) => [task, ...prev]);
-    setSelectedId(id);
+  // ── Data loading ────────────────────────────────────────────────────────────
+
+  function refreshList(nextFilter: TaskFilter) {
+    startTransition(async () => {
+      const res = await listTasks(nextFilter);
+      if (!res.ok) {
+        setError(errText(res.error));
+        return;
+      }
+      setTasks(res.data);
+      // Drop selection if the selected task fell out of the new view.
+      setSelectedId((cur) =>
+        cur && res.data.some((t) => t.id === cur) ? cur : res.data[0]?.id ?? null,
+      );
+    });
   }
 
-  function discardQueueItem(id: string) {
-    setQueue((prev) => prev.filter((item) => item.id !== id));
+  function loadTaskDetail(taskId: string) {
+    startTransition(async () => {
+      const [m, q, a] = await Promise.all([
+        listMessages(taskId),
+        listQueueNotes(taskId),
+        listAttachments(taskId),
+      ]);
+      if (m.ok) setMessages(m.data);
+      if (q.ok) setQueue(q.data);
+      if (a.ok) setAttachments(a.data);
+    });
   }
+
+  // Load detail whenever the selected task changes.
+  useEffect(() => {
+    if (!selectedId) {
+      setMessages([]);
+      setQueue([]);
+      setAttachments([]);
+      return;
+    }
+    loadTaskDetail(selectedId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedId]);
+
+  // Sync prompt textarea with the selected task (unless composing a new one).
+  useEffect(() => {
+    if (composeMode) return;
+    setPromptText(selectedTask?.prompt ?? "");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedId, composeMode]);
+
+  // Close the context menu on any outside click / escape.
+  useEffect(() => {
+    if (!menu) return;
+    function close() {
+      setMenu(null);
+    }
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") setMenu(null);
+    }
+    window.addEventListener("click", close);
+    window.addEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("click", close);
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [menu]);
+
+  // Auto-clear transient notices.
+  useEffect(() => {
+    if (!notice && !error) return;
+    const t = setTimeout(() => {
+      setNotice(null);
+      setError(null);
+    }, 4000);
+    return () => clearTimeout(t);
+  }, [notice, error]);
+
+  // ── Actions ───────────────────────────────────────────────────────────────
+
+  function handleFilterChange(next: TaskFilter) {
+    setFilter(next);
+    refreshList(next);
+  }
+
+  function handleStartCompose() {
+    setComposeMode(true);
+    setSelectedId(null);
+    setPromptText("");
+    setMessages([]);
+    setQueue([]);
+    setAttachments([]);
+    setTimeout(() => promptRef.current?.focus(), 0);
+  }
+
+  function handleCreateTask() {
+    const prompt = promptText.trim();
+    startTransition(async () => {
+      const res = await createTask({ prompt });
+      if (!res.ok) {
+        setError(errText(res.error));
+        return;
+      }
+      setComposeMode(false);
+      setNotice("Task erstellt.");
+      // New task is a draft → it belongs to the Active view. Switch there so
+      // it's visible regardless of the current filter, then select it.
+      setFilter("active");
+      const listRes = await listTasks("active");
+      if (listRes.ok) setTasks(listRes.data);
+      setSelectedId(res.data.id);
+    });
+  }
+
+  function handleSavePrompt() {
+    if (!selectedTask) return;
+    startTransition(async () => {
+      const res = await updateTask(selectedTask.id, { prompt: promptText });
+      if (!res.ok) {
+        setError(errText(res.error));
+        return;
+      }
+      setTasks((prev) => prev.map((t) => (t.id === res.data.id ? res.data : t)));
+      setNotice("Prompt gespeichert.");
+    });
+  }
+
+  function handleAddToQueue() {
+    if (!selectedTask) {
+      setError("Erst eine Task auswählen oder erstellen.");
+      return;
+    }
+    const text = queueText.trim();
+    if (!text) return;
+    startTransition(async () => {
+      const res = await addQueueNote(selectedTask.id, text);
+      if (!res.ok) {
+        setError(errText(res.error));
+        return;
+      }
+      setQueue((prev) => [res.data, ...prev]);
+      setQueueText("");
+      setNotice("Queue-Notiz gespeichert.");
+    });
+  }
+
+  function handleDiscardQueue(id: string) {
+    startTransition(async () => {
+      const res = await discardQueueNote(id);
+      if (!res.ok) {
+        setError(errText(res.error));
+        return;
+      }
+      // Soft discard — keep the row but reflect the new status, or drop it
+      // from the visible list to keep the queue focused on open items.
+      setQueue((prev) => prev.filter((q) => q.id !== id));
+    });
+  }
+
+  function runStatusChange(
+    task: DevTask,
+    fn: (id: string) => Promise<{ ok: boolean; error?: string }>,
+    successMsg: string,
+  ) {
+    setMenu(null);
+    startTransition(async () => {
+      const res = await fn(task.id);
+      if (!res.ok) {
+        setError(errText(res.error ?? "unknown"));
+        return;
+      }
+      setNotice(successMsg);
+      // Re-fetch the current filter so the task moves in/out of view correctly.
+      const listRes = await listTasks(filter);
+      if (listRes.ok) {
+        setTasks(listRes.data);
+        setSelectedId((cur) =>
+          cur && listRes.data.some((t) => t.id === cur)
+            ? cur
+            : listRes.data[0]?.id ?? null,
+        );
+      }
+    });
+  }
+
+  // ── Render ────────────────────────────────────────────────────────────────
 
   return (
     <div style={pageStyle}>
       {/* ── Page heading ── */}
       <div style={pageHeaderStyle}>
         <h1 style={headingStyle}>Dev Cockpit</h1>
-        <span style={phaseBadgeStyle}>Phase 1 — UI Skeleton</span>
+        <span style={phaseBadgeStyle}>Phase 2 — Persistenz</span>
+        {isPending && <span style={{ fontSize: 12, color: "#9ca3af" }}>lädt…</span>}
       </div>
+
+      {/* ── Toast / notice ── */}
+      {(error || notice) && (
+        <div
+          style={{
+            marginBottom: 14,
+            padding: "8px 12px",
+            borderRadius: 6,
+            fontSize: 13,
+            fontWeight: 500,
+            ...(error
+              ? { background: "#fee2e2", color: "#991b1b", border: "1px solid #fca5a5" }
+              : { background: "#dcfce7", color: "#166534", border: "1px solid #86efac" }),
+          }}
+        >
+          {error ?? notice}
+        </div>
+      )}
 
       {/* ── Main 3-column grid ── */}
       <div style={mainGridStyle}>
-
         {/* Left Sidebar */}
         <aside style={sidebarStyle}>
           <div style={sidebarHeaderStyle}>
             <span style={sectionLabelStyle}>Tasks</span>
-            <button style={newTaskBtnStyle} onClick={handleNewTask}>
+            <button style={newTaskBtnStyle} onClick={handleStartCompose}>
               + New Task
             </button>
           </div>
-          <div style={taskListStyle}>
-            {tasks.map((task) => (
+
+          {/* Filter chips */}
+          <div style={filterRowStyle}>
+            {FILTER_ORDER.map((f) => (
               <button
-                key={task.id}
-                onClick={() => setSelectedId(task.id)}
+                key={f}
+                onClick={() => handleFilterChange(f)}
                 style={
-                  selectedId === task.id
-                    ? { ...taskItemStyle, ...taskItemActiveStyle }
-                    : taskItemStyle
+                  filter === f
+                    ? { ...filterChipStyle, ...filterChipActiveStyle }
+                    : filterChipStyle
                 }
               >
-                <span style={taskTitleTextStyle}>{task.title}</span>
-                <div style={taskMetaStyle}>
-                  <StatusBadge status={task.status} />
-                  <span style={taskDateTextStyle}>{fmtDate(task.createdAt)}</span>
-                </div>
+                {FILTER_LABEL[f]}
               </button>
             ))}
+          </div>
+
+          <div style={taskListStyle}>
+            {tasks.length === 0 ? (
+              <p style={{ color: "#9ca3af", fontSize: 13, padding: "16px 14px", margin: 0 }}>
+                Keine Tasks in diesem Filter.
+              </p>
+            ) : (
+              tasks.map((task) => (
+                <button
+                  key={task.id}
+                  onClick={() => {
+                    setComposeMode(false);
+                    setSelectedId(task.id);
+                  }}
+                  onContextMenu={(e) => {
+                    e.preventDefault();
+                    setMenu({ task, x: e.clientX, y: e.clientY });
+                  }}
+                  style={
+                    selectedId === task.id
+                      ? { ...taskItemStyle, ...taskItemActiveStyle }
+                      : taskItemStyle
+                  }
+                >
+                  <span style={taskTitleTextStyle}>{task.title}</span>
+                  <div style={taskMetaStyle}>
+                    <StatusBadge status={task.status} />
+                    <span style={taskDateTextStyle}>{fmtDate(task.created_at)}</span>
+                  </div>
+                </button>
+              ))
+            )}
           </div>
         </aside>
 
         {/* Central area */}
         <main style={centralStyle}>
-
           {/* Task Details card */}
           <section style={cardStyle}>
             <h2 style={cardTitleStyle}>Task Details</h2>
-            {selectedTask ? (
+            {composeMode ? (
+              <p style={{ color: "#6b7280", fontSize: 14, margin: 0 }}>
+                Neue Task — Prompt unten eingeben und <strong>Create Task</strong> klicken.
+              </p>
+            ) : selectedTask ? (
               <>
                 <div style={detailRowStyle}>
                   <span style={detailLabelStyle}>Titel</span>
@@ -221,10 +410,25 @@ export default function DevCockpit() {
                 <div style={detailRowStyle}>
                   <span style={detailLabelStyle}>Erstellt</span>
                   <span style={{ color: "#6b7280", fontSize: 13 }}>
-                    {fmtDate(selectedTask.createdAt)}
+                    {fmtDate(selectedTask.created_at)}
                   </span>
                 </div>
-                <div style={chatPlaceholderStyle}>Chat-Verlauf erscheint hier</div>
+
+                {/* Chat / message history */}
+                {messages.length === 0 ? (
+                  <div style={chatPlaceholderStyle}>Noch keine Nachrichten.</div>
+                ) : (
+                  <div style={chatListStyle}>
+                    {messages.map((m) => (
+                      <div key={m.id} style={msgBubbleStyle(m.role)}>
+                        <span style={msgRoleStyle}>{m.role}</span>
+                        <p style={{ margin: "2px 0 0", fontSize: 13, lineHeight: 1.45, color: "#111", whiteSpace: "pre-wrap" }}>
+                          {m.content}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </>
             ) : (
               <p style={{ color: "#9ca3af", fontSize: 14, margin: 0 }}>
@@ -237,6 +441,7 @@ export default function DevCockpit() {
           <section style={cardStyle}>
             <h2 style={cardTitleStyle}>Prompt</h2>
             <textarea
+              ref={promptRef}
               style={textareaStyle}
               placeholder="Beschreibe die gewünschte Änderung..."
               value={promptText}
@@ -246,33 +451,64 @@ export default function DevCockpit() {
 
             {/* Action buttons */}
             <div style={buttonGroupStyle}>
-              <button style={btnPrimaryStyle}>Analyze Task</button>
-              <button style={btnPrimaryStyle}>Start Build</button>
-              <button style={btnSecondaryStyle}>Add To Queue</button>
-              <button style={btnSecondaryStyle}>Evaluate Queue</button>
-              <button
-                style={{
-                  ...btnSecondaryStyle,
-                  color: "#166534",
-                  borderColor: "#86efac",
-                  background: "#dcfce7",
-                }}
-              >
-                Apply Changes
+              {composeMode || !selectedTask ? (
+                <button
+                  style={btnPrimaryStyle}
+                  onClick={handleCreateTask}
+                  disabled={isPending}
+                >
+                  Create Task
+                </button>
+              ) : (
+                <button
+                  style={btnPrimaryStyle}
+                  onClick={handleSavePrompt}
+                  disabled={isPending}
+                >
+                  Save Prompt
+                </button>
+              )}
+              <button style={btnDisabledStyle} disabled title="Phase 3">
+                Analyze Task
+              </button>
+              <button style={btnDisabledStyle} disabled title="Phase 3">
+                Start Build
               </button>
               <button
-                style={{
-                  ...btnSecondaryStyle,
-                  color: "#991b1b",
-                  borderColor: "#fca5a5",
-                  background: "#fee2e2",
-                }}
+                style={btnSecondaryStyle}
+                onClick={handleAddToQueue}
+                disabled={isPending}
               >
+                Add To Queue
+              </button>
+              <button
+                style={btnDisabledStyle}
+                disabled
+                onClick={() => setNotice("Evaluate Queue — kommt in Phase 4.")}
+                title="Coming in Phase 4"
+              >
+                Evaluate Queue
+              </button>
+              <button style={{ ...btnDisabledStyle, color: "#9ca3af" }} disabled title="Phase 3">
+                Apply Changes
+              </button>
+              <button style={{ ...btnDisabledStyle, color: "#9ca3af" }} disabled title="Phase 3">
                 Reject
               </button>
             </div>
 
-            {/* Attachment zone */}
+            {/* Queue note input */}
+            <div style={{ marginTop: 14 }}>
+              <textarea
+                style={{ ...textareaStyle, minHeight: 0 }}
+                placeholder="Queue-Notiz hinzufügen (wird gespeichert, keine Bewertung in Phase 2)…"
+                value={queueText}
+                onChange={(e) => setQueueText(e.target.value)}
+                rows={2}
+              />
+            </div>
+
+            {/* Attachment zone (upload still disabled in Phase 2) */}
             <div style={{ marginTop: 16 }}>
               <div style={dropZoneStyle}>
                 <span style={{ fontSize: 24 }}>📎</span>
@@ -280,12 +516,22 @@ export default function DevCockpit() {
                   Drag screenshots, files or documents here
                 </span>
                 <button style={uploadBtnStyle} disabled>
-                  Upload
+                  Upload (Phase 3)
                 </button>
               </div>
+              {attachments.length > 0 && (
+                <ul style={{ margin: "8px 0 0", padding: "0 0 0 18px", fontSize: 12, color: "#6b7280" }}>
+                  {attachments.map((a) => (
+                    <li key={a.id}>
+                      {a.file_name}
+                      {a.file_type ? ` · ${a.file_type}` : ""}
+                    </li>
+                  ))}
+                </ul>
+              )}
             </div>
 
-            {/* Voice input */}
+            {/* Voice input (disabled) */}
             <div style={voiceRowStyle}>
               <button style={micBtnStyle} disabled aria-label="Mikrofon">
                 🎙️
@@ -307,28 +553,26 @@ export default function DevCockpit() {
               <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
                 {queue.map((item) => (
                   <div key={item.id} style={queueItemStyle}>
-                    <p
-                      style={{
-                        margin: "0 0 8px",
-                        fontSize: 14,
-                        color: "#111",
-                        lineHeight: 1.4,
-                      }}
-                    >
-                      {item.text}
+                    <p style={{ margin: "0 0 8px", fontSize: 14, color: "#111", lineHeight: 1.4, whiteSpace: "pre-wrap" }}>
+                      {item.content}
                     </p>
                     <div style={{ display: "flex", gap: 6, marginBottom: 8, flexWrap: "wrap" }}>
-                      <span style={placeholderBadgeStyle}>Impact: —</span>
-                      <span style={placeholderBadgeStyle}>Empfehlung: —</span>
+                      <span style={placeholderBadgeStyle}>
+                        Impact: {item.impact_level ?? "—"}
+                      </span>
+                      <span style={placeholderBadgeStyle}>
+                        Empfehlung: {item.recommendation ?? "—"}
+                      </span>
+                      <span style={placeholderBadgeStyle}>Status: {item.status}</span>
                     </div>
                     <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                      <button style={queueActionBtnStyle} disabled>
+                      <button style={queueActionBtnStyle} disabled title="Phase 4">
                         Apply To Current Build
                       </button>
-                      <button style={queueActionBtnStyle} disabled>
+                      <button style={queueActionBtnStyle} disabled title="Phase 4">
                         Apply After Build
                       </button>
-                      <button style={queueActionBtnStyle} disabled>
+                      <button style={queueActionBtnStyle} disabled title="Phase 4">
                         Create New Task
                       </button>
                       <button
@@ -337,8 +581,9 @@ export default function DevCockpit() {
                           color: "#991b1b",
                           borderColor: "#fca5a5",
                           cursor: "pointer",
+                          opacity: 1,
                         }}
-                        onClick={() => discardQueueItem(item.id)}
+                        onClick={() => handleDiscardQueue(item.id)}
                       >
                         Discard
                       </button>
@@ -350,20 +595,12 @@ export default function DevCockpit() {
           </section>
         </main>
 
-        {/* Right panel */}
+        {/* Right panel — Preview placeholder (unchanged, Phase 3+) */}
         <aside style={rightPanelStyle}>
           <h2 style={cardTitleStyle}>Preview</h2>
           <div style={previewPlaceholderStyle}>
             <span style={{ fontSize: 36, marginBottom: 10 }}>🖥️</span>
-            <p
-              style={{
-                margin: 0,
-                fontSize: 13,
-                color: "#6b7280",
-                textAlign: "center",
-                lineHeight: 1.5,
-              }}
-            >
+            <p style={{ margin: 0, fontSize: 13, color: "#6b7280", textAlign: "center", lineHeight: 1.5 }}>
               Vercel Preview will appear here
             </p>
           </div>
@@ -386,7 +623,7 @@ export default function DevCockpit() {
         </aside>
       </div>
 
-      {/* ── Bottom area ── */}
+      {/* ── Bottom area — Diff + Build placeholders (Phase 3+) ── */}
       <div style={bottomAreaStyle}>
         <section style={{ ...cardStyle, flex: 1, minWidth: 0 }}>
           <h2 style={cardTitleStyle}>Diff Viewer</h2>
@@ -403,6 +640,49 @@ export default function DevCockpit() {
           </div>
         </section>
       </div>
+
+      {/* ── Context menu ── */}
+      {menu && (
+        <div
+          style={{ ...contextMenuStyle, top: menu.y, left: menu.x }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <button
+            style={ctxItemStyle}
+            onClick={() =>
+              runStatusChange(menu.task, cancelTask, "Task abgebrochen (cancelled).")
+            }
+          >
+            Cancel Task
+          </button>
+          <button
+            style={
+              menu.task.status === "building"
+                ? { ...ctxItemStyle, color: "#9ca3af", cursor: "not-allowed" }
+                : ctxItemStyle
+            }
+            disabled={menu.task.status === "building"}
+            title={
+              menu.task.status === "building"
+                ? "Laufender Build kann nicht archiviert werden"
+                : undefined
+            }
+            onClick={() =>
+              runStatusChange(menu.task, archiveTask, "Task archiviert.")
+            }
+          >
+            Archive Task
+          </button>
+          <button
+            style={ctxItemStyle}
+            onClick={() =>
+              runStatusChange(menu.task, moveTaskToBacklog, "Task ins Backlog verschoben.")
+            }
+          >
+            Move to Backlog
+          </button>
+        </div>
+      )}
     </div>
   );
 }
@@ -424,7 +704,7 @@ const pageHeaderStyle: React.CSSProperties = {
   display: "flex",
   alignItems: "center",
   gap: 12,
-  marginBottom: 20,
+  marginBottom: 16,
 };
 
 const headingStyle: React.CSSProperties = {
@@ -492,11 +772,38 @@ const newTaskBtnStyle: React.CSSProperties = {
   fontFamily: FONT,
 };
 
+const filterRowStyle: React.CSSProperties = {
+  display: "flex",
+  flexWrap: "wrap",
+  gap: 4,
+  padding: "8px 10px",
+  borderBottom: "1px solid #e5e7eb",
+  background: "#fcfcfd",
+};
+
+const filterChipStyle: React.CSSProperties = {
+  padding: "3px 8px",
+  background: "#fff",
+  color: "#6b7280",
+  border: "1px solid #e5e7eb",
+  borderRadius: 999,
+  fontSize: 11,
+  fontWeight: 600,
+  cursor: "pointer",
+  fontFamily: FONT,
+};
+
+const filterChipActiveStyle: React.CSSProperties = {
+  background: "#111",
+  color: "#fff",
+  borderColor: "#111",
+};
+
 const taskListStyle: React.CSSProperties = {
   display: "flex",
   flexDirection: "column",
   overflowY: "auto",
-  maxHeight: "72vh",
+  maxHeight: "64vh",
 };
 
 const taskItemStyle: React.CSSProperties = {
@@ -588,6 +895,34 @@ const chatPlaceholderStyle: React.CSSProperties = {
   fontSize: 13,
 };
 
+const chatListStyle: React.CSSProperties = {
+  marginTop: 16,
+  display: "flex",
+  flexDirection: "column",
+  gap: 8,
+  maxHeight: 260,
+  overflowY: "auto",
+};
+
+function msgBubbleStyle(role: string): React.CSSProperties {
+  const base: React.CSSProperties = {
+    padding: "8px 10px",
+    borderRadius: 8,
+    border: "1px solid #e5e7eb",
+  };
+  if (role === "user") return { ...base, background: "#f0f4ff", borderColor: "#dbe3ff" };
+  if (role === "assistant") return { ...base, background: "#f9fafb" };
+  return { ...base, background: "#fffaf0", borderColor: "#fde68a" };
+}
+
+const msgRoleStyle: React.CSSProperties = {
+  fontSize: 10,
+  fontWeight: 700,
+  textTransform: "uppercase",
+  letterSpacing: 0.5,
+  color: "#9ca3af",
+};
+
 const textareaStyle: React.CSSProperties = {
   width: "100%",
   padding: "10px 12px",
@@ -630,6 +965,18 @@ const btnSecondaryStyle: React.CSSProperties = {
   fontSize: 13,
   fontWeight: 500,
   cursor: "pointer",
+  fontFamily: FONT,
+};
+
+const btnDisabledStyle: React.CSSProperties = {
+  padding: "7px 14px",
+  background: "#f9fafb",
+  color: "#9ca3af",
+  border: "1px solid #e5e7eb",
+  borderRadius: 5,
+  fontSize: 13,
+  fontWeight: 500,
+  cursor: "not-allowed",
   fontFamily: FONT,
 };
 
@@ -691,7 +1038,7 @@ const placeholderBadgeStyle: React.CSSProperties = {
   display: "inline-block",
   padding: "2px 8px",
   background: "#f3f4f6",
-  color: "#9ca3af",
+  color: "#6b7280",
   border: "1px solid #e5e7eb",
   borderRadius: 12,
   fontSize: 11,
@@ -767,4 +1114,32 @@ const bottomPlaceholderStyle: React.CSSProperties = {
   background: "#f9fafb",
   border: "1px dashed #d1d5db",
   borderRadius: 8,
+};
+
+// Context menu
+
+const contextMenuStyle: React.CSSProperties = {
+  position: "fixed",
+  zIndex: 1000,
+  background: "#fff",
+  border: "1px solid #e5e7eb",
+  borderRadius: 8,
+  boxShadow: "0 8px 24px rgba(0,0,0,0.12)",
+  padding: 4,
+  minWidth: 180,
+  display: "flex",
+  flexDirection: "column",
+};
+
+const ctxItemStyle: React.CSSProperties = {
+  textAlign: "left",
+  padding: "8px 12px",
+  background: "transparent",
+  border: "none",
+  borderRadius: 6,
+  fontSize: 13,
+  fontWeight: 500,
+  color: "#111",
+  cursor: "pointer",
+  fontFamily: FONT,
 };
