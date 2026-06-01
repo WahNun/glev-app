@@ -26,6 +26,8 @@ const iconProps = { width: 16, height: 16, viewBox: "0 0 24 24", fill: "none", s
 
 type SheetKey = "notifications" | "cycleLogging" | "language" | "timeFormat" | "carbUnit" | "onboarding" | "appearance";
 
+const PUSH_DEBUG_EMAIL = "lucas@wahnon-connect.com";
+
 function PushDebugSection() {
   const [token, setToken] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -38,6 +40,7 @@ function PushDebugSection() {
   const [testPending, setTestPending] = useState(false);
   const [testResult, setTestResult] = useState<{ ok: boolean; msg: string } | null>(null);
   const [sandbox, setSandbox] = useState(true);
+  const [isMasterUser, setIsMasterUser] = useState(false);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const waitRef  = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -58,6 +61,11 @@ function PushDebugSection() {
     setPlatform(w.Capacitor?.getPlatform?.() ?? "web");
     const onToken = () => { refresh(); stopPolling(); setRetrying(false); setWaitingSecs(0); };
     window.addEventListener("glev:push-token", onToken);
+    import("@/lib/supabase").then(({ supabase }) => {
+      supabase?.auth.getUser().then(({ data }) => {
+        setIsMasterUser(data.user?.email === PUSH_DEBUG_EMAIL);
+      });
+    });
     return () => { window.removeEventListener("glev:push-token", onToken); stopPolling(); };
   }, []);
   const handleRetry = async () => {
@@ -101,7 +109,7 @@ function PushDebugSection() {
     }
   };
 
-  if (!token && !error && !isNative) return null;
+  if (!isMasterUser) return null;
   const bg = token ? "rgba(80,255,120,0.08)" : error ? "rgba(255,80,80,0.08)" : "rgba(120,120,120,0.08)";
   const border = token ? "rgba(80,255,120,0.3)" : error ? "rgba(255,80,80,0.3)" : "rgba(120,120,120,0.2)";
   return (
