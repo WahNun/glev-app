@@ -25,6 +25,8 @@ export type UserRow = {
   cgm: "none" | "llu" | "nightscout" | "applehealth" | "junction";
   pro_status: string | null;
   trial_ends_at: string | null;
+  /** profiles.trial_end_at — gesetzt für Meta-Leads und andere nicht-Stripe-Trials. */
+  profile_trial_end_at: string | null;
   /** beta_reservations.status — typisch "fulfilled" wenn bezahlt + freigeschaltet, "pending" während Checkout. */
   beta_status: string | null;
   /** profiles.subscription_status='beta' — alte Beta-Käufer:innen (vor 25.04.2026) hatten kein beta_reservations-Eintrag. */
@@ -100,9 +102,12 @@ function cgmLabel(c: UserRow["cgm"]): string {
   return "—";
 }
 function isTrialActive(r: UserRow): boolean {
-  if (r.pro_status !== "trialing") return false;
-  if (!r.trial_ends_at) return false;
-  return new Date(r.trial_ends_at).getTime() > Date.now();
+  const now = Date.now();
+  // Stripe-Trial (pro_subscriptions)
+  if (r.pro_status === "trialing" && r.trial_ends_at && new Date(r.trial_ends_at).getTime() > now) return true;
+  // Nicht-Stripe-Trial (z.B. Meta-Leads via profiles.trial_end_at)
+  if (r.profile_trial_end_at && new Date(r.profile_trial_end_at).getTime() > now) return true;
+  return false;
 }
 
 export default function UsersTable({
@@ -282,7 +287,8 @@ export default function UsersTable({
           </thead>
           <tbody>
             {filtered.map((r) => {
-              const c = planColor(r.plan);
+              const trialActive = isTrialActive(r);
+              const c = trialActive ? { bg: "#fef9c322", fg: "#92400e" } : planColor(r.plan);
               const flags: string[] = [];
               if (r.deleted_at) flags.push("Gelöscht");
               if (r.banned_until) flags.push("Gebannt");
@@ -326,7 +332,7 @@ export default function UsersTable({
                           fontSize: 12,
                         }}
                       >
-                        {planLabel(r.plan)}
+                        {trialActive ? "7 Tage Trial" : planLabel(r.plan)}
                       </span>
                       {r.gift_label ? (
                         <span
