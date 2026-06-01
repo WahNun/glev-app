@@ -53,8 +53,8 @@ export function computeEffectivePlan(p: PlanInputs): EffectivePlan {
 
 export function planLabel(p: EffectivePlan): string {
   if (p === "pro") return "Pro";
-  if (p === "plus") return "Glev+";
-  if (p === "beta") return "Beta";
+  if (p === "plus") return "Plus";
+  if (p === "beta") return "Smart";
   return "Free";
 }
 

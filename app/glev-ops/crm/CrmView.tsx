@@ -77,7 +77,7 @@ type UserFilter =
 const USER_FILTERS: ReadonlyArray<{ key: UserFilter; label: string }> = [
   { key: "all", label: "Alle" },
   { key: "free", label: "Free" },
-  { key: "beta_buyer", label: "Beta-Käufer" },
+  { key: "beta_buyer", label: "Smart-Käufer" },
   { key: "pro", label: "Pro" },
   { key: "pro_trial", label: "Pro-Trial" },
   { key: "manual", label: "Manuell" },
@@ -195,7 +195,7 @@ export default function CrmView({
   const tabs: Array<{ key: Tab; label: string; count: number }> = [
     { key: "alle", label: "Alle Nutzer", count: users.length },
     { key: "trial", label: "Trial / Meta Leads", count: trialUsers.length },
-    { key: "beta", label: "Beta-Käufer", count: beta.length },
+    { key: "beta", label: "Beta-Käufer (veraltet)", count: beta.length },
     { key: "pro", label: "Pro-Abos", count: pro.length },
   ];
 
@@ -327,7 +327,13 @@ function AlleTab({ users, pageSize }: { users: CrmUserRow[]; pageSize: number })
                 else flags.push("Meta Lead · Trial aktiv");
               }
               if (isBetaBuyer(r)) {
-                flags.push(r.beta_status?.toLowerCase() === "pending" ? "Beta (pending)" : r.beta_status ? "Beta-Käufer" : "Beta (Alt)");
+                flags.push(
+                  r.beta_status?.toLowerCase() === "pending"
+                    ? "Beta – veraltet (ausstehend)"
+                    : r.beta_status
+                      ? "Beta – veraltet"
+                      : "Beta – veraltet (Legacy)",
+                );
               }
               return (
                 <tr key={r.id} style={{ borderTop: "1px solid #eee", opacity: r.deleted_at ? 0.55 : 1 }}>

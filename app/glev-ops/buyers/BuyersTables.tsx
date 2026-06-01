@@ -187,7 +187,7 @@ export default function BuyersTables({ beta, pro, betaTotal, proTotal, pageLimit
 
       <section style={{ marginBottom: 32 }}>
         <h2 style={h2Style}>
-          Beta-Reservierungen{" "}
+          Beta-Käufer{" "}<span style={{ fontSize: 12, fontWeight: 400, color: "#9ca3af", background: "#f3f4f6", borderRadius: 4, padding: "1px 6px", marginLeft: 4 }}>ehem. Produkt</span>{" "}
           <span style={countStyle}>({betaHeadingLabel()})</span>
         </h2>
         <div style={tableWrapStyle}>

@@ -55,7 +55,7 @@ type Filter =
 const FILTERS: ReadonlyArray<{ key: Filter; label: string }> = [
   { key: "all", label: "Alle" },
   { key: "free", label: "Free" },
-  { key: "beta_buyer", label: "Beta-Käufer" },
+  { key: "beta_buyer", label: "Smart-Käufer" },
   { key: "pro", label: "Pro" },
   { key: "pro_trial", label: "Pro-Trial" },
   { key: "manual", label: "Manuell" },
@@ -328,10 +328,10 @@ export default function UsersTable({
               if (isBetaBuyer(r)) {
                 flags.push(
                   r.beta_status?.toLowerCase() === "pending"
-                    ? "Beta (pending)"
+                    ? "Beta – veraltet (ausstehend)"
                     : r.beta_status
-                      ? "Beta-Käufer"
-                      : "Beta (Alt-Produkt)",
+                      ? "Beta – veraltet"
+                      : "Beta – veraltet (Legacy)",
                 );
               }
               return (
