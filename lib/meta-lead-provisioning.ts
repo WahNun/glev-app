@@ -150,6 +150,14 @@ export async function provisionMetaLead(
     }
   }
 
+  // Telefonnummer in user_metadata speichern — damit der User im CRM
+  // sichtbar ist und bulk-sms ihn erreichen kann.
+  if (phone) {
+    await sb.auth.admin.updateUserById(userId, {
+      user_metadata: { phone },
+    });
+  }
+
   // Trial-Zeiten NICHT hier setzen — sie werden erst bei Aktivierung gesetzt
   // (POST /api/auth/activate-trial nach erfolgreichem verifyOtp).
   await sb.from("profiles").upsert(

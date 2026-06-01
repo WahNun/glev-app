@@ -2,29 +2,53 @@
 
 import { useState } from "react";
 import type { BulkSmsResult } from "@/app/api/admin/bulk-sms/route";
+import type { BackfillPhoneResult } from "@/app/api/admin/backfill-phones/route";
 
-type State = "idle" | "confirming" | "sending" | "done";
+type State = "idle" | "confirming" | "backfilling" | "sending" | "done";
 
 export default function BulkSmsButton() {
   const [state, setState] = useState<State>("idle");
-  const [results, setResults] = useState<BulkSmsResult[]>([]);
+  const [backfillResults, setBackfillResults] = useState<BackfillPhoneResult[]>([]);
+  const [smsResults, setSmsResults] = useState<BulkSmsResult[]>([]);
   const [error, setError] = useState<string | null>(null);
 
-  async function send() {
-    setState("sending");
+  async function run() {
+    setState("backfilling");
     setError(null);
+
+    // Schritt 1: Telefonnummern aus meta_leads → user_metadata backfill
     try {
-      const res = await fetch("/api/admin/bulk-sms", {
+      const bRes = await fetch("/api/admin/backfill-phones", {
         method: "POST",
         credentials: "include",
       });
-      const data = await res.json() as { results?: BulkSmsResult[]; error?: string };
-      if (!res.ok || data.error) {
-        setError(data.error ?? `HTTP ${res.status}`);
+      const bData = await bRes.json() as { results?: BackfillPhoneResult[]; error?: string };
+      if (!bRes.ok || bData.error) {
+        setError(bData.error ?? `Backfill HTTP ${bRes.status}`);
         setState("idle");
         return;
       }
-      setResults(data.results ?? []);
+      setBackfillResults(bData.results ?? []);
+    } catch (e) {
+      setError(String(e));
+      setState("idle");
+      return;
+    }
+
+    // Schritt 2: Bulk-SMS senden
+    setState("sending");
+    try {
+      const sRes = await fetch("/api/admin/bulk-sms", {
+        method: "POST",
+        credentials: "include",
+      });
+      const sData = await sRes.json() as { results?: BulkSmsResult[]; error?: string };
+      if (!sRes.ok || sData.error) {
+        setError(sData.error ?? `SMS HTTP ${sRes.status}`);
+        setState("idle");
+        return;
+      }
+      setSmsResults(sData.results ?? []);
       setState("done");
     } catch (e) {
       setError(String(e));
@@ -32,9 +56,10 @@ export default function BulkSmsButton() {
     }
   }
 
-  const sent    = results.filter((r) => r.status === "sent").length;
-  const noPhone = results.filter((r) => r.status === "no_phone").length;
-  const failed  = results.filter((r) => r.status === "link_error" || r.status === "sms_error").length;
+  const smsSent    = smsResults.filter((r) => r.status === "sent").length;
+  const smsNoPhone = smsResults.filter((r) => r.status === "no_phone").length;
+  const smsFailed  = smsResults.filter((r) => r.status === "link_error" || r.status === "sms_error").length;
+  const backfilled = backfillResults.filter((r) => r.status === "updated").length;
 
   return (
     <div style={{ marginBottom: 12 }}>
@@ -65,15 +90,15 @@ export default function BulkSmsButton() {
           fontSize: 13,
           maxWidth: 480,
         }}>
-          <p style={{ margin: "0 0 10px", fontWeight: 600 }}>
-            Wirklich SMS an alle Meta-Leads mit Telefonnummer schicken?
+          <p style={{ margin: "0 0 6px", fontWeight: 600 }}>
+            SMS an alle Meta-Leads schicken?
           </p>
-          <p style={{ margin: "0 0 12px", color: "#92400e" }}>
-            Es wird ein frischer Invite-Link generiert und per Twilio verschickt. Nur Leads mit gespeicherter Telefonnummer erhalten eine SMS.
+          <p style={{ margin: "0 0 12px", color: "#92400e", lineHeight: 1.4 }}>
+            Lädt zuerst Telefonnummern aus der meta_leads-Tabelle, dann generiert für jeden Lead mit Nummer einen frischen Invite-Link und schickt eine SMS.
           </p>
           <div style={{ display: "flex", gap: 8 }}>
             <button
-              onClick={send}
+              onClick={run}
               style={{
                 padding: "7px 14px",
                 background: "#1d4ed8",
@@ -105,9 +130,15 @@ export default function BulkSmsButton() {
         </div>
       )}
 
+      {state === "backfilling" && (
+        <div style={{ fontSize: 13, color: "#666", padding: "8px 0" }}>
+          ⏳ Lade Telefonnummern aus meta_leads …
+        </div>
+      )}
+
       {state === "sending" && (
         <div style={{ fontSize: 13, color: "#666", padding: "8px 0" }}>
-          ⏳ Sende SMS …
+          ⏳ Sende SMS ({backfilled} Nummern geladen) …
         </div>
       )}
 
@@ -126,8 +157,11 @@ export default function BulkSmsButton() {
           fontSize: 13,
           maxWidth: 560,
         }}>
-          <p style={{ margin: "0 0 10px", fontWeight: 600 }}>
-            ✓ Fertig — {sent} SMS versendet · {noPhone} ohne Nummer · {failed > 0 ? `${failed} Fehler` : "0 Fehler"}
+          <p style={{ margin: "0 0 4px", fontWeight: 600 }}>
+            ✓ {smsSent} SMS versendet · {smsNoPhone} ohne Nummer · {smsFailed > 0 ? `${smsFailed} Fehler` : "0 Fehler"}
+          </p>
+          <p style={{ margin: "0 0 10px", fontSize: 12, color: "#6b7280" }}>
+            {backfilled} Nummern aus meta_leads geladen
           </p>
           <table style={{ borderCollapse: "collapse", width: "100%", fontSize: 12 }}>
             <thead>
@@ -138,7 +172,7 @@ export default function BulkSmsButton() {
               </tr>
             </thead>
             <tbody>
-              {results.map((r) => (
+              {smsResults.map((r) => (
                 <tr key={r.userId} style={{ borderBottom: "1px solid #f0fdf4" }}>
                   <td style={{ padding: "3px 8px 3px 0", color: "#374151" }}>{r.email}</td>
                   <td style={{ padding: "3px 8px", color: "#374151" }}>{r.phone ?? "—"}</td>
@@ -153,7 +187,7 @@ export default function BulkSmsButton() {
             </tbody>
           </table>
           <button
-            onClick={() => { setState("idle"); setResults([]); }}
+            onClick={() => { setState("idle"); setSmsResults([]); setBackfillResults([]); }}
             style={{
               marginTop: 10,
               padding: "5px 12px",
