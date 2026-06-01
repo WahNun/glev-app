@@ -3,6 +3,7 @@
 import { redirect } from "next/navigation";
 import { verifyAdminCredentials, setAdminCookie, clearAdminCookie, isAdminAuthed } from "@/lib/adminAuth";
 import { provisionMetaLead } from "@/lib/meta-lead-provisioning";
+import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
 
 export async function loginAction(formData: FormData): Promise<void> {
   const email    = String(formData.get("email")    ?? "");
