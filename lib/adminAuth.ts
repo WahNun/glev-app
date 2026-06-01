@@ -17,7 +17,7 @@ import { cookies } from "next/headers";
 import { createHmac, timingSafeEqual } from "crypto";
 
 export const ADMIN_COOKIE = "glev_ops_token";
-const COOKIE_PATH       = "/glev-ops";
+const COOKIE_PATH       = "/";
 const SESSION_HMAC_KEY  = "glev-ops-session-v2";
 
 // ---------------------------------------------------------------------------
