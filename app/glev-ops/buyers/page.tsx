@@ -6,6 +6,7 @@ import AdminLoginForm from "../_components/AdminLoginForm";
 import BuyersTables, { type BetaRow, type ProRow } from "./BuyersTables";
 import DuplicateSignups from "./DuplicateSignups";
 import BulkSmsButton from "./BulkSmsButton";
+import ActivatePendingButton from "./ActivatePendingButton";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -197,6 +198,7 @@ export default async function AdminBuyersPage({
             </span>
           </h2>
         </div>
+        <ActivatePendingButton />
         <BulkSmsButton />
         {trialUsers.length === 0 ? (
           <p style={{ color: "#888", fontSize: 14 }}>Noch keine Trial-User.</p>

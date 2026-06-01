@@ -93,18 +93,24 @@ function isLinkAlreadyUsed(err: unknown): boolean {
   );
 }
 
-/** Ruft POST /api/auth/activate-trial mit dem aktuellen Session-Token auf. */
-async function activateTrial(): Promise<void> {
+/**
+ * Ruft POST /api/auth/activate-trial auf.
+ * token: direkt aus verifyOtp/exchangeCodeForSession — zuverlässiger als
+ * getSession() das nach dem OTP-Tausch manchmal noch null liefert.
+ */
+async function activateTrial(token?: string | null): Promise<void> {
   if (!supabase) return;
   try {
-    const { data: { session } } = await supabase.auth.getSession();
-    const token = session?.access_token;
+    // Prefer the freshly-minted token; fall back to current session.
+    const accessToken =
+      token ?? (await supabase.auth.getSession()).data.session?.access_token;
     await fetch("/api/auth/activate-trial", {
       method: "POST",
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      credentials: "include",
+      headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {},
     });
   } catch {
-    // fire-and-forget — trial activation failure darf den Confirm-Flow nicht blockieren
+    // silent — darf den Confirm-Flow nicht blockieren
   }
 }
 
@@ -175,22 +181,25 @@ function ConfirmInner() {
     }
     setState({ kind: "verifying" });
     try {
+      let sessionToken: string | null = null;
       if (code) {
-        const { error: ex } = await supabase.auth.exchangeCodeForSession(code);
+        const { data, error: ex } = await supabase.auth.exchangeCodeForSession(code);
         if (ex) throw ex;
+        sessionToken = data.session?.access_token ?? null;
       } else if (tokenHash) {
-        const { error: vo } = await supabase.auth.verifyOtp({
+        const { data, error: vo } = await supabase.auth.verifyOtp({
           token_hash: tokenHash,
           type: type as "recovery" | "invite" | "email" | "signup" | "email_change" | "magiclink",
         });
         if (vo) throw vo;
+        sessionToken = data.session?.access_token ?? null;
       } else {
         throw new Error("Kein gültiger Bestätigungs-Link — bitte fordere einen neuen Reset-Link an.");
       }
 
-      // Trial bei Meta-Lead-Invites aktivieren (idempotent — passiert nichts
-      // wenn der User kein Trial-Kandidat ist oder bereits aktiviert hat).
-      activateTrial();
+      // Trial bei Meta-Lead-Invites aktivieren — Token direkt aus der
+      // frischen Session, nicht via getSession() das evtl. noch null liefert.
+      activateTrial(sessionToken);
 
       setState({ kind: "ready" });
     } catch (err) {
@@ -233,6 +242,10 @@ function ConfirmInner() {
       setState({ kind: "ready" });
       return;
     }
+
+    // Zweiter Versuch: nach updateUser ist die Session garantiert frisch.
+    // Idempotent — wenn bereits aktiviert passiert nichts.
+    activateTrial();
 
     setState({ kind: "saved" });
     setTimeout(() => {
