@@ -2,9 +2,7 @@
 
 import { redirect } from "next/navigation";
 import { verifyAdminCredentials, setAdminCookie, clearAdminCookie, isAdminAuthed } from "@/lib/adminAuth";
-import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
-import { scheduleTrialEmails } from "@/lib/emails/drip-scheduler";
-
+import { provisionMetaLead } from "@/lib/meta-lead-provisioning";
 
 export async function loginAction(formData: FormData): Promise<void> {
   const email    = String(formData.get("email")    ?? "");
@@ -24,63 +22,36 @@ export async function logoutAction(): Promise<void> {
 /**
  * Admin: Meta-Lead-Account anlegen.
  *
- * Erstellt einen neuen Supabase-User per inviteUserByEmail (Supabase schickt
- * den Setup-Link automatisch), setzt trial_end_at = jetzt + 7 Tage und
- * signup_source = 'meta_lead' im Profile, und scheduliert die Drip-Mails
- * (Tag 6 Reminder + Tag 7 Expired).
- *
- * Wenn die E-Mail-Adresse schon existiert, wird nur das Profil aktualisiert
- * (kein zweites Invite).
+ * Delegiert komplett an provisionMetaLead() — identisch zum echten
+ * Meta-Webhook-Flow. Das stellt sicher dass Admin-Test-Leads und
+ * echte Leads denselben Pfad durchlaufen:
+ *   - Supabase User anlegen (generateLink statt inviteUserByEmail)
+ *   - Profil: signup_source='meta_lead', trial_* = NULL
+ *   - Branded Invite-Email via Resend
+ *   - SMS via Twilio (wenn Telefonnummer angegeben)
+ *   - Trial startet erst beim Link-Klick (activate-trial Route)
  */
 export async function createMetaLeadAction(formData: FormData): Promise<void> {
   const authed = await isAdminAuthed();
   if (!authed) redirect("/glev-ops/buyers?err=bad");
 
-  const email = String(formData.get("email") ?? "").trim().toLowerCase();
-  const name = String(formData.get("name") ?? "").trim() || null;
-  const localeRaw = String(formData.get("locale") ?? "de");
+  const email      = String(formData.get("email")      ?? "").trim().toLowerCase();
+  const firstName  = String(formData.get("first_name") ?? "").trim();
+  const lastName   = String(formData.get("last_name")  ?? "").trim();
+  const name       = [firstName, lastName].filter(Boolean).join(" ") || null;
+  const phone      = String(formData.get("phone")      ?? "").trim() || null;
+  const localeRaw = String(formData.get("locale")  ?? "de");
   const locale: "de" | "en" = localeRaw === "en" ? "en" : "de";
 
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
     redirect("/glev-ops/buyers?lead_err=invalid_email");
   }
 
-  const sb = getSupabaseAdmin();
-  const trialStartAt = new Date();
-  const trialEndAt = new Date(
-    trialStartAt.getTime() + 7 * 24 * 60 * 60 * 1000,
-  ).toISOString();
+  const result = await provisionMetaLead(email, name, locale, phone || undefined);
 
-  let userId: string;
-
-  const { data: invited, error: inviteErr } = await sb.auth.admin.inviteUserByEmail(email, {
-    data: name ? { full_name: name } : undefined,
-  });
-
-  if (inviteErr) {
-    if (inviteErr.message?.toLowerCase().includes("already been registered") ||
-        inviteErr.message?.toLowerCase().includes("already exists")) {
-      const { data: { users } } = await sb.auth.admin.listUsers({ perPage: 1000 });
-      const existing = users.find((u) => u.email?.toLowerCase() === email);
-      if (!existing) {
-        redirect(`/glev-ops/buyers?lead_err=create_failed`);
-      }
-      userId = existing.id;
-    } else {
-      redirect(`/glev-ops/buyers?lead_err=create_failed`);
-    }
-  } else {
-    userId = invited!.user!.id;
+  if (!result.ok) {
+    redirect(`/glev-ops/buyers?lead_err=${encodeURIComponent(result.reason)}`);
   }
-
-  await sb.from("profiles").upsert(
-    { user_id: userId, trial_end_at: trialEndAt, signup_source: "meta_lead" },
-    { onConflict: "user_id" },
-  );
-
-  scheduleTrialEmails(email, name, trialStartAt, locale).catch((e) =>
-    console.warn("[admin/buyers/createMetaLead] scheduleTrialEmails failed:", e),
-  );
 
   redirect("/glev-ops/buyers?created=1");
 }

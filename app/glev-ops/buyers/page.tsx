@@ -124,7 +124,7 @@ export default async function AdminBuyersPage({
         </h2>
         {createdParam === "1" && (
           <p style={{ color: "#166534", background: "#dcfce7", padding: "8px 12px", borderRadius: 6, fontSize: 14, marginBottom: 12 }}>
-            ✓ Account angelegt. Invite-Email verschickt. Trial startet erst beim ersten Klick auf den Confirm-Button (Drip-Mails werden dann automatisch geplant).
+            ✓ Account angelegt. Invite-Email verschickt{createdParam === "1" ? " · SMS falls Telefonnummer angegeben" : ""}. Trial startet erst beim ersten Link-Klick.
           </p>
         )}
         {leadErrParam && (
@@ -134,11 +134,20 @@ export default async function AdminBuyersPage({
         )}
         <form action={createMetaLeadAction} style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "flex-end" }}>
           <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-            <label style={{ fontSize: 12, color: "#666" }}>Name (optional)</label>
+            <label style={{ fontSize: 12, color: "#666" }}>Vorname (optional)</label>
             <input
-              name="name"
+              name="first_name"
               type="text"
-              placeholder="Lena Müller"
+              placeholder="Lena"
+              style={inputStyle}
+            />
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+            <label style={{ fontSize: 12, color: "#666" }}>Nachname (optional)</label>
+            <input
+              name="last_name"
+              type="text"
+              placeholder="Müller"
               style={inputStyle}
             />
           </div>
@@ -153,6 +162,15 @@ export default async function AdminBuyersPage({
             />
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+            <label style={{ fontSize: 12, color: "#666" }}>Telefon (optional · löst SMS aus)</label>
+            <input
+              name="phone"
+              type="tel"
+              placeholder="+4917612345678"
+              style={{ ...inputStyle, minWidth: 160 }}
+            />
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
             <label style={{ fontSize: 12, color: "#666" }}>Sprache</label>
             <select name="locale" style={inputStyle}>
               <option value="de">DE</option>
@@ -160,7 +178,7 @@ export default async function AdminBuyersPage({
             </select>
           </div>
           <button type="submit" style={btnStyle}>
-            Trial starten →
+            Lead anlegen →
           </button>
         </form>
       </section>
