@@ -39,4 +39,14 @@ INSERT INTO message_templates (key, label, sms_text, email_subject, email_intro)
 ON CONFLICT (key) DO NOTHING;
 
 -- Add owner_email to short_links so click-tracking can be joined per-lead in the CRM.
-ALTER TABLE short_links ADD COLUMN IF NOT EXISTS owner_email TEXT;
+-- Wrapped in a DO block: if short_links doesn't exist yet (created in a later migration),
+-- this is a no-op and the column will be added when that migration runs.
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.tables
+    WHERE table_schema = 'public' AND table_name = 'short_links'
+  ) THEN
+    ALTER TABLE short_links ADD COLUMN IF NOT EXISTS owner_email TEXT;
+  END IF;
+END $$;
