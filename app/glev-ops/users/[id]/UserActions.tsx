@@ -63,6 +63,41 @@ export default function UserActions({
   const [pendingSimple, setPendingSimple] = useState<"magic" | "reset" | null>(null);
   const [, startTransition] = useTransition();
 
+  // Push-Test
+  const [pushPending, setPushPending] = useState(false);
+  const [pushSandbox, setPushSandbox] = useState(true);
+  const [pushResult, setPushResult] = useState<{ ok: boolean; msg: string } | null>(null);
+
+  async function sendTestPush() {
+    if (pushPending) return;
+    setPushPending(true);
+    setPushResult(null);
+    try {
+      const token = document.cookie
+        .split(";")
+        .find((c) => c.trim().startsWith("glev_admin_token="))
+        ?.split("=")[1] ?? "";
+      const res = await fetch("/api/admin/push-test", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "authorization": `Bearer ${token}`,
+        },
+        body: JSON.stringify({ userId, sandbox: pushSandbox }),
+      });
+      const json = await res.json() as { ok?: boolean; error?: string; platform?: string };
+      if (json.ok) {
+        setPushResult({ ok: true, msg: `✅ Gesendet (${json.platform ?? "?"})` });
+      } else {
+        setPushResult({ ok: false, msg: `❌ ${json.error ?? "Unbekannter Fehler"}` });
+      }
+    } catch (e) {
+      setPushResult({ ok: false, msg: `❌ ${String(e)}` });
+    } finally {
+      setPushPending(false);
+    }
+  }
+
   function runSimpleAction(): void {
     const kind = simpleConfirm;
     if (!kind || pendingSimple) return;
@@ -262,6 +297,42 @@ export default function UserActions({
             </button>
           </form>
         ) : null}
+      </section>
+
+      {/* --- Push-Test --- */}
+      <section style={section}>
+        <h2 style={h2}>Push-Benachrichtigung testen</h2>
+        <p style={{ ...muted, margin: "0 0 12px" }}>
+          Sendet eine Test-Push direkt ans Gerät. Funktioniert nur wenn der User die App geöffnet
+          und Push-Berechtigung erteilt hat (Token in DB vorhanden).
+        </p>
+        <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+          <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, color: "var(--text-dim)", cursor: "pointer" }}>
+            <input
+              type="checkbox"
+              checked={pushSandbox}
+              onChange={(e) => setPushSandbox(e.target.checked)}
+            />
+            Sandbox (TestFlight) — deaktivieren für App Store
+          </label>
+          <button
+            type="button"
+            onClick={() => { void sendTestPush(); }}
+            disabled={pushPending}
+            style={{
+              ...btnSecondary,
+              opacity: pushPending ? 0.6 : 1,
+              cursor: pushPending ? "not-allowed" : "pointer",
+            }}
+          >
+            {pushPending ? "Sende…" : "🔔 Test-Push senden"}
+          </button>
+        </div>
+        {pushResult && (
+          <p style={{ margin: "10px 0 0", fontSize: 13, color: pushResult.ok ? "#15803d" : "#991b1b" }}>
+            {pushResult.msg}
+          </p>
+        )}
       </section>
 
       {/* --- Gefährliche Aktionen --- */}
