@@ -44,11 +44,9 @@ export default function PlanSimulator() {
   const [override, setOverride] = useState<EffectivePlan | null>(null);
 
   useEffect(() => {
-    const adminEmail = process.env.NEXT_PUBLIC_ADMIN_EMAIL;
-    if (!adminEmail || !supabase) return;
-
+    if (!supabase) return;
     supabase.auth.getUser().then(({ data }) => {
-      if (data.user?.email === adminEmail) {
+      if (data.user?.email === "lucas@wahnon-connect.com") {
         setVisible(true);
         setOverride(getPlanOverride());
       }
