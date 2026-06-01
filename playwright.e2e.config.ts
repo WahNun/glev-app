@@ -25,6 +25,7 @@ const WORKERS = 2;
 export default defineConfig({
   testDir: "./tests/e2e",
   globalSetup: "./tests/global-setup.ts",
+  globalTeardown: "./tests/global-teardown.ts",
   workers: WORKERS,
   fullyParallel: true,
   // The first Next.js compile of /settings can take 30+ seconds in dev

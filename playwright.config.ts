@@ -25,6 +25,7 @@ export default defineConfig({
   // under `./tests/support/` don't match either glob and are ignored.
   testDir: "./tests",
   globalSetup: "./tests/global-setup.ts",
+  globalTeardown: "./tests/global-teardown.ts",
   // The dev server is single-process / shared state — keep workers serial
   // so Supabase test users don't race each other.
   workers: 1,
