@@ -8,11 +8,14 @@
  *
  * Auth: Bearer CRON_SECRET (GitHub Actions) oder Admin-Cookie.
  * Idempotent — kann mehrfach laufen, jeder Lead bekommt nur einen Reminder.
+ *
+ * SMS + Email-Texte kommen aus message_templates (DB), Fallback: Hardcoded-Defaults.
  */
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
 import { isAdminAuthed } from "@/lib/adminAuth";
 import { shortenUrl } from "@/lib/shortLinks";
+import { getTemplate, renderSms } from "@/lib/messageTemplates";
 import { Resend } from "resend";
 import {
   metaLeadReminderHtml,
@@ -68,6 +71,12 @@ export async function POST(req: NextRequest) {
 
   const sb = getSupabaseAdmin();
 
+  // Fetch message templates from DB (with hardcoded fallbacks)
+  const [smsTpl, emailTpl] = await Promise.all([
+    getTemplate("meta_lead_reminder_sms"),
+    getTemplate("meta_lead_reminder_email"),
+  ]);
+
   // Meta-Leads die vor 24h+ angelegt wurden, noch nicht aktiviert und noch nicht erinnert
   const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
   const { data: leads, error: leadsErr } = await sb
@@ -87,7 +96,6 @@ export async function POST(req: NextRequest) {
     (authData?.users ?? []).map((u) => [u.email?.toLowerCase() ?? "", u]),
   );
 
-  // Profiles für diese User laden
   const userIds = emails
     .map((e) => authByEmail.get(e.toLowerCase())?.id)
     .filter(Boolean) as string[];
@@ -135,26 +143,25 @@ export async function POST(req: NextRequest) {
     let smsSent: ReminderResult["sms"] = "no_phone";
     let emailSent = false;
 
-    // SMS
+    // SMS — Text aus DB-Template
     if (phone) {
-      const smsShort = await shortenUrl(inviteUrl, "sms_reminder");
-      const smsBody =
-        `Hast du Glev noch nicht ausprobiert? Als T1D-Nutzer:in hilft dir Glev dabei, ` +
-        `deine Insulindosierung besser einzuschätzen. Dein kostenloser 7-Tage-Test: ${smsShort}\n\n` +
-        `Fragen? Antworte einfach auf diese SMS.`;
+      const smsShort = await shortenUrl(inviteUrl, "sms_reminder", email);
+      const smsBody = renderSms(smsTpl.sms_text ?? "", { name: firstName, link: smsShort });
       const smsRes = await sendSms(phone, smsBody);
       smsSent = smsRes.ok ? "sent" : "error";
     }
 
-    // Email
+    // Email — Subject + Intro aus DB-Template
     if (resend) {
-      const emailShort = await shortenUrl(inviteUrl, "email_reminder");
+      const emailShort = await shortenUrl(inviteUrl, "email_reminder", email);
       resend.emails
         .send({
           from: FROM,
           to: email,
-          subject: metaLeadReminderSubject(firstName),
-          html: metaLeadReminderHtml(firstName, emailShort, APP_URL),
+          subject: metaLeadReminderSubject(firstName, emailTpl.email_subject),
+          html: metaLeadReminderHtml(firstName, emailShort, APP_URL, {
+            intro: emailTpl.email_intro,
+          }),
         })
         .then(() => { emailSent = true; })
         .catch(() => {});

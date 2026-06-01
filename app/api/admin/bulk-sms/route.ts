@@ -1,6 +1,7 @@
 import { isAdminAuthed } from "@/lib/adminAuth";
 import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
 import { shortenUrl } from "@/lib/shortLinks";
+import { getTemplate, renderSms } from "@/lib/messageTemplates";
 import { NextResponse } from "next/server";
 
 export const runtime = "nodejs";
@@ -45,6 +46,7 @@ export async function POST() {
   if (!authed) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const sb = getSupabaseAdmin();
+  const tpl = await getTemplate("meta_lead_bulk_sms");
 
   // Alle Meta-Leads aus profiles holen
   const { data: profiles, error: profilesErr } = await sb
@@ -95,10 +97,8 @@ export async function POST() {
       continue;
     }
 
-    const shortUrl = await shortenUrl(inviteUrl, "sms_bulk");
-    const body =
-      `Willkommen bei Glev! Aktiviere deinen kostenlosen 7-Tage-Test: ${shortUrl}\n\n` +
-      `Alternativ kannst du dich auch per E-Mail anmelden – bitte prüfe ggf. auch deinen Spam-Ordner auf eine E-Mail von info@glev.app.`;
+    const shortUrl = await shortenUrl(inviteUrl, "sms_bulk", email);
+    const body = renderSms(tpl.sms_text ?? "", { link: shortUrl });
 
     const smsResult = await sendSms(phone, body);
     results.push({

@@ -29,159 +29,97 @@ import {
   metaLeadInviteHtml,
   metaLeadInviteSubject,
 } from "@/lib/emails/meta-lead-invite";
+import {
+  metaLeadReminderHtml,
+  metaLeadReminderSubject,
+} from "@/lib/emails/meta-lead-reminder";
+import { getAllTemplates } from "@/lib/messageTemplates";
 import { isAdminAuthed } from "@/lib/adminAuth";
 import { loginAction } from "./actions";
 import AdminLoginForm from "../_components/AdminLoginForm";
-import EmailPreview, { type TemplateOption } from "./EmailPreview";
+import EmailPreview, {
+  type TemplateOption,
+  type SmsTemplateOption,
+  type DbTemplate,
+} from "./EmailPreview";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-
-/**
- * Operator-Preview für alle Mail-Templates die Glev nach einem Kauf
- * verschickt — Welcome (Beta + Pro) und die drei Drip-Mails Tag 7/14/30.
- *
- * Zweck: Lucas (und alle mit `ADMIN_API_SECRET`) sollen sehen können
- * was Käufer:innen tatsächlich im Posteingang lesen — ohne sich selbst
- * eine Test-Mail schicken zu müssen oder die HTML-Templates im Code
- * zu lesen. Renderaufrufe gehen direkt gegen die echten Renderer aus
- * `lib/emails/*` — d. h. „was du hier siehst" ist garantiert „was
- * Resend rausschickt", solange die Render-Funktionen nicht umgeschrieben
- * werden.
- *
- * URL-Params zum Variieren:
- *   - `?t=<key>` — welches Template (siehe TEMPLATES unten)
- *   - `?name=<vorname>` — Anrede testen (Default: "Julia")
- *   - `?email=<adresse>` — Empfängerin im Drip-Footer + Unsub-Link
- *     (Default: julia@example.com)
- *
- * Dies ist KEIN Mail-Editor. Änderungen am Inhalt passieren weiterhin
- * im Code (`lib/emails/*.ts`); diese Seite ist nur die Sichtbarkeits-
- * Schicht. Falls künftig direkt aus der UI editiert werden soll: separates
- * Tooling (z. B. React Email mit JSX-Templates) — würde aber erfordern
- * dass die Templates aus dem hand-getunten HTML in JSX-Komponenten
- * konvertiert werden.
- */
 
 const DEFAULT_NAME = "Julia";
 const DEFAULT_EMAIL = "julia@example.com";
 const DEFAULT_SESSION_ID = "cs_test_demo_session_for_preview_only";
 
+/** SMS-Templates — Texte kommen aus der DB (message_templates), Vorschau zeigt DB-Stand. */
+const SMS_TEMPLATES: SmsTemplateOption[] = [
+  {
+    key: "meta_lead_invite_sms",
+    label: "Meta Lead — Einladung (SMS)",
+    whenSent: "Sofort nach Webhook-Eingang (Twilio fire-and-forget)",
+  },
+  {
+    key: "meta_lead_bulk_sms",
+    label: "Meta Lead — Bulk-SMS",
+    whenSent: "Manuell via 'Bulk-SMS senden' Button",
+  },
+  {
+    key: "meta_lead_reminder_sms",
+    label: "Meta Lead — Reminder (SMS)",
+    whenSent: "24h nach Einladung, wenn Trial nicht aktiviert — 10:00 UTC Cron",
+  },
+];
+
 function buildTemplates(
   name: string,
   email: string,
   locale: EmailLocale,
+  dbTemplates: Record<string, DbTemplate>,
+  appUrl: string,
 ): TemplateOption[] {
-  // App-URL aus dem env, sonst Production-Fallback. Steckt im Welcome-CTA
-  // und im Unsubscribe-Link der Drips, also muss sie für die Preview real
-  // genug aussehen.
-  const appUrl =
-    process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "") || "https://glev.app";
-
+  const isEn = locale === "en";
   const day7 = day7InsightsEmail(name, email, locale);
   const day14 = day14FeedbackEmail(name, email, locale);
   const day30 = day30TrustpilotEmail(name, email, locale);
 
-  const isEn = locale === "en";
-
-  // Beta-Free-Year: in echt setzen wir das End-Datum auf heute + 365.
-  // Für die Vorschau zeigen wir denselben Zeitraum, damit Lucas das
-  // formatierte Datum genauso sieht wie ein echter Empfänger.
-  const bfyExpiresAt = new Date(
-    Date.now() + 365 * 24 * 60 * 60 * 1000,
-  ).toISOString();
-  // Ein realistischer Beispiel-Login-Link für die Invite-Variante. Geht
-  // nirgends hin (Demo-Token), aber zeigt dem Operator wie der CTA-Link
-  // im echten Empfänger-Posteingang aussieht.
+  const bfyExpiresAt = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString();
   const bfySignupUrl = `${appUrl}/welcome/beta#access_token=demo_preview_only&type=magiclink`;
+  const previewLink = `${appUrl}/auth/confirm#access_token=preview_only&type=recovery`;
+
+  const reminderDb = dbTemplates["meta_lead_reminder_email"] ?? {};
 
   return [
+    // ── Meta Lead ──────────────────────────────────────────────────────
     {
-      key: "beta-welcome",
-      label: isEn ? "Glev Smart — Welcome" : "Glev Smart — Welcome",
+      key: "meta-lead-invite",
+      label: isEn ? "Meta Lead — Invite" : "Meta Lead — Einladung (Email)",
+      campaign: "meta-lead",
       whenSent: isEn
-        ? "Immediately after Stripe Checkout success (€19 setup fee)"
-        : "Sofort nach erfolgreicher Stripe-Checkout (€19 Setup-Fee)",
-      subject: betaWelcomeSubject(name, locale),
-      html: betaWelcomeHtml(name, DEFAULT_SESSION_ID, appUrl, locale),
+        ? "On webhook receipt — branded invite via Resend"
+        : "Beim Webhook-Eingang — gebrandete Einladung via Resend",
+      subject: metaLeadInviteSubject(name, locale),
+      html: metaLeadInviteHtml(name, previewLink, locale, appUrl),
     },
     {
-      key: "pro-welcome",
-      label: "Pro — Welcome",
+      key: "meta-lead-reminder",
+      label: isEn ? "Meta Lead — Reminder (Email, 24h)" : "Meta Lead — Reminder (Email, 24h)",
+      campaign: "meta-lead",
+      editableKey: "meta_lead_reminder_email",
       whenSent: isEn
-        ? "Immediately after Pro subscription is created via Stripe Checkout"
-        : "Sofort nach Anlage des Pro-Abos via Stripe-Checkout",
-      subject: proWelcomeSubject(name, locale),
-      html: proWelcomeHtml(name, DEFAULT_SESSION_ID, appUrl, null, locale),
+        ? "24h after invite, if trial not activated — daily cron 10:00 UTC"
+        : "24h nach Einladung, wenn Trial nicht aktiviert — Cron 10:00 UTC",
+      subject: reminderDb.email_subject ?? metaLeadReminderSubject(name),
+      html: metaLeadReminderHtml(name, previewLink, appUrl, {
+        intro: reminderDb.email_intro,
+      }),
     },
-    {
-      key: "plus-welcome",
-      label: "Plus — Welcome",
-      whenSent: isEn
-        ? "Immediately after Glev+ subscription is created via Stripe Checkout (€29/mo lifetime-lock)"
-        : "Sofort nach Anlage des Glev+-Abos via Stripe-Checkout (€29/Monat Lifetime-Lock)",
-      subject: plusWelcomeSubject(name, locale),
-      html: plusWelcomeHtml(name, DEFAULT_SESSION_ID, appUrl, null, locale),
-    },
-    {
-      key: "beta-free-year-welcome-existing",
-      label: isEn
-        ? "Glev Smart — 1 Year Free (existing user)"
-        : "Glev Smart — 1 Jahr gratis (bestehender User)",
-      whenSent: isEn
-        ? "Admin grants 1 free Glev Smart year via /admin/users — recipient already has an account"
-        : "Admin schaltet 1 Jahr Glev Smart via /admin/users frei — Empfänger:in hat bereits einen Account",
-      subject: betaFreeYearWelcomeSubject(name, locale, "beta"),
-      html: betaFreeYearWelcomeHtml(name, appUrl, bfyExpiresAt, locale, null, "beta"),
-    },
-    {
-      key: "beta-free-year-welcome-invite",
-      label: isEn
-        ? "Glev Smart — 1 Year Free (new user invite)"
-        : "Glev Smart — 1 Jahr gratis (neuer User, Invite)",
-      whenSent: isEn
-        ? "Admin grants 1 free Glev Smart year via /admin/users — recipient is brand-new, gets login link"
-        : "Admin schaltet 1 Jahr Glev Smart via /admin/users frei — neuer User, kriegt Login-Link",
-      subject: betaFreeYearWelcomeSubject(name, locale, "beta"),
-      html: betaFreeYearWelcomeHtml(name, appUrl, bfyExpiresAt, locale, bfySignupUrl, "beta"),
-    },
-    {
-      key: "pro-free-year-welcome-existing",
-      label: isEn
-        ? "Pro-Free-Year — Welcome (existing user)"
-        : "Pro-Free-Year — Welcome (bestehender User)",
-      whenSent: isEn
-        ? "Admin grants 1 free Pro year (e.g. for diabetologists) via /admin/users — recipient already has an account"
-        : "Admin schaltet 1 Jahr Pro via /admin/users frei (z.B. für Diabetolog:innen) — Empfänger:in hat bereits einen Account",
-      subject: betaFreeYearWelcomeSubject(name, locale, "pro"),
-      html: betaFreeYearWelcomeHtml(name, appUrl, bfyExpiresAt, locale, null, "pro"),
-    },
-    {
-      key: "pro-free-year-welcome-invite",
-      label: isEn
-        ? "Pro-Free-Year — Welcome (new user invite)"
-        : "Pro-Free-Year — Welcome (neuer User, Invite)",
-      whenSent: isEn
-        ? "Admin grants 1 free Pro year via /admin/users — recipient is brand-new, gets login link to /welcome/beta"
-        : "Admin schaltet 1 Jahr Pro via /admin/users frei — neuer User, kriegt Login-Link auf /welcome/beta",
-      subject: betaFreeYearWelcomeSubject(name, locale, "pro"),
-      html: betaFreeYearWelcomeHtml(name, appUrl, bfyExpiresAt, locale, bfySignupUrl, "pro"),
-    },
-    {
-      key: "supabase-confirm",
-      label: isEn ? "Supabase — Email Confirmation" : "Supabase — E-Mail-Bestätigung",
-      whenSent: isEn
-        ? "Sent by Supabase immediately after signup (paste HTML into Supabase Dashboard → Auth → Email Templates → Confirm signup)"
-        : "Wird von Supabase direkt nach Signup verschickt (HTML in Supabase Dashboard → Auth → Email Templates → Confirm signup einfügen)",
-      subject: SUPABASE_CONFIRM_SUBJECT,
-      html: supabaseConfirmHtml("https://glev.app/auth/callback?code=EXAMPLE"),
-    },
+    // ── Trial ──────────────────────────────────────────────────────────
     {
       key: "trial-welcome",
-      label: isEn ? "Free Trial — Welcome (Day 0, Outbox)" : "Free Trial — Welcome (Tag 0, Outbox)",
+      label: isEn ? "Free Trial — Welcome (Day 0)" : "Free Trial — Welcome (Tag 0)",
+      campaign: "trial",
       whenSent: isEn
-        ? "Day 0 via reliable outbox queue — sent when POST /api/auth/free-trial is called"
-        : "Tag 0 über zuverlässige Outbox-Queue — wird bei POST /api/auth/free-trial verschickt",
+        ? "Day 0 via outbox queue — on POST /api/auth/free-trial"
+        : "Tag 0 über Outbox-Queue — bei POST /api/auth/free-trial",
       subject: trialWelcomeSubject(name, locale),
       html: trialWelcomeHtml(
         name,
@@ -190,28 +128,13 @@ function buildTemplates(
         locale,
       ),
     },
-    {
-      key: "meta-lead-invite",
-      label: isEn ? "Meta Lead — Invite (branded)" : "Meta Lead — Einladung (gebrandet)",
-      whenSent: isEn
-        ? "Sent manually via POST /api/admin/meta/resend-invite for leads who received the ugly Supabase default"
-        : "Manuell via POST /api/admin/meta/resend-invite — für Leads die die hässliche Supabase-Default-Mail bekommen haben",
-      subject: metaLeadInviteSubject(name, locale),
-      html: metaLeadInviteHtml(
-        name,
-        `${appUrl}/auth/confirm#access_token=preview_only&type=recovery`,
-        locale,
-        appUrl,
-      ),
-    },
     (() => {
       const r = trialDay6ReminderEmail(name, email, locale);
       return {
         key: "trial-day6",
         label: isEn ? "Free Trial — Day 6 (Reminder)" : "Free Trial — Tag 6 (Erinnerung)",
-        whenSent: isEn
-          ? "6 days after trial start — drip cron at 09:00 UTC"
-          : "6 Tage nach Trial-Start — Drip-Cron um 09:00 UTC",
+        campaign: "trial",
+        whenSent: isEn ? "Day 6 after trial start — cron 09:00 UTC" : "Tag 6 nach Trial-Start — Cron 09:00 UTC",
         subject: r.subject,
         html: r.html,
       };
@@ -221,9 +144,8 @@ function buildTemplates(
       return {
         key: "trial-expired",
         label: isEn ? "Free Trial — Day 7 (Expired)" : "Free Trial — Tag 7 (Abgelaufen)",
-        whenSent: isEn
-          ? "7 days after trial start — drip cron at 09:00 UTC"
-          : "7 Tage nach Trial-Start — Drip-Cron um 09:00 UTC",
+        campaign: "trial",
+        whenSent: isEn ? "Day 7 after trial start — cron 09:00 UTC" : "Tag 7 nach Trial-Start — Cron 09:00 UTC",
         subject: r.subject,
         html: r.html,
       };
@@ -232,42 +154,123 @@ function buildTemplates(
       const r = reEngagementEmail(name, email, locale);
       return {
         key: "re-engagement",
-        label: isEn ? "Free Trial — Re-Engagement (48h inactiv)" : "Free Trial — Re-Engagement (48h inaktiv)",
+        label: isEn ? "Free Trial — Re-Engagement (48h inactive)" : "Free Trial — Re-Engagement (48h inaktiv)",
+        campaign: "trial",
         whenSent: isEn
-          ? "Automatically scheduled by daily drip cron when a trial user hasn't been seen for 48h — sent once per user"
-          : "Automatisch vom täglichen Drip-Cron geplant, wenn ein Trial-User 48h nicht aktiv war — wird nur einmal pro User verschickt",
+          ? "When a trial user hasn't been seen for 48h — sent once per user"
+          : "Wenn ein Trial-User 48h nicht aktiv war — einmal pro User",
         subject: r.subject,
         html: r.html,
       };
     })(),
+    // ── Drip ───────────────────────────────────────────────────────────
     {
       key: "drip-day7",
       label: isEn ? "Drip — Day 7 (Insights)" : "Drip — Tag 7 (Insights)",
-      whenSent: isEn
-        ? "7 days after welcome — cron at 09:00 UTC"
-        : "7 Tage nach Welcome — Cron um 09:00 UTC",
+      campaign: "drip",
+      whenSent: isEn ? "7 days after welcome — cron 09:00 UTC" : "7 Tage nach Welcome — Cron 09:00 UTC",
       subject: day7.subject,
       html: day7.html,
     },
     {
       key: "drip-day14",
       label: isEn ? "Drip — Day 14 (Feedback)" : "Drip — Tag 14 (Feedback)",
-      whenSent: isEn
-        ? "14 days after welcome — cron at 09:00 UTC"
-        : "14 Tage nach Welcome — Cron um 09:00 UTC",
+      campaign: "drip",
+      whenSent: isEn ? "14 days after welcome — cron 09:00 UTC" : "14 Tage nach Welcome — Cron 09:00 UTC",
       subject: day14.subject,
       html: day14.html,
     },
     {
       key: "drip-day30",
       label: isEn ? "Drip — Day 30 (Trustpilot)" : "Drip — Tag 30 (Trustpilot)",
-      whenSent: isEn
-        ? "30 days after welcome — cron at 09:00 UTC"
-        : "30 Tage nach Welcome — Cron um 09:00 UTC",
+      campaign: "drip",
+      whenSent: isEn ? "30 days after welcome — cron 09:00 UTC" : "30 Tage nach Welcome — Cron 09:00 UTC",
       subject: day30.subject,
       html: day30.html,
     },
-  ];
+    // ── Welcome ────────────────────────────────────────────────────────
+    {
+      key: "beta-welcome",
+      label: isEn ? "Glev Smart — Welcome" : "Glev Smart — Welcome",
+      campaign: "welcome",
+      whenSent: isEn
+        ? "Immediately after Stripe Checkout (€19 setup fee)"
+        : "Sofort nach Stripe-Checkout (€19 Setup-Fee)",
+      subject: betaWelcomeSubject(name, locale),
+      html: betaWelcomeHtml(name, DEFAULT_SESSION_ID, appUrl, locale),
+    },
+    {
+      key: "pro-welcome",
+      label: "Pro — Welcome",
+      campaign: "welcome",
+      whenSent: isEn
+        ? "Immediately after Pro subscription via Stripe Checkout"
+        : "Sofort nach Pro-Abo via Stripe-Checkout",
+      subject: proWelcomeSubject(name, locale),
+      html: proWelcomeHtml(name, DEFAULT_SESSION_ID, appUrl, null, locale),
+    },
+    {
+      key: "plus-welcome",
+      label: "Plus — Welcome",
+      campaign: "welcome",
+      whenSent: isEn
+        ? "Immediately after Glev+ subscription (€29/mo lifetime-lock)"
+        : "Sofort nach Glev+-Abo (€29/Monat Lifetime-Lock)",
+      subject: plusWelcomeSubject(name, locale),
+      html: plusWelcomeHtml(name, DEFAULT_SESSION_ID, appUrl, null, locale),
+    },
+    {
+      key: "beta-free-year-welcome-existing",
+      label: isEn ? "Smart — 1 Year Free (existing user)" : "Smart — 1 Jahr gratis (bestehender User)",
+      campaign: "welcome",
+      whenSent: isEn
+        ? "Admin grants 1 free Smart year — recipient already has an account"
+        : "Admin schaltet 1 Jahr Smart frei — Empfänger:in hat Account",
+      subject: betaFreeYearWelcomeSubject(name, locale, "beta"),
+      html: betaFreeYearWelcomeHtml(name, appUrl, bfyExpiresAt, locale, null, "beta"),
+    },
+    {
+      key: "beta-free-year-welcome-invite",
+      label: isEn ? "Smart — 1 Year Free (new user invite)" : "Smart — 1 Jahr gratis (neuer User, Invite)",
+      campaign: "welcome",
+      whenSent: isEn
+        ? "Admin grants 1 free Smart year — new user, gets login link"
+        : "Admin schaltet 1 Jahr Smart frei — neuer User, kriegt Login-Link",
+      subject: betaFreeYearWelcomeSubject(name, locale, "beta"),
+      html: betaFreeYearWelcomeHtml(name, appUrl, bfyExpiresAt, locale, bfySignupUrl, "beta"),
+    },
+    {
+      key: "pro-free-year-welcome-existing",
+      label: isEn ? "Pro-Free-Year — Welcome (existing)" : "Pro-Free-Year — Welcome (bestehender User)",
+      campaign: "welcome",
+      whenSent: isEn
+        ? "Admin grants 1 free Pro year — recipient already has an account"
+        : "Admin schaltet 1 Jahr Pro frei — Empfänger:in hat Account",
+      subject: betaFreeYearWelcomeSubject(name, locale, "pro"),
+      html: betaFreeYearWelcomeHtml(name, appUrl, bfyExpiresAt, locale, null, "pro"),
+    },
+    {
+      key: "pro-free-year-welcome-invite",
+      label: isEn ? "Pro-Free-Year — Welcome (new invite)" : "Pro-Free-Year — Welcome (neuer User, Invite)",
+      campaign: "welcome",
+      whenSent: isEn
+        ? "Admin grants 1 free Pro year — new user, gets login link"
+        : "Admin schaltet 1 Jahr Pro frei — neuer User, kriegt Login-Link",
+      subject: betaFreeYearWelcomeSubject(name, locale, "pro"),
+      html: betaFreeYearWelcomeHtml(name, appUrl, bfyExpiresAt, locale, bfySignupUrl, "pro"),
+    },
+    // ── System ─────────────────────────────────────────────────────────
+    {
+      key: "supabase-confirm",
+      label: isEn ? "Supabase — Email Confirmation" : "Supabase — E-Mail-Bestätigung",
+      campaign: "system",
+      whenSent: isEn
+        ? "Sent by Supabase after signup (paste into Auth → Email Templates → Confirm signup)"
+        : "Von Supabase nach Signup (HTML in Dashboard → Auth → Email Templates → Confirm signup)",
+      subject: SUPABASE_CONFIRM_SUBJECT,
+      html: supabaseConfirmHtml("https://glev.app/auth/callback?code=EXAMPLE"),
+    },
+  ] satisfies TemplateOption[];
 }
 
 export default async function AdminEmailsPage({
@@ -281,42 +284,56 @@ export default async function AdminEmailsPage({
   if (!authed) {
     const errParam = Array.isArray(sp.err) ? sp.err[0] : sp.err;
     const err = errParam === "bad" ? "Login fehlgeschlagen." : null;
-    return <AdminLoginForm action={loginAction} title="Mail-Preview" error={err} />;
+    return <AdminLoginForm action={loginAction} title="Mail & SMS Preview" error={err} />;
   }
-  // Aus den Query-Params Anrede + Empfänger-Adresse für die Variablen
-  // ziehen. Werden bei jeder Tab-Auswahl mit weitergegeben (siehe
-  // EmailPreview), damit ein Wechsel nicht den eingestellten Namen
-  // wegwirft.
+
   const nameParam = Array.isArray(sp.name) ? sp.name[0] : sp.name;
   const emailParam = Array.isArray(sp.email) ? sp.email[0] : sp.email;
   const tParam = Array.isArray(sp.t) ? sp.t[0] : sp.t;
   const langParam = Array.isArray(sp.lang) ? sp.lang[0] : sp.lang;
+  const campaignParam = Array.isArray(sp.campaign) ? sp.campaign[0] : sp.campaign;
 
   const name = (nameParam ?? "").trim() || DEFAULT_NAME;
   const email = (emailParam ?? "").trim() || DEFAULT_EMAIL;
   const locale: EmailLocale = langParam === "en" ? "en" : "de";
+  const campaign = campaignParam ?? "alle";
 
-  const templates = buildTemplates(name, email, locale);
+  const appUrl =
+    process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "") || "https://glev.app";
+
+  // Fetch editable templates from DB (falls back to hardcoded defaults in getAllTemplates)
+  const dbTemplatesRaw = await getAllTemplates();
+  const dbTemplates: Record<string, DbTemplate> = {};
+  for (const [k, v] of Object.entries(dbTemplatesRaw)) {
+    dbTemplates[k] = {
+      sms_text: v.sms_text,
+      email_subject: v.email_subject,
+      email_intro: v.email_intro,
+    };
+  }
+
+  const templates = buildTemplates(name, email, locale, dbTemplates, appUrl);
   const selectedKey = templates.some((t) => t.key === tParam)
     ? (tParam as string)
     : templates[0].key;
 
   return (
     <main style={pageStyle}>
-      <h1 style={{ fontSize: 22, margin: "0 0 16px" }}>Glev — Mail-Preview</h1>
-
-      <p style={{ margin: "0 0 16px", color: "#555", fontSize: 14 }}>
-        Live-Render aus <code>lib/emails/*</code> — was du siehst ist exakt was
-        Resend an die Käufer:innen schickt. Inhalt änderst du im Code, diese
-        Seite zeigt dir das Ergebnis.
+      <h1 style={{ fontSize: 22, margin: "0 0 4px", fontWeight: 800 }}>Glev — Nachrichten</h1>
+      <p style={{ margin: "0 0 20px", color: "#6b7280", fontSize: 14 }}>
+        Email-Preview aus <code>lib/emails/*</code> · SMS aus DB (<code>message_templates</code>) ·
+        Templates mit ✏ sind direkt bearbeitbar — Änderungen gelten für alle danach verschickten Nachrichten.
       </p>
 
       <EmailPreview
         templates={templates}
+        smsTemplates={SMS_TEMPLATES}
+        dbTemplates={dbTemplates}
         selectedKey={selectedKey}
         name={name}
         email={email}
         locale={locale}
+        campaign={campaign}
       />
     </main>
   );
@@ -330,23 +347,4 @@ const pageStyle: React.CSSProperties = {
   color: "#111",
   background: "#fff",
   minHeight: "100vh",
-};
-
-const inputStyle: React.CSSProperties = {
-  padding: "10px 12px",
-  border: "1px solid #ccc",
-  borderRadius: 6,
-  fontSize: 14,
-  fontFamily: "inherit",
-};
-
-const btnStyle: React.CSSProperties = {
-  padding: "10px 16px",
-  background: "#111",
-  color: "#fff",
-  border: "none",
-  borderRadius: 6,
-  fontSize: 14,
-  fontWeight: 600,
-  cursor: "pointer",
 };

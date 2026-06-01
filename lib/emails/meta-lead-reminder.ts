@@ -2,7 +2,11 @@
 
 const ACCENT = "#4F6EF7";
 
-export function metaLeadReminderSubject(firstName: string | null): string {
+export function metaLeadReminderSubject(
+  firstName: string | null,
+  subjectOverride?: string | null,
+): string {
+  if (subjectOverride) return subjectOverride;
   const name = firstName ? `, ${firstName}` : "";
   return `Dein Glev-Test wartet noch${name} 🔔`;
 }
@@ -11,8 +15,12 @@ export function metaLeadReminderHtml(
   firstName: string | null,
   inviteUrl: string,
   appUrl: string,
+  overrides?: { intro?: string | null },
 ): string {
   const greeting = firstName ? `Hallo ${firstName}` : "Hallo";
+  const introText =
+    overrides?.intro?.trim() ||
+    "du hattest Interesse an Glev – der App die dir hilft, deine Insulindosierung besser einzuschätzen. Dein kostenloser 7-Tage-Test ist noch nicht aktiviert.";
   return `<!DOCTYPE html>
 <html lang="de">
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
@@ -28,9 +36,7 @@ export function metaLeadReminderHtml(
             Dein Test wartet noch auf dich
           </p>
           <p style="margin:0 0 24px;font-size:14px;color:rgba(255,255,255,0.55);line-height:1.6;">
-            ${greeting}, du hattest Interesse an Glev – der App die dir hilft,
-            deine Insulindosierung besser einzuschätzen. Dein kostenloser
-            7-Tage-Test ist noch nicht aktiviert.
+            ${greeting}, ${introText}
           </p>
           <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:24px;">
             <tr>

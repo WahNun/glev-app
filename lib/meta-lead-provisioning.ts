@@ -19,6 +19,7 @@ import {
 } from "@/lib/emails/meta-lead-invite";
 import type { EmailLocale } from "@/lib/emails/beta-welcome";
 import { shortenUrl } from "@/lib/shortLinks";
+import { getTemplate, renderSms } from "@/lib/messageTemplates";
 
 const APP_URL = (process.env.NEXT_PUBLIC_APP_URL || "https://glev.app").replace(/\/$/, "");
 const FROM = "Glev <info@glev.app>";
@@ -34,7 +35,12 @@ export function localeFromPhone(phone: string | null | undefined): EmailLocale {
 }
 
 /** Sendet eine SMS mit dem Invite-Link via Twilio REST API (fire-and-forget). */
-async function sendTwilioSms(phone: string, inviteUrl: string): Promise<void> {
+async function sendTwilioSms(
+  phone: string,
+  inviteUrl: string,
+  ownerEmail: string | null,
+  smsTemplate: string,
+): Promise<void> {
   const sid   = process.env.TWILIO_ACCOUNT_SID;
   const token = process.env.TWILIO_AUTH_TOKEN;
   const from  = process.env.TWILIO_FROM_NUMBER;
@@ -45,9 +51,8 @@ async function sendTwilioSms(phone: string, inviteUrl: string): Promise<void> {
     return;
   }
 
-  // Separate Short-Links für SMS und Email — ermöglicht Click-Tracking pro Kanal.
-  const shortUrl = await shortenUrl(inviteUrl, "sms");
-  const body = `Willkommen bei Glev! Aktiviere deinen kostenlosen 7-Tage-Test: ${shortUrl}\n\nAlternativ kannst du dich auch per E-Mail anmelden – bitte prüfe ggf. auch deinen Spam-Ordner auf eine E-Mail von info@glev.app.`;
+  const shortUrl = await shortenUrl(inviteUrl, "sms", ownerEmail ?? undefined);
+  const body = renderSms(smsTemplate, { link: shortUrl });
   const formData = new URLSearchParams({ From: from, To: phone, Body: body });
 
   fetch(`https://api.twilio.com/2010-04-01/Accounts/${sid}/Messages.json`, {
@@ -182,7 +187,7 @@ export async function provisionMetaLead(
           from: FROM,
           to: email,
           subject: metaLeadInviteSubject(first, effectiveLocale),
-          html: metaLeadInviteHtml(first, await shortenUrl(inviteUrl, "email"), effectiveLocale, APP_URL),
+          html: metaLeadInviteHtml(first, await shortenUrl(inviteUrl, "email", email), effectiveLocale, APP_URL),
         })
         .then(() => {
           // eslint-disable-next-line no-console
@@ -199,7 +204,8 @@ export async function provisionMetaLead(
 
     // SMS via Twilio (fire-and-forget, Fehler blockieren nicht den Webhook)
     if (phone) {
-      void sendTwilioSms(phone, inviteUrl);
+      const smsTpl = await getTemplate("meta_lead_invite_sms");
+      void sendTwilioSms(phone, inviteUrl, email, smsTpl.sms_text ?? "");
     }
   }
 

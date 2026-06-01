@@ -24,6 +24,8 @@ export type TrialRow = {
   signupSource: string | null;
   createdAt: string | null;
   onboardingCompletedAt: string | null;
+  smsClicked: boolean;
+  emailClicked: boolean;
 };
 
 export default async function AdminBuyersPage({
@@ -52,7 +54,7 @@ export default async function AdminBuyersPage({
 
   const sb = getSupabaseAdmin();
 
-  const [betaRes, proRes, trialProfilesRes, authUsersRes] = await Promise.all([
+  const [betaRes, proRes, trialProfilesRes, authUsersRes, clicksRes] = await Promise.all([
     (() => {
       let query = sb
         .from("beta_reservations")
@@ -90,6 +92,11 @@ export default async function AdminBuyersPage({
       .order("created_at", { ascending: false })
       .limit(200),
     sb.auth.admin.listUsers({ perPage: 1000 }),
+    sb
+      .from("short_links")
+      .select("owner_email, source, clicked_at")
+      .not("owner_email", "is", null)
+      .not("clicked_at", "is", null),
   ]);
 
   const betaErr = betaRes.error?.message ?? null;
@@ -102,8 +109,22 @@ export default async function AdminBuyersPage({
   const authUserMap = new Map(
     (authUsersRes.data?.users ?? []).map((u) => [u.id, u]),
   );
+
+  const clickMap = new Map<string, { sms: boolean; email: boolean }>();
+  for (const row of clicksRes.data ?? []) {
+    const ownerEmail = ((row.owner_email as string) ?? "").toLowerCase();
+    if (!ownerEmail) continue;
+    const cur = clickMap.get(ownerEmail) ?? { sms: false, email: false };
+    const src = (row.source as string | null) ?? "";
+    if (src.includes("sms")) cur.sms = true;
+    if (src.includes("email")) cur.email = true;
+    clickMap.set(ownerEmail, cur);
+  }
+
   const trialUsers: TrialRow[] = (trialProfilesRes.data ?? []).map((p) => {
     const u = authUserMap.get(p.user_id);
+    const emailLower = (u?.email ?? "").toLowerCase();
+    const clicks = clickMap.get(emailLower);
     return {
       userId: p.user_id,
       email: u?.email ?? "—",
@@ -114,6 +135,8 @@ export default async function AdminBuyersPage({
       signupSource: p.signup_source as string | null,
       createdAt: (u?.created_at ?? p.created_at) as string | null,
       onboardingCompletedAt: p.onboarding_completed_at as string | null,
+      smsClicked: clicks?.sms ?? false,
+      emailClicked: clicks?.email ?? false,
     };
   });
 
@@ -220,6 +243,7 @@ export default async function AdminBuyersPage({
                   <Th>Tage übrig</Th>
                   <Th>Status</Th>
                   <Th>Onboarding</Th>
+                  <Th>Link-Klicks</Th>
                   <Th>Angelegt</Th>
                   <Th>{""}</Th>
                 </tr>
@@ -280,6 +304,20 @@ export default async function AdminBuyersPage({
                           <span style={badgeActive}>✓ Abgeschlossen</span>
                         ) : u.trialStartAt ? (
                           <span style={badgePending}>Ausstehend</span>
+                        ) : (
+                          <span style={{ color: "#d1d5db", fontSize: 12 }}>—</span>
+                        )}
+                      </Td>
+                      <Td>
+                        {(u.smsClicked || u.emailClicked) ? (
+                          <span style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
+                            {u.smsClicked && (
+                              <span style={badgeClicked} title="SMS-Link geklickt">📱 SMS</span>
+                            )}
+                            {u.emailClicked && (
+                              <span style={badgeClicked} title="E-Mail-Link geklickt">📧 Email</span>
+                            )}
+                          </span>
                         ) : (
                           <span style={{ color: "#d1d5db", fontSize: 12 }}>—</span>
                         )}
@@ -413,6 +451,17 @@ const badgeDefault: React.CSSProperties = {
   borderRadius: 4,
   padding: "2px 7px",
   fontSize: 11,
+};
+
+const badgeClicked: React.CSSProperties = {
+  background: "#ecfdf5",
+  color: "#059669",
+  border: "1px solid #a7f3d0",
+  borderRadius: 4,
+  padding: "2px 6px",
+  fontSize: 11,
+  fontWeight: 600,
+  whiteSpace: "nowrap",
 };
 
 const badgeActive: React.CSSProperties = {
