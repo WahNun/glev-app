@@ -18,6 +18,7 @@ import {
   metaLeadInviteSubject,
 } from "@/lib/emails/meta-lead-invite";
 import type { EmailLocale } from "@/lib/emails/beta-welcome";
+import { shortenUrl } from "@/lib/shortLinks";
 
 const APP_URL = (process.env.NEXT_PUBLIC_APP_URL || "https://glev.app").replace(/\/$/, "");
 const FROM = "Glev <info@glev.app>";
@@ -33,7 +34,7 @@ export function localeFromPhone(phone: string | null | undefined): EmailLocale {
 }
 
 /** Sendet eine SMS mit dem Invite-Link via Twilio REST API (fire-and-forget). */
-function sendTwilioSms(phone: string, inviteUrl: string): void {
+async function sendTwilioSms(phone: string, inviteUrl: string): Promise<void> {
   const sid   = process.env.TWILIO_ACCOUNT_SID;
   const token = process.env.TWILIO_AUTH_TOKEN;
   const from  = process.env.TWILIO_FROM_NUMBER;
@@ -44,7 +45,9 @@ function sendTwilioSms(phone: string, inviteUrl: string): void {
     return;
   }
 
-  const body = `Willkommen bei Glev! Aktiviere deinen kostenlosen 7-Tage-Test hier: ${inviteUrl}`;
+  // Kürze den langen Supabase-Magic-Link → glev.app/s/XXXXXX
+  const shortUrl = await shortenUrl(inviteUrl);
+  const body = `Willkommen bei Glev! Aktiviere deinen kostenlosen 7-Tage-Test hier: ${shortUrl}`;
   const formData = new URLSearchParams({ From: from, To: phone, Body: body });
 
   fetch(`https://api.twilio.com/2010-04-01/Accounts/${sid}/Messages.json`, {
@@ -188,7 +191,7 @@ export async function provisionMetaLead(
 
     // SMS via Twilio (fire-and-forget, Fehler blockieren nicht den Webhook)
     if (phone) {
-      sendTwilioSms(phone, inviteUrl);
+      void sendTwilioSms(phone, inviteUrl);
     }
   }
 

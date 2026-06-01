@@ -23,6 +23,7 @@ const GROUPS: ReadonlyArray<NavGroup> = [
       { href: "/glev-ops/buyers", label: "Käufer" },
       { href: "/glev-ops/faelle", label: "Fälle" },
       { href: "/glev-ops/praxis", label: "Praxen" },
+      { href: "/glev-ops/sms", label: "SMS Test" },
       { href: "/glev-ops/settings", label: "Einstellungen" },
     ],
   },
