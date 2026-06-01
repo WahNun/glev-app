@@ -39,7 +39,7 @@ export default async function EditTrialUserPage({
   const spaceIdx = fullName.indexOf(" ");
   const firstName = spaceIdx > -1 ? fullName.slice(0, spaceIdx) : fullName;
   const lastName  = spaceIdx > -1 ? fullName.slice(spaceIdx + 1) : "";
-  const phone = (authUser.phone ?? (profile as Record<string,unknown> | null)?.phone as string | null) ?? "";
+  const phone = (authUser.user_metadata?.phone as string | null) ?? "";
 
   return (
     <main style={pageStyle}>

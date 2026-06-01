@@ -21,17 +21,51 @@ export async function logoutAction(): Promise<void> {
 }
 
 /**
- * Admin: Meta-Lead-Account anlegen.
+ * CRM: Vorname / Nachname / Telefon eines Trial-Users aktualisieren.
  *
- * Delegiert komplett an provisionMetaLead() — identisch zum echten
- * Meta-Webhook-Flow. Das stellt sicher dass Admin-Test-Leads und
- * echte Leads denselben Pfad durchlaufen:
- *   - Supabase User anlegen (generateLink statt inviteUserByEmail)
- *   - Profil: signup_source='meta_lead', trial_* = NULL
- *   - Branded Invite-Email via Resend
- *   - SMS via Twilio (wenn Telefonnummer angegeben)
- *   - Trial startet erst beim Link-Klick (activate-trial Route)
+ * Berührt NUR:
+ *   - auth.users.user_metadata.full_name  (Supabase merged user_metadata → keine
+ *     anderen Metadaten-Keys gehen verloren)
+ *   - auth.users.user_metadata.phone      (ebenfalls merged)
+ *   - profiles.display_name               (only diese eine Spalte)
+ *
+ * NICHT berührt: plan, manual_plan_override, trial_start_at, trial_end_at,
+ * signup_source, beta_reservations, pro_subscriptions — nichts davon.
  */
+export async function updateTrialUserAction(formData: FormData): Promise<void> {
+  const authed = await isAdminAuthed();
+  if (!authed) redirect("/glev-ops/buyers?err=bad");
+
+  const userId    = String(formData.get("userId")     ?? "").trim();
+  const firstName = String(formData.get("first_name") ?? "").trim();
+  const lastName  = String(formData.get("last_name")  ?? "").trim();
+  const phone     = String(formData.get("phone")      ?? "").trim() || null;
+  const fullName  = [firstName, lastName].filter(Boolean).join(" ") || null;
+
+  if (!userId) redirect("/glev-ops/buyers");
+
+  const sb = getSupabaseAdmin();
+
+  // 1. auth.users: user_metadata merge (nie ein Replace — andere Keys bleiben erhalten)
+  const metaPatch: Record<string, string | null> = {};
+  if (fullName !== null) metaPatch.full_name = fullName;
+  metaPatch.phone = phone; // null löscht das Feld
+
+  await sb.auth.admin.updateUserById(userId, {
+    user_metadata: metaPatch,
+  });
+
+  // 2. profiles: nur display_name — keine Plan-Felder
+  if (fullName !== null) {
+    await sb
+      .from("profiles")
+      .update({ display_name: fullName })
+      .eq("user_id", userId);
+  }
+
+  redirect(`/glev-ops/buyers/${userId}?saved=1`);
+}
+
 export async function createMetaLeadAction(formData: FormData): Promise<void> {
   const authed = await isAdminAuthed();
   if (!authed) redirect("/glev-ops/buyers?err=bad");

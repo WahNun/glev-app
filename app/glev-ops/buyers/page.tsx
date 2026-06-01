@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
 import { isAdminAuthed } from "@/lib/adminAuth";
 import { loginAction, createMetaLeadAction } from "./actions";
@@ -14,6 +15,7 @@ export type TrialRow = {
   userId: string;
   email: string;
   fullName: string | null;
+  phone: string | null;
   trialStartAt: string | null;
   trialEndAt: string | null;
   signupSource: string | null;
@@ -102,6 +104,7 @@ export default async function AdminBuyersPage({
       userId: p.user_id,
       email: u?.email ?? "—",
       fullName: (u?.user_metadata?.full_name as string | null) ?? null,
+      phone: (u?.user_metadata?.phone as string | null) ?? null,
       trialStartAt: p.trial_start_at as string | null,
       trialEndAt: p.trial_end_at as string | null,
       signupSource: p.signup_source as string | null,
@@ -200,12 +203,14 @@ export default async function AdminBuyersPage({
                 <tr style={{ background: "#f9fafb" }}>
                   <Th>E-Mail</Th>
                   <Th>Name</Th>
+                  <Th>Telefon</Th>
                   <Th>Quelle</Th>
                   <Th>Trial gestartet</Th>
                   <Th>Trial endet</Th>
                   <Th>Tage übrig</Th>
                   <Th>Status</Th>
                   <Th>Angelegt</Th>
+                  <Th></Th>
                 </tr>
               </thead>
               <tbody>
@@ -221,6 +226,7 @@ export default async function AdminBuyersPage({
                     <tr key={u.userId} style={{ borderBottom: "1px solid #f1f5f9" }}>
                       <Td>{u.email}</Td>
                       <Td>{u.fullName ?? "—"}</Td>
+                      <Td>{u.phone ?? "—"}</Td>
                       <Td>
                         {u.signupSource === "meta_lead" ? (
                           <span style={badgeMeta}>Meta Lead</span>
@@ -259,6 +265,15 @@ export default async function AdminBuyersPage({
                         )}
                       </Td>
                       <Td>{fmtDate(u.createdAt)}</Td>
+                      <Td>
+                        <Link
+                          href={`/glev-ops/buyers/${u.userId}`}
+                          style={{ fontSize: 14, color: "#6b7280", textDecoration: "none" }}
+                          title="Bearbeiten"
+                        >
+                          ✏
+                        </Link>
+                      </Td>
                     </tr>
                   );
                 })}
