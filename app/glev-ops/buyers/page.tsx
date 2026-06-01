@@ -210,7 +210,7 @@ export default async function AdminBuyersPage({
                   <Th>Tage übrig</Th>
                   <Th>Status</Th>
                   <Th>Angelegt</Th>
-                  <Th></Th>
+                  <Th>{""}</Th>
                 </tr>
               </thead>
               <tbody>
