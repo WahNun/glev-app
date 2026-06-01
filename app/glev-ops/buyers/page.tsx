@@ -14,6 +14,7 @@ export type TrialRow = {
   userId: string;
   email: string;
   fullName: string | null;
+  trialStartAt: string | null;
   trialEndAt: string | null;
   signupSource: string | null;
   createdAt: string | null;
@@ -78,8 +79,8 @@ export default async function AdminBuyersPage({
     })(),
     sb
       .from("profiles")
-      .select("user_id, trial_end_at, signup_source, created_at")
-      .not("trial_end_at", "is", null)
+      .select("user_id, trial_start_at, trial_end_at, signup_source, created_at")
+      .or("trial_end_at.not.is.null,signup_source.eq.meta_lead")
       .order("created_at", { ascending: false })
       .limit(200),
     sb.auth.admin.listUsers({ perPage: 1000 }),
@@ -101,6 +102,7 @@ export default async function AdminBuyersPage({
       userId: p.user_id,
       email: u?.email ?? "—",
       fullName: (u?.user_metadata?.full_name as string | null) ?? null,
+      trialStartAt: p.trial_start_at as string | null,
       trialEndAt: p.trial_end_at as string | null,
       signupSource: p.signup_source as string | null,
       createdAt: (u?.created_at ?? p.created_at) as string | null,
@@ -122,7 +124,7 @@ export default async function AdminBuyersPage({
         </h2>
         {createdParam === "1" && (
           <p style={{ color: "#166534", background: "#dcfce7", padding: "8px 12px", borderRadius: 6, fontSize: 14, marginBottom: 12 }}>
-            ✓ Account angelegt. Supabase hat einen Setup-Link an die E-Mail-Adresse geschickt. Drip-Mails (Tag 6 + 7) sind scheduliert.
+            ✓ Account angelegt. Invite-Email verschickt. Trial startet erst beim ersten Klick auf den Confirm-Button (Drip-Mails werden dann automatisch geplant).
           </p>
         )}
         {leadErrParam && (
@@ -181,6 +183,7 @@ export default async function AdminBuyersPage({
                   <Th>E-Mail</Th>
                   <Th>Name</Th>
                   <Th>Quelle</Th>
+                  <Th>Trial gestartet</Th>
                   <Th>Trial endet</Th>
                   <Th>Status</Th>
                   <Th>Angelegt</Th>
@@ -189,7 +192,9 @@ export default async function AdminBuyersPage({
               <tbody>
                 {trialUsers.map((u) => {
                   const end = u.trialEndAt ? new Date(u.trialEndAt) : null;
+                  const started = u.trialStartAt ? new Date(u.trialStartAt) : null;
                   const expired = end ? end < now : false;
+                  const notYetActivated = !started;
                   const daysLeft = end
                     ? Math.ceil((end.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
                     : null;
@@ -204,9 +209,18 @@ export default async function AdminBuyersPage({
                           <span style={badgeDefault}>{u.signupSource ?? "Direktanmeldung"}</span>
                         )}
                       </Td>
+                      <Td>
+                        {started ? (
+                          fmtDate(u.trialStartAt)
+                        ) : (
+                          <span style={badgePending}>Noch nicht aktiviert</span>
+                        )}
+                      </Td>
                       <Td>{end ? fmtDate(u.trialEndAt) : "—"}</Td>
                       <Td>
-                        {expired ? (
+                        {notYetActivated ? (
+                          <span style={badgePending}>Wartet</span>
+                        ) : expired ? (
                           <span style={badgeExpired}>Abgelaufen</span>
                         ) : daysLeft !== null ? (
                           <span style={badgeActive}>Aktiv · noch {daysLeft}d</span>
@@ -348,6 +362,14 @@ const badgeActive: React.CSSProperties = {
 const badgeExpired: React.CSSProperties = {
   background: "#fef2f2",
   color: "#991b1b",
+  borderRadius: 4,
+  padding: "2px 7px",
+  fontSize: 11,
+};
+
+const badgePending: React.CSSProperties = {
+  background: "#fefce8",
+  color: "#854d0e",
   borderRadius: 4,
   padding: "2px 7px",
   fontSize: 11,

@@ -29,7 +29,7 @@ type State =
   | { kind: "needs_confirm" }
   | { kind: "verifying" }
   | { kind: "ready" }
-  | { kind: "invalid"; reason: string }
+  | { kind: "invalid"; reason: string; linkUsed?: boolean }
   | { kind: "saving" }
   | { kind: "saved" };
 
@@ -71,6 +71,40 @@ function copyForType(type: string): { title: string; sub: string; cta: string } 
         sub: "Klicke unten, um fortzufahren.",
         cta: "Fortfahren",
       };
+  }
+}
+
+/**
+ * Erkennt ob ein Supabase-Auth-Fehler bedeutet, dass der Link schon
+ * verbraucht wurde (jemand hat zuvor geklickt — SMS oder Email).
+ */
+function isLinkAlreadyUsed(err: unknown): boolean {
+  if (!err || typeof err !== "object") return false;
+  const e = err as Record<string, unknown>;
+  const code    = String(e.code    ?? "").toLowerCase();
+  const message = String(e.message ?? "").toLowerCase();
+  return (
+    code === "otp_expired" ||
+    code === "invalid_otp" ||
+    message.includes("otp has expired") ||
+    message.includes("otp is invalid") ||
+    message.includes("token has expired") ||
+    message.includes("invalid token")
+  );
+}
+
+/** Ruft POST /api/auth/activate-trial mit dem aktuellen Session-Token auf. */
+async function activateTrial(): Promise<void> {
+  if (!supabase) return;
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    const token = session?.access_token;
+    await fetch("/api/auth/activate-trial", {
+      method: "POST",
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+  } catch {
+    // fire-and-forget — trial activation failure darf den Confirm-Flow nicht blockieren
   }
 }
 
@@ -153,10 +187,23 @@ function ConfirmInner() {
       } else {
         throw new Error("Kein gültiger Bestätigungs-Link — bitte fordere einen neuen Reset-Link an.");
       }
+
+      // Trial bei Meta-Lead-Invites aktivieren (idempotent — passiert nichts
+      // wenn der User kein Trial-Kandidat ist oder bereits aktiviert hat).
+      activateTrial();
+
       setState({ kind: "ready" });
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      setState({ kind: "invalid", reason: msg });
+      if (isLinkAlreadyUsed(err)) {
+        setState({
+          kind: "invalid",
+          reason: "Dieser Link wurde bereits verwendet. Falls du per SMS und Email je einen Link erhalten hast, wurde das Konto bereits über den ersten Klick aktiviert. Bitte logge dich direkt ein.",
+          linkUsed: true,
+        });
+      } else {
+        const msg = err instanceof Error ? err.message : String(err);
+        setState({ kind: "invalid", reason: msg });
+      }
     }
   }
 
@@ -242,8 +289,8 @@ function ConfirmInner() {
 
       {state.kind === "invalid" && (
         <div style={{ textAlign: "center" }}>
-          <div style={{ fontSize: 16, fontWeight: 600, color: PINK, marginBottom: 10 }}>
-            Link ungültig oder abgelaufen
+          <div style={{ fontSize: 16, fontWeight: 600, color: state.linkUsed ? "rgba(255,255,255,0.85)" : PINK, marginBottom: 10 }}>
+            {state.linkUsed ? "Link bereits verwendet" : "Link ungültig oder abgelaufen"}
           </div>
           <div style={{ fontSize: 13, color: "rgba(255,255,255,0.55)", lineHeight: 1.5, marginBottom: 22 }}>
             {state.reason}
@@ -253,15 +300,17 @@ function ConfirmInner() {
             style={{
               display: "inline-block",
               padding: "10px 18px",
-              background: "rgba(255,255,255,0.07)",
+              background: state.linkUsed
+                ? `linear-gradient(135deg, ${ACCENT}, #6B8BFF)`
+                : "rgba(255,255,255,0.07)",
               borderRadius: 9,
-              color: "rgba(255,255,255,0.85)",
+              color: "white",
               fontSize: 13,
               fontWeight: 600,
               textDecoration: "none",
             }}
           >
-            Zurück zum Login
+            {state.linkUsed ? "Zum Login →" : "Zurück zum Login"}
           </Link>
         </div>
       )}

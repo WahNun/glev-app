@@ -5,10 +5,14 @@
 // (globales Template, nicht pro-User steuerbar). Stattdessen:
 //   1. generateLink({ type: 'invite' }) → erstellt User OHNE Email-Versand
 //   2. Eigene gebrandete Email via Resend mit dem Magic Link
+//
+// Trial-Strategie: trial_start_at + trial_end_at bleiben beim Webhook NULL.
+// Sie werden erst beim ersten Klick auf den Confirm-Button gesetzt
+// (POST /api/auth/activate-trial). Damit tickt der Trial erst wenn
+// der User wirklich aktiv ist — nicht schon beim Webhook-Eingang.
 
 import { Resend } from "resend";
 import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
-import { scheduleTrialEmails } from "@/lib/emails/drip-scheduler";
 import {
   metaLeadInviteHtml,
   metaLeadInviteSubject,
@@ -28,6 +32,45 @@ export function localeFromPhone(phone: string | null | undefined): EmailLocale {
   return "de";
 }
 
+/** Sendet eine SMS mit dem Invite-Link via Twilio REST API (fire-and-forget). */
+function sendTwilioSms(phone: string, inviteUrl: string): void {
+  const sid   = process.env.TWILIO_ACCOUNT_SID;
+  const token = process.env.TWILIO_AUTH_TOKEN;
+  const from  = process.env.TWILIO_FROM_NUMBER;
+
+  if (!sid || !token || !from) {
+    // eslint-disable-next-line no-console
+    console.warn("[meta-lead-provisioning] Twilio not configured — SMS not sent");
+    return;
+  }
+
+  const body = `Willkommen bei Glev! Aktiviere deinen kostenlosen 7-Tage-Test hier: ${inviteUrl}`;
+  const formData = new URLSearchParams({ From: from, To: phone, Body: body });
+
+  fetch(`https://api.twilio.com/2010-04-01/Accounts/${sid}/Messages.json`, {
+    method: "POST",
+    headers: {
+      Authorization: `Basic ${Buffer.from(`${sid}:${token}`).toString("base64")}`,
+      "Content-Type": "application/x-www-form-urlencoded",
+    },
+    body: formData.toString(),
+  })
+    .then(async (r) => {
+      if (!r.ok) {
+        const text = await r.text().catch(() => "");
+        // eslint-disable-next-line no-console
+        console.error("[meta-lead-provisioning] Twilio SMS failed:", r.status, text);
+      } else {
+        // eslint-disable-next-line no-console
+        console.log("[meta-lead-provisioning] SMS sent →", phone);
+      }
+    })
+    .catch((e) => {
+      // eslint-disable-next-line no-console
+      console.error("[meta-lead-provisioning] Twilio SMS error:", e);
+    });
+}
+
 export async function provisionMetaLead(
   email: string,
   name: string | null | undefined,
@@ -42,10 +85,6 @@ export async function provisionMetaLead(
   const effectiveLocale: EmailLocale = phone ? localeFromPhone(phone) : locale;
 
   const sb = getSupabaseAdmin();
-  const trialStartAt = new Date();
-  const trialEndAt = new Date(
-    trialStartAt.getTime() + 7 * 24 * 60 * 60 * 1000,
-  ).toISOString();
 
   let userId: string;
   let created = true;
@@ -108,10 +147,13 @@ export async function provisionMetaLead(
     }
   }
 
+  // Trial-Zeiten NICHT hier setzen — sie werden erst bei Aktivierung gesetzt
+  // (POST /api/auth/activate-trial nach erfolgreichem verifyOtp).
   await sb.from("profiles").upsert(
     {
       user_id: userId,
-      trial_end_at: trialEndAt,
+      trial_start_at: null,
+      trial_end_at: null,
       signup_source: "meta_lead",
       ...(name ? { display_name: name } : {}),
     },
@@ -143,11 +185,14 @@ export async function provisionMetaLead(
       // eslint-disable-next-line no-console
       console.warn("[meta-lead-provisioning] RESEND_API_KEY missing — invite email not sent");
     }
+
+    // SMS via Twilio (fire-and-forget, Fehler blockieren nicht den Webhook)
+    if (phone) {
+      sendTwilioSms(phone, inviteUrl);
+    }
   }
 
-  scheduleTrialEmails(email, name, trialStartAt, effectiveLocale).catch((e) =>
-    console.error("[meta-lead-provisioning] scheduleTrialEmails failed:", e),
-  );
+  // scheduleTrialEmails wird NICHT mehr hier aufgerufen — erst bei Aktivierung.
 
   return { ok: true, userId, created };
 }
