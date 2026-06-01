@@ -101,6 +101,7 @@ export async function provisionMetaLead(
       user_id: userId,
       trial_end_at: trialEndAt,
       signup_source: "meta_lead",
+      ...(name ? { display_name: name } : {}),
     },
     { onConflict: "user_id" },
   );
