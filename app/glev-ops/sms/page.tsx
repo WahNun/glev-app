@@ -30,6 +30,7 @@ export default function SmsTestPage() {
     try {
       const res = await fetch("/api/admin/sms-test", {
         method: "POST",
+        credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           phone,

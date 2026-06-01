@@ -27,6 +27,12 @@ export type UserRow = {
   trial_ends_at: string | null;
   /** profiles.trial_end_at — gesetzt für Meta-Leads und andere nicht-Stripe-Trials. */
   profile_trial_end_at: string | null;
+  /** profiles.trial_start_at — null = Trial noch nicht aktiviert (Link nicht geklickt). */
+  profile_trial_start_at: string | null;
+  /** profiles.signup_source — z.B. "meta_lead". */
+  signup_source: string | null;
+  /** user_metadata.phone — Twilio-Nummer für SMS. */
+  phone: string | null;
   /** beta_reservations.status — typisch "fulfilled" wenn bezahlt + freigeschaltet, "pending" während Checkout. */
   beta_status: string | null;
   /** profiles.subscription_status='beta' — alte Beta-Käufer:innen (vor 25.04.2026) hatten kein beta_reservations-Eintrag. */
@@ -314,6 +320,13 @@ export default function UsersTable({
               if (r.role === "admin") flags.push("Admin-Rolle");
               if (!r.email_confirmed_at) flags.push("E-Mail unbestätigt");
               if (isTrialActive(r)) flags.push("Pro-Trial");
+              if (r.signup_source === "meta_lead") {
+                const now = Date.now();
+                const end = r.profile_trial_end_at ? new Date(r.profile_trial_end_at).getTime() : null;
+                if (!r.profile_trial_start_at) flags.push("Meta Lead · Nicht aktiviert");
+                else if (end && end < now) flags.push("Meta Lead · Trial abgelaufen");
+                else flags.push("Meta Lead · Trial aktiv");
+              }
               if (isBetaBuyer(r)) {
                 flags.push(
                   r.beta_status?.toLowerCase() === "pending"
@@ -413,9 +426,18 @@ export default function UsersTable({
                   </td>
                   <td style={tdStyle}>{fmtDate(r.created_at)}</td>
                   <td style={tdStyle}>
-                    <Link href={`/admin/users/${r.id}`} style={openBtnStyle}>
-                      Öffnen →
-                    </Link>
+                    <span style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                      <Link href={`/glev-ops/users/${r.id}`} style={openBtnStyle}>
+                        Öffnen →
+                      </Link>
+                      <Link
+                        href={`/glev-ops/buyers/${r.id}`}
+                        style={{ fontSize: 14, color: "#6b7280", textDecoration: "none" }}
+                        title="Name / Telefon bearbeiten"
+                      >
+                        ✏
+                      </Link>
+                    </span>
                   </td>
                 </tr>
               );

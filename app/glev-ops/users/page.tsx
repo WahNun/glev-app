@@ -98,7 +98,7 @@ export default async function AdminUsersPage({
           // wieder ergänzen (siehe unten den row-Mapper, der schon
           // mit den optionalen Feldern umgehen kann).
           .select(
-            "user_id, display_name, role, language, plan, cgm_connected, cgm_source, nightscout_url, trial_end_at",
+            "user_id, display_name, role, language, plan, cgm_connected, cgm_source, nightscout_url, trial_end_at, trial_start_at, signup_source",
           )
           .in("user_id", userIds)
       : Promise.resolve({ data: [], error: null }),
@@ -143,6 +143,8 @@ export default async function AdminUsersPage({
     cgm_source: string | null;
     nightscout_url: string | null;
     trial_end_at: string | null;
+    trial_start_at: string | null;
+    signup_source: string | null;
   };
   type CgmRow = { user_id: string; llu_email: string };
   type ProSubRow = {
@@ -248,6 +250,9 @@ export default async function AdminUsersPage({
       pro_status: pro?.status ?? null,
       trial_ends_at: pro?.trial_ends_at ?? null,
       profile_trial_end_at: p?.trial_end_at ?? null,
+      profile_trial_start_at: p?.trial_start_at ?? null,
+      signup_source: p?.signup_source ?? null,
+      phone: (u.user_metadata?.phone as string | null) ?? null,
       beta_status: beta?.status ?? null,
       // Currency + Land für den Filter — Pro hat Vorrang (Subscription
       // läuft ja noch, ist relevanter als eine evtl. ältere Beta-
