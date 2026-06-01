@@ -35,6 +35,9 @@ function PushDebugSection() {
   const [isNative, setIsNative] = useState(false);
   const [retrying, setRetrying] = useState(false);
   const [waitingSecs, setWaitingSecs] = useState(0);
+  const [testPending, setTestPending] = useState(false);
+  const [testResult, setTestResult] = useState<{ ok: boolean; msg: string } | null>(null);
+  const [sandbox, setSandbox] = useState(true);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const waitRef  = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -74,6 +77,30 @@ function PushDebugSection() {
     waitRef.current = setInterval(() => setWaitingSecs(s => s + 1), 1000);
   };
   const stuckAtRegister = retrying && waitingSecs >= 4 && !localStorage.getItem("glev_push_token") && !localStorage.getItem("glev_push_error");
+
+  const handleTest = async () => {
+    if (testPending) return;
+    setTestPending(true);
+    setTestResult(null);
+    try {
+      const res = await fetch("/api/push/self-test", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ sandbox }),
+      });
+      const json = await res.json() as { ok?: boolean; error?: string; platform?: string };
+      if (json.ok) {
+        setTestResult({ ok: true, msg: `✅ Gesendet (${json.platform ?? "?"})` });
+      } else {
+        setTestResult({ ok: false, msg: `❌ ${json.error ?? "Unbekannter Fehler"}` });
+      }
+    } catch (e) {
+      setTestResult({ ok: false, msg: `❌ ${String(e)}` });
+    } finally {
+      setTestPending(false);
+    }
+  };
+
   if (!token && !error && !isNative) return null;
   const bg = token ? "rgba(80,255,120,0.08)" : error ? "rgba(255,80,80,0.08)" : "rgba(120,120,120,0.08)";
   const border = token ? "rgba(80,255,120,0.3)" : error ? "rgba(255,80,80,0.3)" : "rgba(120,120,120,0.2)";
@@ -89,9 +116,23 @@ function PushDebugSection() {
       </div>
       {perm === "denied" && <div style={{ marginTop: 8, padding: "6px 10px", borderRadius: 8, background: "rgba(255,80,80,0.12)", fontSize: 11, lineHeight: 1.4 }}>⚠️ Benachrichtigungen in iOS-Einstellungen abgelehnt.<br />Geh zu <strong>Einstellungen → Glev → Mitteilungen</strong> und schalte sie manuell ein.</div>}
       {stuckAtRegister && <div style={{ marginTop: 8, padding: "8px 10px", borderRadius: 8, background: "rgba(255,180,0,0.10)", border: "1px solid rgba(255,180,0,0.3)", fontSize: 11, lineHeight: 1.5 }}>⏳ <strong>register() wurde aufgerufen — warte auf APNs-Antwort…</strong><br />Wenn das nach 15 s hängen bleibt, prüfe in Xcode:<br /><strong>Target → Signing &amp; Capabilities → Push Notifications</strong> muss als Capability eingetragen sein.</div>}
-      <button onClick={() => void handleRetry()} disabled={retrying} style={{ marginTop: 10, padding: "6px 12px", borderRadius: 8, border: "none", background: "var(--accent)", color: "#fff", fontSize: 12, cursor: retrying ? "default" : "pointer", opacity: retrying ? 0.6 : 1 }}>
-        {retrying ? `Warte auf APNs… (${waitingSecs}s)` : "Push-Registrierung neu starten"}
-      </button>
+      <div style={{ marginTop: 10, display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+        <button onClick={() => void handleRetry()} disabled={retrying} style={{ padding: "6px 12px", borderRadius: 8, border: "none", background: "var(--accent)", color: "#fff", fontSize: 12, cursor: retrying ? "default" : "pointer", opacity: retrying ? 0.6 : 1 }}>
+          {retrying ? `Warte auf APNs… (${waitingSecs}s)` : "Push-Registrierung neu starten"}
+        </button>
+        <label style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 11, color: "var(--text-faint)", cursor: "pointer" }}>
+          <input type="checkbox" checked={sandbox} onChange={(e) => setSandbox(e.target.checked)} style={{ accentColor: "var(--accent)" }} />
+          Sandbox
+        </label>
+        <button onClick={() => void handleTest()} disabled={testPending || !token} style={{ padding: "6px 12px", borderRadius: 8, border: "none", background: token ? "rgba(80,180,255,0.18)" : "rgba(120,120,120,0.12)", color: token ? "#60b4ff" : "var(--text-faint)", fontSize: 12, cursor: testPending || !token ? "default" : "pointer", opacity: testPending ? 0.6 : 1 }}>
+          {testPending ? "Sende…" : "🔔 Test-Push"}
+        </button>
+      </div>
+      {testResult && (
+        <div style={{ marginTop: 6, fontSize: 11, color: testResult.ok ? "rgba(80,255,120,0.9)" : "var(--red, #f87171)" }}>
+          {testResult.msg}
+        </div>
+      )}
     </div>
   );
 }
