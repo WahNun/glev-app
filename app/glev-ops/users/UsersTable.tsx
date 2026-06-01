@@ -109,6 +109,23 @@ function isTrialActive(r: UserRow): boolean {
   if (r.profile_trial_end_at && new Date(r.profile_trial_end_at).getTime() > now) return true;
   return false;
 }
+function fmtShortDe(v: string | null | undefined): string {
+  if (!v) return "";
+  const d = new Date(v);
+  if (Number.isNaN(d.getTime())) return "";
+  return `${String(d.getDate()).padStart(2, "0")}.${String(d.getMonth() + 1).padStart(2, "0")}.`;
+}
+function trialLabel(r: UserRow): string {
+  const now = Date.now();
+  if (r.pro_status === "trialing" && r.trial_ends_at && new Date(r.trial_ends_at).getTime() > now) {
+    const suffix = fmtShortDe(r.trial_ends_at);
+    return suffix ? `Pro-Trial · bis ${suffix}` : "Pro-Trial";
+  }
+  if (r.profile_trial_end_at && new Date(r.profile_trial_end_at).getTime() > now) {
+    return "7 Tage Trial";
+  }
+  return planLabel(r.plan);
+}
 
 export default function UsersTable({
   rows,
@@ -332,7 +349,7 @@ export default function UsersTable({
                           fontSize: 12,
                         }}
                       >
-                        {trialActive ? "7 Tage Trial" : planLabel(r.plan)}
+                        {trialLabel(r)}
                       </span>
                       {r.gift_label ? (
                         <span
