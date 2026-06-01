@@ -2,9 +2,9 @@
 
 import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import Image from "next/image";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
-import GlevLockup from "@/components/GlevLockup";
 
 const ACCENT  = "#4F6EF7";
 const GREEN   = "#22D3A0";
@@ -407,7 +407,7 @@ function Shell({ children }: { children: React.ReactNode }) {
     }}>
       <div style={{ width: "100%", maxWidth: 400 }}>
         <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 14, marginBottom: 32 }}>
-          <GlevLockup size={44} />
+          <Image src="/glev-lockup.png" alt="Glev" width={120} height={44} style={{ objectFit: "contain" }} />
           <div style={{ fontSize: 11, color: "rgba(255,255,255,0.3)", letterSpacing: "0.12em" }}>
             INSULIN DECISION SUPPORT
           </div>
