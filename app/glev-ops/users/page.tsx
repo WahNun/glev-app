@@ -67,6 +67,7 @@ export default async function AdminUsersPage({
       last_sign_in_at: u.last_sign_in_at,
       email_confirmed_at: u.email_confirmed_at,
       banned_until: (u as { banned_until?: string | null }).banned_until,
+      user_metadata: (u.user_metadata ?? {}) as Record<string, unknown>,
     }));
   } catch (e) {
     authErr = e instanceof Error ? e.message : String(e);
