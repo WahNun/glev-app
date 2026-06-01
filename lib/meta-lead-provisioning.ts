@@ -47,7 +47,7 @@ async function sendTwilioSms(phone: string, inviteUrl: string): Promise<void> {
 
   // Kürze den langen Supabase-Magic-Link → glev.app/s/XXXXXX
   const shortUrl = await shortenUrl(inviteUrl);
-  const body = `Willkommen bei Glev! Aktiviere deinen kostenlosen 7-Tage-Test hier: ${shortUrl}`;
+  const body = `Willkommen bei Glev! Aktiviere deinen kostenlosen 7-Tage-Test: ${shortUrl}\n\nAlternativ kannst du dich auch per E-Mail anmelden – bitte prüfe ggf. auch deinen Spam-Ordner.`;
   const formData = new URLSearchParams({ From: from, To: phone, Body: body });
 
   fetch(`https://api.twilio.com/2010-04-01/Accounts/${sid}/Messages.json`, {
