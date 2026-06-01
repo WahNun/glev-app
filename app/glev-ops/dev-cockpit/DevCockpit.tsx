@@ -17,7 +17,6 @@ import {
   listTasks,
   getTask,
   createTask,
-  updateTask,
   cancelTask,
   archiveTask,
   moveTaskToBacklog,
@@ -90,10 +89,6 @@ export default function DevCockpit({ initialTasks }: { initialTasks: DevTask[] }
   const [selectedId, setSelectedId] = useState<string | null>(
     initialTasks[0]?.id ?? null,
   );
-  const [composeMode, setComposeMode] = useState<boolean>(
-    initialTasks.length === 0,
-  );
-
   const [promptText, setPromptText] = useState("");
   const [queueText, setQueueText] = useState("");
 
@@ -154,13 +149,6 @@ export default function DevCockpit({ initialTasks }: { initialTasks: DevTask[] }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedId]);
 
-  // Sync prompt textarea with the selected task (unless composing a new one).
-  useEffect(() => {
-    if (composeMode) return;
-    setPromptText(selectedTask?.prompt ?? "");
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedId, composeMode]);
-
   // Close the context menu on any outside click / escape.
   useEffect(() => {
     if (!menu) return;
@@ -195,16 +183,14 @@ export default function DevCockpit({ initialTasks }: { initialTasks: DevTask[] }
     refreshList(next);
   }
 
+  // "+ New Task" — clear the composer for a fresh task and focus it.
   function handleStartCompose() {
-    setComposeMode(true);
     setSelectedId(null);
     setPromptText("");
-    setMessages([]);
-    setQueue([]);
-    setAttachments([]);
     setTimeout(() => promptRef.current?.focus(), 0);
   }
 
+  // The prompt box ALWAYS creates a NEW task — no hidden "save/edit" mode.
   function handleCreateTask() {
     const prompt = promptText.trim();
     startTransition(async () => {
@@ -213,7 +199,7 @@ export default function DevCockpit({ initialTasks }: { initialTasks: DevTask[] }
         setError(errText(res.error));
         return;
       }
-      setComposeMode(false);
+      setPromptText("");
       setNotice("Task erstellt.");
       // New task is a draft → it belongs to the Active view. Switch there so
       // it's visible regardless of the current filter, then select it.
@@ -221,19 +207,6 @@ export default function DevCockpit({ initialTasks }: { initialTasks: DevTask[] }
       const listRes = await listTasks("active");
       if (listRes.ok) setTasks(listRes.data);
       setSelectedId(res.data.id);
-    });
-  }
-
-  function handleSavePrompt() {
-    if (!selectedTask) return;
-    startTransition(async () => {
-      const res = await updateTask(selectedTask.id, { prompt: promptText });
-      if (!res.ok) {
-        setError(errText(res.error));
-        return;
-      }
-      setTasks((prev) => prev.map((t) => (t.id === res.data.id ? res.data : t)));
-      setNotice("Prompt gespeichert.");
     });
   }
 
@@ -361,10 +334,7 @@ export default function DevCockpit({ initialTasks }: { initialTasks: DevTask[] }
               tasks.map((task) => (
                 <button
                   key={task.id}
-                  onClick={() => {
-                    setComposeMode(false);
-                    setSelectedId(task.id);
-                  }}
+                  onClick={() => setSelectedId(task.id)}
                   onContextMenu={(e) => {
                     e.preventDefault();
                     setMenu({ task, x: e.clientX, y: e.clientY });
@@ -391,11 +361,7 @@ export default function DevCockpit({ initialTasks }: { initialTasks: DevTask[] }
           {/* Task Details card */}
           <section style={cardStyle}>
             <h2 style={cardTitleStyle}>Task Details</h2>
-            {composeMode ? (
-              <p style={{ color: "#6b7280", fontSize: 14, margin: 0 }}>
-                Neue Task — Prompt unten eingeben und <strong>Create Task</strong> klicken.
-              </p>
-            ) : selectedTask ? (
+            {selectedTask ? (
               <>
                 <div style={detailRowStyle}>
                   <span style={detailLabelStyle}>Titel</span>
@@ -443,41 +409,29 @@ export default function DevCockpit({ initialTasks }: { initialTasks: DevTask[] }
             <textarea
               ref={promptRef}
               style={textareaStyle}
-              placeholder="Beschreibe die gewünschte Änderung…  (⌘/Strg+Enter zum Absenden)"
+              placeholder="Neue Task: gewünschte Änderung beschreiben…  (⌘/Strg+Enter = Create Task)"
               value={promptText}
               onChange={(e) => setPromptText(e.target.value)}
               onKeyDown={(e) => {
-                // Cmd/Ctrl+Enter submits; plain Enter stays a newline so the
-                // prompt can be multi-line.
+                // Cmd/Ctrl+Enter creates a new task; plain Enter stays a
+                // newline so the prompt can be multi-line.
                 if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
                   e.preventDefault();
-                  if (isPending) return;
-                  if (composeMode || !selectedTask) handleCreateTask();
-                  else handleSavePrompt();
+                  if (!isPending) handleCreateTask();
                 }
               }}
               rows={5}
             />
 
-            {/* Action buttons */}
+            {/* Action buttons — the prompt box always CREATES a new task. */}
             <div style={buttonGroupStyle}>
-              {composeMode || !selectedTask ? (
-                <button
-                  style={btnPrimaryStyle}
-                  onClick={handleCreateTask}
-                  disabled={isPending}
-                >
-                  Create Task
-                </button>
-              ) : (
-                <button
-                  style={btnPrimaryStyle}
-                  onClick={handleSavePrompt}
-                  disabled={isPending}
-                >
-                  Save Prompt
-                </button>
-              )}
+              <button
+                style={btnPrimaryStyle}
+                onClick={handleCreateTask}
+                disabled={isPending}
+              >
+                Create Task
+              </button>
               <button style={btnDisabledStyle} disabled title="Phase 3">
                 Analyze Task
               </button>
