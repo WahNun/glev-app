@@ -76,7 +76,10 @@ export default function MistralTTSPage() {
 
   const reload = () => {
     setLoading(true);
-    getTtsConfig().then(c => { setCfg(c); setLoading(false); });
+    getTtsConfig()
+      .then(c => { setCfg(c); })
+      .catch(() => {})
+      .finally(() => setLoading(false));
   };
 
   const reloadStyle = () => {
