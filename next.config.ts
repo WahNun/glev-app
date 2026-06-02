@@ -17,6 +17,20 @@ const withSerwist = withSerwistInit({
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
+  // Prevent WKWebView (Capacitor) and browsers from caching HTML pages.
+  // Static assets (_next/static/*) keep their default immutable cache
+  // since they are content-hashed. Only HTML documents get no-store so
+  // a new Vercel deploy is always picked up on the next app launch.
+  async headers() {
+    return [
+      {
+        source: "/((?!_next/static|_next/image|favicon|icons|mockups|sw\\.js).*)",
+        headers: [
+          { key: "Cache-Control", value: "no-store, must-revalidate" },
+        ],
+      },
+    ];
+  },
   experimental: {
     // Keep recently visited pages in the Next.js Router Cache longer so
     // back-navigations (e.g. Engine → Entries) are served instantly from
