@@ -456,10 +456,9 @@ function HeroFront({
               background: "var(--border)",
               border: "1px solid var(--text-ghost)",
               color: "var(--text-strong)",
-              fontSize: 11, fontWeight: 700, letterSpacing: "0.08em",
-              textTransform: "uppercase",
+              fontSize: 14,
             }}>
-              FS
+              🩸
             </span>
           )}
           {trendDirection && (

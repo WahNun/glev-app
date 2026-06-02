@@ -11,6 +11,11 @@ import {
   type CrosshairPoint,
 } from "@/components/ChartCrosshair";
 import CgmFetchButton, { type CgmFetchResult } from "@/components/CgmFetchButton";
+import {
+  fetchRecentFingersticks,
+  FS_OVERRIDE_WINDOW_MS,
+  type FingerstickReading,
+} from "@/lib/fingerstick";
 
 const GREEN   = "#22D3A0";
 const ORANGE  = "#FF9500";
@@ -81,7 +86,7 @@ type CgmPoint = { t: number; v: number };
 type State =
   | { kind: "loading" }
   | { kind: "no-data" }
-  | { kind: "ok"; current: CgmPoint; history: CgmPoint[]; trend: string };
+  | { kind: "ok"; current: CgmPoint; history: CgmPoint[]; trend: string; fingersticks: CgmPoint[] };
 
 export default function LandscapeGlucoseOverlay() {
   const t = useTranslations("LandscapeGlucoseOverlay");
@@ -118,7 +123,10 @@ export default function LandscapeGlucoseOverlay() {
 
   const load = useCallback(async () => {
     try {
-      const data = await fetchCgmHistory();
+      const [data, fsResult] = await Promise.all([
+        fetchCgmHistory(),
+        fetchRecentFingersticks(24).catch(() => [] as FingerstickReading[]),
+      ]);
       if (!data) { setState({ kind: "no-data" }); return; }
 
       const now = Date.now();
@@ -127,6 +135,11 @@ export default function LandscapeGlucoseOverlay() {
         .filter((r) => r.value != null && r.timestamp)
         .map((r)  => ({ t: parseLluTs(r.timestamp!), v: r.value! }))
         .filter((r) => Number.isFinite(r.t) && r.t >= cutoff && r.t <= now)
+        .sort((a, b) => a.t - b.t);
+
+      const fingersticks = fsResult
+        .map((r) => ({ t: new Date(r.measured_at).getTime(), v: Number(r.value_mg_dl) }))
+        .filter((r) => Number.isFinite(r.t) && Number.isFinite(r.v) && r.t >= cutoff && r.t <= now)
         .sort((a, b) => a.t - b.t);
 
       const official = data.current?.value != null && data.current.timestamp
@@ -138,7 +151,7 @@ export default function LandscapeGlucoseOverlay() {
         : (official ?? newest);
 
       if (!current) { setState({ kind: "no-data" }); return; }
-      setState({ kind: "ok", current, history, trend: String(data.current?.trend ?? "") });
+      setState({ kind: "ok", current, history, trend: String(data.current?.trend ?? ""), fingersticks });
     } catch {
       setState({ kind: "no-data" });
     }
@@ -165,12 +178,20 @@ export default function LandscapeGlucoseOverlay() {
 
   if (!landscape) return null;
 
-  const ok      = state.kind === "ok";
-  const current = ok ? state.current : null;
-  const history = ok ? state.history : [];
-  const trend   = ok ? parseTrend(state.trend) : "flat";
-  const color   = current ? glucoseColor(current.v) : DIM;
-  const now     = Date.now();
+  const ok           = state.kind === "ok";
+  const cgmCurrent   = ok ? state.current : null;
+  const history      = ok ? state.history : [];
+  const fingersticks = ok ? state.fingersticks : [];
+  const rawTrend     = ok ? parseTrend(state.trend) : "flat";
+  const now          = Date.now();
+
+  // Override rule: a fingerstick within FS_OVERRIDE_WINDOW_MS outranks the
+  // latest CGM value — mirrors the same logic in CurrentDayGlucoseCard HeroFront.
+  const latestFs  = fingersticks.length ? fingersticks[fingersticks.length - 1] : null;
+  const fsOverride = latestFs && (now - latestFs.t) <= FS_OVERRIDE_WINDOW_MS ? latestFs : null;
+  const current    = fsOverride ?? cgmCurrent;
+  const trend      = fsOverride ? "flat" : rawTrend; // hide trend while FS is shown
+  const color      = current ? glucoseColor(current.v) : DIM;
 
   return (
     <div
@@ -227,7 +248,19 @@ export default function LandscapeGlucoseOverlay() {
             </span>
             <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 5 }}>
               <span style={{ fontSize: 14, color: DIM, fontWeight: 500 }}>mg/dL</span>
-              <TrendSvg direction={trend} color={color} size={30} />
+              {fsOverride ? (
+                <span style={{
+                  padding: "2px 8px", borderRadius: 99,
+                  background: "#ffffff18",
+                  border: "1px solid #ffffff30",
+                  color: "#ffffff",
+                  fontSize: 18,
+                }}>
+                  🩸
+                </span>
+              ) : (
+                <TrendSvg direction={trend} color={color} size={30} />
+              )}
             </div>
           </>
         ) : state.kind === "loading" ? (
@@ -244,8 +277,8 @@ export default function LandscapeGlucoseOverlay() {
         padding:    "0 18px 6px",
         boxSizing:  "border-box",
       }}>
-        {history.length > 0
-          ? <LandscapeChart history={history} />
+        {(history.length > 0 || fingersticks.length > 0)
+          ? <LandscapeChart history={history} fingersticks={fingersticks} />
           : null
         }
       </div>
@@ -263,7 +296,7 @@ const RANGE_LOW  = 70;
 const RANGE_HIGH = 180;
 const Y_TICKS    = [70, 180, 250];
 
-function LandscapeChart({ history }: { history: CgmPoint[] }) {
+function LandscapeChart({ history, fingersticks = [] }: { history: CgmPoint[]; fingersticks?: CgmPoint[] }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState<{ w: number; h: number }>({ w: 640, h: 160 });
 
@@ -285,18 +318,23 @@ function LandscapeChart({ history }: { history: CgmPoint[] }) {
   const MAX_WIN = 14 * 60 * 60 * 1000;
 
   const winSpan = useMemo(() => {
-    const all = history.filter((r) => r.t <= now && r.t >= now - MAX_WIN);
+    const all = [...history, ...fingersticks].filter((r) => r.t <= now && r.t >= now - MAX_WIN);
     if (!all.length) return MAX_WIN;
     const oldest = Math.min(...all.map((r) => r.t));
     return Math.max(MIN_WIN, Math.min(MAX_WIN, now - oldest + 30 * 60 * 1000));
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [history]);
+  }, [history, fingersticks]);
 
   const winStart = now - winSpan;
   const visible  = useMemo(
     () => history.filter((r) => r.t >= winStart && r.t <= now),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [history, winStart],
+  );
+  const visibleFs = useMemo(
+    () => fingersticks.filter((r) => r.t >= winStart && r.t <= now),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [fingersticks, winStart],
   );
 
   const yMin = 40, yMax = 300;
@@ -325,7 +363,7 @@ function LandscapeChart({ history }: { history: CgmPoint[] }) {
 
   const crosshairPoints = useMemo<CrosshairPoint[]>(() => {
     if (W <= 0 || H <= 0) return [];
-    return visible.map((r) => ({
+    const cgmPts: CrosshairPoint[] = visible.map((r) => ({
       x:       toX(r.t),
       y:       toY(r.v),
       color:   glucoseLineColor(r.v),
@@ -334,9 +372,20 @@ function LandscapeChart({ history }: { history: CgmPoint[] }) {
         `${Math.round(r.v)} mg/dL`,
       ],
     }));
-  // toX/toY depend on W/H/winStart/now — visible + W + H covers all.
+    const fsPts: CrosshairPoint[] = visibleFs.map((r) => ({
+      x:       toX(r.t),
+      y:       toY(r.v),
+      color:   glucoseLineColor(r.v),
+      tooltip: [
+        new Date(r.t).toLocaleTimeString("de", { hour: "2-digit", minute: "2-digit", hour12: false }),
+        `${Math.round(r.v)} mg/dL`,
+      ],
+      badge: "Manuell",
+    }));
+    return [...cgmPts, ...fsPts].sort((a, b) => a.x - b.x);
+  // toX/toY depend on W/H/winStart/now — visible + visibleFs + W + H covers all.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [visible, W, H]);
+  }, [visible, visibleFs, W, H]);
 
   const { active: rawActive, handlers } = useCrosshair(crosshairPoints);
   // Always show crosshair on the latest point; touch snaps to any point.
@@ -398,6 +447,21 @@ function LandscapeChart({ history }: { history: CgmPoint[] }) {
 
           {/* Last-point dot */}
           {lastPt && <circle cx={lastX} cy={lastY} r="4" fill={lastC} stroke={SURFACE} strokeWidth="1.5" />}
+
+          {/* Fingerstick markers — halo + inner circle, same shape as the
+              portrait chart (CurrentDayGlucoseCard RollingChart). Rendered
+              on top of the CGM trace so they're always visible. */}
+          {visibleFs.map((r, i) => {
+            const cx = toX(r.t);
+            const cy = toY(r.v);
+            const c  = glucoseLineColor(r.v);
+            return (
+              <g key={`ls-fs${i}-${r.t}`}>
+                <circle cx={cx} cy={cy} r="9"   fill={c} fillOpacity="0.15" />
+                <circle cx={cx} cy={cy} r="4.5" fill={c} stroke={SURFACE} strokeWidth="1.5" />
+              </g>
+            );
+          })}
 
           {/* Crosshair overlay */}
           <CrosshairOverlay active={active} top={padT} bottom={H - padB} left={padL} right={W - padR} />

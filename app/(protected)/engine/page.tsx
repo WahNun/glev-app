@@ -1594,7 +1594,7 @@ export default function EnginePage() {
           glucoseProvenanceRef.current = "live";
           setGlucoseProvenance("live");
           const d = new Date(measuredMs);
-          setLastReading(`${String(d.getHours()).padStart(2,"0")}:${String(d.getMinutes()).padStart(2,"0")} · FS`);
+          setLastReading(`${String(d.getHours()).padStart(2,"0")}:${String(d.getMinutes()).padStart(2,"0")} · 🩸`);
           logDebug("ENGINE.FS_USED", { reading, measured_at: fs.measured_at });
           return;
         }
