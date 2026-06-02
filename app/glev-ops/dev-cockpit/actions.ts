@@ -32,7 +32,12 @@ import {
   type QueueStatus,
   type BuildPlan,
 } from "./types";
-import { runDevCockpitAnalysis, formatPlanMessage } from "@/lib/ai/devCockpitAnalysis";
+import {
+  runDevCockpitAnalysis,
+  formatPlanMessage,
+  isTaskDestructive,
+  filterOutDestructiveSafetyQuestions,
+} from "@/lib/ai/devCockpitAnalysis";
 
 // ── Result envelope ─────────────────────────────────────────────────────────
 
@@ -270,14 +275,53 @@ export async function analyzeTask(
     return fail("analysis-failed");
   }
 
+  // 2b. AUTHORITATIVE final safety pass (persistence layer, deterministic).
+  // The library already gates, but we re-run it here on the SAME current-task
+  // user-authored context (title + prompt + this task's USER messages + queued
+  // notes) so the persisted plan is guaranteed correct regardless of anything
+  // upstream. If the task is NOT destructive, hard-strip any destructive safety
+  // questions the model echoed from old assistant text; if that empties the
+  // blockers → ready_to_build = true (waiting_for_start, no 🔒 message).
+  const userAuthoredContext = [
+    task.title,
+    task.prompt ?? "",
+    ...history.filter((m) => m.role === "user").map((m) => m.content),
+    ...queuedNotes,
+  ].join("\n");
+  const destructive = isTaskDestructive(userAuthoredContext);
+
+  let finalPlan: BuildPlan = plan;
+  if (!destructive) {
+    const filtered = filterOutDestructiveSafetyQuestions(plan.questions);
+    finalPlan = {
+      ...plan,
+      questions: filtered,
+      ready_to_build: filtered.length === 0 ? true : plan.ready_to_build,
+    };
+  }
+
+  // Diagnostic (no secrets) — lets us see whether a task was flagged destructive
+  // and how many questions survived the safety pass.
+  // eslint-disable-next-line no-console
+  console.log(
+    "[dev_cockpit_safety]",
+    JSON.stringify({
+      taskId,
+      destructive,
+      modelQuestions: plan.questions.length,
+      finalQuestions: finalPlan.questions.length,
+      ready_to_build: finalPlan.ready_to_build,
+    }),
+  );
+
   // 3a. Persist plan + status transition
-  const nextStatus: TaskStatus = plan.ready_to_build
+  const nextStatus: TaskStatus = finalPlan.ready_to_build
     ? "waiting_for_start"
     : "waiting_for_input";
 
   const { data: updated, error: upErr } = await sb
     .from("dev_cockpit_tasks")
-    .update({ status: nextStatus, plan_text: JSON.stringify(plan) })
+    .update({ status: nextStatus, plan_text: JSON.stringify(finalPlan) })
     .eq("id", taskId)
     .select(TASK_COLUMNS)
     .single();
@@ -287,10 +331,10 @@ export async function analyzeTask(
   await sb.from("dev_cockpit_messages").insert({
     task_id: taskId,
     role: "assistant",
-    content: formatPlanMessage(plan),
+    content: formatPlanMessage(finalPlan),
   });
 
-  return { ok: true, data: { task: updated as DevTask, plan } };
+  return { ok: true, data: { task: updated as DevTask, plan: finalPlan } };
 }
 
 // ── Messages ─────────────────────────────────────────────────────────────────
