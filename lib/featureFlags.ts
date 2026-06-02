@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { supabase } from "./supabase";
 
-export type FeatureFlag = "ai_voice";
+export type FeatureFlag = "ai_voice" | "voice_intent_routing";
 
 /**
  * Email address that is allowed to use the ai_voice feature.
@@ -67,6 +67,9 @@ export function useFeatureFlag(flag: FeatureFlag): boolean | null {
       if (cancelled) return;
       if (!user) { setEnabled(false); return; }
 
+      // ai_voice is restricted to the owner email while in development.
+      // voice_intent_routing has no email guard — it's enabled per-user
+      // via the feature_flags JSONB column in user_settings.
       if (flag === "ai_voice" && user.email !== AI_OWNER_EMAIL) {
         setEnabled(false);
         return;

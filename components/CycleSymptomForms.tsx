@@ -431,6 +431,27 @@ export function SymptomForm() {
   // what the API/DB constraint expects.
   const [severities, setSeverities] = useState<SeveritiesMap>({});
   const [occurredAt, setOccurredAt] = useState<string>(() => nowLocalDt());
+
+  // Voice-intent pre-fill: glev:open-symptom-log dispatched by useVoiceIntents
+  // when the classifier recognises a symptom utterance (e.g. "Ich fühle mich
+  // hypoglykämisch"). Pre-selects matching symptom chips and sets default
+  // severities — user still confirms with "Speichern" (compliance gate D-003).
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent<{ symptom_types?: string[] }>).detail;
+      if (!Array.isArray(detail?.symptom_types)) return;
+      const incoming = detail.symptom_types.filter(
+        (s): s is SymptomType => SYMPTOM_TYPES.includes(s as SymptomType),
+      );
+      if (incoming.length === 0) return;
+      setSelected(new Set(incoming));
+      setSeverities(
+        Object.fromEntries(incoming.map((s) => [s, 3 as const])) as SeveritiesMap,
+      );
+    };
+    window.addEventListener("glev:open-symptom-log", handler);
+    return () => window.removeEventListener("glev:open-symptom-log", handler);
+  }, []);
   const [notes, setNotes] = useState("");
   const [status, setStatus] = useState<Status>({ kind: "idle" });
   const [savedTick, setSavedTick] = useState<number>(0);

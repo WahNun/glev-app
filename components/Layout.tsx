@@ -129,6 +129,7 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
   // sessionStorage-backed conversation history, and the streaming
   // fetch to /api/ai/chat. See DECISIONS.md D-013.
   const aiVoiceEnabled = useFeatureFlag("ai_voice");
+  const voiceIntentEnabled = useFeatureFlag("voice_intent_routing") === true;
   const screenCtx = useScreenContext();
   const glevAi = useGlevAI({
     contextSnapshot: screenCtx,
@@ -175,6 +176,66 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
     window.addEventListener("glev:tts-speaking", onTtsSpeaking);
     return () => window.removeEventListener("glev:tts-speaking", onTtsSpeaking);
   }, []);
+
+  // Voice-intent navigation: glev:intent-navigate is dispatched by
+  // useVoiceIntents when the classifier returns a "navigate" intent.
+  // Handled here because Layout owns the router instance.
+  useEffect(() => {
+    const SCREEN_PATHS: Record<string, string> = {
+      dashboard: "/dashboard",
+      entries: "/entries",
+      engine: "/engine",
+      engine_bolus: "/engine?tab=bolus",
+      insights: "/insights",
+      settings: "/settings",
+    };
+    const handler = (e: Event) => {
+      const screen = (e as CustomEvent<{ screen: string }>).detail?.screen;
+      if (typeof screen === "string") {
+        const path = SCREEN_PATHS[screen] ?? "/dashboard";
+        router.push(path);
+      }
+    };
+    window.addEventListener("glev:intent-navigate", handler);
+    return () => window.removeEventListener("glev:intent-navigate", handler);
+  }, [router]);
+
+  // Voice-intent meal pre-fill: glev:open-meal-log reuses the existing
+  // glev_pending_meal sessionStorage + glev:meal-prefill pattern so the
+  // engine page can pre-fill its macro form without a separate mechanism.
+  // Navigates to /engine and then fires glev:meal-prefill — the engine
+  // page's existing listener picks it up regardless of whether it was
+  // already mounted (cached route) or freshly loaded.
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent<{
+        input_text?: string;
+        carbs_grams?: number;
+        protein_grams?: number;
+        fat_grams?: number;
+      }>).detail;
+      if (!detail) return;
+      try {
+        sessionStorage.setItem(
+          "glev_pending_meal",
+          JSON.stringify({
+            input_text: detail.input_text ?? "",
+            carbs: detail.carbs_grams ?? 0,
+            protein: detail.protein_grams ?? null,
+            fat: detail.fat_grams ?? null,
+            fiber: null,
+          }),
+        );
+      } catch { /* sessionStorage unavailable */ }
+      router.push("/engine");
+      // Short delay so the route can mount before the prefill event fires.
+      window.setTimeout(() => {
+        window.dispatchEvent(new CustomEvent("glev:meal-prefill"));
+      }, 300);
+    };
+    window.addEventListener("glev:open-meal-log", handler);
+    return () => window.removeEventListener("glev:open-meal-log", handler);
+  }, [router]);
 
   // ── FAB independent hit-area refs ──────────────────────────────────
   // iOS WKWebView clips pointer hit-testing to the layout bounds of a
@@ -1144,6 +1205,7 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
             onCancelAction={glevAi.cancelAction}
             onClearChat={glevAi.clearMessages}
             onListeningChange={setAiThinking}
+            voiceIntentEnabled={voiceIntentEnabled}
           />
         </>
       )}

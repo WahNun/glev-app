@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import type { GlevChatMessage, PendingAction } from "@/lib/useGlevAI";
-import { useVoxtral } from "@/hooks/useVoxtral";
+import { useVoiceIntents } from "@/hooks/useVoiceIntents";
 import { useTTS } from "@/hooks/useTTS";
 
 const ACCENT = "#8b5cf6";
@@ -21,6 +21,12 @@ interface Props {
   /** Called whenever the chat sheet's STT listening state changes so the
    *  parent (Layout.tsx) can reflect it on the FAB. */
   onListeningChange?: (listening: boolean) => void;
+  /**
+   * When true, voice transcripts are classified into intents before
+   * reaching the chat pipeline. Requires voice_intent_routing feature flag.
+   * Non-matching intents still fall through to the normal chat flow.
+   */
+  voiceIntentEnabled?: boolean;
 }
 
 const DISCLAIMER =
@@ -183,6 +189,7 @@ export default function GlevAIChatSheet({
   onCancelAction,
   onClearChat,
   onListeningChange,
+  voiceIntentEnabled = false,
 }: Props) {
   const [input, setInput] = useState("");
   const [sttError, setSttError] = useState<string | null>(null);
@@ -197,8 +204,10 @@ export default function GlevAIChatSheet({
   const inputRef2 = useRef(input);
   inputRef2.current = input;
 
-  const { isListening, startListening, stopListening } = useVoxtral({
-    onTranscript: (text) => {
+  const { isListening, startListening, stopListening } = useVoiceIntents({
+    // When voice_intent_routing is enabled and the classifier returns
+    // fallback_chat (or is disabled), the transcript is sent normally.
+    onFallbackTranscript: (text) => {
       setSttError(null);
       setSttPartial(null);
       if (!text.trim()) return;
@@ -218,6 +227,7 @@ export default function GlevAIChatSheet({
       setSttPartial(null);
       setSttError(err);
     },
+    enabled: voiceIntentEnabled,
   });
 
   const tts = useTTS();

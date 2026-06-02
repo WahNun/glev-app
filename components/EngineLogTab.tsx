@@ -320,6 +320,29 @@ export function InsulinForm({ initialType = "bolus" }: { initialType?: "bolus" |
     return () => { cancelled = true; };
   }, [type]);
 
+  // Voice-intent pre-fill: glev:open-bolus-log dispatched by useVoiceIntents
+  // when the intent classifier recognises a bolus utterance (e.g. "4 Einheiten
+  // Novorapid"). Fills in units and insulin name, but does NOT submit — the
+  // user must still tap "Speichern" (compliance gate D-003).
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent<{ units?: number; insulin_name?: string; notes?: string }>).detail;
+      if (typeof detail?.units === "number" && detail.units > 0) {
+        setUnits(String(detail.units));
+      }
+      if (typeof detail?.insulin_name === "string" && detail.insulin_name.trim()) {
+        setName(detail.insulin_name.trim());
+      }
+      if (typeof detail?.notes === "string" && detail.notes.trim()) {
+        setNotes(detail.notes.trim());
+      }
+      // Force bolus tab so the pre-fill is visible immediately.
+      setType("bolus");
+    };
+    window.addEventListener("glev:open-bolus-log", handler);
+    return () => window.removeEventListener("glev:open-bolus-log", handler);
+  }, []);
+
   const placeholder = type === "bolus" ? "Fiasp" : "Tresiba";
   // Accept "5" and "7,5" (German decimal). Empty/garbage parses to NaN
   // → invalidates the form via the existing `Number.isFinite` check.
@@ -892,6 +915,32 @@ export function ExerciseForm() {
   const [notes, setNotes] = useState("");
   const [status, setStatus] = useState<Status>({ kind: "idle" });
   const [savedTick, setSavedTick] = useState<number>(0);
+
+  // Voice-intent pre-fill: glev:open-exercise-log dispatched by useVoiceIntents
+  // when the classifier recognises an exercise utterance (e.g. "30 Minuten
+  // Radfahren"). Fills in duration, type and intensity — user still confirms
+  // with "Speichern" (compliance gate D-003).
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent<{
+        duration_minutes?: number;
+        exercise_type?: string;
+        intensity?: "low" | "medium" | "high";
+      }>).detail;
+      if (typeof detail?.duration_minutes === "number" && detail.duration_minutes > 0) {
+        setDuration(String(Math.min(600, Math.round(detail.duration_minutes))));
+      }
+      const validTypes: ExerciseType[] = ["cardio", "strength", "yoga", "cycling", "swimming", "run", "hiit", "football", "tennis", "volleyball", "basketball", "breathwork", "hot_shower", "cold_shower"];
+      if (typeof detail?.exercise_type === "string" && validTypes.includes(detail.exercise_type as ExerciseType)) {
+        setType(detail.exercise_type as ExerciseType);
+      }
+      if (detail?.intensity === "low" || detail?.intensity === "medium" || detail?.intensity === "high") {
+        setIntensity(detail.intensity);
+      }
+    };
+    window.addEventListener("glev:open-exercise-log", handler);
+    return () => window.removeEventListener("glev:open-exercise-log", handler);
+  }, []);
 
   // Accept "30" and "30,5" (German decimal). Empty/garbage parses to
   // NaN → invalidates the form via the existing `Number.isFinite` check.
