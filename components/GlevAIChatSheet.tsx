@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import type { GlevChatMessage, PendingAction } from "@/lib/useGlevAI";
 import { useVoiceIntents } from "@/hooks/useVoiceIntents";
 import { useTTS } from "@/hooks/useTTS";
+import IntentConfirmChip from "@/components/IntentConfirmChip";
 
 const ACCENT = "#8b5cf6";
 const SHEET_BG = "var(--surface)";
@@ -204,7 +205,14 @@ export default function GlevAIChatSheet({
   const inputRef2 = useRef(input);
   inputRef2.current = input;
 
-  const { isListening, startListening, stopListening } = useVoiceIntents({
+  const {
+    isListening,
+    startListening,
+    stopListening,
+    pendingIntent,
+    confirmPendingIntent,
+    dismissPendingIntent,
+  } = useVoiceIntents({
     // When voice_intent_routing is enabled and the classifier returns
     // fallback_chat (or is disabled), the transcript is sent normally.
     onFallbackTranscript: (text) => {
@@ -653,6 +661,15 @@ export default function GlevAIChatSheet({
             </div>
           ))}
         </div>
+
+        {/* Intent confirmation chip — shown for 2-3 s after voice classification */}
+        {pendingIntent && (
+          <IntentConfirmChip
+            intent={pendingIntent}
+            onConfirm={confirmPendingIntent}
+            onDismiss={dismissPendingIntent}
+          />
+        )}
 
         {/* Input row */}
         <div
