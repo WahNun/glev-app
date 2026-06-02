@@ -61,12 +61,13 @@ function makeMeal(overrides: Partial<MealLike> & { id: string }): MealLike {
   };
 }
 
-// ── Section 1: Basal CircleGauge — fraction={basalFraction} (depletion meter) ──
+// ── Section 1: Basal CircleGauge — fraction={basalFraction} (time-progress meter) ──
 //
-// The basal ring is a Wirkdauer depletion meter: it shrinks as time elapses.
+// The basal ring is a Wirkdauer time-progress meter: it shrinks linearly as
+// time elapses from injection to end of the action window.
 // fraction={basalFraction} is passed to CircleGauge so the ring reflects the
-// pharmacokinetic model (plateau + tail decay). The number inside always shows
-// the originally injected dose — not a residual value.
+// simple linear decay model. The number inside always shows the originally
+// injected dose — not a residual value.
 //
 // We read the source file directly so the test fails the moment someone
 // reverts to the old presence-indicator approach (fraction={1}).
@@ -162,9 +163,8 @@ test("cleared=false: calcTotalIOB >= threshold with multiple active doses", () =
 // ── Section 3: calcBasalRemaining cross-check ─────────────────────────────────
 //
 // The basal expanded detail panel shows an approximate remaining dose derived
-// from calcBasalRemaining(units, elapsedMin, windowMin). Because the collapsed
-// ring is now always fraction={1}, the ONLY place basalFraction is used is the
-// expanded coverage bar — we lock in the underlying math here.
+// from calcBasalRemaining(units, elapsedMin, windowMin). We lock in the
+// underlying math here to guard against silent regressions in the decay model.
 
 test("calcBasalRemaining: fraction model — remaining equals units × (1 − elapsed/window)", () => {
   const units = 10;

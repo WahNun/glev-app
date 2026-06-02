@@ -1796,7 +1796,8 @@
     "add_meal_manual": "Add meal manually",
     "cta_add_entry": "Entry",
     "trigger_label": "New entry",
-    "basal_log_sheet_title": "Log basal"
+    "basal_log_sheet_title": "Log basal",
+    "bolus_log_sheet_title": "Log bolus"
   },
   "postMeal": {
     "title": "BG after {label}",
@@ -1839,6 +1840,7 @@
     "iob_tab_basal": "Basal",
     "iob_basal_no_log": "No basal log",
     "iob_log_basal_btn": "Log Basal",
+    "iob_log_bolus_btn": "Log bolus",
     "iob_basal_overdue": "Injection overdue",
     "iob_basal_next_in": "Next in ~{hours}h",
     "iob_basal_coverage_title": "Coverage",

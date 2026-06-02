@@ -544,6 +544,17 @@ export default function DashboardPage() {
     return () => window.removeEventListener("glev:insulin-updated", onInsulinSaved);
   }, [basalSheetOpen]);
 
+  // Inline bolus-log sheet — opened by the "+ Bolus loggen" chip on the
+  // IOB bolus view. Mirrors the basalSheetOpen pattern above.
+  const [bolusSheetOpen, setBolusSheetOpen] = useState(false);
+
+  useEffect(() => {
+    if (!bolusSheetOpen) return;
+    function onInsulinSaved() { setBolusSheetOpen(false); }
+    window.addEventListener("glev:insulin-updated", onInsulinSaved);
+    return () => window.removeEventListener("glev:insulin-updated", onInsulinSaved);
+  }, [bolusSheetOpen]);
+
   useEffect(() => {
     fetchMacroTargets().then(setMacroTargets).catch(() => {});
     fetchInsulinType().then(setInsulinType).catch(() => {});
@@ -702,7 +713,7 @@ export default function DashboardPage() {
       // Unlocked (pro/plus): no gate needed here — adapt-score is already
       // in the control cluster above.
       cards: [
-        { id: "iob",         node: <IOBCard insulin={insulin} insulinType={insulinType} meals={meals} currentBg={latestCgmBg} onLogBasal={() => setBasalSheetOpen(true)} /> },
+        { id: "iob",         node: <IOBCard insulin={insulin} insulinType={insulinType} meals={meals} currentBg={latestCgmBg} onLogBasal={() => setBasalSheetOpen(true)} onLogBolus={() => setBolusSheetOpen(true)} /> },
         ...(controlScoreGated
           ? [{ id: "control-score", node: controlScoreNode }]
           : []
@@ -811,6 +822,16 @@ export default function DashboardPage() {
       >
         <div style={{ padding: "4px 0 8px" }}>
           <InsulinForm initialType="basal" />
+        </div>
+      </BottomSheet>
+      <BottomSheet
+        open={bolusSheetOpen}
+        onClose={() => setBolusSheetOpen(false)}
+        title={tQuick("bolus_log_sheet_title")}
+        maxWidth={480}
+      >
+        <div style={{ padding: "4px 0 8px" }}>
+          <InsulinForm initialType="bolus" />
         </div>
       </BottomSheet>
 

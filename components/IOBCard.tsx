@@ -3,7 +3,7 @@ import { useEffect, useState, useMemo, useRef } from "react";
 import { useTranslations } from "next-intl";
 import { calcTotalIOB, calcSingleIOB, getDIAMinutes, buildDoses, calcBasalRemaining, calcBasalFraction, resolveBolusTypeLabel, resolveBasalTypeLabel, type BolusDose, type InsulinType } from "@/lib/iob";
 import { getInsulinSettings } from "@/lib/userSettings";
-import { DEFAULT_BASAL_WINDOW_H, BASAL_PK_PEAK_FRACTION, BASAL_PK_PRESETS } from "@/lib/engine/constants";
+import { DEFAULT_BASAL_WINDOW_H } from "@/lib/engine/constants";
 import type { InsulinLog } from "@/lib/insulin";
 import type { Meal } from "@/lib/meals";
 
@@ -71,9 +71,12 @@ interface Props {
   /** Called when the user taps the "Log Basal" quick-action button on the
    *  basal view. The parent is responsible for opening the log form. */
   onLogBasal?: () => void;
+  /** Called when the user taps the "+ Bolus loggen" chip on the bolus view.
+   *  The parent is responsible for opening the bolus log form. */
+  onLogBolus?: () => void;
 }
 
-export default function IOBCard({ insulin, insulinType, meals, currentBg, onLogBasal }: Props) {
+export default function IOBCard({ insulin, insulinType, meals, currentBg, onLogBasal, onLogBolus }: Props) {
   const t = useTranslations("dashboard");
   const [now, setNow]           = useState(() => Date.now());
   const [expanded, setExpanded] = useState(() => {
@@ -175,17 +178,10 @@ export default function IOBCard({ insulin, insulinType, meals, currentBg, onLogB
   const basalElapsedMin = lastBasal
     ? (now - new Date(lastBasal.created_at).getTime()) / 60_000
     : null;
-  // Per-brand plateau fraction: Tresiba stays full for ~78 % of its 42h
-  // window; Levemir only ~50 %; all Glargin variants default to 60 %.
-  // Falls back to the global BASAL_PK_PEAK_FRACTION (0.60) for unknown brands.
-  const basalPkFraction = insulinBrandBasal?.trim()
-    ? (BASAL_PK_PRESETS[insulinBrandBasal.trim()] ?? BASAL_PK_PEAK_FRACTION)
-    : BASAL_PK_PEAK_FRACTION;
-  // Ring fill: stays at 1.0 during the plateau phase, then decays to 0 over
-  // the tail phase — avoids misleading users into thinking their basal
-  // coverage is already diminishing right after injection.
+  // Ring fill: linear decay from 1.0 (freshly injected) to 0.0 (window
+  // expired). Shows the user exactly how much of their action window is left.
   const basalFraction   = basalElapsedMin !== null
-    ? calcBasalFraction(basalElapsedMin, BASAL_WINDOW_MIN, basalPkFraction)
+    ? calcBasalFraction(basalElapsedMin, BASAL_WINDOW_MIN)
     : 0;
   const basalOverdue    = basalElapsedMin !== null && basalElapsedMin > BASAL_WINDOW_MIN;
   // Approximate remaining basal units using linear decay over the 24h window.
@@ -328,6 +324,24 @@ export default function IOBCard({ insulin, insulinType, meals, currentBg, onLogB
                   <div style={{ fontSize: 11, color: "var(--text-ghost)", lineHeight: 1.4 }}>
                     {iob < 1 ? t("iob_risk_low") : iob < 3 ? t("iob_risk_moderate") : t("iob_risk_high")}
                   </div>
+                )}
+                {onLogBolus && !cleared && (
+                  <button
+                    type="button"
+                    onClick={e => { e.stopPropagation(); onLogBolus(); }}
+                    style={{
+                      alignSelf: "flex-start", padding: "3px 10px", borderRadius: 99,
+                      fontSize: 11, fontWeight: 700, letterSpacing: "0.04em",
+                      border: `1px solid ${color}44`,
+                      background: `${color}10`,
+                      color,
+                      cursor: "pointer",
+                      WebkitTapHighlightColor: "transparent",
+                      touchAction: "manipulation",
+                    }}
+                  >
+                    + {t("iob_log_bolus_btn")}
+                  </button>
                 )}
               </div>
             </>

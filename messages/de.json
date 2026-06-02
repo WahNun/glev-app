@@ -1796,7 +1796,8 @@
     "add_meal_manual": "Mahlzeit manuell eintragen",
     "cta_add_entry": "Eintrag",
     "trigger_label": "Neuer Eintrag",
-    "basal_log_sheet_title": "Basal loggen"
+    "basal_log_sheet_title": "Basal loggen",
+    "bolus_log_sheet_title": "Bolus loggen"
   },
   "postMeal": {
     "title": "BG nach {label}",
@@ -1839,6 +1840,7 @@
     "iob_tab_basal": "Basal",
     "iob_basal_no_log": "Kein Basal-Log",
     "iob_log_basal_btn": "Basal loggen",
+    "iob_log_bolus_btn": "Bolus loggen",
     "iob_basal_overdue": "Injektion überfällig",
     "iob_basal_next_in": "Nächste in ~{hours}h",
     "iob_basal_coverage_title": "Wirkdauer",
