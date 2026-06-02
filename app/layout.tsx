@@ -12,6 +12,7 @@ import LandscapeGlucoseOverlay from "@/components/LandscapeGlucoseOverlay";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import CookieBanner from "@/components/CookieBanner";
 import GoogleAnalytics from "@/components/GoogleAnalytics";
+import ServiceWorkerRegistration from "@/components/ServiceWorkerRegistration";
 
 const META_PIXEL_ID = "960780236789931";
 
@@ -252,6 +253,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
             <LandscapeGlucoseOverlay />
             {children}
             <CookieBanner />
+            <ServiceWorkerRegistration />
           </ThemeProvider>
         </NextIntlClientProvider>
       </body>

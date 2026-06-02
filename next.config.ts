@@ -1,7 +1,19 @@
 import type { NextConfig } from "next";
 import createNextIntlPlugin from "next-intl/plugin";
+import withSerwistInit from "@serwist/next";
 
 const withNextIntl = createNextIntlPlugin("./i18n/request.ts");
+
+const withSerwist = withSerwistInit({
+  swSrc: "app/sw.ts",
+  swDest: "public/sw.js",
+  // Reload all open tabs when the user comes back online after being offline
+  // so they get fresh data immediately.
+  reloadOnOnline: true,
+  // Disable the SW in development — it intercepts hot-module replacement
+  // requests and breaks fast refresh in the Replit preview.
+  disable: process.env.NODE_ENV === "development",
+});
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
@@ -25,4 +37,4 @@ const nextConfig: NextConfig = {
   ],
 };
 
-export default withNextIntl(nextConfig);
+export default withSerwist(withNextIntl(nextConfig));
