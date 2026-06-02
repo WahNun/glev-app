@@ -140,8 +140,10 @@ export function useTTS() {
   // `speed` = TTS playback speed preference
   const [speed, setSpeedState] = useState<TtsSpeed>("normal");
   const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
-  // For Mistral TTS via AudioContext (replaces HTMLAudioElement to fix iOS autoplay)
-  const sourceNodeRef = useRef<AudioBufferSourceNode | null>(null);
+  // For Mistral TTS — HTMLAudioElement + blob URL (works in Capacitor WKWebView
+  // without user gesture because Capacitor sets requiresUserActionForMediaPlayback=false)
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const audioBlobUrl = useRef<string | null>(null);
 
   useEffect(() => {
     setEnabled(readPref(TTS_MUTE_KEY, true));
@@ -200,12 +202,22 @@ export function useTTS() {
     };
   }, []);
 
-  const stop = useCallback(() => {
-    // Stop Mistral AudioContext source if playing
-    if (sourceNodeRef.current) {
-      try { sourceNodeRef.current.stop(); } catch { /* already stopped */ }
-      sourceNodeRef.current = null;
+  /** Revoke any blob URL we created to free memory. */
+  function revokeBlob() {
+    if (audioBlobUrl.current) {
+      URL.revokeObjectURL(audioBlobUrl.current);
+      audioBlobUrl.current = null;
     }
+  }
+
+  const stop = useCallback(() => {
+    // Stop Mistral HTML audio if playing
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current.src = "";
+      audioRef.current = null;
+    }
+    revokeBlob();
     // Stop Web Speech fallback
     if (typeof window !== "undefined" && "speechSynthesis" in window) {
       window.speechSynthesis.cancel();
@@ -265,13 +277,9 @@ export function useTTS() {
       if (!clean) return;
 
       // ── Mistral Voxtral TTS (primary) ────────────────────────────────────
-      // iOS fix: unlock AudioContext BEFORE the first await so we're still
-      // inside the user-gesture activation window. Once resumed, the context
-      // stays running for the page lifetime — audio.play() calls after async
-      // network fetches succeed because they go through AudioContext, not
-      // HTMLAudioElement (which iOS blocks after gesture chain is broken).
-      const audioCtx = await unlockAudioCtx();
-
+      // Uses HTMLAudioElement + blob URL. Capacitor's WKWebView allows
+      // audio.play() without a user gesture (requiresUserActionForMediaPlayback
+      // is false), so autoRead works correctly when triggered after streaming.
       try {
         const res = await fetch("/api/tts/mistral", {
           method: "POST",
@@ -283,30 +291,37 @@ export function useTTS() {
           signal: AbortSignal.timeout(12_000),
         });
 
-        if (res.ok && audioCtx) {
-          const arrayBuffer = await res.arrayBuffer();
-          const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
+        if (res.ok) {
+          const blob = await res.blob();
+          const url = URL.createObjectURL(blob);
+          audioBlobUrl.current = url;
 
-          const source = audioCtx.createBufferSource();
-          source.buffer = audioBuffer;
-          source.playbackRate.value = speedToFloat(speedRef.current);
-          source.connect(audioCtx.destination);
+          const audio = new Audio(url);
+          audio.playbackRate = speedToFloat(speedRef.current);
+          audioRef.current = audio;
 
-          sourceNodeRef.current = source;
-
-          source.onended = () => {
+          audio.onplay = () => { setSpeaking(true); setSpeakingId(id ?? null); };
+          audio.onended = () => {
             setSpeaking(false);
             setSpeakingId(null);
-            sourceNodeRef.current = null;
+            audioRef.current = null;
+            revokeBlob();
+          };
+          audio.onerror = () => {
+            setSpeaking(false);
+            setSpeakingId(null);
+            audioRef.current = null;
+            revokeBlob();
+            speakWebSpeech(clean, id);
           };
 
           setSpeaking(true);
           setSpeakingId(id ?? null);
-          source.start(0);
+          await audio.play();
           return; // success — skip Web Speech below
         }
       } catch {
-        // Network error, timeout, decode error → fall through to Web Speech
+        // Network error, timeout, or server unavailable → fall through to Web Speech
       }
 
       // ── Web Speech API (fallback) ─────────────────────────────────────────
