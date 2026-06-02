@@ -1469,7 +1469,7 @@ function MobileTab({
         background: "rgba(0,0,0,0.001)",
         cursor: "pointer",
         color: visualActive ? ACCENT : NAV_INACTIVE,
-        fontSize: 11, fontWeight: visualActive ? 600 : 500, letterSpacing: "0.005em",
+        fontSize: 10, fontWeight: visualActive ? 600 : 500, letterSpacing: "0.005em",
         borderRadius: 10,
         transition: "color 0.15s",
         // Subtle scale-down on press for tactile feedback on iOS where
