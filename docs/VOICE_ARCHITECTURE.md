@@ -112,8 +112,11 @@ Key invariants:
   instance exists on the Engine/Macro screen.
 - **ref_audio loaded server-side** — callers never pass ref_audio; the route reads it from
   `admin_tts_config` on every request. Voice consistency is guaranteed across all screens.
-- **Speed stored client-side** — `glev_tts_speed` in `localStorage`. The route accepts the value
-  but Voxtral does not yet expose a speed parameter (`VOXTRAL_SPEED_TODO` in `route.ts`).
+- **Speed controlled client-side via `playbackRate`** — `glev_tts_speed` in `localStorage`
+  (`"slow"` → 0.75, `"normal"` → 1.0, `"fast"` → 1.3). Applied to `HTMLAudioElement.playbackRate`
+  before `play()` in `useTTS.ts`. Mistral confirmed (2026-06-02) that voxtral-mini-tts-2603 has no
+  native speed parameter; the client-side approach works on the already-decoded MP3 across all
+  browsers and also on the Web Speech API fallback via `SpeechSynthesisUtterance.rate`.
 - **Persona-leak guard** — `extractAssistantText()` in `useTTS.ts` strips lines matching known
   system-prompt patterns before any text reaches the TTS API.
 
@@ -122,5 +125,3 @@ Key invariants:
 ## 4  Related decisions
 
 - **D-003** — Compliance principle: no direct dose instructions; every write action confirmed by user.
-- `VOXTRAL_SPEED_TODO` comment in `app/api/tts/mistral/route.ts` — tracks when Voxtral gains a
-  native speed parameter so we can forward `glev_tts_speed` upstream.

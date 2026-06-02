@@ -175,6 +175,13 @@ export function useTTS() {
     setSpeakingId(null);
   }, []);
 
+  /** Map TtsSpeed enum to a playback-rate float. */
+  function speedToFloat(s: TtsSpeed): number {
+    if (s === "slow") return 0.75;
+    if (s === "fast") return 1.3;
+    return 1.0;
+  }
+
   /** Web Speech API fallback — used when Mistral TTS is unavailable. */
   const speakWebSpeech = useCallback(
     (text: string, id?: string) => {
@@ -182,7 +189,7 @@ export function useTTS() {
 
       const u = new SpeechSynthesisUtterance(text.trim());
       u.lang = "de-DE";
-      u.rate = 1.05;
+      u.rate = speedToFloat(speedRef.current);
       u.pitch = 1.0;
 
       const voice = pickGermanVoice();
@@ -242,6 +249,7 @@ export function useTTS() {
           audioBlobUrl.current = url;
 
           const audio = new Audio(url);
+          audio.playbackRate = speedToFloat(speedRef.current);
           audioRef.current = audio;
 
           audio.onplay = () => { setSpeaking(true); setSpeakingId(id ?? null); };

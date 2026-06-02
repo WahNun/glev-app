@@ -28,12 +28,14 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "text too long (max 1000 chars)" }, { status: 400 });
   }
 
-  // VOXTRAL_SPEED_TODO: speed parameter not yet supported by voxtral-mini-tts-2603;
-  // stored in client localStorage under glev_tts_speed for future use. When Mistral
-  // ships a stable speed/rate parameter for Voxtral, read it here and forward it in
-  // the upstream request body (e.g. `speed: speedToFloat(speed)`). Until then we
-  // accept the value to avoid breaking the client API contract.
-  const _speed = typeof rawObj.speed === "string" ? rawObj.speed : "normal";
+  // Map speed preference to a float for the upstream request body.
+  // Mistral confirmed (2026-06-02) that voxtral-mini-tts-2603 does not yet expose a native
+  // speed/rate parameter, so the field is currently ignored by the API. It is included anyway
+  // so that when Mistral ships the parameter the integration activates automatically without
+  // a code change. Client-side playbackRate in useTTS.ts (same mapping) handles actual speed
+  // today; a prompt-based tempo hint below adds a best-effort LLM-level nudge.
+  const speed = rawObj.speed === "slow" || rawObj.speed === "fast" ? rawObj.speed : "normal";
+  const speedFloat = speed === "slow" ? 0.75 : speed === "fast" ? 1.3 : 1.0;
 
   // Load central voice config from admin_tts_config (service-role, fire-and-forget).
   // Priority: ref_audio (admin upload) > voice_id (DB) > env var > Mistral default.
@@ -56,13 +58,21 @@ export async function POST(req: NextRequest) {
 
   // Voxtral TTS is LLM-based and responds to speaking-style instructions
   // prepended to the input — same technique used in Mistral Studio.
-  // This makes output warmer and more conversational rather than flat/robotic.
-  const styledInput = `Sprich warm, ruhig und natürlich — wie ein vertrauter Assistent beim Gespräch unter vier Augen. Keine übertriebene Betonung, keine Pausen zwischen Wörtern, fließend und menschlich.\n\n${text}`;
+  // Tempo hint varies by user speed preference; client-side playbackRate is applied
+  // on top of this so both layers reinforce the intended pace.
+  const tempoHint =
+    speed === "slow"
+      ? "Sprich warm, ruhig und sehr deutlich — in langsamem Tempo mit kurzen Pausen zwischen den Sätzen, gut verständlich und entspannt."
+      : speed === "fast"
+        ? "Sprich warm und natürlich — in flottem, zügigem Tempo, fließend und energisch, wie jemand der etwas klar auf den Punkt bringt."
+        : "Sprich warm, ruhig und natürlich — wie ein vertrauter Assistent beim Gespräch unter vier Augen. Keine übertriebene Betonung, keine Pausen zwischen Wörtern, fließend und menschlich.";
+  const styledInput = `${tempoHint}\n\n${text}`;
 
   const body: Record<string, unknown> = {
     model: TTS_MODEL,
     input: styledInput,
     response_format: "mp3",
+    speed: speedFloat,
     ...(refAudio ? { ref_audio: refAudio } : { voice_id: voiceId }),
   };
 
