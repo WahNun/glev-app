@@ -14,6 +14,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import GlevLogo from "@/components/GlevLogo";
+import DevCockpitPhaseProgress from "./DevCockpitPhaseProgress";
 import {
   listTasks,
   getTask,
@@ -845,7 +846,7 @@ export default function DevCockpit({ initialTasks }: { initialTasks: DevTask[] }
       {/* ── Page heading ── */}
       <div style={pageHeaderStyle}>
         <h1 style={headingStyle}>Dev Cockpit</h1>
-        <span style={phaseBadgeStyle}>Phase 2 — Persistenz</span>
+        <DevCockpitPhaseProgress />
         {analyzingIds.size > 0 && (
           <span style={{ fontSize: 12, color: "#6b7280" }}>
             {analyzingIds.size === 1 ? "Analyse läuft…" : `${analyzingIds.size} Analysen laufen…`}
@@ -1432,18 +1433,6 @@ const headingStyle: React.CSSProperties = {
   fontWeight: 700,
   margin: 0,
   color: "#111",
-};
-
-const phaseBadgeStyle: React.CSSProperties = {
-  display: "inline-block",
-  padding: "2px 10px",
-  background: "#f3e8ff",
-  color: "#6b21a8",
-  border: "1px solid #d8b4fe",
-  borderRadius: 12,
-  fontSize: 11,
-  fontWeight: 600,
-  letterSpacing: 0.3,
 };
 
 const mainGridStyle: React.CSSProperties = {
