@@ -179,6 +179,27 @@ export function useTTS() {
     return () => window.speechSynthesis.removeEventListener("voiceschanged", onVoicesChanged);
   }, []);
 
+  // Proactively unlock the AudioContext on the very first user interaction
+  // (touch or click anywhere in the app). This ensures the context is already
+  // running when autoRead fires after an AI response — which happens outside a
+  // gesture window. Capacitor WKWebView allows new Audio().play() without a
+  // gesture, but AudioContext.resume() requires at least one prior user interaction.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const unlock = () => {
+      const ctx = getAudioCtx();
+      if (ctx && ctx.state === "suspended") {
+        ctx.resume().catch(() => {});
+      }
+    };
+    window.addEventListener("touchstart", unlock, { once: true, passive: true });
+    window.addEventListener("click", unlock, { once: true });
+    return () => {
+      window.removeEventListener("touchstart", unlock);
+      window.removeEventListener("click", unlock);
+    };
+  }, []);
+
   const stop = useCallback(() => {
     // Stop Mistral AudioContext source if playing
     if (sourceNodeRef.current) {
