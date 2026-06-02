@@ -25,6 +25,9 @@ import {
   listQueueNotes,
   addQueueNote,
   discardQueueNote,
+  applyQueueNoteToCurrentBuild,
+  applyQueueNoteAfterBuild,
+  convertQueueNoteToTask,
   listAttachments,
   addMessage,
 } from "./actions";
@@ -326,6 +329,64 @@ function errText(code: string): string {
   return ERR_LABEL[code] ?? `Fehler: ${code}`;
 }
 
+// ── Queue evaluation badge styling (Phase 4) ────────────────────────────────
+const IMPACT_STYLE: Record<string, React.CSSProperties> = {
+  low: { background: "#dcfce7", color: "#166534", border: "1px solid #86efac" },
+  medium: { background: "#fef9c3", color: "#854d0e", border: "1px solid #fde047" },
+  high: { background: "#fee2e2", color: "#991b1b", border: "1px solid #fca5a5" },
+};
+const REC_LABEL: Record<string, string> = {
+  current_build: "Aktueller Build",
+  after_build: "Nach Build",
+  separate_task: "Separate Task",
+  discard: "Verwerfen",
+};
+const REC_STYLE: Record<string, React.CSSProperties> = {
+  current_build: { background: "#dbeafe", color: "#1e40af", border: "1px solid #93c5fd" },
+  after_build: { background: "#fef9c3", color: "#854d0e", border: "1px solid #fde047" },
+  separate_task: { background: "#f3e8ff", color: "#6b21a8", border: "1px solid #d8b4fe" },
+  discard: { background: "#f3f4f6", color: "#6b7280", border: "1px solid #e5e7eb" },
+};
+const QUEUE_STATUS_LABEL: Record<string, string> = {
+  queued: "Queued",
+  evaluated: "Evaluated",
+  applied: "Applied",
+  after_build_pending: "After Build",
+  discarded: "Discarded",
+  converted_to_task: "→ Task",
+};
+function evalBadge(style: React.CSSProperties, text: string) {
+  return (
+    <span
+      style={{
+        display: "inline-block",
+        padding: "2px 8px",
+        borderRadius: 12,
+        fontSize: 11,
+        fontWeight: 600,
+        ...style,
+      }}
+    >
+      {text}
+    </span>
+  );
+}
+
+// Enabled queue-note action button style (disabled handled via the attribute).
+function qBtn(danger: boolean): React.CSSProperties {
+  return {
+    padding: "4px 10px",
+    background: "#fff",
+    color: danger ? "#991b1b" : "#374151",
+    border: `1px solid ${danger ? "#fca5a5" : "#d1d5db"}`,
+    borderRadius: 5,
+    fontSize: 12,
+    fontWeight: 500,
+    fontFamily: "system-ui, -apple-system, sans-serif",
+    cursor: "pointer",
+  };
+}
+
 // ── Main component ────────────────────────────────────────────────────────────
 
 export default function DevCockpit({ initialTasks }: { initialTasks: DevTask[] }) {
@@ -357,6 +418,12 @@ export default function DevCockpit({ initialTasks }: { initialTasks: DevTask[] }
   const [creating, setCreating] = useState(false);
   const [queueing, setQueueing] = useState(false);
   const [answering, setAnswering] = useState(false);
+
+  // Per-queue-note pending (Phase 4) — only the affected note shows loading.
+  // evaluatingNoteIds = Mistral evaluation in flight; noteBusyIds = a quick
+  // apply/convert/discard in flight. Both keyed by note id.
+  const [evaluatingNoteIds, setEvaluatingNoteIds] = useState<Set<string>>(() => new Set());
+  const [noteBusyIds, setNoteBusyIds] = useState<Set<string>>(() => new Set());
 
   // The task_id whose detail (messages/queue/attachments) is currently valid.
   // Updated synchronously on every switch so out-of-order async loads can be
@@ -615,14 +682,118 @@ export default function DevCockpit({ initialTasks }: { initialTasks: DevTask[] }
     });
   }
 
-  function handleDiscardQueue(id: string) {
+  // Replace a note in the visible queue, but only if it still belongs to the
+  // selected task (the user may have switched away during an async action).
+  function applyNoteUpdate(note: DevQueueNote) {
+    if (activeTaskIdRef.current !== note.task_id) return;
+    setQueue((prev) => prev.map((q) => (q.id === note.id ? note : q)));
+  }
+
+  // Phase 4 — Evaluate a single queue note with Mistral (per-note, non-blocking
+  // route handler). Only this note shows loading; everything else stays usable.
+  function handleEvaluateNote(noteId: string) {
+    if (evaluatingNoteIds.has(noteId)) return;
+    setEvaluatingNoteIds((prev) => new Set(prev).add(noteId));
     run(async () => {
-      const res = await discardQueueNote(id);
-      if (!res.ok) {
-        setError(errText(res.error));
-        return;
+      try {
+        const r = await fetch("/glev-ops/dev-cockpit/api/evaluate-queue", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ noteId }),
+        });
+        const res = (await r.json().catch(() => ({ ok: false, error: "bad-response" }))) as
+          | { ok: true; note: DevQueueNote }
+          | { ok: false; error: string };
+        if (!res.ok) {
+          setError(errText(res.error));
+          return;
+        }
+        applyNoteUpdate(res.note);
+        setNotice("Queue-Notiz bewertet.");
+      } finally {
+        setEvaluatingNoteIds((prev) => {
+          const next = new Set(prev);
+          next.delete(noteId);
+          return next;
+        });
       }
-      setQueue((prev) => prev.filter((q) => q.id !== id));
+    });
+  }
+
+  // Quick per-note action (apply current / apply after / discard) — per-note
+  // pending via noteBusyIds; never blocks other notes or the rest of the UI.
+  function runNoteAction(
+    noteId: string,
+    fn: (id: string) => Promise<{ ok: boolean; error?: string; data?: DevQueueNote }>,
+    successMsg: string,
+  ) {
+    if (noteBusyIds.has(noteId)) return;
+    setNoteBusyIds((prev) => new Set(prev).add(noteId));
+    run(async () => {
+      try {
+        const res = await fn(noteId);
+        if (!res.ok) {
+          setError(errText(res.error ?? "unknown"));
+          return;
+        }
+        if (res.data) applyNoteUpdate(res.data);
+        setNotice(successMsg);
+      } finally {
+        setNoteBusyIds((prev) => {
+          const next = new Set(prev);
+          next.delete(noteId);
+          return next;
+        });
+      }
+    });
+  }
+
+  // Convenience: evaluate every still-"queued" note of the selected task.
+  function handleEvaluateAllQueued() {
+    const pending = queue.filter((q) => q.status === "queued");
+    if (pending.length === 0) {
+      setNotice("Keine offenen Queue-Notizen zum Bewerten.");
+      return;
+    }
+    for (const q of pending) handleEvaluateNote(q.id);
+  }
+
+  function handleApplyCurrent(noteId: string) {
+    runNoteAction(noteId, applyQueueNoteToCurrentBuild, "In aktuellen Build übernommen.");
+  }
+  function handleApplyAfter(noteId: string) {
+    runNoteAction(noteId, applyQueueNoteAfterBuild, "Für späteren Build vorgemerkt.");
+  }
+  function handleDiscardQueue(noteId: string) {
+    runNoteAction(noteId, discardQueueNote, "Queue-Notiz verworfen.");
+  }
+
+  // Create New Task from a queue note → note becomes converted_to_task, a new
+  // draft task is created and selected.
+  function handleConvertNote(noteId: string) {
+    if (noteBusyIds.has(noteId)) return;
+    setNoteBusyIds((prev) => new Set(prev).add(noteId));
+    run(async () => {
+      try {
+        const res = await convertQueueNoteToTask(noteId);
+        if (!res.ok) {
+          setError(errText(res.error));
+          return;
+        }
+        applyNoteUpdate(res.data.note);
+        setNotice("Neue Task aus Queue-Notiz erstellt.");
+        setFilter("active");
+        const listRes = await listTasks("active");
+        if (listRes.ok) setTasks(listRes.data);
+        setSelectedId(res.data.task.id);
+        refreshSummary();
+      } finally {
+        setNoteBusyIds((prev) => {
+          const next = new Set(prev);
+          next.delete(noteId);
+          return next;
+        });
+      }
     });
   }
 
@@ -968,12 +1139,12 @@ export default function DevCockpit({ initialTasks }: { initialTasks: DevTask[] }
                 {queueing ? "Speichert…" : "Add To Queue"}
               </button>
               <button
-                style={btnDisabledStyle}
-                disabled
-                onClick={() => setNotice("Evaluate Queue — kommt in Phase 4.")}
-                title="Coming in Phase 4"
+                style={btnSecondaryStyle}
+                onClick={handleEvaluateAllQueued}
+                disabled={evaluatingNoteIds.size > 0}
+                title="Bewertet alle offenen Queue-Notizen dieser Task"
               >
-                Evaluate Queue
+                {evaluatingNoteIds.size > 0 ? "Bewerte…" : "Evaluate Queue"}
               </button>
               <button style={{ ...btnDisabledStyle, color: "#9ca3af" }} disabled title="Phase 4+">
                 Apply Changes
@@ -1043,45 +1214,102 @@ export default function DevCockpit({ initialTasks }: { initialTasks: DevTask[] }
               </p>
             ) : (
               <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-                {queue.map((item) => (
-                  <div key={item.id} style={queueItemStyle}>
-                    <p style={{ margin: "0 0 8px", fontSize: 14, color: "#111", lineHeight: 1.4, whiteSpace: "pre-wrap" }}>
-                      {item.content}
-                    </p>
-                    <div style={{ display: "flex", gap: 6, marginBottom: 8, flexWrap: "wrap" }}>
-                      <span style={placeholderBadgeStyle}>
-                        Impact: {item.impact_level ?? "—"}
-                      </span>
-                      <span style={placeholderBadgeStyle}>
-                        Empfehlung: {item.recommendation ?? "—"}
-                      </span>
-                      <span style={placeholderBadgeStyle}>Status: {item.status}</span>
+                {queue.map((item) => {
+                  const evaluating = evaluatingNoteIds.has(item.id);
+                  const busy = noteBusyIds.has(item.id) || evaluating;
+                  const areas = Array.isArray(item.affected_areas)
+                    ? (item.affected_areas as unknown[]).map(String)
+                    : [];
+                  const risks = Array.isArray(item.risks)
+                    ? (item.risks as unknown[]).map(String)
+                    : [];
+                  return (
+                    <div key={item.id} style={queueItemStyle}>
+                      <p style={{ margin: "0 0 8px", fontSize: 14, color: "#111", lineHeight: 1.4, whiteSpace: "pre-wrap" }}>
+                        {item.content}
+                      </p>
+
+                      {/* Badges */}
+                      <div style={{ display: "flex", gap: 6, marginBottom: 8, flexWrap: "wrap" }}>
+                        {evalBadge(
+                          { background: "#f3f4f6", color: "#6b7280", border: "1px solid #e5e7eb" },
+                          `Status: ${QUEUE_STATUS_LABEL[item.status] ?? item.status}`,
+                        )}
+                        {item.impact_level
+                          ? evalBadge(IMPACT_STYLE[item.impact_level], `Impact: ${item.impact_level}`)
+                          : evalBadge({ background: "#f3f4f6", color: "#9ca3af", border: "1px solid #e5e7eb" }, "Impact: —")}
+                        {item.recommendation
+                          ? evalBadge(REC_STYLE[item.recommendation], REC_LABEL[item.recommendation] ?? item.recommendation)
+                          : evalBadge({ background: "#f3f4f6", color: "#9ca3af", border: "1px solid #e5e7eb" }, "Empfehlung: —")}
+                        {item.approved_for_current_build &&
+                          evalBadge({ background: "#dbeafe", color: "#1e40af", border: "1px solid #93c5fd" }, "✓ Current Build")}
+                      </div>
+
+                      {/* Evaluation text */}
+                      {item.evaluation_text && (
+                        <p style={{ margin: "0 0 8px", fontSize: 13, color: "#374151", lineHeight: 1.45, whiteSpace: "pre-wrap" }}>
+                          {item.evaluation_text}
+                        </p>
+                      )}
+
+                      {/* Affected areas */}
+                      {areas.length > 0 && (
+                        <div style={{ marginBottom: 6 }}>
+                          <span style={{ fontSize: 11, fontWeight: 700, color: "#6b7280" }}>Betroffene Bereiche: </span>
+                          <span style={{ fontSize: 12, color: "#374151" }}>{areas.join(" · ")}</span>
+                        </div>
+                      )}
+
+                      {/* Risks */}
+                      {risks.length > 0 && (
+                        <ul style={{ margin: "0 0 8px", padding: "0 0 0 18px", fontSize: 12, color: "#92400e" }}>
+                          {risks.map((r, i) => (
+                            <li key={i}>{r}</li>
+                          ))}
+                        </ul>
+                      )}
+
+                      {/* Buttons */}
+                      <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                        <button
+                          style={qBtn(false)}
+                          onClick={() => handleEvaluateNote(item.id)}
+                          disabled={busy}
+                        >
+                          {evaluating ? "Bewerte…" : item.status === "queued" ? "Evaluate Queue" : "Re-Evaluate"}
+                        </button>
+                        <button
+                          style={qBtn(false)}
+                          onClick={() => handleApplyCurrent(item.id)}
+                          disabled={busy}
+                        >
+                          Apply To Current Build
+                        </button>
+                        <button
+                          style={qBtn(false)}
+                          onClick={() => handleApplyAfter(item.id)}
+                          disabled={busy}
+                        >
+                          Apply After Build
+                        </button>
+                        <button
+                          style={qBtn(false)}
+                          onClick={() => handleConvertNote(item.id)}
+                          disabled={busy}
+                        >
+                          Create New Task
+                        </button>
+                        <button
+                          style={qBtn(true)}
+                          onClick={() => handleDiscardQueue(item.id)}
+                          disabled={busy}
+                        >
+                          Discard
+                        </button>
+                      </div>
                     </div>
-                    <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                      <button style={queueActionBtnStyle} disabled title="Phase 4">
-                        Apply To Current Build
-                      </button>
-                      <button style={queueActionBtnStyle} disabled title="Phase 4">
-                        Apply After Build
-                      </button>
-                      <button style={queueActionBtnStyle} disabled title="Phase 4">
-                        Create New Task
-                      </button>
-                      <button
-                        style={{
-                          ...queueActionBtnStyle,
-                          color: "#991b1b",
-                          borderColor: "#fca5a5",
-                          cursor: "pointer",
-                          opacity: 1,
-                        }}
-                        onClick={() => handleDiscardQueue(item.id)}
-                      >
-                        Discard
-                      </button>
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </section>
@@ -1585,30 +1813,6 @@ const queueItemStyle: React.CSSProperties = {
   background: "#f9fafb",
   border: "1px solid #e5e7eb",
   borderRadius: 8,
-};
-
-const placeholderBadgeStyle: React.CSSProperties = {
-  display: "inline-block",
-  padding: "2px 8px",
-  background: "#f3f4f6",
-  color: "#6b7280",
-  border: "1px solid #e5e7eb",
-  borderRadius: 12,
-  fontSize: 11,
-  fontWeight: 500,
-};
-
-const queueActionBtnStyle: React.CSSProperties = {
-  padding: "4px 10px",
-  background: "#fff",
-  color: "#374151",
-  border: "1px solid #d1d5db",
-  borderRadius: 5,
-  fontSize: 12,
-  fontWeight: 500,
-  fontFamily: FONT,
-  opacity: 0.6,
-  cursor: "not-allowed",
 };
 
 // Right panel

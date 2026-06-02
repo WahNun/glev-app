@@ -21,6 +21,7 @@ import { isAdminAuthed } from "@/lib/adminAuth";
 import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
 import {
   TASK_COLUMNS,
+  QUEUE_COLUMNS,
   FILTER_STATUSES,
   type DevTask,
   type DevMessage,
@@ -293,9 +294,7 @@ export async function listQueueNotes(
   const sb = getSupabaseAdmin();
   const { data, error } = await sb
     .from("dev_cockpit_prompt_queue")
-    .select(
-      "id, task_id, content, status, impact_level, recommendation, evaluation_text, created_at, updated_at",
-    )
+    .select(QUEUE_COLUMNS)
     .eq("task_id", taskId)
     .order("created_at", { ascending: false });
 
@@ -317,9 +316,7 @@ export async function addQueueNote(
   const { data, error } = await sb
     .from("dev_cockpit_prompt_queue")
     .insert({ task_id: taskId, content: text, status: "queued" })
-    .select(
-      "id, task_id, content, status, impact_level, recommendation, evaluation_text, created_at, updated_at",
-    )
+    .select(QUEUE_COLUMNS)
     .single();
 
   if (error) return fail(error.message);
@@ -335,7 +332,7 @@ export async function updateQueueNote(
   if (!id) return fail("missing-id");
 
   const valid: QueueStatus[] = [
-    "queued", "evaluated", "applied", "discarded", "converted_to_task",
+    "queued", "evaluated", "applied", "after_build_pending", "discarded", "converted_to_task",
   ];
   const update: Record<string, unknown> = {};
   if (typeof patch.content === "string") update.content = patch.content;
@@ -350,9 +347,7 @@ export async function updateQueueNote(
     .from("dev_cockpit_prompt_queue")
     .update(update)
     .eq("id", id)
-    .select(
-      "id, task_id, content, status, impact_level, recommendation, evaluation_text, created_at, updated_at",
-    )
+    .select(QUEUE_COLUMNS)
     .single();
 
   if (error) return fail(error.message);
@@ -364,6 +359,75 @@ export async function discardQueueNote(
   id: string,
 ): Promise<Result<DevQueueNote>> {
   return updateQueueNote(id, { status: "discarded" });
+}
+
+// ── Queue note apply / convert (Phase 4 — no build logic yet) ────────────────
+
+/**
+ * Apply To Current Build — mark the note approved to be folded into the current
+ * build. NO build runs yet; a later build phase can pick up rows where
+ * `approved_for_current_build = true`. Sets status='applied'.
+ */
+export async function applyQueueNoteToCurrentBuild(
+  id: string,
+): Promise<Result<DevQueueNote>> {
+  if (!(await requireAdmin())) return fail("auth");
+  if (!id) return fail("missing-id");
+
+  const sb = getSupabaseAdmin();
+  const { data, error } = await sb
+    .from("dev_cockpit_prompt_queue")
+    .update({ status: "applied", approved_for_current_build: true })
+    .eq("id", id)
+    .select(QUEUE_COLUMNS)
+    .single();
+
+  if (error) return fail(error.message);
+  return { ok: true, data: data as DevQueueNote };
+}
+
+/**
+ * Apply After Build — defer the note to a later follow-up build. Sets
+ * status='after_build_pending' so a future build phase can find it.
+ */
+export async function applyQueueNoteAfterBuild(
+  id: string,
+): Promise<Result<DevQueueNote>> {
+  return updateQueueNote(id, { status: "after_build_pending" });
+}
+
+/**
+ * Create New Task from a queue note: title + prompt from the note, status
+ * 'draft'; the note becomes status='converted_to_task'. No build logic.
+ */
+export async function convertQueueNoteToTask(
+  id: string,
+): Promise<Result<{ task: DevTask; note: DevQueueNote }>> {
+  if (!(await requireAdmin())) return fail("auth");
+  if (!id) return fail("missing-id");
+
+  const sb = getSupabaseAdmin();
+
+  const { data: note, error: ne } = await sb
+    .from("dev_cockpit_prompt_queue")
+    .select(QUEUE_COLUMNS)
+    .eq("id", id)
+    .single();
+  if (ne || !note) return fail(ne?.message ?? "not-found");
+  const n = note as DevQueueNote;
+
+  const created = await createTask({ prompt: n.content });
+  if (!created.ok) return created;
+
+  const { data: updated, error: ue } = await sb
+    .from("dev_cockpit_prompt_queue")
+    .update({ status: "converted_to_task" })
+    .eq("id", id)
+    .select(QUEUE_COLUMNS)
+    .single();
+  if (ue) return fail(ue.message);
+
+  return { ok: true, data: { task: created.data, note: updated as DevQueueNote } };
 }
 
 // ── Attachments (metadata only — no real upload in Phase 2) ──────────────────

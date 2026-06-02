@@ -69,6 +69,7 @@ export type QueueStatus =
   | "queued"
   | "evaluated"
   | "applied"
+  | "after_build_pending" // Phase 4: queued for a later follow-up build
   | "discarded"
   | "converted_to_task";
 
@@ -88,9 +89,26 @@ export interface DevQueueNote {
   impact_level: ImpactLevel | null;
   recommendation: Recommendation | null;
   evaluation_text: string | null;
+  // Phase 4 — structured evaluation extras + apply marker.
+  affected_areas: unknown[];
+  risks: unknown[];
+  approved_for_current_build: boolean;
   created_at: string;
   updated_at: string;
 }
+
+/** Structured Mistral evaluation of a single queue note (Phase 4). */
+export interface QueueEvaluation {
+  impact_level: ImpactLevel;
+  recommendation: Recommendation;
+  evaluation_text: string;
+  affected_areas: string[];
+  risks: string[];
+}
+
+// Column list used by every queue-note SELECT so the shape always matches DevQueueNote.
+export const QUEUE_COLUMNS =
+  "id, task_id, content, status, impact_level, recommendation, evaluation_text, affected_areas, risks, approved_for_current_build, created_at, updated_at";
 
 // ── Build Plan (Phase 3 — Mistral analysis result) ──────────────────────────
 
