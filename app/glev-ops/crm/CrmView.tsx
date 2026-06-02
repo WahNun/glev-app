@@ -51,6 +51,7 @@ export type CrmBetaRow = {
   stripe_session_id: string | null;
   created_at: string | null;
   fulfilled_at: string | null;
+  user_id?: string;
 };
 
 export type CrmProRow = {
@@ -62,6 +63,7 @@ export type CrmProRow = {
   current_period_end: string | null;
   stripe_session_id: string | null;
   created_at: string | null;
+  user_id?: string;
 };
 
 type Tab = "alle" | "trial" | "beta" | "pro";
@@ -715,7 +717,7 @@ function BetaTab({ rows }: { rows: CrmBetaRow[] }) {
               <tr key={r.id} style={{ borderTop: "1px solid #eee" }}>
                 <Td>{r.full_name ?? "—"}</Td>
                 <Td>
-                  <Link href={`/glev-ops/users?q=${encodeURIComponent(r.email)}`} style={emailLink}>{r.email}</Link>
+                  <Link href={r.user_id ? `/glev-ops/users/${r.user_id}` : `/glev-ops/users?q=${encodeURIComponent(r.email)}`} style={emailLink}>{r.email}</Link>
                 </Td>
                 <Td>{r.status ?? "—"}</Td>
                 <Td>{fmtAmount(r.amount_cents, r.currency)}</Td>
@@ -724,7 +726,7 @@ function BetaTab({ rows }: { rows: CrmBetaRow[] }) {
                 <Td>{fmtDateTime(r.fulfilled_at)}</Td>
                 <Td><CaseStatusCell rowKey={`beta-${r.id}`} /></Td>
                 <Td>
-                  <Link href={`/glev-ops/users?q=${encodeURIComponent(r.email)}`} style={openBtn}>Öffnen →</Link>
+                  <Link href={r.user_id ? `/glev-ops/users/${r.user_id}` : `/glev-ops/users?q=${encodeURIComponent(r.email)}`} style={openBtn}>Öffnen →</Link>
                 </Td>
               </tr>
             ))}
@@ -781,7 +783,7 @@ function ProTab({ rows }: { rows: CrmProRow[] }) {
               <tr key={r.id} style={{ borderTop: "1px solid #eee" }}>
                 <Td>{r.full_name ?? "—"}</Td>
                 <Td>
-                  <Link href={`/glev-ops/users?q=${encodeURIComponent(r.email)}`} style={emailLink}>{r.email}</Link>
+                  <Link href={r.user_id ? `/glev-ops/users/${r.user_id}` : `/glev-ops/users?q=${encodeURIComponent(r.email)}`} style={emailLink}>{r.email}</Link>
                 </Td>
                 <Td>{r.status ?? "—"}</Td>
                 <Td>{fmtDateTime(r.trial_ends_at)}</Td>
@@ -790,7 +792,7 @@ function ProTab({ rows }: { rows: CrmProRow[] }) {
                 <Td>{fmtDateTime(r.created_at)}</Td>
                 <Td><CaseStatusCell rowKey={`pro-${r.id}`} /></Td>
                 <Td>
-                  <Link href={`/glev-ops/users?q=${encodeURIComponent(r.email)}`} style={openBtn}>Öffnen →</Link>
+                  <Link href={r.user_id ? `/glev-ops/users/${r.user_id}` : `/glev-ops/users?q=${encodeURIComponent(r.email)}`} style={openBtn}>Öffnen →</Link>
                 </Td>
               </tr>
             ))}

@@ -164,6 +164,7 @@ export default async function CrmPage({
   const betaByEmail = new Map(betas.map((b) => [b.email.toLowerCase(), b]));
 
   const authUserMap = new Map(authUsers.map((u) => [u.id, u]));
+  const authUserByEmail = new Map(authUsers.map((u) => [u.email.toLowerCase(), u]));
 
   const clickMap = new Map<string, { sms: boolean; email: boolean }>();
   for (const row of clicksRes.data ?? []) {
@@ -256,6 +257,7 @@ export default async function CrmPage({
     stripe_session_id: r.stripe_session_id,
     created_at: r.created_at,
     fulfilled_at: r.fulfilled_at,
+    user_id: authUserByEmail.get(r.email.toLowerCase())?.id,
   }));
 
   const proRows: CrmProRow[] = pros.map((r) => ({
@@ -267,6 +269,7 @@ export default async function CrmPage({
     current_period_end: r.current_period_end,
     stripe_session_id: r.stripe_session_id,
     created_at: r.created_at,
+    user_id: authUserByEmail.get(r.email.toLowerCase())?.id,
   }));
 
   const authErr = authUsersRes.error?.message ?? null;
