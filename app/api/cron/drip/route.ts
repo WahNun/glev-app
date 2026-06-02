@@ -60,11 +60,14 @@ async function scheduleReEngagementBatch(
     now.getTime() - 48 * 60 * 60 * 1000,
   ).toISOString();
 
+  // Nur Free-Trial-User: trial_end_at gesetzt + in der Zukunft + plan=free (oder null)
+  // + seit ≥48h nicht eingeloggt (last_seen_at älter als 48h oder null)
   const { data: inactiveProfiles, error: profileErr } = await admin
     .from("profiles")
     .select("user_id, language")
     .not("trial_end_at", "is", null)
     .gt("trial_end_at", now.toISOString())
+    .or("plan.is.null,plan.eq.free")
     .or(`last_seen_at.is.null,last_seen_at.lt.${fortyEightHoursAgo}`);
 
   if (profileErr || !inactiveProfiles || inactiveProfiles.length === 0) {
@@ -77,12 +80,26 @@ async function scheduleReEngagementBatch(
     (authData?.users ?? []).map((u) => [u.id, u]),
   );
 
+  // Unsubscribed-Adressen vorab laden (Batch-Lookup über alle Kandidaten)
+  const candidateEmails = (inactiveProfiles as Array<{ user_id: string; language: string | null }>)
+    .map((p) => userMap.get(p.user_id)?.email)
+    .filter((e): e is string => !!e);
+
+  const { data: unsubRows } = await admin
+    .from("email_drip_unsubscribes")
+    .select("email")
+    .in("email", candidateEmails);
+  const unsubscribed = new Set((unsubRows ?? []).map((r) => r.email as string));
+
   let scheduled = 0;
   for (const profile of inactiveProfiles) {
     const user = userMap.get(profile.user_id as string);
     if (!user?.email) continue;
 
-    // Bereits geplant?
+    // Abgemeldete Adressen überspringen
+    if (unsubscribed.has(user.email)) continue;
+
+    // Bereits geplant oder bereits versendet? — kein Duplikat einplanen
     const { data: existing } = await admin
       .from("email_drip_schedule")
       .select("id")

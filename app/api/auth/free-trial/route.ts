@@ -59,14 +59,18 @@ export async function POST(req: NextRequest) {
 
     const admin = getSupabaseAdmin();
 
-    // Set trial_end_at = 7 days from now
+    // Set trial_start_at = now, trial_end_at = 7 days from now
     const trialStartAt = new Date();
     const trialEndAt = new Date(trialStartAt.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString();
 
     const { error } = await admin
       .from("profiles")
       .upsert(
-        { user_id: user.id, trial_end_at: trialEndAt },
+        {
+          user_id: user.id,
+          trial_start_at: trialStartAt.toISOString(),
+          trial_end_at: trialEndAt,
+        },
         { onConflict: "user_id" }
       );
 

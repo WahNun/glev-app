@@ -60,6 +60,11 @@ function trialWelcomeHtmlDe(
               Dein Testzeitraum endet am <strong style="color:#fff;">${trialEndDisplay}</strong>.
             </p>
 
+            <p style="margin:0 0 20px;font-size:15px;line-height:1.7;color:#A1A1AA;">
+              Kleines Dankeschön: Wer bis zum <strong style="color:#fff;">01. Juli 2026</strong> eine Zahlungsmethode hinterlegt, behält den Zugang danach noch eine Weile kostenlos — ganz ohne Bindung.
+              Kein Druck, einfach nur eine kleine Bonuszeit für die Early Adopters.
+            </p>
+
             <div style="background:rgba(79,110,247,0.12);border:1px solid rgba(79,110,247,0.3);border-radius:10px;padding:16px 20px;margin-bottom:24px;">
               <p style="margin:0;font-size:12px;color:rgba(255,255,255,0.45);text-transform:uppercase;letter-spacing:0.08em;font-weight:600;">Was dich erwartet</p>
               <table width="100%" cellpadding="0" cellspacing="0" style="margin-top:12px;">
@@ -140,6 +145,11 @@ function trialWelcomeHtmlEn(
             <p style="margin:0 0 20px;font-size:15px;line-height:1.7;color:#A1A1AA;">
               All Pro features are yours to explore — no credit card needed.
               Your trial ends on <strong style="color:#fff;">${trialEndDisplay}</strong>.
+            </p>
+
+            <p style="margin:0 0 20px;font-size:15px;line-height:1.7;color:#A1A1AA;">
+              Small thank-you: anyone who adds a payment method by <strong style="color:#fff;">July 1, 2026</strong> keeps access free for a while longer — no commitment.
+              Just a little bonus window for early adopters.
             </p>
 
             <div style="background:rgba(79,110,247,0.12);border:1px solid rgba(79,110,247,0.3);border-radius:10px;padding:16px 20px;margin-bottom:24px;">

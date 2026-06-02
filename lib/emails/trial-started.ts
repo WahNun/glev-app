@@ -1,9 +1,11 @@
 /**
  * HTML body for the free-trial-started confirmation email.
  *
- * Sent immediately after a user signs up via /signup (card-free flow).
- * The POST /api/auth/free-trial route calls this stub; a follow-up task
- * will wire the real Resend send.
+ * ⚠️  UNGENUTZTER STUB — diese Datei wird aktuell nicht über den Outbox-
+ * Flow verschickt. Die tatsächliche Trial-Welcome-Email läuft über
+ * `lib/emails/trial-welcome.ts` (Outbox-Template "trial-welcome").
+ * Dieser Stub kann aktiviert werden, falls ein zweiter Send-Kanal
+ * (z. B. ein separater Transaktions-Trigger) benötigt wird.
  *
  * Key framing rules (Compliance — see replit.md):
  *   - No dose recommendations, no clinical instructions
@@ -94,7 +96,7 @@ function trialStartedHtmlDe(
               </p>
 
               <!-- Trial end date badge -->
-              <table cellpadding="0" cellspacing="0" style="margin:0 0 24px;width:100%;">
+              <table cellpadding="0" cellspacing="0" style="margin:0 0 16px;width:100%;">
                 <tr>
                   <td style="background:#f0f4ff;border-radius:8px;border-left:4px solid #4F6EF7;padding:14px 18px;">
                     <p style="margin:0;font-size:13px;color:#6b7280;line-height:1.5;">
@@ -106,6 +108,11 @@ function trialStartedHtmlDe(
                   </td>
                 </tr>
               </table>
+
+              <p style="margin:0 0 16px;font-size:15px;line-height:1.7;color:#374151;">
+                Kleines Dankeschön: Wer bis zum <strong>01. Juli 2026</strong> eine Zahlungsmethode hinterlegt, behält den Zugang danach noch eine Weile kostenlos — ganz ohne Bindung.
+                Kein Druck, einfach nur eine kleine Bonuszeit für die Early Adopters.
+              </p>
 
               <p style="margin:0 0 8px;font-size:14px;font-weight:600;color:#0f172a;">Was du in diesen 7 Tagen ausprobieren kannst:</p>
               <ul style="margin:0 0 24px;padding-left:20px;font-size:15px;line-height:1.8;color:#374151;">
@@ -203,7 +210,7 @@ function trialStartedHtmlEn(
               </p>
 
               <!-- Trial end date badge -->
-              <table cellpadding="0" cellspacing="0" style="margin:0 0 24px;width:100%;">
+              <table cellpadding="0" cellspacing="0" style="margin:0 0 16px;width:100%;">
                 <tr>
                   <td style="background:#f0f4ff;border-radius:8px;border-left:4px solid #4F6EF7;padding:14px 18px;">
                     <p style="margin:0;font-size:13px;color:#6b7280;line-height:1.5;">
@@ -215,6 +222,11 @@ function trialStartedHtmlEn(
                   </td>
                 </tr>
               </table>
+
+              <p style="margin:0 0 16px;font-size:15px;line-height:1.7;color:#374151;">
+                Small thank-you: anyone who adds a payment method by <strong>July 1, 2026</strong> keeps access free for a while longer — no commitment.
+                Just a little bonus window for early adopters.
+              </p>
 
               <p style="margin:0 0 8px;font-size:14px;font-weight:600;color:#0f172a;">What you can try in these 7 days:</p>
               <ul style="margin:0 0 24px;padding-left:20px;font-size:15px;line-height:1.8;color:#374151;">
