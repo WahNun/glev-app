@@ -29,16 +29,43 @@ export const DEFAULT_TARGET_BG = 110;
  *
  * Key = canonical label shown in Settings UI.
  * Value = typical action window in hours (rounded conservatively).
+ *
+ * Toujeo: dosed every 24 h despite pharmacological tail up to 36 h —
+ * 24 h matches the user-facing injection interval and makes the ring
+ * deplete by the time the next dose is due.
+ * Levemir: SmPC range 12–18 h; 16 h is the midpoint used as the
+ * in-app default.
  */
 export const BASAL_WINDOW_PRESETS: Record<string, number> = {
   "Lantus (Glargin U100)":   24,
-  "Toujeo (Glargin U300)":   36,
+  "Toujeo (Glargin U300)":   24,
   "Tresiba (Degludec)":      42,
-  "Levemir (Detemir)":       20,
+  "Levemir (Detemir)":       16,
   "Basaglar (Glargin U100)": 24,
   "Abasaglar (Glargin)":     24,
   "Semglee (Glargin)":       24,
 };
+
+/**
+ * Structured list of known basal insulin brands for the Settings UI.
+ *
+ * `windowH` is the default action-window hours applied automatically
+ * when the user selects this brand in Settings → Insulin → Basal brand.
+ * Users can still override the value with the manual slider afterwards.
+ *
+ * Values mirror BASAL_WINDOW_PRESETS — kept in sync here so the
+ * Settings page can render preset cards (name + mfr) without building
+ * a parallel array from the Record entries.
+ */
+export const BASAL_BRAND_PRESETS: Array<{ name: string; mfr: string; windowH: number }> = [
+  { name: "Lantus (Glargin U100)",   mfr: "Sanofi",       windowH: 24 },
+  { name: "Toujeo (Glargin U300)",   mfr: "Sanofi",       windowH: 24 },
+  { name: "Tresiba (Degludec)",      mfr: "Novo Nordisk",  windowH: 42 },
+  { name: "Levemir (Detemir)",       mfr: "Novo Nordisk",  windowH: 16 },
+  { name: "Basaglar (Glargin U100)", mfr: "Eli Lilly",    windowH: 24 },
+  { name: "Abasaglar (Glargin)",     mfr: "Eli Lilly",    windowH: 24 },
+  { name: "Semglee (Glargin)",       mfr: "Mylan/Viatris", windowH: 24 },
+];
 
 /** Default basal action window in hours (Lantus/Glargin U100 = 24 h). */
 export const DEFAULT_BASAL_WINDOW_H = 24;
@@ -68,10 +95,13 @@ export const BASAL_PK_PEAK_FRACTION = 0.60;
  *   • Tresiba (Degludec, 42 h)  — extremely flat ultra-long profile; the dose
  *     stays at near-full effectiveness for ~78 % of its window before the
  *     visible tail begins.
- *   • Toujeo (Glargin U300, 36 h) — slightly more extended plateau than U100
- *     due to slower subcutaneous depot dissolution; ~65 %.
- *   • Levemir (Detemir, 20 h) — mild peak around hours 6–10 followed by a
- *     longer tail; plateau covers only ~50 % of the window.
+ *   • Toujeo (Glargin U300, 24 h window in-app) — slightly more extended
+ *     plateau than U100; ~65 % of the 24 h injection interval. Note: the
+ *     pharmacological tail extends to ~36 h, but the in-app window matches
+ *     the typical once-daily dosing interval so the ring empties at the
+ *     right time for the user.
+ *   • Levemir (Detemir, 16 h window) — mild peak around hours 6–10 followed
+ *     by a longer tail; plateau covers only ~50 % of the window.
  *   • All Glargin U100 variants (Lantus, Basaglar, Abasaglar, Semglee) — share
  *     the same flat-plateau profile; ~60 % (= global default).
  *

@@ -1365,6 +1365,8 @@
     "insulin_brand_bolus_placeholder": "z. B. NovoRapid, Fiasp, Humalog",
     "insulin_brand_basal_placeholder": "z. B. Tresiba, Lantus, Levemir",
     "insulin_brand_body": "Dein Markenname wird im IOB-Footer angezeigt und im Log-Formular vorausgefüllt.",
+    "insulin_brand_basal_body": "Wähle deine Basalinsulinmarke — die passende Wirkdauer wird automatisch voreingestellt. Du kannst sie danach noch anpassen.",
+    "basal_window_preset_duration": "{h} h Wirkdauer",
     "insulin_brand_hint": "Optional · max. 40 Zeichen",
     "insulin_brand_preset_ultra_rapid": "Ultra-schnell",
     "insulin_brand_or_manual": "Oder manuell eingeben",

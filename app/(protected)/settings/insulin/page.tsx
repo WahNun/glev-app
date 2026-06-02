@@ -16,7 +16,7 @@ import { parseDbDate, localeToBcp47 } from "@/lib/time";
 import { fetchIcrSchedule } from "@/lib/icrSchedule";
 import type { InsulinType } from "@/lib/iob";
 import type { AdjustmentRecord } from "@/lib/engine/adjustment";
-import { BASAL_WINDOW_PRESETS, DEFAULT_BASAL_WINDOW_H } from "@/lib/engine/constants";
+import { BASAL_WINDOW_PRESETS, BASAL_BRAND_PRESETS, DEFAULT_BASAL_WINDOW_H } from "@/lib/engine/constants";
 import SnapSlider from "@/components/log/SnapSlider";
 import BottomSheet from "@/components/BottomSheet";
 import { SettingsSection, SettingsRow } from "@/components/SettingsRow";
@@ -357,11 +357,25 @@ export default function InsulinSettingsPage() {
     insulinBrandBasal: {
       title: t("sheet_insulin_brand_basal_title"),
       body: (
-        <div>
-          <p style={{ fontSize: 13, color: "var(--text-dim)", lineHeight: 1.5, marginBottom: 12 }}>{t("insulin_brand_body")}</p>
-          <label style={{ fontSize: 13, color: "var(--text-dim)", display: "block", marginBottom: 6 }}>{t("row_insulin_brand_basal")}</label>
-          <input style={inp} type="text" maxLength={40} placeholder={t("insulin_brand_basal_placeholder")} value={settings.insulinBrandBasal} onChange={(e) => upd("insulinBrandBasal", e.target.value.slice(0, 40))} />
-          <div style={{ fontSize: 13, color: "var(--text-ghost)", marginTop: 6 }}>{t("insulin_brand_hint")}</div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          <p style={{ fontSize: 13, color: "var(--text-dim)", lineHeight: 1.5, margin: 0 }}>{t("insulin_brand_basal_body")}</p>
+          {BASAL_BRAND_PRESETS.map((preset) => {
+            const isSel = settings.insulinBrandBasal === preset.name;
+            return (
+              <button key={preset.name} type="button" onClick={() => {
+                insulinTouchedRef.current = true;
+                setSettings((prev) => ({ ...prev, insulinBrandBasal: preset.name, basalActionWindowH: preset.windowH }));
+              }} style={{ width: "100%", padding: "12px 14px", borderRadius: 12, border: `2px solid ${isSel ? ACCENT : BORDER}`, background: isSel ? `${ACCENT}14` : "var(--surface-soft)", textAlign: "left", cursor: "pointer", display: "flex", flexDirection: "column", gap: 3, transition: "border-color 150ms ease, background 150ms ease" }}>
+                <div style={{ fontSize: 15, fontWeight: 700, color: isSel ? ACCENT : "var(--text-strong)" }}>{preset.name}</div>
+                <div style={{ fontSize: 12, color: isSel ? ACCENT : "var(--text-faint)" }}>{preset.mfr} · {t("basal_window_preset_duration", { h: preset.windowH })}</div>
+              </button>
+            );
+          })}
+          <div style={{ borderTop: `1px solid ${BORDER}`, paddingTop: 10 }}>
+            <label style={{ fontSize: 13, color: "var(--text-dim)", display: "block", marginBottom: 6 }}>{t("insulin_brand_or_manual")}</label>
+            <input style={inp} type="text" maxLength={40} placeholder={t("insulin_brand_basal_placeholder")} value={settings.insulinBrandBasal} onChange={(e) => upd("insulinBrandBasal", e.target.value.slice(0, 40))} />
+            <div style={{ fontSize: 13, color: "var(--text-ghost)", marginTop: 6 }}>{t("insulin_brand_hint")}</div>
+          </div>
         </div>
       ),
       footer: <SaveFooter onSave={saveInsulinBrandsAction} />,
@@ -440,7 +454,9 @@ export default function InsulinSettingsPage() {
         <SettingsRow iconColor={ACCENT} icon={<svg {...iconProps}><path d="M18 6L6 18" /><path d="M14 4l6 6" /><path d="M4 14l6 6" /></svg>} label={t("row_insulin_brand_bolus_2")} subtitle={settings.insulinBrandBolus2.trim() || t("subtitle_no_brand")} ariaLabel={t("row_open_aria", { label: t("row_insulin_brand_bolus_2") })} onClick={() => openSheetWith("insulinBrandBolus2")} />
         <SubgroupLabel label={t("group_insulin_basal")} />
         <SettingsRow iconColor={ACCENT} icon={<svg {...iconProps}><path d="M18 6L6 18" /><path d="M14 4l6 6" /><path d="M4 14l6 6" /></svg>} label={t("row_insulin_brand_basal")} subtitle={settings.insulinBrandBasal.trim() || t("subtitle_no_brand")} ariaLabel={t("row_open_aria", { label: t("row_insulin_brand_basal") })} onClick={() => openSheetWith("insulinBrandBasal")} />
-        <SettingsRow iconColor={ACCENT} icon={<svg {...iconProps}><path d="M18 6L6 18" /><path d="M14 4l6 6" /><path d="M4 14l6 6" /></svg>} label={t("row_basal_window")} subtitle={settings.basalActionWindowH !== undefined ? t("subtitle_basal_window_h", { h: settings.basalActionWindowH }) : t("subtitle_basal_window_default")} ariaLabel={t("row_open_aria", { label: t("row_basal_window") })} onClick={() => openSheetWith("basalWindow")} />
+        {settings.insulinBrandBasal.trim() && (
+          <SettingsRow iconColor={ACCENT} icon={<svg {...iconProps}><path d="M18 6L6 18" /><path d="M14 4l6 6" /><path d="M4 14l6 6" /></svg>} label={t("row_basal_window")} subtitle={settings.basalActionWindowH !== undefined ? t("subtitle_basal_window_h", { h: settings.basalActionWindowH }) : t("subtitle_basal_window_default")} ariaLabel={t("row_open_aria", { label: t("row_basal_window") })} onClick={() => openSheetWith("basalWindow")} />
+        )}
         <SubgroupLabel label={t("group_insulin_history")} />
         <SettingsRow iconColor={ACCENT} icon={<svg {...iconProps}><path d="M18 6L6 18" /><path d="M14 4l6 6" /><path d="M4 14l6 6" /></svg>} label={t("row_adjustment_history")} subtitle={adjustmentHistorySub} ariaLabel={t("row_open_aria", { label: t("row_adjustment_history") })} onClick={() => openSheetWith("adjustmentHistory")} />
       </SettingsSection>

@@ -1365,6 +1365,8 @@
     "insulin_brand_bolus_placeholder": "e.g. NovoRapid, Fiasp, Humalog",
     "insulin_brand_basal_placeholder": "e.g. Tresiba, Lantus, Levemir",
     "insulin_brand_body": "Your brand name is shown in the IOB footer and pre-fills the insulin log form.",
+    "insulin_brand_basal_body": "Choose your basal insulin brand — the matching action window is applied automatically. You can still fine-tune it afterwards.",
+    "basal_window_preset_duration": "{h} h action window",
     "insulin_brand_hint": "Optional · max. 40 characters",
     "insulin_brand_preset_ultra_rapid": "Ultra-rapid",
     "insulin_brand_or_manual": "Or enter manually",
