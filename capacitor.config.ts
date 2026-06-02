@@ -21,7 +21,7 @@ const config: CapacitorConfig = {
   appName: "Glev",
   webDir: "www",
   server: {
-    url: "https://glev.app",
+    url: "https://glev.app/dashboard",
     cleartext: false,
     androidScheme: "https",
   },
