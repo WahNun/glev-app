@@ -65,6 +65,16 @@ der **unabhängig vom Modelloutput** greift (nach dem Mistral-Call als Post-Proc
 Bewusst eng: ein Verb **ohne** sensibles Target (z. B. „Delete-Button für Notizen")
 blockt nicht.
 
+**Scope-Fix (2026-06-02):** Der Gate scannt jetzt **ausschließlich user-authored
+Current-Task-Inhalt** — `title` + `prompt` + nur die **`user`**-Messages dieser
+task_id + queued notes dieser task_id. **Assistant-/System-Outputs werden nie
+gescannt** (sie enthalten alte Analysen / bereits injizierte Safety-Fragen mit
+„Nutzer/Zahlung/Löschung" bzw. Pläne, die legitim „delete users" erwähnen).
+Vorher trippte das beim Re-Analyze den Gate erneut und leakte Safety-Fragen in
+harmlose Tasks (Self-Contamination). Nie wird Kontext anderer Tasks geprüft;
+`plan_text` fließt nicht in die Analyse. `runSafetyGateSelfTest()` deckt den
+Rollen-/Berechtigungs-Fall (nicht destruktiv) zusätzlich ab.
+
 ### Infrastruktur (2026-06-02): separate AI-Keys + Usage-Tracking-Prep
 
 Dev-Cockpit-AI nutzt jetzt einen **eigenen Credential-Bucket**, getrennt von der

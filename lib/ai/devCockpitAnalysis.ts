@@ -241,6 +241,14 @@ export function runSafetyGateSelfTest(): Array<{
     { input: "Lösche alle Nutzer ohne aktive Zahlung aus der Datenbank", expectedBlocked: true },
     { input: "Delete all inactive users from the database", expectedBlocked: true },
     { input: "Füge einen Delete-Button für einzelne Notizen hinzu", expectedBlocked: false },
+    // Roles/permissions task (user-authored) must NOT be flagged — "User" is a
+    // target but there is no destructive verb. (The gate scopes to user input,
+    // so a plan/assistant message mentioning "delete users" cannot trip it.)
+    {
+      input:
+        "Baue ein Rollen- und Berechtigungssystem.\nNur zwei Rollen: Admin und User. Keine Editor/Viewer-Rollen. Admin darf alles im glev-ops Bereich, User darf nur normale App-Funktionen nutzen.",
+      expectedBlocked: false,
+    },
   ];
   return cases.map((c) => {
     const blocked = isTaskDestructive(c.input);
@@ -333,15 +341,20 @@ export async function runDevCockpitAnalysis(input: {
   }
 
   const plan = normalizePlan(parsed);
-  // Hard safety gate: scan title + prompt + ENTIRE chat history + queued notes.
-  // Destructive tasks can never come back ready-to-build, regardless of model.
-  const taskText = [
+  // Hard safety gate — scope is the CURRENT task's USER-AUTHORED input ONLY:
+  // title + prompt + this task's `user` messages + this task's queued notes.
+  // We deliberately EXCLUDE assistant/system messages: those contain prior
+  // analysis output (incl. previously-injected safety questions that mention
+  // "Nutzer/Zahlung/Löschung", or a plan that legitimately discusses "delete
+  // users"). Scanning them would self-trigger the gate on Re-Analyze and leak
+  // safety questions into non-destructive tasks. Never scans other tasks.
+  const userAuthoredText = [
     input.title,
     input.prompt,
-    ...input.history.map((h) => h.content),
+    ...input.history.filter((h) => h.role === "user").map((h) => h.content),
     ...input.queuedNotes,
   ].join("\n");
-  return enforceSafetyBlock(plan, taskText);
+  return enforceSafetyBlock(plan, userAuthoredText);
 }
 
 /**
