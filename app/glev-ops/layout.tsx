@@ -2,6 +2,7 @@ import { isAdminAuthed } from "@/lib/adminAuth";
 import AdminNav from "./_components/AdminNav";
 
 export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
 /**
  * Shared chrome for every /admin/* page (Task #171).

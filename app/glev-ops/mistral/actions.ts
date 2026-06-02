@@ -12,8 +12,6 @@ import {
   type TtsConfig,
 } from "./types";
 
-export type { AgentPromptConfig, PromptVersion, StylePrefixConfig, TtsConfig };
-
 const PROMPT_KEY = "glev_ai_default";
 
 export async function getAgentPrompt(): Promise<AgentPromptConfig | null> {

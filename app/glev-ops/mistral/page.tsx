@@ -1,5 +1,8 @@
 "use client";
 
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
 import { useEffect, useRef, useState, useTransition } from "react";
 import {
   getTtsConfig,
@@ -78,7 +81,7 @@ export default function MistralTTSPage() {
     setLoading(true);
     getTtsConfig()
       .then(c => { setCfg(c); })
-      .catch(() => {})
+      .catch((e: unknown) => { setMsg({ type: "err", text: `Fehler: ${String(e)}` }); })
       .finally(() => setLoading(false));
   };
 
