@@ -418,3 +418,210 @@ test.describe("SymptomForm — chip and severity radiogroup interactions", () =>
     }
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Portrait dashboard — 🩸 chip in the CurrentDayGlucoseCard hero
+// ═══════════════════════════════════════════════════════════════════════════
+//
+// The landscape overlay has automated coverage for the 🩸 chip via
+// landscape-glucose-overlay.spec.ts (describe block 3). The portrait
+// side — CurrentDayGlucoseCard (dashboard hero) — applies the same
+// 5-minute override logic but previously had no equivalent test.
+//
+// Both tests use Playwright route interception so no real Supabase
+// credentials are consumed and the suite is hermetic.
+//
+// ── Test 11: Fresh fingerstick shows 🩸 chip ─────────────────────────────
+// A fingerstick logged 2 minutes ago is within FS_OVERRIDE_WINDOW_MS
+// (5 min). `fsOverride` is set → the chip renders next to the mg/dL
+// label and the hero number shows the FS value, not the CGM value.
+//
+// ── Test 12: 90-min-old fingerstick — no chip, square dot on sparkline ──
+// A reading 90 minutes old is outside the override window, so the chip
+// must NOT appear. However, 90 min is well inside the 4–14h chart window,
+// so RollingChart renders it as a halo circle (fill-opacity="0.15").
+// CrosshairOverlay only renders its own halo when a pointer interaction
+// sets `active` — it returns null otherwise. Without any mouse/touch
+// event in this test, there is exactly 1 halo circle: the fingerstick
+// marker from RollingChart.
+//
+// ── Why route interception is sufficient ────────────────────────────────
+// CurrentDayGlucoseCard calls fetchCgmHistory() → GET /api/cgm/history
+// and fetchRecentFingersticks() → Supabase REST GET on
+// fingerstick_readings. Intercepting both at the Playwright network layer
+// is enough; no DB row is created, so no afterAll cleanup is needed.
+//
+// ── Why we navigate to /dashboard (not /login) ──────────────────────────
+// CurrentDayGlucoseCard is a protected component mounted only on
+// /dashboard. Authentication is required. We reuse loginAsTestUser() which
+// submits the login form and waits for the /dashboard redirect — by that
+// time the route interceptors are already active so the very first CGM +
+// FS fetches are served the mock payloads.
+
+test.describe("CurrentDayGlucoseCard — portrait dashboard 🩸 chip", () => {
+  test.use({ viewport: { width: 375, height: 812 } });
+
+  test.beforeEach(async ({ page, context, baseURL }) => {
+    await context.clearCookies();
+    await pinGermanLocale(context, baseURL!);
+  });
+
+  // ── Test 11: Fresh fingerstick (2 min old) shows 🩸 chip ──────────────
+  // The FS is within the 5-minute FS_OVERRIDE_WINDOW_MS, so fsOverride
+  // is set and the chip renders next to the mg/dL label.
+  // The hero number must show FS_VALUE (not the CGM value) because the
+  // override replaces cgmCurrent as the "current" glucose source.
+  test("🩸 chip appears in hero card when fingerstick is within 5-min override window", async ({ page }) => {
+    test.setTimeout(180_000);
+
+    const now  = Date.now();
+    const mkTs = (minsAgo: number) => new Date(now - minsAgo * 60_000).toISOString();
+
+    const CGM_VALUE = 142;
+    const FS_VALUE  = 138; // distinct from CGM so the assertion is unambiguous
+
+    // Intercept CGM history — current point is 6 min old so it would
+    // normally display, but the fresh FS (2 min) should override it.
+    await page.route("/api/cgm/history", (route) => {
+      route.fulfill({
+        status:      200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          current: {
+            value:     CGM_VALUE,
+            unit:      "mg/dL",
+            timestamp: mkTs(6),
+            trend:     "flat",
+          },
+          history: [
+            { value: 108, timestamp: mkTs(120), trend: "flat" },
+            { value: 120, timestamp: mkTs(60),  trend: "up"   },
+            { value: 130, timestamp: mkTs(20),  trend: "up"   },
+            { value: CGM_VALUE, timestamp: mkTs(6), trend: "flat" },
+          ],
+        }),
+      });
+    });
+
+    // Intercept Supabase REST fingerstick query — reading is 2 min old,
+    // well within the 5-min FS_OVERRIDE_WINDOW_MS.
+    await page.route("**/rest/v1/fingerstick_readings**", (route) => {
+      route.fulfill({
+        status:      200,
+        contentType: "application/json",
+        body: JSON.stringify([
+          {
+            id:          "mock-portrait-fs-fresh-001",
+            user_id:     "mock-user",
+            measured_at: mkTs(2),
+            value_mg_dl: FS_VALUE,
+            notes:       null,
+            created_at:  mkTs(2),
+          },
+        ]),
+      });
+    });
+
+    // Log in — loginAsTestUser waits for the /dashboard redirect, by
+    // which time the interceptors above are already active.
+    await loginAsTestUser(page, test.info().workerIndex);
+
+    // The hero card must be present on /dashboard.
+    const heroCard = page.locator(".glev-today-card");
+    await expect(heroCard).toBeVisible({ timeout: 30_000 });
+
+    // ── 11-A. 🩸 chip must appear inside the hero card ───────────────────
+    await expect(
+      heroCard.getByText("🩸"),
+      "Blood-drop chip (🩸) should be visible in the portrait hero card (fsOverride active)",
+    ).toBeVisible({ timeout: 15_000 });
+
+    // ── 11-B. Hero number must show FS value, not CGM value ──────────────
+    // Math.round(current.v) renders as a bare number span. FS_VALUE (138)
+    // must be visible; CGM_VALUE (142) must not be the displayed number.
+    await expect(
+      heroCard.getByText(String(FS_VALUE), { exact: true }),
+      `Hero number should display fingerstick value (${FS_VALUE}), not CGM value (${CGM_VALUE})`,
+    ).toBeVisible({ timeout: 5_000 });
+  });
+
+  // ── Test 12: 90-min-old fingerstick — no chip, halo dot on sparkline ──
+  // The FS is outside the 5-minute window → no chip. But 90 min is
+  // inside the 4–14h adaptive chart window → RollingChart renders a
+  // halo circle (fill-opacity="0.15") for it. CrosshairOverlay returns
+  // null unless a pointer interaction activates it, so without any
+  // mouse/touch event here there is exactly 1 halo: the FS marker.
+  test("90-min-old fingerstick shows no chip but renders sparkline dot", async ({ page }) => {
+    test.setTimeout(180_000);
+
+    const now  = Date.now();
+    const mkTs = (minsAgo: number) => new Date(now - minsAgo * 60_000).toISOString();
+
+    const FS_VALUE = 115;
+
+    // CGM current is 5 min old — NOT within the FS override window since
+    // the FS is 90 min old.
+    await page.route("/api/cgm/history", (route) => {
+      route.fulfill({
+        status:      200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          current: {
+            value:     142,
+            unit:      "mg/dL",
+            timestamp: mkTs(5),
+            trend:     "flat",
+          },
+          history: [
+            { value: 108, timestamp: mkTs(120), trend: "flat" },
+            { value: 120, timestamp: mkTs(60),  trend: "up"   },
+            { value: 130, timestamp: mkTs(30),  trend: "up"   },
+            { value: 142, timestamp: mkTs(5),   trend: "flat" },
+          ],
+        }),
+      });
+    });
+
+    // Fingerstick from 90 minutes ago — outside the 5-min override
+    // window but inside the 4–14h adaptive chart window.
+    await page.route("**/rest/v1/fingerstick_readings**", (route) => {
+      route.fulfill({
+        status:      200,
+        contentType: "application/json",
+        body: JSON.stringify([
+          {
+            id:          "mock-portrait-fs-hist-002",
+            user_id:     "mock-user",
+            measured_at: mkTs(90),
+            value_mg_dl: FS_VALUE,
+            notes:       null,
+            created_at:  mkTs(90),
+          },
+        ]),
+      });
+    });
+
+    await loginAsTestUser(page, test.info().workerIndex);
+
+    const heroCard = page.locator(".glev-today-card");
+    await expect(heroCard).toBeVisible({ timeout: 30_000 });
+
+    // ── 12-A. 🩸 chip must NOT appear ────────────────────────────────────
+    // The FS is 90 min old — well outside the 5-min override window.
+    await expect(
+      heroCard.getByText("🩸"),
+      "Blood-drop chip should NOT appear for a 90-min-old fingerstick",
+    ).not.toBeVisible({ timeout: 5_000 });
+
+    // ── 12-B. Chart SVG must contain exactly 1 halo circle ──────────────
+    // circle[fill-opacity="0.15"] in the hero card SVG without pointer
+    // interaction: CrosshairOverlay returns null (no active point), so
+    // only the RollingChart fingerstick marker contributes one halo.
+    // With our fixture (1 FS at 90 min), total = 1. If fingerstick
+    // rendering regresses the count drops to 0 → fail.
+    await expect(
+      heroCard.locator('svg circle[fill-opacity="0.15"]'),
+      "Exactly 1 halo circle expected: fingerstick dot (CrosshairOverlay inactive)",
+    ).toHaveCount(1, { timeout: 15_000 });
+  });
+});
