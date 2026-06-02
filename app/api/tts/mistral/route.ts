@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { authedClient } from "@/app/api/insulin/_helpers";
 import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
+import { isAdminAuthed } from "@/lib/adminAuth";
 
 // Voxtral TTS model — matches what Mistral Studio uses.
 // Override via MISTRAL_TTS_MODEL env var if Mistral ships a newer model.
@@ -8,7 +9,8 @@ const TTS_MODEL = process.env.MISTRAL_TTS_MODEL ?? "voxtral-mini-tts-2603";
 
 export async function POST(req: NextRequest) {
   const auth = await authedClient(req);
-  if (!auth.user) {
+  const adminAuthed = auth.user ? false : await isAdminAuthed();
+  if (!auth.user && !adminAuthed) {
     return NextResponse.json({ error: "not authenticated" }, { status: 401 });
   }
 

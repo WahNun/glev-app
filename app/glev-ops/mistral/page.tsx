@@ -5,7 +5,6 @@ import {
   getTtsConfig,
   uploadRefAudio,
   deleteRefAudio,
-  testTts,
   getAgentPrompt,
   saveAgentPrompt,
   resetAgentPrompt,
@@ -133,13 +132,24 @@ export default function MistralTTSPage() {
   const handleTest = () => {
     setTestAudio(null);
     startTransition(async () => {
-      const res = await testTts(testText);
-      if (res.ok && res.audioB64) {
-        const url = `data:audio/mpeg;base64,${res.audioB64}`;
+      try {
+        const res = await fetch("/api/tts/mistral", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ text: testText }),
+          credentials: "include",
+        });
+        if (!res.ok) {
+          const errJson = await res.json().catch(() => null);
+          flash("err", errJson?.error ?? `TTS-Fehler (${res.status})`);
+          return;
+        }
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
         setTestAudio(url);
         setTimeout(() => { audioRef.current?.play().catch(() => {}); }, 100);
-      } else {
-        flash("err", res.error ?? "TTS-Fehler");
+      } catch (e) {
+        flash("err", e instanceof Error ? e.message : "Netzwerkfehler");
       }
     });
   };
@@ -255,9 +265,9 @@ export default function MistralTTSPage() {
 
       {/* Test Player */}
       <div style={S.card}>
-        <div style={S.cardTitle}>TTS testen</div>
+        <div style={S.cardTitle}>Stimme live anhören</div>
         <p style={{ fontSize: 12, color: "#666", marginBottom: 12 }}>
-          Spricht den Text via Mistral Voxtral mit der aktuell hinterlegten Konfiguration.
+          Ruft <code>/api/tts/mistral</code> mit der aktuellen Konfiguration auf — exakt so, wie echte Nutzer es hören (inkl. Style-Prefix).
         </p>
         <textarea
           style={S.textarea}
@@ -272,7 +282,7 @@ export default function MistralTTSPage() {
             onClick={handleTest}
             disabled={isPending || !testText.trim()}
           >
-            {isPending ? "Generiere…" : "▶ Vorlesen"}
+            {isPending ? "Generiere…" : "▶ Vorschau abspielen"}
           </button>
           {testAudio && (
             <audio ref={audioRef} controls src={testAudio} style={{ flex: 1, minWidth: 200 }} />
