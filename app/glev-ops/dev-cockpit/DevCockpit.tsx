@@ -44,6 +44,7 @@ import {
   type TaskStatus,
   type TaskFilter,
   type BuildPlan,
+  type BuildExecutionPlan,
 } from "./types";
 
 // Parse a task's stored plan_text (JSON) into a BuildPlan, or null if none/invalid.
@@ -63,6 +64,31 @@ function parsePlan(planText: string | null): BuildPlan | null {
   } catch {
     return null;
   }
+}
+
+// Parse a task's stored build_plan (jsonb) into a BuildExecutionPlan, or null.
+function parseBuildPlan(raw: unknown): BuildExecutionPlan | null {
+  if (!raw) return null;
+  let obj: unknown = raw;
+  if (typeof raw === "string") {
+    try {
+      obj = JSON.parse(raw);
+    } catch {
+      return null;
+    }
+  }
+  if (!obj || typeof obj !== "object") return null;
+  const p = obj as Partial<BuildExecutionPlan>;
+  const arr = (v: unknown) => (Array.isArray(v) ? (v as unknown[]).map(String) : []);
+  return {
+    scope: typeof p.scope === "string" ? p.scope : "",
+    steps: arr(p.steps),
+    included_notes: arr(p.included_notes),
+    excluded_notes: arr(p.excluded_notes),
+    affected_areas: arr(p.affected_areas),
+    risks: arr(p.risks),
+    complexity: p.complexity === "low" || p.complexity === "high" ? p.complexity : "medium",
+  };
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -133,7 +159,11 @@ function GlevStatic({ color, title, label }: { color: string; title: string; lab
  *  - draft / archived / backlog → static muted-grey Glev icon
  */
 function StatusIndicator({ status, animated }: { status: TaskStatus; animated?: boolean }) {
-  const spinning = animated || status === "planning" || status === "building";
+  const spinning =
+    animated ||
+    status === "planning" ||
+    status === "planning_build" ||
+    status === "building";
 
   if (spinning) {
     return (
@@ -156,19 +186,23 @@ function StatusIndicator({ status, animated }: { status: TaskStatus; animated?: 
       return <GlevStatic color="#eab308" title="Agent benötigt Input" label="waiting_for_input" />;
     case "waiting_for_start":
       return <GlevStatic color="#16a34a" title="Plan fertig — bereit für Start Build" label="waiting_for_start" />;
+    case "build_ready":
+      return <GlevStatic color="#16a34a" title="Build Plan fertig" label="build_ready" />;
     case "preview_ready":
       return <GlevStatic color="#16a34a" title="Build fertig — Apply Changes" label="preview_ready" />;
     case "applied":
+    case "build_complete":
       return (
-        <span style={indicatorBox} title="Angewendet" aria-label="applied">
+        <span style={indicatorBox} title={STATUS_LABEL[status]} aria-label={status}>
           <svg {...ICON} viewBox="0 0 24 24" fill="none" stroke="#16a34a" strokeWidth={3} strokeLinecap="round" strokeLinejoin="round">
             <polyline points="20 6 9 17 4 12" />
           </svg>
         </span>
       );
     case "rejected":
+    case "build_failed":
       return (
-        <span style={indicatorBox} title="Abgelehnt" aria-label="rejected">
+        <span style={indicatorBox} title={STATUS_LABEL[status]} aria-label={status}>
           <svg {...ICON} viewBox="0 0 24 24" fill="none" stroke="#dc2626" strokeWidth={3} strokeLinecap="round">
             <line x1="6" y1="6" x2="18" y2="18" />
             <line x1="18" y1="6" x2="6" y2="18" />
@@ -412,6 +446,8 @@ export default function DevCockpit({ initialTasks }: { initialTasks: DevTask[] }
   // analyzingIds        — tasks whose analysis is in flight (spinning icon; many at once)
   // actionPendingByTaskId — cancel/archive/backlog in flight, per task
   const [analyzingIds, setAnalyzingIds] = useState<Set<string>>(() => new Set());
+  // Phase 5 — tasks whose build plan is being generated (parallel allowed).
+  const [buildingTaskIds, setBuildingTaskIds] = useState<Set<string>>(() => new Set());
   const [actionPendingByTaskId, setActionPendingByTaskId] = useState<
     Record<string, "cancel" | "archive" | "backlog">
   >({});
@@ -451,6 +487,7 @@ export default function DevCockpit({ initialTasks }: { initialTasks: DevTask[] }
 
   const selectedTask = tasks.find((t) => t.id === selectedId) ?? null;
   const plan = selectedTask ? parsePlan(selectedTask.plan_text) : null;
+  const buildPlan = selectedTask ? parseBuildPlan(selectedTask.build_plan) : null;
 
   // ── Data loading ────────────────────────────────────────────────────────────
 
@@ -625,6 +662,55 @@ export default function DevCockpit({ initialTasks }: { initialTasks: DevTask[] }
         );
       } finally {
         setAnalyzingIds((prev) => {
+          const next = new Set(prev);
+          next.delete(id);
+          return next;
+        });
+      }
+    });
+  }
+
+  // Phase 5 — Start Build: generate a build plan (PLAN ONLY, no code). Per-task
+  // via a route handler so multiple tasks can plan builds in parallel (no global
+  // lock). Optimistically flips the task to planning_build so the icon spins.
+  function handleStartBuild() {
+    if (!selectedTask) {
+      setError("Erst eine Task auswählen.");
+      return;
+    }
+    const id = selectedTask.id;
+    if (buildingTaskIds.has(id)) return;
+    setBuildingTaskIds((prev) => new Set(prev).add(id));
+    // Optimistic: show planning_build immediately (spinning Glev icon).
+    setTasks((prev) =>
+      prev.map((t) => (t.id === id ? { ...t, status: "planning_build" } : t)),
+    );
+    setNotice("Erstelle Build Plan…");
+    run(async () => {
+      try {
+        const r = await fetch("/glev-ops/dev-cockpit/api/start-build", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ taskId: id }),
+        });
+        const res = (await r.json().catch(() => ({ ok: false, error: "bad-response" }))) as
+          | { ok: true; task: DevTask; build_plan: BuildExecutionPlan }
+          | { ok: false; error: string };
+
+        if (!res.ok) {
+          setError(errText(res.error));
+          // Reflect build_failed by reloading the row (server set it) + messages.
+          const t = await getTask(id);
+          if (t.ok) setTasks((prev) => prev.map((x) => (x.id === id ? t.data : x)));
+          if (activeTaskIdRef.current === id) loadTaskDetail(id);
+          return;
+        }
+        setTasks((prev) => prev.map((t) => (t.id === res.task.id ? res.task : t)));
+        if (activeTaskIdRef.current === id) loadTaskDetail(id);
+        refreshSummary();
+        setNotice("Build Plan erstellt — bereit.");
+      } finally {
+        setBuildingTaskIds((prev) => {
           const next = new Set(prev);
           next.delete(id);
           return next;
@@ -852,6 +938,11 @@ export default function DevCockpit({ initialTasks }: { initialTasks: DevTask[] }
             {analyzingIds.size === 1 ? "Analyse läuft…" : `${analyzingIds.size} Analysen laufen…`}
           </span>
         )}
+        {buildingTaskIds.size > 0 && (
+          <span style={{ fontSize: 12, color: "#3730a3" }}>
+            {buildingTaskIds.size === 1 ? "Build-Plan läuft…" : `${buildingTaskIds.size} Build-Pläne laufen…`}
+          </span>
+        )}
       </div>
 
       {/* ── Toast / notice ── */}
@@ -1033,7 +1124,7 @@ export default function DevCockpit({ initialTasks }: { initialTasks: DevTask[] }
                       {answering ? "Speichert…" : "Antwort senden"}
                     </button>
                     <button
-                      style={btnPrimaryStyle}
+                      style={btnSecondaryStyle}
                       onClick={handleAnalyze}
                       disabled={analyzingIds.has(selectedTask.id)}
                       title="Mistral analysiert die Aufgabe (nur Planung, kein Build)"
@@ -1043,6 +1134,18 @@ export default function DevCockpit({ initialTasks }: { initialTasks: DevTask[] }
                         : plan
                           ? "Re-Analyze"
                           : "Analyze Task"}
+                    </button>
+                    <button
+                      style={btnPrimaryStyle}
+                      onClick={handleStartBuild}
+                      disabled={buildingTaskIds.has(selectedTask.id)}
+                      title="Erzeugt einen strukturierten Build Plan (nur Plan, keine Code-Ausführung)"
+                    >
+                      {buildingTaskIds.has(selectedTask.id)
+                        ? "Build-Plan…"
+                        : buildPlan
+                          ? "Re-Plan Build"
+                          : "Start Build"}
                     </button>
                   </div>
                 </div>
@@ -1054,7 +1157,7 @@ export default function DevCockpit({ initialTasks }: { initialTasks: DevTask[] }
             )}
           </section>
 
-          {/* Build Plan card (Phase 3) — rendered from plan_text, never as JSON */}
+          {/* Analyse-Plan card (Phase 3) — rendered from plan_text, never as JSON */}
           {selectedTask && plan && (
             <section style={cardStyle}>
               <div
@@ -1068,7 +1171,7 @@ export default function DevCockpit({ initialTasks }: { initialTasks: DevTask[] }
                 }}
               >
                 <h2 style={{ ...cardTitleStyle, margin: 0, padding: 0, border: "none" }}>
-                  Build Plan
+                  Analyse-Plan
                 </h2>
                 <span style={plan.ready_to_build ? readyPill : notReadyPill}>
                   {plan.ready_to_build ? "Ready To Build" : "Rückfragen offen"}
@@ -1100,6 +1203,85 @@ export default function DevCockpit({ initialTasks }: { initialTasks: DevTask[] }
             </section>
           )}
 
+          {/* Build Plan card (Phase 5) — rendered from build_plan, never as JSON */}
+          {selectedTask && buildPlan && (
+            <section style={cardStyle}>
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  margin: "0 0 14px",
+                  paddingBottom: 10,
+                  borderBottom: "1px solid #f3f4f6",
+                }}
+              >
+                <h2 style={{ ...cardTitleStyle, margin: 0, padding: 0, border: "none" }}>
+                  Build Plan
+                </h2>
+                <span style={complexityPill(buildPlan.complexity)}>
+                  Komplexität: {buildPlan.complexity}
+                </span>
+              </div>
+
+              {/* Build Scope */}
+              {buildPlan.scope && (
+                <div style={{ marginBottom: 12 }}>
+                  <div style={planSectionTitle}>Build Scope</div>
+                  <p style={{ margin: 0, fontSize: 14, lineHeight: 1.5, color: "#111", whiteSpace: "pre-wrap" }}>
+                    {buildPlan.scope}
+                  </p>
+                </div>
+              )}
+
+              {/* Build Steps (ordered) */}
+              {buildPlan.steps.length > 0 && (
+                <div style={{ marginBottom: 14 }}>
+                  <div style={planSectionTitle}>Build Steps</div>
+                  <ol style={{ margin: 0, padding: "0 0 0 20px", display: "flex", flexDirection: "column", gap: 4 }}>
+                    {buildPlan.steps.map((s, i) => (
+                      <li key={i} style={{ fontSize: 13, lineHeight: 1.45, color: "#111" }}>{s}</li>
+                    ))}
+                  </ol>
+                </div>
+              )}
+
+              {/* Included (current build) */}
+              <div style={{ marginBottom: 10 }}>
+                <div style={{ ...planSectionTitle, color: "#166534" }}>
+                  Included ({buildPlan.included_notes.length})
+                </div>
+                {buildPlan.included_notes.length > 0 ? (
+                  <ul style={{ margin: 0, padding: "0 0 0 18px", fontSize: 13, color: "#166534" }}>
+                    {buildPlan.included_notes.map((n, i) => <li key={i}>{n}</li>)}
+                  </ul>
+                ) : (
+                  <span style={{ fontSize: 12, color: "#9ca3af" }}>keine zusätzlichen Current-Build-Notes</span>
+                )}
+              </div>
+
+              {/* Excluded (after build) */}
+              <div style={{ marginBottom: 10 }}>
+                <div style={{ ...planSectionTitle, color: "#9a3412" }}>
+                  Excluded — später ({buildPlan.excluded_notes.length})
+                </div>
+                {buildPlan.excluded_notes.length > 0 ? (
+                  <ul style={{ margin: 0, padding: "0 0 0 18px", fontSize: 13, color: "#9a3412" }}>
+                    {buildPlan.excluded_notes.map((n, i) => <li key={i}>{n}</li>)}
+                  </ul>
+                ) : (
+                  <span style={{ fontSize: 12, color: "#9ca3af" }}>keine</span>
+                )}
+              </div>
+
+              <PlanSection
+                title={`Betroffene Bereiche (${buildPlan.affected_areas.length})`}
+                items={buildPlan.affected_areas}
+              />
+              <PlanSection title="Risiken" items={buildPlan.risks} accent="#92400e" />
+            </section>
+          )}
+
           {/* Prompt area */}
           <section style={cardStyle}>
             <h2 style={cardTitleStyle}>Prompt</h2>
@@ -1128,9 +1310,6 @@ export default function DevCockpit({ initialTasks }: { initialTasks: DevTask[] }
                 disabled={creating}
               >
                 {creating ? "Erstellt…" : "Create Task"}
-              </button>
-              <button style={btnDisabledStyle} disabled title="Phase 4">
-                Start Build
               </button>
               <button
                 style={btnSecondaryStyle}
@@ -1664,6 +1843,21 @@ const notReadyPill: React.CSSProperties = {
   color: "#854d0e",
   border: "1px solid #fde047",
 };
+
+// Build Plan card (Phase 5) — section header + complexity pill.
+const planSectionTitle: React.CSSProperties = {
+  fontSize: 11,
+  fontWeight: 700,
+  textTransform: "uppercase",
+  letterSpacing: 0.5,
+  color: "#6b7280",
+  marginBottom: 6,
+};
+function complexityPill(c: string): React.CSSProperties {
+  if (c === "high") return { ...pillBase, background: "#fee2e2", color: "#991b1b", border: "1px solid #fca5a5" };
+  if (c === "low") return { ...pillBase, background: "#dcfce7", color: "#166534", border: "1px solid #86efac" };
+  return { ...pillBase, background: "#fef9c3", color: "#854d0e", border: "1px solid #fde047" };
+}
 
 const chatListStyle: React.CSSProperties = {
   marginTop: 16,

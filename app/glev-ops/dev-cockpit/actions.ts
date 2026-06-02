@@ -34,6 +34,8 @@ import {
   type BuildPlan,
 } from "./types";
 import { performAnalyze } from "@/lib/devCockpit/performAnalyze";
+import { performStartBuild } from "@/lib/devCockpit/performStartBuild";
+import type { BuildExecutionPlan } from "./types";
 
 // ── Result envelope ─────────────────────────────────────────────────────────
 
@@ -52,7 +54,8 @@ function fail(error: string): { ok: false; error: string } {
 // Valid status values, mirrored from the DB CHECK constraint, so a bad value
 // from the client is rejected before it ever hits the database.
 const ALL_STATUSES: TaskStatus[] = [
-  "draft", "planning", "waiting_for_start", "waiting_for_input", "building",
+  "draft", "planning", "waiting_for_start", "waiting_for_input",
+  "planning_build", "build_ready", "building", "build_failed", "build_complete",
   "preview_ready", "applied", "rejected", "cancelled", "archived", "backlog",
 ];
 
@@ -239,6 +242,20 @@ export async function analyzeTask(
   const res = await performAnalyze(taskId);
   if (!res.ok) return fail(res.error);
   return { ok: true, data: { task: res.task, plan: res.plan } };
+}
+
+/**
+ * Start Build (Phase 5) — generate a structured build plan. PLAN ONLY, no code
+ * generation/execution. Delegates to the shared orchestration; the UI calls the
+ * route handler (POST /glev-ops/dev-cockpit/api/start-build) so it stays off the
+ * Server-Action queue. Kept for non-UI / programmatic callers.
+ */
+export async function startBuild(
+  taskId: string,
+): Promise<Result<{ task: DevTask; build_plan: BuildExecutionPlan }>> {
+  const res = await performStartBuild(taskId);
+  if (!res.ok) return fail(res.error);
+  return { ok: true, data: { task: res.task, build_plan: res.build_plan } };
 }
 
 // ── Messages ─────────────────────────────────────────────────────────────────
