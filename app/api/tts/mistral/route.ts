@@ -58,15 +58,15 @@ export async function POST(req: NextRequest) {
 
   // Voxtral TTS is LLM-based and responds to speaking-style instructions
   // prepended to the input — same technique used in Mistral Studio.
-  // Tempo hint varies by user speed preference; client-side playbackRate is applied
-  // on top of this so both layers reinforce the intended pace.
-  const tempoHint =
-    speed === "slow"
-      ? "Sprich warm, ruhig und sehr deutlich — in langsamem Tempo mit kurzen Pausen zwischen den Sätzen, gut verständlich und entspannt."
-      : speed === "fast"
-        ? "Sprich warm und natürlich — in flottem, zügigem Tempo, fließend und energisch, wie jemand der etwas klar auf den Punkt bringt."
-        : "Sprich warm, ruhig und natürlich — wie ein vertrauter Assistent beim Gespräch unter vier Augen. Keine übertriebene Betonung, keine Pausen zwischen Wörtern, fließend und menschlich.";
-  const styledInput = `${tempoHint}\n\n${text}`;
+  // A single fixed style prefix is used for all speed settings; actual speed is
+  // controlled client-side via HTMLAudioElement.playbackRate in useTTS.ts
+  // (slow → 0.75, normal → 1.0, fast → 1.3). Tempo hints in the prompt were
+  // tested (2026-06-02) and produced no reliable audible difference in speaking
+  // rate — Voxtral's neural vocoder does not respond predictably to text-based
+  // pace instructions, while playbackRate works precisely on all platforms.
+  const stylePrefix =
+    "Sprich warm, ruhig und natürlich — wie ein vertrauter Assistent beim Gespräch unter vier Augen. Keine übertriebene Betonung, keine Pausen zwischen Wörtern, fließend und menschlich.";
+  const styledInput = `${stylePrefix}\n\n${text}`;
 
   const body: Record<string, unknown> = {
     model: TTS_MODEL,

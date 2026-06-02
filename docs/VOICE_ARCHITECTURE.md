@@ -117,6 +117,12 @@ Key invariants:
   before `play()` in `useTTS.ts`. Mistral confirmed (2026-06-02) that voxtral-mini-tts-2603 has no
   native speed parameter; the client-side approach works on the already-decoded MP3 across all
   browsers and also on the Web Speech API fallback via `SpeechSynthesisUtterance.rate`.
+- **Single fixed style prefix** — the route prepends one German style instruction to every TTS
+  input regardless of the `speed` parameter. Three-variant tempo hints (slow/normal/fast) were
+  evaluated (2026-06-02): Voxtral's neural vocoder does not respond reliably to text-based pace
+  instructions — the slow-hint text and fast-hint text produced no audible difference in speaking
+  rate compared to the neutral-tone prompt. Conclusion: `playbackRate` is the only reliable speed
+  lever; prompt-based tempo instructions add complexity without measurable benefit and were removed.
 - **Persona-leak guard** — `extractAssistantText()` in `useTTS.ts` strips lines matching known
   system-prompt patterns before any text reaches the TTS API.
 
