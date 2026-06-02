@@ -3,6 +3,7 @@
 import { isAdminAuthed } from "@/lib/adminAuth";
 import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
 import { GLEV_CHAT_SYSTEM_PROMPT } from "@/lib/ai/glevChatPrompt";
+import { bustSystemPromptCache } from "@/lib/ai/systemPromptCache";
 
 const PROMPT_KEY = "glev_ai_default";
 
@@ -73,6 +74,7 @@ export async function saveAgentPrompt(
   );
 
   if (error) return { ok: false, error: error.message };
+  bustSystemPromptCache();
   return { ok: true };
 }
 
@@ -105,6 +107,7 @@ export async function resetAgentPrompt(
   );
 
   if (error) return { ok: false, error: error.message };
+  bustSystemPromptCache();
   return { ok: true };
 }
 

@@ -4,6 +4,10 @@ import { authedClient } from "@/app/api/insulin/_helpers";
 import { getMistralClient, mistralConfigError } from "@/lib/ai/mistralClient";
 import { GLEV_CHAT_SYSTEM_PROMPT } from "@/lib/ai/glevChatPrompt";
 import {
+  getSystemPromptCache,
+  setSystemPromptCache,
+} from "@/lib/ai/systemPromptCache";
+import {
   GLEV_TOOLS,
   executeGlevTool,
   isPendingActionEnvelope,
@@ -269,6 +273,11 @@ const AI_OWNER_EMAIL = "lucas@wahnon-connect.com";
  * working even when the admin table is unreachable.
  */
 async function loadActiveSystemPrompt(): Promise<string> {
+  const cached = getSystemPromptCache();
+  if (cached !== null) {
+    return cached;
+  }
+
   let admin;
   try {
     admin = getSupabaseAdmin();
@@ -282,11 +291,14 @@ async function loadActiveSystemPrompt(): Promise<string> {
       .eq("key", "glev_ai_default")
       .eq("is_active", true)
       .maybeSingle();
-    if (data?.prompt_text && data.prompt_text.trim().length > 0) {
-      return data.prompt_text.trim();
-    }
+    const prompt =
+      data?.prompt_text && data.prompt_text.trim().length > 0
+        ? data.prompt_text.trim()
+        : GLEV_CHAT_SYSTEM_PROMPT;
+    setSystemPromptCache(prompt);
+    return prompt;
   } catch {
-    // Fail open — return the hardcoded default below.
+    // Fail open — return the hardcoded default below (do not cache on error).
   }
   return GLEV_CHAT_SYSTEM_PROMPT;
 }
