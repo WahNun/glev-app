@@ -219,7 +219,7 @@ export default function LandscapeGlucoseOverlay() {
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           {current && (
             <span style={{ fontSize: 11, color: DIM, fontFamily: "var(--font-mono, monospace)" }}>
-              {formatAgo(now - current.t)}
+              {fsOverride ? `🩸 ${formatAgo(now - fsOverride.t)}` : formatAgo(now - current.t)}
             </span>
           )}
           <CgmFetchButton variant="ghost" onResult={onRefresh} title="Refresh CGM" />
