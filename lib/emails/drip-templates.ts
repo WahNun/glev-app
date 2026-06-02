@@ -350,18 +350,46 @@ function trial6BodyDe(firstName: string | null, scheduleId?: string): string {
   return `
     <p style="margin:0 0 20px;font-size:18px;font-weight:600;color:#0f172a;">${greeting(firstName, "de")} 👋</p>
     <p style="margin:0 0 16px;font-size:15px;line-height:1.7;color:#374151;">
-      dein kostenloser Glev-Testzeitraum endet <strong>morgen</strong>.
+      dein kostenloser Glev-Testzeitraum endet <strong>morgen</strong>. Du hast in den letzten 7 Tagen <strong>alle Pro-Features</strong> genutzt — inklusive Adaptive Engine, Insights und Adapt Score.
     </p>
-    <p style="margin:0 0 16px;font-size:15px;line-height:1.7;color:#374151;">
-      Wenn du weitermachen möchtest, kannst du jetzt auf <strong>Glev Smart für 9&nbsp;€/Monat</strong> upgraden — oder auf Pro für 14,90&nbsp;€/Monat, wenn du alle Features behalten willst. Kein Kreditkartenzwang während der Testphase, aber ab morgen wird der Zugang auf Free eingeschränkt.
+    <p style="margin:0 0 8px;font-size:15px;line-height:1.7;color:#374151;">
+      Damit es so weitergeht wie bisher, empfehle ich Pro:
     </p>
-    <table cellpadding="0" cellspacing="0" style="margin:24px auto 16px;">
+    <table width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 24px;border-radius:10px;overflow:hidden;border:2px solid #4F6EF7;">
+      <tr style="background:#4F6EF7;">
+        <td style="padding:12px 18px;">
+          <span style="font-size:14px;font-weight:700;color:#ffffff;">Pro</span>
+          <span style="margin-left:8px;font-size:11px;font-weight:600;color:#c7d2fe;background:rgba(255,255,255,0.15);border-radius:4px;padding:2px 7px;">Was du getestet hast</span>
+        </td>
+        <td style="padding:12px 18px;font-size:14px;color:#e0e7ff;text-align:right;font-weight:600;">14,90&nbsp;€/Monat</td>
+      </tr>
+      <tr style="background:#f0f4ff;">
+        <td colspan="2" style="padding:12px 18px;font-size:13px;color:#374151;line-height:1.6;">
+          ✓ Adaptive Engine — KI-Bolus aus deiner Geschichte<br />
+          ✓ Adapt Score 0–100 · deine Bolus-Präzision<br />
+          ✓ CGM-basierte Insights<br />
+          ✓ Alle Basis-Features
+        </td>
+      </tr>
+    </table>
+    <table width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 24px;border-radius:10px;overflow:hidden;border:1px solid #e5e7eb;">
+      <tr style="background:#f9fafb;">
+        <td style="padding:12px 18px;font-size:14px;font-weight:600;color:#6b7280;">Smart</td>
+        <td style="padding:12px 18px;font-size:14px;color:#9ca3af;text-align:right;">9&nbsp;€/Monat</td>
+      </tr>
+      <tr>
+        <td colspan="2" style="padding:10px 18px;font-size:13px;color:#9ca3af;line-height:1.6;">
+          Basis-Logging · CGM-Kurve — ohne Engine, Insights &amp; Adapt Score
+        </td>
+      </tr>
+    </table>
+    <table cellpadding="0" cellspacing="0" style="margin:0 0 20px;">
       <tr><td style="background:#4F6EF7;border-radius:8px;">
-        <a href="${upgradeUrl}" style="display:inline-block;padding:14px 30px;color:#ffffff;font-size:15px;font-weight:700;text-decoration:none;letter-spacing:0.2px;">Jetzt upgraden →</a>
+        <a href="${upgradeUrl}" style="display:inline-block;padding:14px 30px;color:#ffffff;font-size:15px;font-weight:700;text-decoration:none;letter-spacing:0.2px;">Plan wählen →</a>
       </td></tr>
     </table>
     <p style="margin:0 0 20px;font-size:15px;line-height:1.7;color:#374151;">
-      Falls du noch Fragen hast oder dir unsicher bist, welcher Plan zu dir passt — antworte einfach auf diese Mail.
+      Noch unsicher? Antworte einfach auf diese Mail — ich helfe dir beim Entscheiden.
     </p>
     <p style="margin:0;font-size:15px;line-height:1.7;color:#374151;">
       Bis bald,<br /><strong>Lucas</strong><br /><span style="color:#6b7280;">Glev Team</span>
@@ -374,18 +402,46 @@ function trial6BodyEn(firstName: string | null, scheduleId?: string): string {
   return `
     <p style="margin:0 0 20px;font-size:18px;font-weight:600;color:#0f172a;">${greeting(firstName, "en")} 👋</p>
     <p style="margin:0 0 16px;font-size:15px;line-height:1.7;color:#374151;">
-      your free Glev trial ends <strong>tomorrow</strong>.
+      your free Glev trial ends <strong>tomorrow</strong>. Over the last 7 days you've had access to <strong>all Pro features</strong> — including the Adaptive Engine, Insights, and Adapt Score.
     </p>
-    <p style="margin:0 0 16px;font-size:15px;line-height:1.7;color:#374151;">
-      To keep going, you can upgrade to <strong>Glev Smart for €9/month</strong> — or Pro for €14.90/month if you want to keep all features. No card was required during the trial, but from tomorrow your access will switch to the Free tier.
+    <p style="margin:0 0 8px;font-size:15px;line-height:1.7;color:#374151;">
+      To keep everything working the way it has been, I'd recommend Pro:
     </p>
-    <table cellpadding="0" cellspacing="0" style="margin:24px auto 16px;">
+    <table width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 24px;border-radius:10px;overflow:hidden;border:2px solid #4F6EF7;">
+      <tr style="background:#4F6EF7;">
+        <td style="padding:12px 18px;">
+          <span style="font-size:14px;font-weight:700;color:#ffffff;">Pro</span>
+          <span style="margin-left:8px;font-size:11px;font-weight:600;color:#c7d2fe;background:rgba(255,255,255,0.15);border-radius:4px;padding:2px 7px;">What you tested</span>
+        </td>
+        <td style="padding:12px 18px;font-size:14px;color:#e0e7ff;text-align:right;font-weight:600;">€14.90/month</td>
+      </tr>
+      <tr style="background:#f0f4ff;">
+        <td colspan="2" style="padding:12px 18px;font-size:13px;color:#374151;line-height:1.6;">
+          ✓ Adaptive Engine — AI bolus from your own history<br />
+          ✓ Adapt Score 0–100 · your bolus precision<br />
+          ✓ CGM-based Insights<br />
+          ✓ All core features
+        </td>
+      </tr>
+    </table>
+    <table width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 24px;border-radius:10px;overflow:hidden;border:1px solid #e5e7eb;">
+      <tr style="background:#f9fafb;">
+        <td style="padding:12px 18px;font-size:14px;font-weight:600;color:#6b7280;">Smart</td>
+        <td style="padding:12px 18px;font-size:14px;color:#9ca3af;text-align:right;">€9/month</td>
+      </tr>
+      <tr>
+        <td colspan="2" style="padding:10px 18px;font-size:13px;color:#9ca3af;line-height:1.6;">
+          Core logging · CGM curve — no Engine, Insights or Adapt Score
+        </td>
+      </tr>
+    </table>
+    <table cellpadding="0" cellspacing="0" style="margin:0 0 20px;">
       <tr><td style="background:#4F6EF7;border-radius:8px;">
-        <a href="${upgradeUrl}" style="display:inline-block;padding:14px 30px;color:#ffffff;font-size:15px;font-weight:700;text-decoration:none;letter-spacing:0.2px;">Upgrade now →</a>
+        <a href="${upgradeUrl}" style="display:inline-block;padding:14px 30px;color:#ffffff;font-size:15px;font-weight:700;text-decoration:none;letter-spacing:0.2px;">Choose a plan →</a>
       </td></tr>
     </table>
     <p style="margin:0 0 20px;font-size:15px;line-height:1.7;color:#374151;">
-      If you have questions or aren't sure which plan fits — just reply to this email.
+      Not sure? Just reply to this email — happy to help you decide.
     </p>
     <p style="margin:0;font-size:15px;line-height:1.7;color:#374151;">
       Talk soon,<br /><strong>Lucas</strong><br /><span style="color:#6b7280;">Glev Team</span>
@@ -416,28 +472,46 @@ function trialExpiredBodyDe(firstName: string | null, scheduleId?: string): stri
   return `
     <p style="margin:0 0 20px;font-size:18px;font-weight:600;color:#0f172a;">${greeting(firstName, "de")},</p>
     <p style="margin:0 0 16px;font-size:15px;line-height:1.7;color:#374151;">
-      dein kostenloser 7-Tage-Testzeitraum bei Glev ist heute abgelaufen. Dein Konto läuft ab sofort im Free-Modus weiter — du kannst dich weiterhin einloggen, einige Features sind aber nun eingeschränkt.
+      dein kostenloser 7-Tage-Testzeitraum bei Glev ist heute abgelaufen. Du hast <strong>alle Pro-Features</strong> getestet — inklusive Adaptive Engine, Insights und Adapt Score. Dein Konto läuft ab sofort im Free-Modus weiter.
     </p>
-    <p style="margin:0 0 16px;font-size:15px;line-height:1.7;color:#374151;">
-      Wenn du Glev weiterhin voll nutzen möchtest, wähle einen Plan:
+    <p style="margin:0 0 8px;font-size:15px;line-height:1.7;color:#374151;">
+      Damit du alles, was du kennst, weiternutzen kannst, empfehle ich Pro:
     </p>
-    <table width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 24px;border:1px solid #e5e7eb;border-radius:10px;overflow:hidden;">
+    <table width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 24px;border-radius:10px;overflow:hidden;border:2px solid #4F6EF7;">
+      <tr style="background:#4F6EF7;">
+        <td style="padding:12px 18px;">
+          <span style="font-size:14px;font-weight:700;color:#ffffff;">Pro</span>
+          <span style="margin-left:8px;font-size:11px;font-weight:600;color:#c7d2fe;background:rgba(255,255,255,0.15);border-radius:4px;padding:2px 7px;">Was du getestet hast</span>
+        </td>
+        <td style="padding:12px 18px;font-size:14px;color:#e0e7ff;text-align:right;font-weight:600;">14,90&nbsp;€/Monat</td>
+      </tr>
+      <tr style="background:#f0f4ff;">
+        <td colspan="2" style="padding:12px 18px;font-size:13px;color:#374151;line-height:1.6;">
+          ✓ Adaptive Engine — KI-Bolus aus deiner Geschichte<br />
+          ✓ Adapt Score 0–100 · deine Bolus-Präzision<br />
+          ✓ CGM-basierte Insights<br />
+          ✓ Alle Basis-Features
+        </td>
+      </tr>
+    </table>
+    <table width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 24px;border-radius:10px;overflow:hidden;border:1px solid #e5e7eb;">
       <tr style="background:#f9fafb;">
-        <td style="padding:14px 18px;font-size:14px;font-weight:600;color:#0f172a;border-bottom:1px solid #e5e7eb;">Smart</td>
-        <td style="padding:14px 18px;font-size:14px;color:#374151;border-bottom:1px solid #e5e7eb;">9&nbsp;€/Monat · Kernfeatures</td>
+        <td style="padding:12px 18px;font-size:14px;font-weight:600;color:#6b7280;">Smart</td>
+        <td style="padding:12px 18px;font-size:14px;color:#9ca3af;text-align:right;">9&nbsp;€/Monat</td>
       </tr>
       <tr>
-        <td style="padding:14px 18px;font-size:14px;font-weight:600;color:#0f172a;">Pro</td>
-        <td style="padding:14px 18px;font-size:14px;color:#374151;">14,90&nbsp;€/Monat · Alle Features</td>
+        <td colspan="2" style="padding:10px 18px;font-size:13px;color:#9ca3af;line-height:1.6;">
+          Basis-Logging · CGM-Kurve — ohne Engine, Insights &amp; Adapt Score
+        </td>
       </tr>
     </table>
     <table cellpadding="0" cellspacing="0" style="margin:0 0 20px;">
       <tr><td style="background:#4F6EF7;border-radius:8px;">
-        <a href="${upgradeUrl}" style="display:inline-block;padding:14px 30px;color:#ffffff;font-size:15px;font-weight:700;text-decoration:none;letter-spacing:0.2px;">Plan auswählen →</a>
+        <a href="${upgradeUrl}" style="display:inline-block;padding:14px 30px;color:#ffffff;font-size:15px;font-weight:700;text-decoration:none;letter-spacing:0.2px;">Plan wählen →</a>
       </td></tr>
     </table>
     <p style="margin:0;font-size:15px;line-height:1.7;color:#374151;">
-      Bei Fragen einfach antworten — ich bin direkt erreichbar.<br />
+      Bei Fragen einfach antworten — ich helfe dir beim Entscheiden.<br />
       <strong>Lucas</strong><br /><span style="color:#6b7280;">Glev Team</span>
     </p>
   `;
@@ -448,19 +522,37 @@ function trialExpiredBodyEn(firstName: string | null, scheduleId?: string): stri
   return `
     <p style="margin:0 0 20px;font-size:18px;font-weight:600;color:#0f172a;">${greeting(firstName, "en")},</p>
     <p style="margin:0 0 16px;font-size:15px;line-height:1.7;color:#374151;">
-      your free 7-day Glev trial ended today. Your account continues on the Free tier — you can still log in, but some features are now restricted.
+      your free 7-day Glev trial ended today. You've had access to <strong>all Pro features</strong> — including the Adaptive Engine, Insights, and Adapt Score. Your account is now on the Free tier.
     </p>
-    <p style="margin:0 0 16px;font-size:15px;line-height:1.7;color:#374151;">
-      To keep the full experience, pick a plan:
+    <p style="margin:0 0 8px;font-size:15px;line-height:1.7;color:#374151;">
+      To keep everything working the way it has been, I'd recommend Pro:
     </p>
-    <table width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 24px;border:1px solid #e5e7eb;border-radius:10px;overflow:hidden;">
+    <table width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 24px;border-radius:10px;overflow:hidden;border:2px solid #4F6EF7;">
+      <tr style="background:#4F6EF7;">
+        <td style="padding:12px 18px;">
+          <span style="font-size:14px;font-weight:700;color:#ffffff;">Pro</span>
+          <span style="margin-left:8px;font-size:11px;font-weight:600;color:#c7d2fe;background:rgba(255,255,255,0.15);border-radius:4px;padding:2px 7px;">What you tested</span>
+        </td>
+        <td style="padding:12px 18px;font-size:14px;color:#e0e7ff;text-align:right;font-weight:600;">€14.90/month</td>
+      </tr>
+      <tr style="background:#f0f4ff;">
+        <td colspan="2" style="padding:12px 18px;font-size:13px;color:#374151;line-height:1.6;">
+          ✓ Adaptive Engine — AI bolus from your own history<br />
+          ✓ Adapt Score 0–100 · your bolus precision<br />
+          ✓ CGM-based Insights<br />
+          ✓ All core features
+        </td>
+      </tr>
+    </table>
+    <table width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 24px;border-radius:10px;overflow:hidden;border:1px solid #e5e7eb;">
       <tr style="background:#f9fafb;">
-        <td style="padding:14px 18px;font-size:14px;font-weight:600;color:#0f172a;border-bottom:1px solid #e5e7eb;">Smart</td>
-        <td style="padding:14px 18px;font-size:14px;color:#374151;border-bottom:1px solid #e5e7eb;">€9/month · Core features</td>
+        <td style="padding:12px 18px;font-size:14px;font-weight:600;color:#6b7280;">Smart</td>
+        <td style="padding:12px 18px;font-size:14px;color:#9ca3af;text-align:right;">€9/month</td>
       </tr>
       <tr>
-        <td style="padding:14px 18px;font-size:14px;font-weight:600;color:#0f172a;">Pro</td>
-        <td style="padding:14px 18px;font-size:14px;color:#374151;">€14.90/month · All features</td>
+        <td colspan="2" style="padding:10px 18px;font-size:13px;color:#9ca3af;line-height:1.6;">
+          Core logging · CGM curve — no Engine, Insights or Adapt Score
+        </td>
       </tr>
     </table>
     <table cellpadding="0" cellspacing="0" style="margin:0 0 20px;">
@@ -469,7 +561,7 @@ function trialExpiredBodyEn(firstName: string | null, scheduleId?: string): stri
       </td></tr>
     </table>
     <p style="margin:0;font-size:15px;line-height:1.7;color:#374151;">
-      Questions? Just reply — I'm right here.<br />
+      Questions? Just reply — happy to help you decide.<br />
       <strong>Lucas</strong><br /><span style="color:#6b7280;">Glev Team</span>
     </p>
   `;
