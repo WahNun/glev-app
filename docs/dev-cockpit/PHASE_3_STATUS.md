@@ -137,6 +137,24 @@ und sicherstellen, dass `MISTRAL_API_KEY` als Secret gesetzt ist. App neu starte
    bleibt unverändert, `system`-Message „Mistral analysis failed." erscheint.
 7. Gegencheck DB: `SELECT status, plan_text FROM dev_cockpit_tasks WHERE id='…';`
 
+### UX-Fix (2026-06-02): Analyse-Persistenz beim Task-Wechsel + Glev-Icon-Status
+
+- **Race-Condition / Cross-Task-Leak behoben:** `loadTaskDetail()` verwirft jetzt
+  veraltete Antworten via `activeTaskIdRef` (eine langsame Lade-Antwort einer
+  früheren Task überschreibt nicht mehr die aktuelle). Beim Task-Wechsel werden
+  `messages/queue/attachments` sofort geleert → kein Aufblitzen fremder Daten.
+- **Analyse bleibt persistent:** Build-Plan-Card + Status werden aus der **Task-Row**
+  (`plan_text`/`status`) gerendert, nie aus globalem Lade-State → stabil beim
+  Wechsel und nach Browser-Reload. `analyzeTask` aktualisiert die Row by-id (auch
+  wenn der User weggewechselt hat).
+- **Sidebar-Status-Icons aus dem bestehenden Glev-Logo** (`components/GlevLogo`):
+  analyzing/planning/building → rotierendes Glev-Icon (Glev-Blau `#4F6EF7`, 2,6 s
+  linear infinite, leichter Glow); `waiting_for_input` → statisch gelb;
+  `waiting_for_start`/`preview_ready` → statisch grün; `applied` → grüner Check;
+  `rejected` → rotes X; `cancelled` → graues X; draft/archived/backlog → statisch
+  grau. Mehrere Tasks können gleichzeitig rotieren (`analyzingIds`-Set). Der globale
+  „lädt…"-Hinweis bleibt sekundär.
+
 ## 5. Offene Punkte für Phase 4
 
 - **Start Build** (regulärer `building`-Übergang), echte Code-Generierung,

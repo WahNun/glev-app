@@ -13,6 +13,7 @@
 // execution — those controls stay visibly disabled / "coming".
 
 import { useEffect, useRef, useState, useTransition } from "react";
+import GlevLogo from "@/components/GlevLogo";
 import {
   listTasks,
   getTask,
@@ -84,101 +85,76 @@ function StatusBadge({ status }: { status: TaskStatus }) {
 
 // ── Status indicator (left of the title in the sidebar) ─────────────────────
 //
-// CSS keyframes are injected once via <KeyframeStyles/> at the top of the
-// component tree (this file uses inline styles, no global stylesheet). The
-// animation names are dc-prefixed to avoid collisions.
+// Built from the existing Glev logo (components/GlevLogo) so the cockpit reuses
+// the app's brand mark instead of a generic spinner. One CSS keyframe (dc-spin)
+// is injected once via <KeyframeStyles/>; this file uses inline styles only.
+
+const GLEV_BLUE = "#4F6EF7";
 
 function KeyframeStyles() {
   return (
     <style>{`
       @keyframes dc-spin { to { transform: rotate(360deg); } }
-      @keyframes dc-pulse { 0%,100% { opacity: 1; transform: scale(1); } 50% { opacity: .4; transform: scale(.72); } }
-      @keyframes dc-pulse-slow { 0%,100% { opacity: 1; transform: scale(1); } 50% { opacity: .35; transform: scale(.78); } }
-      @keyframes dc-glow {
-        0%,100% { box-shadow: 0 0 0 0 rgba(34,197,94,.0); }
-        50%     { box-shadow: 0 0 6px 2px rgba(34,197,94,.6); }
-      }
     `}</style>
   );
 }
 
 const indicatorBox: React.CSSProperties = {
-  width: 14,
-  height: 14,
+  width: 18,
+  height: 18,
   flexShrink: 0,
   display: "inline-flex",
   alignItems: "center",
   justifyContent: "center",
 };
 
-function Dot({ color, anim }: { color: string; anim?: string }) {
+const ICON = { width: 14, height: 14 } as const;
+
+// Static (non-rotating) Glev logo tinted to a status colour.
+function GlevStatic({ color, title, label }: { color: string; title: string; label: string }) {
   return (
-    <span style={indicatorBox}>
-      <span
-        style={{
-          width: 9,
-          height: 9,
-          borderRadius: "50%",
-          background: color,
-          animation: anim,
-        }}
-      />
+    <span style={indicatorBox} title={title} aria-label={label}>
+      <GlevLogo size={18} color={color} bg="transparent" />
     </span>
   );
 }
 
-const ICON = { width: 12, height: 12 } as const;
+/**
+ * Per-task sidebar status indicator using the Glev logo.
+ * `animated` = this task is currently analyzing (transient UI state), so multiple
+ * tasks can spin at once.
+ *  - analyzing / planning / building → Glev icon rotates (slow, linear, blue + glow)
+ *  - waiting_for_input → static yellow Glev icon
+ *  - waiting_for_start / preview_ready → static green Glev icon
+ *  - applied → green check · rejected → red X · cancelled → grey X
+ *  - draft / archived / backlog → static muted-grey Glev icon
+ */
+function StatusIndicator({ status, animated }: { status: TaskStatus; animated?: boolean }) {
+  const spinning = animated || status === "planning" || status === "building";
 
-/** Small status glyph shown left of each sidebar task title. */
-function StatusIndicator({ status }: { status: TaskStatus }) {
+  if (spinning) {
+    return (
+      <span style={indicatorBox} title="Agent arbeitet…" aria-label={`${status} (aktiv)`}>
+        <span
+          style={{
+            display: "inline-flex",
+            animation: "dc-spin 2.6s linear infinite",
+            filter: `drop-shadow(0 0 4px ${GLEV_BLUE}aa)`,
+          }}
+        >
+          <GlevLogo size={18} color={GLEV_BLUE} bg="transparent" />
+        </span>
+      </span>
+    );
+  }
+
   switch (status) {
-    case "building":
-      // Small circular spinner — gentle ~1s rotation, clearly visible.
-      return (
-        <span style={indicatorBox} title="Agent arbeitet gerade" aria-label="building">
-          <span
-            style={{
-              width: 12,
-              height: 12,
-              borderRadius: "50%",
-              border: "2px solid #fed7aa",
-              borderTopColor: "#ea580c",
-              animation: "dc-spin 0.9s linear infinite",
-            }}
-          />
-        </span>
-      );
-    case "planning":
-      // Blue pulsing dot — "Analyse läuft".
-      return <Dot color="#2563eb" anim="dc-pulse 1.4s ease-in-out infinite" />;
     case "waiting_for_input":
-      // Yellow slow-pulsing dot — "Agent benötigt Antwort des Users" (Phase 3).
-      return <Dot color="#eab308" anim="dc-pulse-slow 2.2s ease-in-out infinite" />;
-    case "preview_ready":
-      // Green dot with a soft glow — "Build fertig, wartet auf Apply".
-      return (
-        <span style={indicatorBox} title="Build fertig — Apply Changes" aria-label="preview_ready">
-          <span
-            style={{
-              width: 10,
-              height: 10,
-              borderRadius: "50%",
-              background: "#22c55e",
-              animation: "dc-glow 1.8s ease-in-out infinite",
-            }}
-          />
-        </span>
-      );
+      return <GlevStatic color="#eab308" title="Agent benötigt Input" label="waiting_for_input" />;
     case "waiting_for_start":
-      // Amber pause glyph, no animation — "Plan fertig, wartet auf Start Build".
-      return (
-        <span style={indicatorBox} title="Plan fertig — wartet auf Start Build" aria-label="waiting_for_start">
-          <svg {...ICON} viewBox="0 0 24 24" fill="none" stroke="#b45309" strokeWidth={2.6} strokeLinecap="round">
-            <line x1="9" y1="6" x2="9" y2="18" />
-            <line x1="15" y1="6" x2="15" y2="18" />
-          </svg>
-        </span>
-      );
+      return <GlevStatic color="#16a34a" title="Plan fertig — bereit für Start Build" label="waiting_for_start" />;
+    case "preview_ready":
+      return <GlevStatic color="#16a34a" title="Build fertig — Apply Changes" label="preview_ready" />;
     case "applied":
       return (
         <span style={indicatorBox} title="Angewendet" aria-label="applied">
@@ -199,34 +175,17 @@ function StatusIndicator({ status }: { status: TaskStatus }) {
     case "cancelled":
       return (
         <span style={indicatorBox} title="Abgebrochen" aria-label="cancelled">
-          <svg {...ICON} viewBox="0 0 24 24" fill="#9ca3af">
-            <rect x="6" y="6" width="12" height="12" rx="2" />
-          </svg>
-        </span>
-      );
-    case "archived":
-      return (
-        <span style={indicatorBox} title="Archiviert" aria-label="archived">
-          <svg {...ICON} viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-            <rect x="3" y="4" width="18" height="4" rx="1" />
-            <path d="M5 8v11a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8" />
-            <line x1="10" y1="12" x2="14" y2="12" />
-          </svg>
-        </span>
-      );
-    case "backlog":
-      return (
-        <span style={indicatorBox} title="Backlog" aria-label="backlog">
-          <svg {...ICON} viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-            <path d="M22 12h-6l-2 3h-4l-2-3H2" />
-            <path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z" />
+          <svg {...ICON} viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth={3} strokeLinecap="round">
+            <line x1="6" y1="6" x2="18" y2="18" />
+            <line x1="18" y1="6" x2="6" y2="18" />
           </svg>
         </span>
       );
     case "draft":
+    case "archived":
+    case "backlog":
     default:
-      // Neutral grey dot keeps every row's indicator slot aligned.
-      return <Dot color="#cbd5e1" />;
+      return <GlevStatic color="#cbd5e1" title={STATUS_LABEL[status]} label={status} />;
   }
 }
 
@@ -384,6 +343,14 @@ export default function DevCockpit({ initialTasks }: { initialTasks: DevTask[] }
   const [queue, setQueue] = useState<DevQueueNote[]>([]);
   const [attachments, setAttachments] = useState<DevAttachment[]>([]);
 
+  // Per-task transient state. `analyzingIds` = tasks whose analysis is in flight
+  // (drives the spinning sidebar icon; several can run at once).
+  const [analyzingIds, setAnalyzingIds] = useState<Set<string>>(() => new Set());
+  // The task_id whose detail (messages/queue/attachments) is currently valid.
+  // Updated synchronously on every switch so out-of-order async loads can be
+  // discarded — prevents one task's data from overwriting another's.
+  const activeTaskIdRef = useRef<string | null>(selectedId);
+
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [menu, setMenu] = useState<{ task: DevTask; x: number; y: number } | null>(
@@ -432,20 +399,27 @@ export default function DevCockpit({ initialTasks }: { initialTasks: DevTask[] }
         listQueueNotes(taskId),
         listAttachments(taskId),
       ]);
+      // Discard stale responses: only apply if this task is still selected.
+      // Without this, a slow load for an earlier task can land after a newer
+      // one and overwrite the current task's messages/queue (cross-task leak).
+      if (activeTaskIdRef.current !== taskId) return;
       if (m.ok) setMessages(m.data);
       if (q.ok) setQueue(q.data);
       if (a.ok) setAttachments(a.data);
     });
   }
 
-  // Load detail whenever the selected task changes.
+  // Load detail whenever the selected task changes. We update the active-id ref
+  // synchronously and clear the previous task's transient state immediately so
+  // no other task's messages/queue can flash before this task's load resolves.
+  // (The Build Plan + status come from the task row itself, so they stay stable
+  // and persistent across switches/reloads — they never depend on this load.)
   useEffect(() => {
-    if (!selectedId) {
-      setMessages([]);
-      setQueue([]);
-      setAttachments([]);
-      return;
-    }
+    activeTaskIdRef.current = selectedId;
+    setMessages([]);
+    setQueue([]);
+    setAttachments([]);
+    if (!selectedId) return;
     loadTaskDetail(selectedId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedId]);
@@ -518,31 +492,47 @@ export default function DevCockpit({ initialTasks }: { initialTasks: DevTask[] }
     });
   }
 
-  // Phase 3 — Analyze Task with Mistral (plan only, no build).
+  // Phase 3 — Analyze Task with Mistral (plan only, no build). Runs per-task:
+  // the analyzed task spins in the sidebar (via analyzingIds) until it finishes,
+  // independently of which task is currently selected.
   function handleAnalyze() {
     if (!selectedTask) {
       setError("Erst eine Task auswählen.");
       return;
     }
     const id = selectedTask.id;
+    setAnalyzingIds((prev) => new Set(prev).add(id));
     setNotice("Analysiere mit Mistral…");
     startTransition(async () => {
-      const res = await analyzeTask(id);
-      if (!res.ok) {
-        setError(errText(res.error));
-        // Reload so the persisted "Mistral analysis failed." system message shows.
-        loadTaskDetail(id);
-        return;
+      try {
+        const res = await analyzeTask(id);
+        if (!res.ok) {
+          setError(errText(res.error));
+          // Reload so the persisted "Mistral analysis failed." message shows —
+          // only if this task is still selected (loadTaskDetail guards staleness).
+          if (activeTaskIdRef.current === id) loadTaskDetail(id);
+          return;
+        }
+        // Reflect the new status + plan_text on the task row (by id, so it's
+        // correct even if the user switched away). The Build Plan + status read
+        // from this row, so the analysis stays visible & persistent.
+        setTasks((prev) => prev.map((t) => (t.id === res.data.task.id ? res.data.task : t)));
+        // Refresh this task's messages only if it's still the active one; if the
+        // user navigated away, returning re-fetches via the selectedId effect.
+        if (activeTaskIdRef.current === id) loadTaskDetail(id);
+        refreshSummary();
+        setNotice(
+          res.data.plan.ready_to_build
+            ? "Analyse fertig — bereit für Start Build."
+            : "Analyse fertig — Rückfragen offen.",
+        );
+      } finally {
+        setAnalyzingIds((prev) => {
+          const next = new Set(prev);
+          next.delete(id);
+          return next;
+        });
       }
-      // Reflect the new status + plan_text on the task in the list.
-      setTasks((prev) => prev.map((t) => (t.id === res.data.task.id ? res.data.task : t)));
-      loadTaskDetail(id);
-      refreshSummary();
-      setNotice(
-        res.data.plan.ready_to_build
-          ? "Analyse fertig — bereit für Start Build."
-          : "Analyse fertig — Rückfragen offen.",
-      );
     });
   }
 
@@ -725,7 +715,7 @@ export default function DevCockpit({ initialTasks }: { initialTasks: DevTask[] }
                   }
                 >
                   <div style={taskTitleRowStyle}>
-                    <StatusIndicator status={task.status} />
+                    <StatusIndicator status={task.status} animated={analyzingIds.has(task.id)} />
                     <span style={taskTitleTextStyle}>{task.title}</span>
                   </div>
                   <div style={taskMetaStyle}>
