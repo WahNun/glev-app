@@ -2,6 +2,32 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
+// ── iOS AudioContext unlock ──────────────────────────────────────────────────
+// On iOS Safari / WKWebView, HTMLAudioElement.play() and Web Audio are blocked
+// unless the AudioContext was resumed inside a synchronous user-gesture handler.
+// Once resumed, the context stays running for the page lifetime — so we resume
+// it as the very first step of speak() (before any awaits) and then decode +
+// play the TTS audio through it. This bypasses iOS's autoplay policy.
+let _audioCtx: AudioContext | null = null;
+
+function getAudioCtx(): AudioContext | null {
+  if (typeof window === "undefined") return null;
+  const W = window as { AudioContext?: typeof AudioContext; webkitAudioContext?: typeof AudioContext };
+  const Ctor = W.AudioContext ?? W.webkitAudioContext;
+  if (!Ctor) return null;
+  if (!_audioCtx) _audioCtx = new Ctor();
+  return _audioCtx;
+}
+
+async function unlockAudioCtx(): Promise<AudioContext | null> {
+  const ctx = getAudioCtx();
+  if (!ctx) return null;
+  if (ctx.state === "suspended") {
+    try { await ctx.resume(); } catch { /* ignore */ }
+  }
+  return ctx;
+}
+
 const TTS_MUTE_KEY = "glev_tts_enabled";
 const TTS_AUTO_KEY = "glev_tts_auto";
 const TTS_INTENT_KEY = "glev_tts_intent";
@@ -114,9 +140,8 @@ export function useTTS() {
   // `speed` = TTS playback speed preference
   const [speed, setSpeedState] = useState<TtsSpeed>("normal");
   const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
-  // For Mistral TTS audio element
-  const audioRef = useRef<HTMLAudioElement | null>(null);
-  const audioBlobUrl = useRef<string | null>(null);
+  // For Mistral TTS via AudioContext (replaces HTMLAudioElement to fix iOS autoplay)
+  const sourceNodeRef = useRef<AudioBufferSourceNode | null>(null);
 
   useEffect(() => {
     setEnabled(readPref(TTS_MUTE_KEY, true));
@@ -154,22 +179,12 @@ export function useTTS() {
     return () => window.speechSynthesis.removeEventListener("voiceschanged", onVoicesChanged);
   }, []);
 
-  /** Revoke any blob URL we created to free memory. */
-  function revokeBlob() {
-    if (audioBlobUrl.current) {
-      URL.revokeObjectURL(audioBlobUrl.current);
-      audioBlobUrl.current = null;
-    }
-  }
-
   const stop = useCallback(() => {
-    // Stop Mistral HTML audio if playing
-    if (audioRef.current) {
-      audioRef.current.pause();
-      audioRef.current.src = "";
-      audioRef.current = null;
+    // Stop Mistral AudioContext source if playing
+    if (sourceNodeRef.current) {
+      try { sourceNodeRef.current.stop(); } catch { /* already stopped */ }
+      sourceNodeRef.current = null;
     }
-    revokeBlob();
     // Stop Web Speech fallback
     if (typeof window !== "undefined" && "speechSynthesis" in window) {
       window.speechSynthesis.cancel();
@@ -229,56 +244,48 @@ export function useTTS() {
       if (!clean) return;
 
       // ── Mistral Voxtral TTS (primary) ────────────────────────────────────
-      // Calls our server-side proxy /api/tts/mistral which holds the API key
-      // AND loads ref_audio from admin_tts_config server-side on every call.
-      // This means the caller (chat sheet, macro screen, etc.) never needs to
-      // pass ref_audio — the voice stays consistent across all screens.
-      // Falls back to Web Speech API on any error so voice always works.
+      // iOS fix: unlock AudioContext BEFORE the first await so we're still
+      // inside the user-gesture activation window. Once resumed, the context
+      // stays running for the page lifetime — audio.play() calls after async
+      // network fetches succeed because they go through AudioContext, not
+      // HTMLAudioElement (which iOS blocks after gesture chain is broken).
+      const audioCtx = await unlockAudioCtx();
+
       try {
         const res = await fetch("/api/tts/mistral", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             text: clean,
-            // Pass speed preference. The route will use it if the upstream
-            // provider supports it; otherwise the value is stored for future use.
             speed: speedRef.current,
           }),
           signal: AbortSignal.timeout(12_000),
         });
 
-        if (res.ok) {
-          const blob = await res.blob();
-          const url = URL.createObjectURL(blob);
-          audioBlobUrl.current = url;
+        if (res.ok && audioCtx) {
+          const arrayBuffer = await res.arrayBuffer();
+          const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
 
-          const audio = new Audio(url);
-          audio.playbackRate = speedToFloat(speedRef.current);
-          audioRef.current = audio;
+          const source = audioCtx.createBufferSource();
+          source.buffer = audioBuffer;
+          source.playbackRate.value = speedToFloat(speedRef.current);
+          source.connect(audioCtx.destination);
 
-          audio.onplay = () => { setSpeaking(true); setSpeakingId(id ?? null); };
-          audio.onended = () => {
+          sourceNodeRef.current = source;
+
+          source.onended = () => {
             setSpeaking(false);
             setSpeakingId(null);
-            audioRef.current = null;
-            revokeBlob();
-          };
-          audio.onerror = () => {
-            setSpeaking(false);
-            setSpeakingId(null);
-            audioRef.current = null;
-            revokeBlob();
-            // If audio playback fails, fall back to Web Speech
-            speakWebSpeech(clean, id);
+            sourceNodeRef.current = null;
           };
 
           setSpeaking(true);
           setSpeakingId(id ?? null);
-          await audio.play();
+          source.start(0);
           return; // success — skip Web Speech below
         }
       } catch {
-        // Network error, timeout, or server unavailable → fall through to Web Speech
+        // Network error, timeout, decode error → fall through to Web Speech
       }
 
       // ── Web Speech API (fallback) ─────────────────────────────────────────
