@@ -39,6 +39,7 @@ export type CrmUserRow = {
   onboarding_completed_at: string | null;
   sms_clicked: boolean;
   email_clicked: boolean;
+  reminder_sent_at: string | null;
 };
 
 export type CrmBetaRow = {
@@ -532,6 +533,7 @@ function TrialTab({ users }: { users: CrmUserRow[] }) {
               <Th>Trial endet</Th>
               <Th>Tage übrig</Th>
               <Th>Status</Th>
+              <Th>Reminder</Th>
               <Th>Onboarding</Th>
               <Th>Link-Klicks</Th>
               <Th>Angelegt</Th>
@@ -593,6 +595,11 @@ function TrialTab({ users }: { users: CrmUserRow[] }) {
                       : <span style={badgeActive}>Aktiv</span>}
                   </Td>
                   <Td>
+                    {u.reminder_sent_at
+                      ? <span style={badgeClicked} title={u.reminder_sent_at}>🔔 {fmtDate(u.reminder_sent_at)}</span>
+                      : <span style={{ color: "#d1d5db", fontSize: 12 }}>—</span>}
+                  </Td>
+                  <Td>
                     {u.onboarding_completed_at
                       ? <span style={badgeActive}>✓ Abgeschlossen</span>
                       : u.profile_trial_start_at
@@ -618,7 +625,7 @@ function TrialTab({ users }: { users: CrmUserRow[] }) {
               );
             })}
             {filtered.length === 0 && (
-              <tr><td colSpan={13} style={{ padding: 32, textAlign: "center", color: "#999" }}>Keine Trial-Nutzer.</td></tr>
+              <tr><td colSpan={14} style={{ padding: 32, textAlign: "center", color: "#999" }}>Keine Trial-Nutzer.</td></tr>
             )}
           </tbody>
         </table>

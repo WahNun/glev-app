@@ -60,7 +60,7 @@ export default async function CrmPage({
 
   const sb = getSupabaseAdmin();
 
-  const [authUsersRes, profilesRes, cgmRes, proRes, betaRes, profilesOptRes, trialProfilesRes, clicksRes] =
+  const [authUsersRes, profilesRes, cgmRes, proRes, betaRes, profilesOptRes, trialProfilesRes, clicksRes, metaLeadsRes] =
     await Promise.all([
       sb.auth.admin.listUsers({ page: 1, perPage: PAGE_SIZE }),
       sb.from("profiles").select(
@@ -87,6 +87,9 @@ export default async function CrmPage({
         .select("owner_email, source, clicked_at")
         .not("owner_email", "is", null)
         .not("clicked_at", "is", null),
+      sb.from("meta_leads")
+        .select("email, reminder_sent_at")
+        .not("email", "is", null),
     ]);
 
   const authUsers = (authUsersRes.data?.users ?? []).map((u) => ({
@@ -181,6 +184,13 @@ export default async function CrmPage({
     (trialProfilesRes.data ?? []).map((p) => [p.user_id as string, p]),
   );
 
+  const reminderByEmail = new Map(
+    (metaLeadsRes.data ?? []).map((r) => [
+      (r.email as string).toLowerCase(),
+      (r.reminder_sent_at as string | null) ?? null,
+    ]),
+  );
+
   const users: CrmUserRow[] = authUsers.map((u) => {
     const p = profileById.get(u.id);
     const opt = profileOptById.get(u.id);
@@ -244,6 +254,7 @@ export default async function CrmPage({
       onboarding_completed_at: trialP?.onboarding_completed_at as string | null ?? null,
       sms_clicked: clicks?.sms ?? false,
       email_clicked: clicks?.email ?? false,
+      reminder_sent_at: reminderByEmail.get(u.email.toLowerCase()) ?? null,
     };
   });
 
