@@ -2,6 +2,111 @@
 
 import { isAdminAuthed } from "@/lib/adminAuth";
 import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
+import { GLEV_CHAT_SYSTEM_PROMPT } from "@/lib/ai/glevChatPrompt";
+
+const PROMPT_KEY = "glev_ai_default";
+
+export interface AgentPromptConfig {
+  promptText: string;
+  version: number;
+  updatedAt: string | null;
+  updatedBy: string | null;
+  isDefault: boolean;
+}
+
+export async function getAgentPrompt(): Promise<AgentPromptConfig | null> {
+  if (!(await isAdminAuthed())) return null;
+  const sb = getSupabaseAdmin();
+  const { data } = await sb
+    .from("ai_agent_prompts")
+    .select("prompt_text, version, updated_at, updated_by")
+    .eq("key", PROMPT_KEY)
+    .eq("is_active", true)
+    .maybeSingle();
+
+  if (!data) {
+    return {
+      promptText: GLEV_CHAT_SYSTEM_PROMPT,
+      version: 0,
+      updatedAt: null,
+      updatedBy: null,
+      isDefault: true,
+    };
+  }
+  return {
+    promptText: data.prompt_text || GLEV_CHAT_SYSTEM_PROMPT,
+    version: data.version ?? 1,
+    updatedAt: data.updated_at ?? null,
+    updatedBy: data.updated_by ?? null,
+    isDefault: false,
+  };
+}
+
+export async function saveAgentPrompt(
+  text: string,
+  adminEmail: string,
+): Promise<{ ok: boolean; error?: string }> {
+  if (!(await isAdminAuthed())) return { ok: false, error: "Nicht eingeloggt." };
+  if (!text.trim()) return { ok: false, error: "Prompt darf nicht leer sein." };
+
+  const sb = getSupabaseAdmin();
+
+  const { data: existing } = await sb
+    .from("ai_agent_prompts")
+    .select("version")
+    .eq("key", PROMPT_KEY)
+    .maybeSingle();
+
+  const nextVersion = (existing?.version ?? 0) + 1;
+
+  const { error } = await sb.from("ai_agent_prompts").upsert(
+    {
+      key: PROMPT_KEY,
+      title: "Glev AI Chat System Prompt",
+      prompt_text: text.trim(),
+      is_active: true,
+      version: nextVersion,
+      updated_by: adminEmail,
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: "key" },
+  );
+
+  if (error) return { ok: false, error: error.message };
+  return { ok: true };
+}
+
+export async function resetAgentPrompt(
+  adminEmail: string,
+): Promise<{ ok: boolean; error?: string }> {
+  if (!(await isAdminAuthed())) return { ok: false, error: "Nicht eingeloggt." };
+
+  const sb = getSupabaseAdmin();
+
+  const { data: existing } = await sb
+    .from("ai_agent_prompts")
+    .select("version")
+    .eq("key", PROMPT_KEY)
+    .maybeSingle();
+
+  const nextVersion = (existing?.version ?? 0) + 1;
+
+  const { error } = await sb.from("ai_agent_prompts").upsert(
+    {
+      key: PROMPT_KEY,
+      title: "Glev AI Chat System Prompt",
+      prompt_text: GLEV_CHAT_SYSTEM_PROMPT,
+      is_active: true,
+      version: nextVersion,
+      updated_by: adminEmail,
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: "key" },
+  );
+
+  if (error) return { ok: false, error: error.message };
+  return { ok: true };
+}
 
 const MAX_BYTES = 5 * 1024 * 1024; // 5 MB
 const ALLOWED_MIME = new Set([

@@ -1,7 +1,17 @@
 "use client";
 
 import { useEffect, useRef, useState, useTransition } from "react";
-import { getTtsConfig, uploadRefAudio, deleteRefAudio, testTts, type TtsConfig } from "./actions";
+import {
+  getTtsConfig,
+  uploadRefAudio,
+  deleteRefAudio,
+  testTts,
+  getAgentPrompt,
+  saveAgentPrompt,
+  resetAgentPrompt,
+  type TtsConfig,
+  type AgentPromptConfig,
+} from "./actions";
 
 const S = {
   page: { maxWidth: 780, margin: "0 auto", padding: "32px 24px", fontFamily: "system-ui, -apple-system, sans-serif", color: "#111" } as React.CSSProperties,
@@ -24,7 +34,7 @@ const S = {
   btnGhost: { background: "#f3f4f6", color: "#374151" } as React.CSSProperties,
   err: { marginTop: 8, padding: "8px 12px", borderRadius: 8, background: "#fee2e2", color: "#991b1b", fontSize: 12 } as React.CSSProperties,
   ok: { marginTop: 8, padding: "8px 12px", borderRadius: 8, background: "#dcfce7", color: "#166534", fontSize: 12 } as React.CSSProperties,
-  textarea: { width: "100%", padding: "8px 12px", borderRadius: 8, border: "1px solid #d1d5db", fontSize: 13, fontFamily: "inherit", resize: "vertical" as const, boxSizing: "border-box" as const },
+  textarea: { width: "100%", padding: "8px 12px", borderRadius: 8, border: "1px solid #d1d5db", fontSize: 13, fontFamily: "ui-monospace, 'Cascadia Code', 'Source Code Pro', Menlo, monospace", resize: "vertical" as const, boxSizing: "border-box" as const },
   fileInput: { fontSize: 13, padding: "6px 0" } as React.CSSProperties,
 };
 
@@ -37,16 +47,39 @@ export default function MistralTTSPage() {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const [isPending, startTransition] = useTransition();
 
+  // Prompt state
+  const [promptCfg, setPromptCfg] = useState<AgentPromptConfig | null>(null);
+  const [promptText, setPromptText] = useState("");
+  const [promptMsg, setPromptMsg] = useState<{ type: "ok" | "err"; text: string } | null>(null);
+  const [isPromptPending, startPromptTransition] = useTransition();
+
   const reload = () => {
     setLoading(true);
     getTtsConfig().then(c => { setCfg(c); setLoading(false); });
   };
 
-  useEffect(() => { reload(); }, []);
+  const reloadPrompt = () => {
+    getAgentPrompt().then(p => {
+      if (p) {
+        setPromptCfg(p);
+        setPromptText(p.promptText);
+      }
+    });
+  };
+
+  useEffect(() => {
+    reload();
+    reloadPrompt();
+  }, []);
 
   const flash = (type: "ok" | "err", text: string) => {
     setMsg({ type, text });
     setTimeout(() => setMsg(null), 5000);
+  };
+
+  const flashPrompt = (type: "ok" | "err", text: string) => {
+    setPromptMsg({ type, text });
+    setTimeout(() => setPromptMsg(null), 5000);
   };
 
   const handleUpload = (e: React.FormEvent<HTMLFormElement>) => {
@@ -78,6 +111,31 @@ export default function MistralTTSPage() {
         setTimeout(() => { audioRef.current?.play().catch(() => {}); }, 100);
       } else {
         flash("err", res.error ?? "TTS-Fehler");
+      }
+    });
+  };
+
+  const handleSavePrompt = () => {
+    startPromptTransition(async () => {
+      const res = await saveAgentPrompt(promptText, "admin");
+      if (res.ok) {
+        flashPrompt("ok", "Prompt gespeichert ✓");
+        reloadPrompt();
+      } else {
+        flashPrompt("err", res.error ?? "Fehler");
+      }
+    });
+  };
+
+  const handleResetPrompt = () => {
+    if (!confirm("Prompt auf den hardcoded Default zurücksetzen?")) return;
+    startPromptTransition(async () => {
+      const res = await resetAgentPrompt("admin");
+      if (res.ok) {
+        flashPrompt("ok", "Prompt auf Default zurückgesetzt ✓");
+        reloadPrompt();
+      } else {
+        flashPrompt("err", res.error ?? "Fehler");
       }
     });
   };
@@ -204,6 +262,76 @@ export default function MistralTTSPage() {
           immer mit der gleichen Stimme, egal welcher Nutzer fragt.<br /><br />
           <strong>Priorität:</strong> ref_audio (diese Seite) → voice_id (DB) → Env-Var MISTRAL_TTS_VOICE_ID → Mistral-Standard.
         </p>
+      </div>
+
+      {/* ── AI Agent Prompt ──────────────────────────────────────────── */}
+      <div style={{ ...S.card, marginTop: 40 }}>
+        <div style={S.cardTitle}>Glev AI Agent Prompt</div>
+        <p style={{ fontSize: 12, color: "#666", marginBottom: 16, lineHeight: 1.6 }}>
+          Der System-Prompt steuert das Verhalten des Glev-Chat-Assistenten (Mistral).
+          Änderungen wirken sofort ohne Redeploy — der Chat-Endpunkt lädt den Prompt zur Laufzeit aus der Datenbank.
+        </p>
+
+        {/* Metadata row */}
+        {promptCfg && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 16 }}>
+            <div style={S.row}>
+              <span style={S.label}>Key</span>
+              <code style={{ fontSize: 12, background: "#f3f4f6", padding: "2px 8px", borderRadius: 4 }}>glev_ai_default</code>
+            </div>
+            <div style={S.row}>
+              <span style={S.label}>Status</span>
+              <span style={S.badge(!promptCfg.isDefault)}>
+                {promptCfg.isDefault ? "Hardcoded Default" : `v${promptCfg.version} · In Datenbank`}
+              </span>
+            </div>
+            {promptCfg.updatedAt && (
+              <div style={S.row}>
+                <span style={S.label}>Zuletzt gespeichert</span>
+                <span style={{ fontSize: 13, color: "#777" }}>
+                  {new Date(promptCfg.updatedAt).toLocaleString("de-DE")}
+                  {promptCfg.updatedBy ? ` · ${promptCfg.updatedBy}` : ""}
+                </span>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Prompt textarea */}
+        <textarea
+          style={{ ...S.textarea, minHeight: 320, fontSize: 12, lineHeight: 1.5 }}
+          value={promptText}
+          onChange={e => setPromptText(e.target.value)}
+          placeholder="System-Prompt…"
+          spellCheck={false}
+        />
+
+        {/* Character count */}
+        <div style={{ fontSize: 11, color: "#999", marginTop: 4, textAlign: "right" }}>
+          {promptText.length.toLocaleString("de-DE")} Zeichen
+        </div>
+
+        {/* Action buttons */}
+        <div style={{ marginTop: 12, display: "flex", gap: 10, flexWrap: "wrap" }}>
+          <button
+            style={{ ...S.btn, ...S.btnPrimary, opacity: isPromptPending ? 0.6 : 1 }}
+            onClick={handleSavePrompt}
+            disabled={isPromptPending || !promptText.trim()}
+          >
+            {isPromptPending ? "Speichert…" : "Prompt speichern"}
+          </button>
+          <button
+            style={{ ...S.btn, ...S.btnGhost, opacity: isPromptPending ? 0.6 : 1 }}
+            onClick={handleResetPrompt}
+            disabled={isPromptPending}
+          >
+            Auf Default zurücksetzen
+          </button>
+        </div>
+
+        {promptMsg && (
+          <div style={promptMsg.type === "ok" ? S.ok : S.err}>{promptMsg.text}</div>
+        )}
       </div>
     </div>
   );

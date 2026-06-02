@@ -262,6 +262,35 @@ async function loadUserMemoryBlock(
 
 const AI_OWNER_EMAIL = "lucas@wahnon-connect.com";
 
+/**
+ * Loads the active system prompt from `ai_agent_prompts` (key = 'glev_ai_default').
+ * Falls back to the hardcoded GLEV_CHAT_SYSTEM_PROMPT if the table has no entry,
+ * the entry is empty, or the DB call fails. Never throws — the chat must keep
+ * working even when the admin table is unreachable.
+ */
+async function loadActiveSystemPrompt(): Promise<string> {
+  let admin;
+  try {
+    admin = getSupabaseAdmin();
+  } catch {
+    return GLEV_CHAT_SYSTEM_PROMPT;
+  }
+  try {
+    const { data } = await admin
+      .from("ai_agent_prompts")
+      .select("prompt_text")
+      .eq("key", "glev_ai_default")
+      .eq("is_active", true)
+      .maybeSingle();
+    if (data?.prompt_text && data.prompt_text.trim().length > 0) {
+      return data.prompt_text.trim();
+    }
+  } catch {
+    // Fail open — return the hardcoded default below.
+  }
+  return GLEV_CHAT_SYSTEM_PROMPT;
+}
+
 export async function POST(req: NextRequest) {
   // 1. Auth
   const auth = await authedClient(req);
@@ -332,11 +361,14 @@ export async function POST(req: NextRequest) {
   // System-Message angehängt, wenn es tatsächlich Einträge gibt. Kein
   // leerer „Was du über diesen User weißt:"-Header — das würde den
   // Agenten ohne echten Inhalt nur verwirren.
-  const memoryBlock = await loadUserMemoryBlock(sb, user.id);
+  const [memoryBlock, activeSystemPrompt] = await Promise.all([
+    loadUserMemoryBlock(sb, user.id),
+    loadActiveSystemPrompt(),
+  ]);
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const messages: any[] = [
-    { role: "system", content: GLEV_CHAT_SYSTEM_PROMPT },
+    { role: "system", content: activeSystemPrompt },
     ...(memoryBlock ? [{ role: "system", content: memoryBlock }] : []),
     {
       role: "system",
