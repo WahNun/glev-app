@@ -4,25 +4,17 @@ import { isAdminAuthed } from "@/lib/adminAuth";
 import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
 import { GLEV_CHAT_SYSTEM_PROMPT } from "@/lib/ai/glevChatPrompt";
 import { bustSystemPromptCache } from "@/lib/ai/systemPromptCache";
+import {
+  DEFAULT_STYLE_PREFIX,
+  type AgentPromptConfig,
+  type PromptVersion,
+  type StylePrefixConfig,
+  type TtsConfig,
+} from "./types";
+
+export type { AgentPromptConfig, PromptVersion, StylePrefixConfig, TtsConfig };
 
 const PROMPT_KEY = "glev_ai_default";
-
-export interface AgentPromptConfig {
-  promptText: string;
-  version: number;
-  updatedAt: string | null;
-  updatedBy: string | null;
-  isDefault: boolean;
-}
-
-export interface PromptVersion {
-  id: string;
-  version: number;
-  promptText: string;
-  savedBy: string | null;
-  savedAt: string;
-  isReset: boolean;
-}
 
 export async function getAgentPrompt(): Promise<AgentPromptConfig | null> {
   if (!(await isAdminAuthed())) return null;
@@ -175,15 +167,6 @@ export async function getPromptVersions(page = 0): Promise<{ versions: PromptVer
 
 // ── Style-Prefix ─────────────────────────────────────────────────────────────
 
-export const DEFAULT_STYLE_PREFIX =
-  "Sprich warm, ruhig und natürlich — wie ein vertrauter Assistent beim Gespräch unter vier Augen. Keine übertriebene Betonung, keine Pausen zwischen Wörtern, fließend und menschlich.";
-
-export interface StylePrefixConfig {
-  text: string;
-  isDefault: boolean;
-  updatedAt: string | null;
-}
-
 export async function getStylePrefix(): Promise<StylePrefixConfig | null> {
   if (!(await isAdminAuthed())) return null;
   const sb = getSupabaseAdmin();
@@ -242,14 +225,6 @@ const ALLOWED_MIME = new Set([
   "audio/ogg", "audio/opus",
   "audio/pcm",
 ]);
-
-export interface TtsConfig {
-  hasRefAudio: boolean;
-  refAudioPreviewB64: string | null; // first 200 kB for in-browser playback
-  voiceId: string | null;
-  model: string;
-  updatedAt: string | null;
-}
 
 export async function getTtsConfig(): Promise<TtsConfig | null> {
   if (!(await isAdminAuthed())) return null;

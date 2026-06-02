@@ -12,12 +12,14 @@ import {
   getStylePrefix,
   saveStylePrefix,
   resetStylePrefix,
+} from "./actions";
+import {
   DEFAULT_STYLE_PREFIX,
   type TtsConfig,
   type AgentPromptConfig,
   type PromptVersion,
   type StylePrefixConfig,
-} from "./actions";
+} from "./types";
 
 const S = {
   page: { maxWidth: 780, margin: "0 auto", padding: "32px 24px", fontFamily: "system-ui, -apple-system, sans-serif", color: "#111" } as React.CSSProperties,
