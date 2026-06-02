@@ -47,15 +47,17 @@ export async function POST(req: NextRequest) {
   // Priority: ref_audio (admin upload) > voice_id (DB) > env var > Mistral default.
   let refAudio: string | null = null;
   let dbVoiceId: string | null = null;
+  let dbStylePrefix: string | null = null;
   try {
     const sb = getSupabaseAdmin();
     const { data: cfg } = await sb
       .from("admin_tts_config")
-      .select("ref_audio, voice_id")
+      .select("ref_audio, voice_id, style_prefix")
       .eq("id", "singleton")
       .maybeSingle();
     refAudio = cfg?.ref_audio ?? null;
     dbVoiceId = cfg?.voice_id ?? null;
+    dbStylePrefix = (cfg?.style_prefix as string | null) ?? null;
   } catch {
     // Table may not exist yet in dev — fall back to env var below.
   }
@@ -70,8 +72,12 @@ export async function POST(req: NextRequest) {
   // tested (2026-06-02) and produced no reliable audible difference in speaking
   // rate — Voxtral's neural vocoder does not respond predictably to text-based
   // pace instructions, while playbackRate works precisely on all platforms.
-  const stylePrefix =
+  //
+  // Style prefix is editable via /glev-ops/mistral (stored in admin_tts_config.style_prefix).
+  // Falls back to the hardcoded default when the DB value is absent or empty.
+  const DEFAULT_STYLE_PREFIX =
     "Sprich warm, ruhig und natürlich — wie ein vertrauter Assistent beim Gespräch unter vier Augen. Keine übertriebene Betonung, keine Pausen zwischen Wörtern, fließend und menschlich.";
+  const stylePrefix = dbStylePrefix?.trim() || DEFAULT_STYLE_PREFIX;
   const styledInput = skipStylePrefix ? text : `${stylePrefix}\n\n${text}`;
 
   const body: Record<string, unknown> = {

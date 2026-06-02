@@ -173,6 +173,67 @@ export async function getPromptVersions(page = 0): Promise<{ versions: PromptVer
   return { versions, hasMore };
 }
 
+// ── Style-Prefix ─────────────────────────────────────────────────────────────
+
+export const DEFAULT_STYLE_PREFIX =
+  "Sprich warm, ruhig und natürlich — wie ein vertrauter Assistent beim Gespräch unter vier Augen. Keine übertriebene Betonung, keine Pausen zwischen Wörtern, fließend und menschlich.";
+
+export interface StylePrefixConfig {
+  text: string;
+  isDefault: boolean;
+  updatedAt: string | null;
+}
+
+export async function getStylePrefix(): Promise<StylePrefixConfig | null> {
+  if (!(await isAdminAuthed())) return null;
+  const sb = getSupabaseAdmin();
+  const { data } = await sb
+    .from("admin_tts_config")
+    .select("style_prefix, updated_at")
+    .eq("id", "singleton")
+    .maybeSingle();
+  const raw = (data?.style_prefix as string | null) ?? null;
+  return {
+    text: raw?.trim() || DEFAULT_STYLE_PREFIX,
+    isDefault: !raw?.trim(),
+    updatedAt: data?.updated_at ?? null,
+  };
+}
+
+export async function saveStylePrefix(
+  text: string,
+): Promise<{ ok: boolean; error?: string }> {
+  if (!(await isAdminAuthed())) return { ok: false, error: "Nicht eingeloggt." };
+  const trimmed = text.trim();
+  if (trimmed.length > 2000) return { ok: false, error: "Style-Prefix zu lang (max 2000 Zeichen)." };
+
+  const sb = getSupabaseAdmin();
+  // Store NULL when the admin explicitly resets to the default (empty submission)
+  const { error } = await sb.from("admin_tts_config").upsert(
+    {
+      id: "singleton",
+      style_prefix: trimmed || null,
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: "id" },
+  );
+  if (error) return { ok: false, error: error.message };
+  return { ok: true };
+}
+
+export async function resetStylePrefix(): Promise<{ ok: boolean; error?: string }> {
+  if (!(await isAdminAuthed())) return { ok: false, error: "Nicht eingeloggt." };
+  const sb = getSupabaseAdmin();
+  const { error } = await sb.from("admin_tts_config").upsert(
+    { id: "singleton", style_prefix: null, updated_at: new Date().toISOString() },
+    { onConflict: "id" },
+  );
+  if (error) return { ok: false, error: error.message };
+  return { ok: true };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
 const MAX_BYTES = 5 * 1024 * 1024; // 5 MB
 const ALLOWED_MIME = new Set([
   "audio/wav", "audio/x-wav", "audio/wave",

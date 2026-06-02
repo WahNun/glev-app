@@ -9,9 +9,14 @@ import {
   saveAgentPrompt,
   resetAgentPrompt,
   getPromptVersions,
+  getStylePrefix,
+  saveStylePrefix,
+  resetStylePrefix,
+  DEFAULT_STYLE_PREFIX,
   type TtsConfig,
   type AgentPromptConfig,
   type PromptVersion,
+  type StylePrefixConfig,
 } from "./actions";
 
 const S = {
@@ -48,6 +53,12 @@ export default function MistralTTSPage() {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const [isPending, startTransition] = useTransition();
 
+  // Style-Prefix state
+  const [styleCfg, setStyleCfg] = useState<StylePrefixConfig | null>(null);
+  const [styleText, setStyleText] = useState(DEFAULT_STYLE_PREFIX);
+  const [styleMsg, setStyleMsg] = useState<{ type: "ok" | "err"; text: string } | null>(null);
+  const [isStylePending, startStyleTransition] = useTransition();
+
   // Prompt state
   const [promptCfg, setPromptCfg] = useState<AgentPromptConfig | null>(null);
   const [promptText, setPromptText] = useState("");
@@ -64,6 +75,15 @@ export default function MistralTTSPage() {
   const reload = () => {
     setLoading(true);
     getTtsConfig().then(c => { setCfg(c); setLoading(false); });
+  };
+
+  const reloadStyle = () => {
+    getStylePrefix().then(s => {
+      if (s) {
+        setStyleCfg(s);
+        setStyleText(s.text);
+      }
+    });
   };
 
   const reloadPrompt = () => {
@@ -97,12 +117,43 @@ export default function MistralTTSPage() {
 
   useEffect(() => {
     reload();
+    reloadStyle();
     reloadPrompt();
   }, []);
 
   const flash = (type: "ok" | "err", text: string) => {
     setMsg({ type, text });
     setTimeout(() => setMsg(null), 5000);
+  };
+
+  const flashStyle = (type: "ok" | "err", text: string) => {
+    setStyleMsg({ type, text });
+    setTimeout(() => setStyleMsg(null), 5000);
+  };
+
+  const handleSaveStyle = () => {
+    startStyleTransition(async () => {
+      const res = await saveStylePrefix(styleText);
+      if (res.ok) {
+        flashStyle("ok", "Style-Prefix gespeichert ✓");
+        reloadStyle();
+      } else {
+        flashStyle("err", res.error ?? "Fehler");
+      }
+    });
+  };
+
+  const handleResetStyle = () => {
+    if (!confirm("Style-Prefix auf den hardcoded Default zurücksetzen?")) return;
+    startStyleTransition(async () => {
+      const res = await resetStylePrefix();
+      if (res.ok) {
+        flashStyle("ok", "Style-Prefix auf Default zurückgesetzt ✓");
+        reloadStyle();
+      } else {
+        flashStyle("err", res.error ?? "Fehler");
+      }
+    });
   };
 
   const flashPrompt = (type: "ok" | "err", text: string) => {
@@ -301,6 +352,74 @@ export default function MistralTTSPage() {
           immer mit der gleichen Stimme, egal welcher Nutzer fragt.<br /><br />
           <strong>Priorität:</strong> ref_audio (diese Seite) → voice_id (DB) → Env-Var MISTRAL_TTS_VOICE_ID → Mistral-Standard.
         </p>
+      </div>
+
+      {/* ── Style-Prefix ─────────────────────────────────────────────── */}
+      <div style={{ ...S.card, marginTop: 40 }}>
+        <div style={S.cardTitle}>TTS Style-Prefix</div>
+        <p style={{ fontSize: 12, color: "#666", marginBottom: 16, lineHeight: 1.6 }}>
+          Dieser Text wird vor jede TTS-Anfrage gesetzt und steuert den Sprechstil (Voxtral ist LLM-basiert und reagiert auf solche Anweisungen).
+          Änderungen wirken sofort ohne Redeploy — der TTS-Endpunkt lädt den Wert zur Laufzeit aus der Datenbank.
+        </p>
+
+        {styleCfg && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 16 }}>
+            <div style={S.row}>
+              <span style={S.label}>Status</span>
+              <span style={S.badge(!styleCfg.isDefault)}>
+                {styleCfg.isDefault ? "Hardcoded Default" : "In Datenbank"}
+              </span>
+            </div>
+            {!styleCfg.isDefault && styleCfg.updatedAt && (
+              <div style={S.row}>
+                <span style={S.label}>Zuletzt gespeichert</span>
+                <span style={{ fontSize: 13, color: "#777" }}>
+                  {new Date(styleCfg.updatedAt).toLocaleString("de-DE")}
+                </span>
+              </div>
+            )}
+          </div>
+        )}
+
+        <textarea
+          style={{ ...S.textarea, minHeight: 100 }}
+          value={styleText}
+          onChange={e => setStyleText(e.target.value)}
+          placeholder="Style-Prefix…"
+          spellCheck={false}
+        />
+
+        <div style={{ fontSize: 11, color: "#999", marginTop: 4, textAlign: "right" }}>
+          {styleText.length.toLocaleString("de-DE")} / 2000 Zeichen
+        </div>
+
+        <div style={{ marginTop: 12, display: "flex", gap: 10, flexWrap: "wrap" }}>
+          <button
+            style={{ ...S.btn, ...S.btnPrimary, opacity: isStylePending ? 0.6 : 1 }}
+            onClick={handleSaveStyle}
+            disabled={isStylePending || !styleText.trim()}
+          >
+            {isStylePending ? "Speichert…" : "Style-Prefix speichern"}
+          </button>
+          <button
+            style={{ ...S.btn, ...S.btnGhost, opacity: isStylePending ? 0.6 : 1 }}
+            onClick={handleResetStyle}
+            disabled={isStylePending}
+          >
+            Auf Default zurücksetzen
+          </button>
+        </div>
+
+        {styleMsg && (
+          <div style={styleMsg.type === "ok" ? S.ok : S.err}>{styleMsg.text}</div>
+        )}
+
+        <div style={{ marginTop: 16, padding: "10px 14px", borderRadius: 8, background: "#f8fafc", border: "1px solid #e5e7eb" }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: "#888", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 }}>Hardcoded Default (Fallback)</div>
+          <div style={{ fontSize: 12, color: "#555", fontFamily: "ui-monospace, 'Cascadia Code', monospace", lineHeight: 1.5 }}>
+            {DEFAULT_STYLE_PREFIX}
+          </div>
+        </div>
       </div>
 
       {/* ── AI Agent Prompt ──────────────────────────────────────────── */}
