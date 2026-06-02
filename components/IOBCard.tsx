@@ -325,16 +325,16 @@ export default function IOBCard({ insulin, insulinType, meals, currentBg, onLogB
                     {iob < 1 ? t("iob_risk_low") : iob < 3 ? t("iob_risk_moderate") : t("iob_risk_high")}
                   </div>
                 )}
-                {onLogBolus && !cleared && (
+                {onLogBolus && (
                   <button
                     type="button"
                     onClick={e => { e.stopPropagation(); onLogBolus(); }}
                     style={{
                       alignSelf: "flex-start", padding: "3px 10px", borderRadius: 99,
                       fontSize: 11, fontWeight: 700, letterSpacing: "0.04em",
-                      border: `1px solid ${color}44`,
-                      background: `${color}10`,
-                      color,
+                      border: cleared ? "1px solid var(--border)" : `1px solid ${color}44`,
+                      background: cleared ? "var(--surface-soft)" : `${color}10`,
+                      color: cleared ? "var(--text-ghost)" : color,
                       cursor: "pointer",
                       WebkitTapHighlightColor: "transparent",
                       touchAction: "manipulation",
