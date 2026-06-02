@@ -13,6 +13,7 @@ import { ThemeProvider } from "@/components/ThemeProvider";
 import CookieBanner from "@/components/CookieBanner";
 import GoogleAnalytics from "@/components/GoogleAnalytics";
 import ServiceWorkerRegistration from "@/components/ServiceWorkerRegistration";
+import SplashScreenHider from "@/components/SplashScreenHider";
 
 const META_PIXEL_ID = "960780236789931";
 
@@ -254,6 +255,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
             {children}
             <CookieBanner />
             <ServiceWorkerRegistration />
+            <SplashScreenHider />
           </ThemeProvider>
         </NextIntlClientProvider>
       </body>

@@ -35,6 +35,12 @@ const config: CapacitorConfig = {
     ScreenOrientation: {
       default: "portrait",
     },
+    SplashScreen: {
+      launchAutoHide: false,
+      backgroundColor: "#111117",
+      androidSplashResourceName: "splash",
+      showSpinner: false,
+    },
   },
   ios: {
     // 2026-05-18: switched from "always" → "never" so the WKWebView
