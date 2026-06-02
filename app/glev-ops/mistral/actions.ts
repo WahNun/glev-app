@@ -15,6 +15,15 @@ export interface AgentPromptConfig {
   isDefault: boolean;
 }
 
+export interface PromptVersion {
+  id: string;
+  version: number;
+  promptText: string;
+  savedBy: string | null;
+  savedAt: string;
+  isReset: boolean;
+}
+
 export async function getAgentPrompt(): Promise<AgentPromptConfig | null> {
   if (!(await isAdminAuthed())) return null;
   const sb = getSupabaseAdmin();
@@ -59,6 +68,7 @@ export async function saveAgentPrompt(
     .maybeSingle();
 
   const nextVersion = (existing?.version ?? 0) + 1;
+  const now = new Date().toISOString();
 
   const { error } = await sb.from("ai_agent_prompts").upsert(
     {
@@ -68,12 +78,24 @@ export async function saveAgentPrompt(
       is_active: true,
       version: nextVersion,
       updated_by: adminEmail,
-      updated_at: new Date().toISOString(),
+      updated_at: now,
     },
     { onConflict: "key" },
   );
 
   if (error) return { ok: false, error: error.message };
+
+  const { error: histError } = await sb.from("ai_agent_prompt_versions").insert({
+    prompt_key: PROMPT_KEY,
+    version: nextVersion,
+    prompt_text: text.trim(),
+    saved_by: adminEmail,
+    saved_at: now,
+    is_reset: false,
+  });
+
+  if (histError) return { ok: false, error: `Prompt gespeichert, aber Verlaufseintrag fehlgeschlagen: ${histError.message}` };
+
   bustSystemPromptCache();
   return { ok: true };
 }
@@ -92,6 +114,7 @@ export async function resetAgentPrompt(
     .maybeSingle();
 
   const nextVersion = (existing?.version ?? 0) + 1;
+  const now = new Date().toISOString();
 
   const { error } = await sb.from("ai_agent_prompts").upsert(
     {
@@ -101,14 +124,53 @@ export async function resetAgentPrompt(
       is_active: true,
       version: nextVersion,
       updated_by: adminEmail,
-      updated_at: new Date().toISOString(),
+      updated_at: now,
     },
     { onConflict: "key" },
   );
 
   if (error) return { ok: false, error: error.message };
+
+  const { error: histError } = await sb.from("ai_agent_prompt_versions").insert({
+    prompt_key: PROMPT_KEY,
+    version: nextVersion,
+    prompt_text: GLEV_CHAT_SYSTEM_PROMPT,
+    saved_by: adminEmail,
+    saved_at: now,
+    is_reset: true,
+  });
+
+  if (histError) return { ok: false, error: `Prompt zurückgesetzt, aber Verlaufseintrag fehlgeschlagen: ${histError.message}` };
+
   bustSystemPromptCache();
   return { ok: true };
+}
+
+const VERSIONS_PAGE_SIZE = 20;
+
+export async function getPromptVersions(page = 0): Promise<{ versions: PromptVersion[]; hasMore: boolean } | null> {
+  if (!(await isAdminAuthed())) return null;
+  const sb = getSupabaseAdmin();
+  const from = page * VERSIONS_PAGE_SIZE;
+  const to = from + VERSIONS_PAGE_SIZE;
+  const { data, error } = await sb
+    .from("ai_agent_prompt_versions")
+    .select("id, version, prompt_text, saved_by, saved_at, is_reset")
+    .eq("prompt_key", PROMPT_KEY)
+    .order("version", { ascending: false })
+    .range(from, to);
+
+  if (error || !data) return { versions: [], hasMore: false };
+  const hasMore = data.length > VERSIONS_PAGE_SIZE;
+  const versions = data.slice(0, VERSIONS_PAGE_SIZE).map((r) => ({
+    id: r.id as string,
+    version: r.version as number,
+    promptText: r.prompt_text as string,
+    savedBy: (r.saved_by as string | null) ?? null,
+    savedAt: r.saved_at as string,
+    isReset: r.is_reset as boolean,
+  }));
+  return { versions, hasMore };
 }
 
 const MAX_BYTES = 5 * 1024 * 1024; // 5 MB

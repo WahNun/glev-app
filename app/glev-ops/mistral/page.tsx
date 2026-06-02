@@ -9,8 +9,10 @@ import {
   getAgentPrompt,
   saveAgentPrompt,
   resetAgentPrompt,
+  getPromptVersions,
   type TtsConfig,
   type AgentPromptConfig,
+  type PromptVersion,
 } from "./actions";
 
 const S = {
@@ -53,6 +55,13 @@ export default function MistralTTSPage() {
   const [promptMsg, setPromptMsg] = useState<{ type: "ok" | "err"; text: string } | null>(null);
   const [isPromptPending, startPromptTransition] = useTransition();
 
+  // Version history state
+  const [versions, setVersions] = useState<PromptVersion[]>([]);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [historyPage, setHistoryPage] = useState(0);
+  const [historyHasMore, setHistoryHasMore] = useState(false);
+  const [isHistoryLoading, setIsHistoryLoading] = useState(false);
+
   const reload = () => {
     setLoading(true);
     getTtsConfig().then(c => { setCfg(c); setLoading(false); });
@@ -64,6 +73,26 @@ export default function MistralTTSPage() {
         setPromptCfg(p);
         setPromptText(p.promptText);
       }
+    });
+    setHistoryPage(0);
+    getPromptVersions(0).then(res => {
+      if (res) {
+        setVersions(res.versions);
+        setHistoryHasMore(res.hasMore);
+      }
+    });
+  };
+
+  const loadMoreHistory = () => {
+    const nextPage = historyPage + 1;
+    setIsHistoryLoading(true);
+    getPromptVersions(nextPage).then(res => {
+      if (res) {
+        setVersions(prev => [...prev, ...res.versions]);
+        setHistoryHasMore(res.hasMore);
+        setHistoryPage(nextPage);
+      }
+      setIsHistoryLoading(false);
     });
   };
 
@@ -332,6 +361,116 @@ export default function MistralTTSPage() {
         {promptMsg && (
           <div style={promptMsg.type === "ok" ? S.ok : S.err}>{promptMsg.text}</div>
         )}
+
+        {/* ── Änderungshistorie ───────────────────────────────────────── */}
+        <div style={{ marginTop: 24, borderTop: "1px solid #e5e7eb", paddingTop: 16 }}>
+          <button
+            style={{
+              background: "none",
+              border: "none",
+              cursor: "pointer",
+              padding: 0,
+              display: "flex",
+              alignItems: "center",
+              gap: 6,
+              fontSize: 13,
+              fontWeight: 600,
+              color: "#374151",
+            }}
+            onClick={() => setHistoryOpen(o => !o)}
+          >
+            <span style={{ fontSize: 11, transition: "transform 0.15s", display: "inline-block", transform: historyOpen ? "rotate(90deg)" : "rotate(0deg)" }}>▶</span>
+            Änderungshistorie
+            {versions.length > 0 && (
+              <span style={{ fontSize: 11, background: "#f3f4f6", color: "#6b7280", borderRadius: 10, padding: "1px 7px", fontWeight: 500 }}>
+                {versions.length}
+              </span>
+            )}
+          </button>
+
+          {historyOpen && (
+            <div style={{ marginTop: 12 }}>
+              {versions.length === 0 ? (
+                <p style={{ fontSize: 12, color: "#9ca3af", margin: 0 }}>
+                  Noch keine gespeicherten Versionen. Beim nächsten Speichern wird hier ein Eintrag erscheinen.
+                </p>
+              ) : (
+                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                  {versions.map((v) => (
+                    <div
+                      key={v.id}
+                      style={{
+                        border: "1px solid #e5e7eb",
+                        borderRadius: 8,
+                        padding: "10px 14px",
+                        background: "#f9fafb",
+                      }}
+                    >
+                      <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 6 }}>
+                        <span style={{ fontSize: 12, fontWeight: 700, color: "#374151" }}>v{v.version}</span>
+                        {v.isReset && (
+                          <span style={{ fontSize: 10, fontWeight: 700, background: "#fef3c7", color: "#92400e", borderRadius: 4, padding: "1px 6px" }}>
+                            Reset
+                          </span>
+                        )}
+                        <span style={{ fontSize: 11, color: "#9ca3af" }}>
+                          {new Date(v.savedAt).toLocaleString("de-DE")}
+                          {v.savedBy ? ` · ${v.savedBy}` : ""}
+                        </span>
+                        <button
+                          style={{
+                            marginLeft: "auto",
+                            background: "none",
+                            border: "1px solid #d1d5db",
+                            borderRadius: 6,
+                            padding: "3px 10px",
+                            fontSize: 11,
+                            fontWeight: 600,
+                            cursor: "pointer",
+                            color: "#2563eb",
+                          }}
+                          onClick={() => {
+                            setPromptText(v.promptText);
+                            window.scrollTo({ top: 0, behavior: "smooth" });
+                          }}
+                        >
+                          Wiederherstellen
+                        </button>
+                      </div>
+                      <div
+                        style={{
+                          fontSize: 11,
+                          color: "#6b7280",
+                          fontFamily: "ui-monospace, 'Cascadia Code', monospace",
+                          whiteSpace: "nowrap",
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                        }}
+                      >
+                        {v.promptText.slice(0, 120)}{v.promptText.length > 120 ? "…" : ""}
+                      </div>
+                    </div>
+                  ))}
+
+                  {historyHasMore && (
+                    <button
+                      style={{
+                        ...S.btn,
+                        ...S.btnGhost,
+                        width: "100%",
+                        opacity: isHistoryLoading ? 0.6 : 1,
+                      }}
+                      onClick={loadMoreHistory}
+                      disabled={isHistoryLoading}
+                    >
+                      {isHistoryLoading ? "Lädt…" : "Weitere laden"}
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
