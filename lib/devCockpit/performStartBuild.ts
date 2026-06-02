@@ -1,9 +1,16 @@
-// Dev Cockpit Phase 5 — Start Build orchestration (server-only).
+// Dev Cockpit Phase 5 + 5.1 — Start Build orchestration (server-only).
 //
-// Invoked from a route handler (POST /glev-ops/dev-cockpit/api/start-build) so
-// the long Mistral call stays off the Server-Action queue — multiple tasks can
-// be planning_build in parallel, no global lock. Admin-guarded; scoped to the
-// task's OWN current-build queue notes. PLAN ONLY — no code/branches/execution.
+// Generates a FROZEN, versioned build artifact. Invoked from a route handler so
+// the long Mistral call stays off the Server-Action queue (parallel builds, no
+// global lock). Admin-guarded; scoped to the task's OWN current-build queue
+// notes. PLAN ONLY — no code/branches/execution.
+//
+// Each Start Build:
+//   • captures note snapshots at generation time (never re-read later)
+//   • inserts an immutable row in dev_cockpit_builds (history; stable build_id)
+//   • bumps version (1, 2, 3, …)
+//   • denormalizes the latest build into dev_cockpit_tasks.build_plan
+//     (created_at = first build's time, updated_at = this build's time)
 
 import { isAdminAuthed } from "@/lib/adminAuth";
 import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
@@ -28,38 +35,37 @@ export async function performStartBuild(taskId: string): Promise<PerformStartBui
   if (te || !task) return { ok: false, error: te?.message ?? "not-found" };
   const t = task as DevTask;
 
-  // Mark planning_build immediately so the spinner + status persist for
-  // parallel views / reloads while the model works.
+  // Show planning_build immediately so the spinner + status persist for parallel
+  // views / reloads while the model works.
   await sb.from("dev_cockpit_tasks").update({ status: "planning_build" }).eq("id", taskId);
 
-  // Build scope from this task's queue notes:
-  //  • included = current build  (status='applied' AND approved_for_current_build=true)
-  //  • excluded = after_build_pending (listed but NOT planned)
-  //  • separate_task / others → ignored
+  // FROZEN snapshots — captured now, never re-read from the live queue.
+  //   included = current build  (status='applied' AND approved_for_current_build)
+  //   excluded = after_build_pending (deferred)
+  //   converted_to_task / discarded / separate_task / other tasks → excluded
   const { data: notes } = await sb
     .from("dev_cockpit_prompt_queue")
     .select("content, status, approved_for_current_build")
     .eq("task_id", taskId);
   const rows = notes ?? [];
-  const includedNotes = rows
+  const includedSnapshot = rows
     .filter((n) => n.status === "applied" && n.approved_for_current_build === true)
     .map((n) => String(n.content ?? ""));
-  const excludedNotes = rows
+  const excludedSnapshot = rows
     .filter((n) => n.status === "after_build_pending")
     .map((n) => String(n.content ?? ""));
 
-  // Generate the build plan.
-  let plan: BuildExecutionPlan;
+  // Generate the core plan.
+  let core;
   try {
-    plan = await runBuildPlanGeneration({
+    core = await runBuildPlanGeneration({
       title: t.title,
       prompt: t.prompt ?? "",
       analysisPlanText: t.plan_text,
-      includedNotes,
-      excludedNotes,
+      includedNotes: includedSnapshot,
+      excludedNotes: excludedSnapshot,
     });
   } catch {
-    // Failure → status=build_failed (per Phase-5 state machine) + system message.
     await sb.from("dev_cockpit_tasks").update({ status: "build_failed" }).eq("id", taskId);
     await sb.from("dev_cockpit_messages").insert({
       task_id: taskId,
@@ -69,24 +75,70 @@ export async function performStartBuild(taskId: string): Promise<PerformStartBui
     return { ok: false, error: "build-failed" };
   }
 
-  // Persist plan + status=build_ready + an assistant summary message.
+  // Version = number of prior builds + 1; first build's created_at is the
+  // artifact's initial creation time.
+  const { data: prior } = await sb
+    .from("dev_cockpit_builds")
+    .select("created_at, version")
+    .eq("task_id", taskId)
+    .order("version", { ascending: true });
+  const priorBuilds = prior ?? [];
+  const version = priorBuilds.length + 1;
+
+  // Insert the immutable build record (history; stable build_id).
+  const { data: buildRow, error: be } = await sb
+    .from("dev_cockpit_builds")
+    .insert({
+      task_id: taskId,
+      version,
+      status: "build_ready",
+      scope: core.scope,
+      steps: core.steps,
+      included_notes_snapshot: includedSnapshot,
+      excluded_notes_snapshot: excludedSnapshot,
+      affected_areas: core.affected_areas,
+      risks: core.risks,
+      complexity: core.complexity,
+    })
+    .select("id, created_at")
+    .single();
+  if (be || !buildRow) return { ok: false, error: be?.message ?? "build-insert-failed" };
+
+  const initialCreatedAt = priorBuilds[0]?.created_at ?? buildRow.created_at;
+
+  // Denormalized latest-build artifact for the task card / page load.
+  const artifact: BuildExecutionPlan = {
+    build_id: buildRow.id,
+    version,
+    status: "build_ready",
+    scope: core.scope,
+    steps: core.steps,
+    included_notes_snapshot: includedSnapshot,
+    excluded_notes_snapshot: excludedSnapshot,
+    affected_areas: core.affected_areas,
+    risks: core.risks,
+    complexity: core.complexity,
+    created_at: String(initialCreatedAt),
+    updated_at: String(buildRow.created_at),
+  };
+
   const { data: updated, error: ue } = await sb
     .from("dev_cockpit_tasks")
-    .update({ status: "build_ready", build_plan: plan })
+    .update({ status: "build_ready", build_plan: artifact })
     .eq("id", taskId)
     .select(TASK_COLUMNS)
     .single();
   if (ue) return { ok: false, error: ue.message };
 
-  const stepsText = plan.steps.map((s, i) => `${i + 1}. ${s}`).join("\n");
-  const excludedText = plan.excluded_notes.length
-    ? `\n\nExcluded (später):\n${plan.excluded_notes.map((n) => `• ${n}`).join("\n")}`
+  const stepsText = core.steps.map((s, i) => `${i + 1}. ${s}`).join("\n");
+  const excludedText = excludedSnapshot.length
+    ? `\n\nExcluded (später):\n${excludedSnapshot.map((n) => `• ${n}`).join("\n")}`
     : "";
   await sb.from("dev_cockpit_messages").insert({
     task_id: taskId,
     role: "assistant",
-    content: `Build Plan erstellt (${plan.complexity} Komplexität).\n\nScope: ${plan.scope}\n\nSchritte:\n${stepsText}${excludedText}`,
+    content: `Build Plan #${version} erstellt (${core.complexity} Komplexität).\n\nScope: ${core.scope}\n\nSchritte:\n${stepsText}${excludedText}`,
   });
 
-  return { ok: true, task: updated as DevTask, build_plan: plan };
+  return { ok: true, task: updated as DevTask, build_plan: artifact };
 }

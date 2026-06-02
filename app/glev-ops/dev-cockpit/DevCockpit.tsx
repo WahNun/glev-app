@@ -30,6 +30,7 @@ import {
   applyQueueNoteAfterBuild,
   convertQueueNoteToTask,
   listAttachments,
+  listBuilds,
   addMessage,
 } from "./actions";
 import {
@@ -45,6 +46,7 @@ import {
   type TaskFilter,
   type BuildPlan,
   type BuildExecutionPlan,
+  type DevBuild,
 } from "./types";
 
 // Parse a task's stored plan_text (JSON) into a BuildPlan, or null if none/invalid.
@@ -78,16 +80,28 @@ function parseBuildPlan(raw: unknown): BuildExecutionPlan | null {
     }
   }
   if (!obj || typeof obj !== "object") return null;
-  const p = obj as Partial<BuildExecutionPlan>;
+  const p = obj as Partial<BuildExecutionPlan> & Record<string, unknown>;
   const arr = (v: unknown) => (Array.isArray(v) ? (v as unknown[]).map(String) : []);
+  // Back-compat: older artifacts used included_notes/excluded_notes.
+  const included = Array.isArray(p.included_notes_snapshot)
+    ? p.included_notes_snapshot
+    : (p as Record<string, unknown>).included_notes;
+  const excluded = Array.isArray(p.excluded_notes_snapshot)
+    ? p.excluded_notes_snapshot
+    : (p as Record<string, unknown>).excluded_notes;
   return {
+    build_id: typeof p.build_id === "string" ? p.build_id : "",
+    version: typeof p.version === "number" ? p.version : 1,
+    status: (typeof p.status === "string" ? p.status : "build_ready") as TaskStatus,
     scope: typeof p.scope === "string" ? p.scope : "",
     steps: arr(p.steps),
-    included_notes: arr(p.included_notes),
-    excluded_notes: arr(p.excluded_notes),
+    included_notes_snapshot: arr(included),
+    excluded_notes_snapshot: arr(excluded),
     affected_areas: arr(p.affected_areas),
     risks: arr(p.risks),
     complexity: p.complexity === "low" || p.complexity === "high" ? p.complexity : "medium",
+    created_at: typeof p.created_at === "string" ? p.created_at : "",
+    updated_at: typeof p.updated_at === "string" ? p.updated_at : "",
   };
 }
 
@@ -353,6 +367,26 @@ function fmtDate(iso: string): string {
   }
 }
 
+function fmtDateTime(iso: string): string {
+  if (!iso) return "—";
+  try {
+    return new Date(iso).toLocaleString("de-DE", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  } catch {
+    return iso;
+  }
+}
+
+// Short, readable build id (first segment of the uuid).
+function shortId(id: string): string {
+  return id ? id.slice(0, 8) : "—";
+}
+
 const ERR_LABEL: Record<string, string> = {
   auth: "Session abgelaufen — bitte neu einloggen.",
   "building-cannot-archive":
@@ -437,6 +471,7 @@ export default function DevCockpit({ initialTasks }: { initialTasks: DevTask[] }
   const [messages, setMessages] = useState<DevMessage[]>([]);
   const [queue, setQueue] = useState<DevQueueNote[]>([]);
   const [attachments, setAttachments] = useState<DevAttachment[]>([]);
+  const [builds, setBuilds] = useState<DevBuild[]>([]);
 
   // ── Per-task / per-action pending state (NO global blocking) ───────────────
   // Each long/async action tracks ONLY the affected task(s), so the rest of the
@@ -516,10 +551,11 @@ export default function DevCockpit({ initialTasks }: { initialTasks: DevTask[] }
 
   function loadTaskDetail(taskId: string) {
     run(async () => {
-      const [m, q, a] = await Promise.all([
+      const [m, q, a, b] = await Promise.all([
         listMessages(taskId),
         listQueueNotes(taskId),
         listAttachments(taskId),
+        listBuilds(taskId),
       ]);
       // Discard stale responses: only apply if this task is still selected.
       // Without this, a slow load for an earlier task can land after a newer
@@ -528,6 +564,7 @@ export default function DevCockpit({ initialTasks }: { initialTasks: DevTask[] }
       if (m.ok) setMessages(m.data);
       if (q.ok) setQueue(q.data);
       if (a.ok) setAttachments(a.data);
+      if (b.ok) setBuilds(b.data);
     });
   }
 
@@ -541,6 +578,7 @@ export default function DevCockpit({ initialTasks }: { initialTasks: DevTask[] }
     setMessages([]);
     setQueue([]);
     setAttachments([]);
+    setBuilds([]);
     if (!selectedId) return;
     loadTaskDetail(selectedId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1100,6 +1138,36 @@ export default function DevCockpit({ initialTasks }: { initialTasks: DevTask[] }
                   </div>
                 )}
 
+                {/* Build History (Phase 5.1) — display only, newest first */}
+                {builds.length > 0 && (
+                  <div style={{ marginTop: 16 }}>
+                    <div style={planSectionTitle}>Build History</div>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                      {builds.map((b) => (
+                        <div
+                          key={b.id}
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 8,
+                            padding: "6px 10px",
+                            background: "#f9fafb",
+                            border: "1px solid #e5e7eb",
+                            borderRadius: 6,
+                            fontSize: 12,
+                          }}
+                        >
+                          <span style={{ fontWeight: 700, color: "#111" }}>Build #{b.version}</span>
+                          {evalBadge(STATUS_STYLE[b.status] ?? {}, STATUS_LABEL[b.status] ?? b.status)}
+                          <span style={{ color: "#9ca3af", marginLeft: "auto" }}>
+                            {fmtDateTime(b.created_at)} · {shortId(b.id)}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
                 {/* Follow-up answer + Analyze / Re-Analyze (Phase 3) */}
                 <div style={{ marginTop: 14 }}>
                   <textarea
@@ -1203,7 +1271,7 @@ export default function DevCockpit({ initialTasks }: { initialTasks: DevTask[] }
             </section>
           )}
 
-          {/* Build Plan card (Phase 5) — rendered from build_plan, never as JSON */}
+          {/* Build Plan card (Phase 5.1) — FROZEN readonly artifact from build_plan */}
           {selectedTask && buildPlan && (
             <section style={cardStyle}>
               <div
@@ -1211,17 +1279,26 @@ export default function DevCockpit({ initialTasks }: { initialTasks: DevTask[] }
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "space-between",
-                  margin: "0 0 14px",
+                  margin: "0 0 10px",
                   paddingBottom: 10,
                   borderBottom: "1px solid #f3f4f6",
                 }}
               >
                 <h2 style={{ ...cardTitleStyle, margin: 0, padding: 0, border: "none" }}>
-                  Build Plan
+                  Build Plan <span style={{ color: "#9ca3af", fontWeight: 600 }}>#{buildPlan.version}</span>
                 </h2>
                 <span style={complexityPill(buildPlan.complexity)}>
                   Komplexität: {buildPlan.complexity}
                 </span>
+              </div>
+
+              {/* Artifact metadata (readonly) */}
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 12 }}>
+                {evalBadge({ background: "#f3f4f6", color: "#374151", border: "1px solid #e5e7eb" }, `Build ID: ${shortId(buildPlan.build_id)}`)}
+                {evalBadge({ background: "#e0e7ff", color: "#3730a3", border: "1px solid #a5b4fc" }, `Version ${buildPlan.version}`)}
+                {evalBadge(STATUS_STYLE[buildPlan.status] ?? {}, STATUS_LABEL[buildPlan.status] ?? buildPlan.status)}
+                {evalBadge({ background: "#f9fafb", color: "#6b7280", border: "1px solid #e5e7eb" }, `Created: ${fmtDateTime(buildPlan.created_at)}`)}
+                {evalBadge({ background: "#f9fafb", color: "#6b7280", border: "1px solid #e5e7eb" }, `Updated: ${fmtDateTime(buildPlan.updated_at)}`)}
               </div>
 
               {/* Build Scope */}
@@ -1246,28 +1323,28 @@ export default function DevCockpit({ initialTasks }: { initialTasks: DevTask[] }
                 </div>
               )}
 
-              {/* Included (current build) */}
+              {/* Included snapshot (current build, frozen) */}
               <div style={{ marginBottom: 10 }}>
                 <div style={{ ...planSectionTitle, color: "#166534" }}>
-                  Included ({buildPlan.included_notes.length})
+                  Included Notes Snapshot ({buildPlan.included_notes_snapshot.length})
                 </div>
-                {buildPlan.included_notes.length > 0 ? (
+                {buildPlan.included_notes_snapshot.length > 0 ? (
                   <ul style={{ margin: 0, padding: "0 0 0 18px", fontSize: 13, color: "#166534" }}>
-                    {buildPlan.included_notes.map((n, i) => <li key={i}>{n}</li>)}
+                    {buildPlan.included_notes_snapshot.map((n, i) => <li key={i}>{n}</li>)}
                   </ul>
                 ) : (
                   <span style={{ fontSize: 12, color: "#9ca3af" }}>keine zusätzlichen Current-Build-Notes</span>
                 )}
               </div>
 
-              {/* Excluded (after build) */}
+              {/* Excluded snapshot (after build, frozen) */}
               <div style={{ marginBottom: 10 }}>
                 <div style={{ ...planSectionTitle, color: "#9a3412" }}>
-                  Excluded — später ({buildPlan.excluded_notes.length})
+                  Excluded Notes Snapshot — später ({buildPlan.excluded_notes_snapshot.length})
                 </div>
-                {buildPlan.excluded_notes.length > 0 ? (
+                {buildPlan.excluded_notes_snapshot.length > 0 ? (
                   <ul style={{ margin: 0, padding: "0 0 0 18px", fontSize: 13, color: "#9a3412" }}>
-                    {buildPlan.excluded_notes.map((n, i) => <li key={i}>{n}</li>)}
+                    {buildPlan.excluded_notes_snapshot.map((n, i) => <li key={i}>{n}</li>)}
                   </ul>
                 ) : (
                   <span style={{ fontSize: 12, color: "#9ca3af" }}>keine</span>

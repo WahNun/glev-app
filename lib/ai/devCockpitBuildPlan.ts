@@ -8,7 +8,7 @@
 
 import { getDevCockpitMistralClient } from "./mistralClient";
 import { logAiUsage } from "./aiUsageLog";
-import type { BuildExecutionPlan, Complexity } from "@/app/glev-ops/dev-cockpit/types";
+import type { GeneratedBuildPlan, Complexity } from "@/app/glev-ops/dev-cockpit/types";
 
 const BUILD_MODEL =
   process.env.DEV_COCKPIT_ANALYSIS_MODEL ?? "mistral-large-latest";
@@ -78,16 +78,13 @@ function extractText(content: unknown): string {
   return "";
 }
 
-function normalize(raw: unknown, includedNotes: string[], excludedNotes: string[]): BuildExecutionPlan {
+function normalize(raw: unknown): GeneratedBuildPlan {
   const o = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
   const complexity: Complexity =
     o.complexity === "high" || o.complexity === "low" ? o.complexity : "medium";
   return {
     scope: typeof o.scope === "string" ? o.scope.trim() : "",
     steps: toStrArray(o.steps),
-    // included/excluded come from the DB (deterministic), not the model.
-    included_notes: includedNotes,
-    excluded_notes: excludedNotes,
     affected_areas: toStrArray(o.affected_areas),
     risks: toStrArray(o.risks),
     complexity,
@@ -100,7 +97,7 @@ export async function runBuildPlanGeneration(input: {
   analysisPlanText: string | null;
   includedNotes: string[];
   excludedNotes: string[];
-}): Promise<BuildExecutionPlan> {
+}): Promise<GeneratedBuildPlan> {
   const client = getDevCockpitMistralClient();
   const startedAt = Date.now();
 
@@ -147,5 +144,5 @@ export async function runBuildPlanGeneration(input: {
     parsed = JSON.parse(match[0]);
   }
 
-  return normalize(parsed, input.includedNotes, input.excludedNotes);
+  return normalize(parsed);
 }

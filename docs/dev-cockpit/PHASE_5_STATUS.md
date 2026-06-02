@@ -71,8 +71,18 @@ Nach grünem Migrations-Run + Redeploy:
 - Mehrere Build Plans parallel erzeugbar
 - Header: `█████░░░░░░░ 42% · Phase 5/12 · Build Execution · Next: Coding Agent`
 
-## 9. Offene Punkte für Phase 6 (Coding Agent)
-Echte Code-Generierung auf Basis des Build Plans, GitHub-Branch, Vercel-Preview, Diff & Review, Apply — die Status `building`/`build_complete`/`preview_ready` werden dann regulär durchlaufen.
+## 9. Phase 5.1 — Build Execution Hardening (2026-06-03)
+
+Build Plans sind jetzt **eingefrorene, versionierte Artefakte**:
+- **Versionierung:** `build_plan.version` (1, 2, 3…), `created_at` (initial), `updated_at` (letzte Erzeugung).
+- **Eingefrorene Snapshots:** `included_notes_snapshot` / `excluded_notes_snapshot` werden zum Start-Build-Zeitpunkt gespeichert und **nie** aus der Live-Queue neu gerendert → spätere Queue-Änderungen mutieren den Plan **nicht**. `build_plan` wird ausschließlich von `performStartBuild` geschrieben.
+- **Stabile `build_id`** pro Build + neue Tabelle `dev_cockpit_builds` (immutable Build-Records, History; eine Task kann mehrere Builds haben).
+- **Readonly Build Plan Card:** Build ID · Version · Created/Updated · Status · Included/Excluded Snapshot · Steps · Complexity · Risks.
+- **Build History** im Task-Detail (Build #N · Status · Created · Version) — nur Anzeige.
+- Migration: `20260603_dev_cockpit_build_artifacts.sql`. `currentPhase` bleibt **5**.
+
+## 10. Offene Punkte für Phase 6 (Coding Agent)
+Echte Code-Generierung auf Basis des eingefrorenen Build-Artefakts, GitHub-Branch, Vercel-Preview, Diff & Review, Apply — die Status `building`/`build_complete`/`preview_ready` werden dann regulär durchlaufen.
 
 ---
 

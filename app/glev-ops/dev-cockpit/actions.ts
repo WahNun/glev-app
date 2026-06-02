@@ -35,7 +35,7 @@ import {
 } from "./types";
 import { performAnalyze } from "@/lib/devCockpit/performAnalyze";
 import { performStartBuild } from "@/lib/devCockpit/performStartBuild";
-import type { BuildExecutionPlan } from "./types";
+import { BUILD_COLUMNS, type BuildExecutionPlan, type DevBuild } from "./types";
 
 // ── Result envelope ─────────────────────────────────────────────────────────
 
@@ -256,6 +256,22 @@ export async function startBuild(
   const res = await performStartBuild(taskId);
   if (!res.ok) return fail(res.error);
   return { ok: true, data: { task: res.task, build_plan: res.build_plan } };
+}
+
+/** List a task's build records newest-first (build history — display only). */
+export async function listBuilds(taskId: string): Promise<Result<DevBuild[]>> {
+  if (!(await requireAdmin())) return fail("auth");
+  if (!taskId) return fail("missing-id");
+
+  const sb = getSupabaseAdmin();
+  const { data, error } = await sb
+    .from("dev_cockpit_builds")
+    .select(BUILD_COLUMNS)
+    .eq("task_id", taskId)
+    .order("version", { ascending: false });
+
+  if (error) return fail(error.message);
+  return { ok: true, data: (data ?? []) as DevBuild[] };
 }
 
 // ── Messages ─────────────────────────────────────────────────────────────────
