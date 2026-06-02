@@ -33,3 +33,40 @@ export function mistralConfigError(): { error: string; status: number } {
     status: 503,
   };
 }
+
+// ---------------------------------------------------------------------------
+// Dev Cockpit — separate credential bucket
+// ---------------------------------------------------------------------------
+//
+// Dev Cockpit AI (Analyze Task, Re-Analyze, future queue evaluation / build
+// planning / coding agent) bills against its OWN key so its cost can be tracked
+// separately from user-facing Glev AI. It prefers MISTRAL_DEV_COCKPIT_API_KEY
+// and falls back to MISTRAL_API_KEY so existing environments keep working.
+
+let cachedDevCockpit: Mistral | null = null;
+
+/**
+ * Resolve the Mistral key for Dev Cockpit AI calls.
+ *   1. MISTRAL_DEV_COCKPIT_API_KEY if set (preferred — separate cost bucket)
+ *   2. otherwise MISTRAL_API_KEY (fallback for existing environments)
+ *   3. throw a meaningful error if neither exists
+ */
+export function getDevCockpitMistralKey(): string {
+  const devKey = process.env.MISTRAL_DEV_COCKPIT_API_KEY;
+  if (devKey) return devKey;
+  const fallback = process.env.MISTRAL_API_KEY;
+  if (fallback) return fallback;
+  throw new Error(
+    "Missing Dev Cockpit Mistral key. Set MISTRAL_DEV_COCKPIT_API_KEY (preferred, " +
+      "separate cost bucket) or MISTRAL_API_KEY (fallback) as a Replit Secret in " +
+      "dev and a Vercel Environment Variable (Production + Preview).",
+  );
+}
+
+/** Mistral client for Dev Cockpit AI, using the Dev Cockpit key (see above). */
+export function getDevCockpitMistralClient(): Mistral {
+  if (!cachedDevCockpit) {
+    cachedDevCockpit = new Mistral({ apiKey: getDevCockpitMistralKey() });
+  }
+  return cachedDevCockpit;
+}

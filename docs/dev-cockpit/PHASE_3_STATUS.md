@@ -65,6 +65,23 @@ der **unabhängig vom Modelloutput** greift (nach dem Mistral-Call als Post-Proc
 Bewusst eng: ein Verb **ohne** sensibles Target (z. B. „Delete-Button für Notizen")
 blockt nicht.
 
+### Infrastruktur (2026-06-02): separate AI-Keys + Usage-Tracking-Prep
+
+Dev-Cockpit-AI nutzt jetzt einen **eigenen Credential-Bucket**, getrennt von der
+user-facing Glev-AI — für separate Kostenverfolgung. **Kein** Verhaltens-/Prompt-/
+Logik-Change.
+
+- `getDevCockpitMistralKey()` (in `lib/ai/mistralClient.ts`): nutzt
+  `MISTRAL_DEV_COCKPIT_API_KEY`, sonst Fallback `MISTRAL_API_KEY`, sonst klare
+  Fehlermeldung. `getDevCockpitMistralClient()` baut den Client damit; die Analyse
+  ruft jetzt diesen statt `getMistralClient()`.
+- Alle übrigen Glev-Features bleiben auf `MISTRAL_API_KEY`.
+- `lib/ai/aiUsageLog.ts`: leichter `logAiUsage()`-Helper (noch **keine** DB) —
+  zentralisiert `source = "dev_cockpit"` (+ Modell, Tokens, Dauer, ok). Vorbereitung
+  für späteres `ai_usage_logs`. Keine Secrets/Bodies geloggt.
+- `.env.example` dokumentiert `MISTRAL_API_KEY`, `MISTRAL_DEV_COCKPIT_API_KEY`,
+  `DEV_COCKPIT_ANALYSIS_MODEL`.
+
 ## 2. Neue Dateien
 
 - `lib/ai/devCockpitAnalysis.ts` — Mistral-Analyse-Engine: System-Prompt, JSON-Parsing/Normalisierung, `runDevCockpitAnalysis()` + `formatPlanMessage()`

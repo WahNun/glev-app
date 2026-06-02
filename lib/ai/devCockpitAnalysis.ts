@@ -1,15 +1,17 @@
 // Dev Cockpit Phase 3 — Mistral-backed task analysis ("Analyze Task").
 //
-// Server-only. The Mistral API key lives exclusively in MISTRAL_API_KEY
-// (read by getMistralClient) and never reaches the client. This module turns
-// a task (prompt + chat history + queued notes) into a structured BuildPlan.
+// Server-only. Dev Cockpit AI uses its OWN credential bucket via
+// getDevCockpitMistralClient (MISTRAL_DEV_COCKPIT_API_KEY, falling back to
+// MISTRAL_API_KEY); the key never reaches the client. This module turns a task
+// (prompt + chat history + queued notes) into a structured BuildPlan.
 //
 // Scope: thinking + planning ONLY. No builds, branches, commits, diffs, code
 // changes, previews. The analysis just understands the task, flags risks,
 // guesses affected areas/files, asks follow-up questions, and decides whether
 // it is ready to build.
 
-import { getMistralClient } from "./mistralClient";
+import { getDevCockpitMistralClient } from "./mistralClient";
+import { logAiUsage } from "./aiUsageLog";
 import type { BuildPlan } from "@/app/glev-ops/dev-cockpit/types";
 
 // Architect-grade model by default; override via env without a code change.
@@ -272,18 +274,49 @@ export async function runDevCockpitAnalysis(input: {
   history: { role: string; content: string }[];
   queuedNotes: string[];
 }): Promise<BuildPlan> {
-  const client = getMistralClient();
+  // Dev Cockpit uses its own credential bucket (separate cost tracking).
+  const client = getDevCockpitMistralClient();
 
-  const completion = await client.chat.complete({
+  const startedAt = Date.now();
+  let completion;
+  try {
+    completion = await client.chat.complete({
+      model: ANALYSIS_MODEL,
+      temperature: 0.3,
+      maxTokens: 1400,
+      // Force a JSON object response so parsing is reliable.
+      responseFormat: { type: "json_object" },
+      messages: [
+        { role: "system", content: SYSTEM_PROMPT },
+        { role: "user", content: buildUserPrompt(input) },
+      ],
+    });
+  } catch (e) {
+    // Centralized usage logging tagged source="dev_cockpit" (no secrets/bodies).
+    logAiUsage({
+      source: "dev_cockpit",
+      model: ANALYSIS_MODEL,
+      operation: "analyze_task",
+      ok: false,
+      ms: Date.now() - startedAt,
+    });
+    throw e;
+  }
+
+  // Read usage defensively — exact field names vary across SDK versions, and we
+  // never want a token-count read to break the build or the call.
+  const usage = (completion?.usage ?? undefined) as unknown as
+    | { promptTokens?: number; completionTokens?: number; totalTokens?: number }
+    | undefined;
+  logAiUsage({
+    source: "dev_cockpit",
     model: ANALYSIS_MODEL,
-    temperature: 0.3,
-    maxTokens: 1400,
-    // Force a JSON object response so parsing is reliable.
-    responseFormat: { type: "json_object" },
-    messages: [
-      { role: "system", content: SYSTEM_PROMPT },
-      { role: "user", content: buildUserPrompt(input) },
-    ],
+    operation: "analyze_task",
+    ok: true,
+    promptTokens: usage?.promptTokens,
+    completionTokens: usage?.completionTokens,
+    totalTokens: usage?.totalTokens,
+    ms: Date.now() - startedAt,
   });
 
   const text = extractText(completion?.choices?.[0]?.message?.content).trim();
