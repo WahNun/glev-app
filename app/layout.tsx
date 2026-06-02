@@ -13,7 +13,6 @@ import { ThemeProvider } from "@/components/ThemeProvider";
 import CookieBanner from "@/components/CookieBanner";
 import GoogleAnalytics from "@/components/GoogleAnalytics";
 import ServiceWorkerRegistration from "@/components/ServiceWorkerRegistration";
-import SplashScreenHider from "@/components/SplashScreenHider";
 
 const META_PIXEL_ID = "960780236789931";
 
@@ -69,18 +68,6 @@ const BOOTSTRAP_SCRIPT = `
     }
     measureSafeArea();
     window.addEventListener('resize',measureSafeArea,{passive:true});
-  }catch(e){}
-  try{
-    // Capacitor SplashScreen: hide as early as possible — the Capacitor
-    // bridge (window.Capacitor) is injected by WKWebView via WKUserScript
-    // at document-start, so it is available before any page script runs.
-    // Calling hide() here is the earliest possible moment — no React, no
-    // useEffect, no dynamic import delay. This fixes the permanent black
-    // screen caused by launchAutoHide:false in the @capacitor/splash-screen
-    // plugin when SplashScreen.hide() was never deployed to Vercel in time.
-    if(window.Capacitor&&window.Capacitor.Plugins&&window.Capacitor.Plugins.SplashScreen){
-      window.Capacitor.Plugins.SplashScreen.hide({fadeOutDuration:200});
-    }
   }catch(e){}
 })();
 `;
@@ -267,7 +254,6 @@ export default async function RootLayout({ children }: { children: React.ReactNo
             {children}
             <CookieBanner />
             <ServiceWorkerRegistration />
-            <SplashScreenHider />
           </ThemeProvider>
         </NextIntlClientProvider>
       </body>

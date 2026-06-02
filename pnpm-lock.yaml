@@ -29,9 +29,6 @@ importers:
       '@capacitor/share':
         specifier: ^6.0.2
         version: 6.0.4(@capacitor/core@8.3.1)
-      '@capacitor/splash-screen':
-        specifier: ^8.0.1
-        version: 8.0.1(@capacitor/core@8.3.1)
       '@capgo/capacitor-health':
         specifier: ^8.4.8
         version: 8.4.8(@capacitor/core@8.3.1)
@@ -176,11 +173,6 @@ packages:
     resolution: {integrity: sha512-Ij8C3as4n6L+SUj3M1ko+DGIsrDw2VTkn5Y/pQnFRI9dRk6YoSpGKLN54yOyN7ew3N9bVa8Rko+dFwdcNg7ESA==}
     peerDependencies:
       '@capacitor/core': ^6.0.0
-
-  '@capacitor/splash-screen@8.0.1':
-    resolution: {integrity: sha512-c/ew/Z3eA7z8l06WoRAtzVF16VwYYrExmHmfGq1Cg675pVzaC/yuucB8/1xG1vhEfnW4fZ1KhSf/kzR1RiVYgg==}
-    peerDependencies:
-      '@capacitor/core': '>=8.0.0'
 
   '@capgo/capacitor-health@8.4.8':
     resolution: {integrity: sha512-nhQDzGzSX4O55YEDUHfbD6iRaXqtXMylJnrmVPt6RRGqbsBwFinyrkC+/BIbW60PjRb2hxaONNCbIFVmHJcHKQ==}
@@ -2045,10 +2037,6 @@ snapshots:
       '@capacitor/core': 8.3.1
 
   '@capacitor/share@6.0.4(@capacitor/core@8.3.1)':
-    dependencies:
-      '@capacitor/core': 8.3.1
-
-  '@capacitor/splash-screen@8.0.1(@capacitor/core@8.3.1)':
     dependencies:
       '@capacitor/core': 8.3.1
 
