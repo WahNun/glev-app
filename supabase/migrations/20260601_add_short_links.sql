@@ -10,5 +10,6 @@ CREATE TABLE IF NOT EXISTS public.short_links (
 ALTER TABLE public.short_links ENABLE ROW LEVEL SECURITY;
 
 -- Nur Service-Role darf lesen/schreiben (kein Nutzer-Zugriff nötig)
+DROP POLICY IF EXISTS "service role only" ON public.short_links;
 CREATE POLICY "service role only" ON public.short_links
   USING (false);

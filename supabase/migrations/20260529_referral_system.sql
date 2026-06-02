@@ -25,10 +25,12 @@ CREATE INDEX IF NOT EXISTS referrals_referred_idx ON public.referrals (referred_
 
 ALTER TABLE public.referrals ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Users read own referrals as referrer" ON public.referrals;
 CREATE POLICY "Users read own referrals as referrer"
   ON public.referrals FOR SELECT
   USING (referrer_user_id = auth.uid());
 
+DROP POLICY IF EXISTS "Users read own referral entry as referred" ON public.referrals;
 CREATE POLICY "Users read own referral entry as referred"
   ON public.referrals FOR SELECT
   USING (referred_user_id = auth.uid());
