@@ -37,7 +37,7 @@ export interface UseVoiceIntentsReturn extends UseVoxtralReturn {
 }
 
 /** Intents that require explicit user confirmation before firing. */
-const WRITE_INTENTS = new Set([
+export const WRITE_INTENTS = new Set([
   "log_bolus",
   "log_meal",
   "log_exercise",
@@ -203,3 +203,89 @@ export function useVoiceIntents({
     dismissPendingIntent,
   };
 }
+
+// ── Test helpers ─────────────────────────────────────────────────────────────
+//
+// Pure functions that mirror the routing / dispatch / dismiss logic without
+// touching React state. Exported under `__test__` so they are tree-shaken in
+// production builds and clearly marked as not part of the public API.
+
+/** Pure routing decision extracted from handleTranscript. */
+function routeIntent(
+  intent: IntentEnvelope,
+  transcript: string,
+  callbacks: {
+    onPending: (intent: IntentEnvelope) => void;
+    onFallback: (text: string) => void;
+    /** Receives the intent type string for easy assertion. */
+    onDispatch: (type: string) => void;
+  },
+): void {
+  if (intent.type === "fallback_chat") {
+    callbacks.onFallback(transcript);
+    return;
+  }
+  if (intent.type === "navigate") {
+    callbacks.onDispatch(intent.type);
+    return;
+  }
+  if (WRITE_INTENTS.has(intent.type)) {
+    callbacks.onPending(intent);
+    return;
+  }
+  // Unknown future intent — dispatch immediately.
+  callbacks.onDispatch(intent.type);
+}
+
+/**
+ * Simulate confirming a pending intent.
+ * Calls onEvent with the CustomEvent type string for each window.dispatchEvent
+ * call, without requiring a real browser window.
+ * Returns true when an event was dispatched.
+ */
+function simulateConfirm(
+  intent: IntentEnvelope,
+  onEvent: (eventType: string, detail: unknown) => void,
+): boolean {
+  switch (intent.type) {
+    case "log_bolus":
+      onEvent("glev:open-bolus-log", intent.payload);
+      return true;
+    case "log_meal":
+      onEvent("glev:open-meal-log", intent.payload);
+      return true;
+    case "log_exercise":
+      onEvent("glev:open-exercise-log", intent.payload);
+      return true;
+    case "log_symptom":
+      onEvent("glev:open-symptom-log", intent.payload);
+      return true;
+    case "edit_macro":
+      onEvent("glev:set-macro", intent.payload);
+      return true;
+    case "navigate":
+      onEvent("glev:intent-navigate", { screen: intent.payload.screen });
+      return true;
+    default:
+      return false;
+  }
+}
+
+/**
+ * Simulate dismissing a pending intent.
+ * Mirrors the dismiss path: the original transcript (not the intent payload)
+ * is passed back to onFallbackTranscript so the user can rephrase.
+ */
+function simulateDismiss(
+  _intent: IntentEnvelope,
+  originalTranscript: string,
+  onFallback: (text: string) => void,
+): void {
+  onFallback(originalTranscript);
+}
+
+export const __test__ = {
+  routeIntent,
+  simulateConfirm,
+  simulateDismiss,
+};

@@ -74,8 +74,10 @@ const BOLUS_RE =
   /^(\d+(?:[.,]\d+)?)\s*(ie|einheit(?:en)?|units?|u\b)(?:\s+(.+))?$/i;
 
 // Navigate: "Geh zu Insights" / "Öffne Dashboard" / "Zeig mir Einstellungen"
+// Optional German prepositions (zu, nach) and English "to" are skipped so both
+// "Geh Dashboard" and "Geh zu Dashboard" are handled by the same pattern.
 const NAVIGATE_RE =
-  /(?:geh?|öffne?|zeig(?:e)?(?:\s+mir)?|go\s+to|open|show)\s+(dashboard|entries|engine|insights|settings|einstellung(?:en)?)/i;
+  /(?:geh?|öffne?|zeig(?:e)?(?:\s+mir)?|go\s+to|open|show)\s+(?:zu\s+|nach\s+)?(dashboard|entries|engine|insights|settings|einstellung(?:en)?)/i;
 
 const NAVIGATE_SCREEN_MAP: Record<string, string> = {
   dashboard: "dashboard",

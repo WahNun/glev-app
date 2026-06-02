@@ -4,7 +4,7 @@ import { useEffect, useRef } from "react";
 import type { IntentEnvelope } from "@/lib/ai/intentClassifier";
 
 const ACCENT = "#8b5cf6";
-const AUTO_DISMISS_MS = 3000;
+export const AUTO_DISMISS_MS = 3000;
 
 /** Human-readable summary of a classified intent. */
 export function intentLabel(intent: IntentEnvelope): string {
