@@ -57,6 +57,22 @@ export default function AiSettingsPage() {
     });
   }, []);
 
+  const [ttsIntentAnnounce, setTtsIntentAnnounce] = useState(false);
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      const v = window.localStorage.getItem("glev_tts_intent");
+      setTtsIntentAnnounce(v !== null && v !== "0");
+    } catch { /* ignore */ }
+  }, []);
+  const toggleTtsIntentAnnounce = useCallback(() => {
+    setTtsIntentAnnounce((prev) => {
+      const next = !prev;
+      try { window.localStorage.setItem("glev_tts_intent", next ? "1" : "0"); } catch { /* ignore */ }
+      return next;
+    });
+  }, []);
+
   const [ttsSpeed, setTtsSpeedState] = useState<TtsSpeed>("normal");
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -300,6 +316,17 @@ export default function AiSettingsPage() {
             onClick={toggleTtsAutoRead}
             style={{ width: 44, height: 24, borderRadius: 99, cursor: "pointer", flexShrink: 0, background: ttsAutoRead ? ACCENT : "var(--border-strong)", border: `1px solid ${ttsAutoRead ? ACCENT + "60" : BORDER}`, position: "relative", transition: "background 0.2s" }}>
             <div style={{ position: "absolute", top: 2, left: ttsAutoRead ? 22 : 2, width: 18, height: 18, borderRadius: 99, background: "#fff", transition: "left 0.2s", boxShadow: "0 1px 4px rgba(0,0,0,0.4)" }} />
+          </div>
+        </div>
+        <div style={{ padding: "14px 16px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, borderBottom: `1px solid ${BORDER}` }}>
+          <span style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+            <span style={{ fontSize: 14, fontWeight: 600, color: "var(--text-strong)" }}>{t("tts_intent_label")}</span>
+            <span style={{ fontSize: 13, color: "var(--text-dim)", lineHeight: 1.3 }}>{t("tts_intent_desc")}</span>
+          </span>
+          <div role="switch" aria-checked={ttsIntentAnnounce} aria-label={t("tts_intent_label")}
+            onClick={toggleTtsIntentAnnounce}
+            style={{ width: 44, height: 24, borderRadius: 99, cursor: "pointer", flexShrink: 0, background: ttsIntentAnnounce ? ACCENT : "var(--border-strong)", border: `1px solid ${ttsIntentAnnounce ? ACCENT + "60" : BORDER}`, position: "relative", transition: "background 0.2s" }}>
+            <div style={{ position: "absolute", top: 2, left: ttsIntentAnnounce ? 22 : 2, width: 18, height: 18, borderRadius: 99, background: "#fff", transition: "left 0.2s", boxShadow: "0 1px 4px rgba(0,0,0,0.4)" }} />
           </div>
         </div>
         <div style={{ padding: "14px 16px", display: "flex", flexDirection: "column", gap: 10 }}>

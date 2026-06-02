@@ -1455,6 +1455,8 @@
     "fab_mode_option_voice": "Start voice input",
     "tts_auto_label": "Read replies aloud",
     "tts_auto_desc": "Glev AI automatically reads each reply aloud when it finishes.",
+    "tts_intent_label": "Announce recognised logging",
+    "tts_intent_desc": "When logging by voice, Glev reads back what it understood — e.g. \"Bolus: 4 units\".",
     "tts_speed_label": "Speech speed",
     "tts_speed_desc": "How fast Glev AI reads replies aloud.",
     "tts_speed_slow": "Slow",

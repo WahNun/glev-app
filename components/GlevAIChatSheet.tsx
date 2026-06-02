@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import type { GlevChatMessage, PendingAction } from "@/lib/useGlevAI";
 import { useVoiceIntents } from "@/hooks/useVoiceIntents";
 import { useTTS } from "@/hooks/useTTS";
-import IntentConfirmChip from "@/components/IntentConfirmChip";
+import IntentConfirmChip, { intentLabel } from "@/components/IntentConfirmChip";
 
 const ACCENT = "#8b5cf6";
 const SHEET_BG = "var(--surface)";
@@ -239,6 +239,18 @@ export default function GlevAIChatSheet({
   });
 
   const tts = useTTS();
+
+  // TTS: announce recognised intent aloud as soon as pendingIntent is set.
+  // Only fires when tts.enabled AND tts.intentAnnounce (opt-in, default off).
+  // The speech starts immediately — before the chip animation — so the user
+  // hears feedback without looking at the screen.
+  useEffect(() => {
+    if (!pendingIntent) return;
+    if (!tts.enabled || !tts.intentAnnounce) return;
+    void tts.speak(intentLabel(pendingIntent));
+  // tts.speak and tts.stop are stable callbacks; only run when pendingIntent changes.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingIntent]);
 
   // TTS: auto-play last assistant message when streaming stops.
   // Controlled by tts.autoRead (user preference set in the chat header).

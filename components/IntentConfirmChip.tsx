@@ -7,7 +7,7 @@ const ACCENT = "#8b5cf6";
 const AUTO_DISMISS_MS = 3000;
 
 /** Human-readable summary of a classified intent. */
-function intentLabel(intent: IntentEnvelope): string {
+export function intentLabel(intent: IntentEnvelope): string {
   switch (intent.type) {
     case "log_bolus": {
       const { units, insulin_name } = intent.payload;

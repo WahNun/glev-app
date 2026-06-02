@@ -1455,6 +1455,8 @@
     "fab_mode_option_voice": "Spracheingabe starten",
     "tts_auto_label": "Antworten vorlesen",
     "tts_auto_desc": "Glev AI liest jede Antwort automatisch vor, sobald sie fertig ist.",
+    "tts_intent_label": "Erkanntes Logging vorlesen",
+    "tts_intent_desc": "Beim Loggen per Sprache liest Glev vor, was es verstanden hat — z. B. \"Bolus: 4 Einheiten\".",
     "tts_speed_label": "Sprachtempo",
     "tts_speed_desc": "Wie schnell Glev AI Antworten vorliest.",
     "tts_speed_slow": "Langsam",

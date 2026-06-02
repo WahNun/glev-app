@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 const TTS_MUTE_KEY = "glev_tts_enabled";
 const TTS_AUTO_KEY = "glev_tts_auto";
+const TTS_INTENT_KEY = "glev_tts_intent";
 export const TTS_SPEED_KEY = "glev_tts_speed";
 
 export type TtsSpeed = "slow" | "normal" | "fast";
@@ -108,6 +109,8 @@ export function useTTS() {
   const [enabled, setEnabled] = useState(true);
   // `autoRead` = automatically speak AI responses (default: off)
   const [autoRead, setAutoRead] = useState(false);
+  // `intentAnnounce` = read classified voice intent aloud before chip appears (default: off)
+  const [intentAnnounce, setIntentAnnounce] = useState(false);
   // `speed` = TTS playback speed preference
   const [speed, setSpeedState] = useState<TtsSpeed>("normal");
   const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
@@ -118,6 +121,7 @@ export function useTTS() {
   useEffect(() => {
     setEnabled(readPref(TTS_MUTE_KEY, true));
     setAutoRead(readPref(TTS_AUTO_KEY, false));
+    setIntentAnnounce(readPref(TTS_INTENT_KEY, false));
     setSpeedState(readSpeed());
   }, []);
 
@@ -305,6 +309,14 @@ export function useTTS() {
     });
   }, []);
 
+  const toggleIntentAnnounce = useCallback(() => {
+    setIntentAnnounce((prev) => {
+      const next = !prev;
+      writePref(TTS_INTENT_KEY, next);
+      return next;
+    });
+  }, []);
+
   const setSpeed = useCallback((next: TtsSpeed) => {
     setSpeedState(next);
     try { window.localStorage.setItem(TTS_SPEED_KEY, next); } catch { /* ignore */ }
@@ -317,5 +329,5 @@ export function useTTS() {
     return () => { stop(); };
   }, [stop]);
 
-  return { speak, stop, speaking, speakingId, enabled, toggleEnabled, autoRead, toggleAutoRead, speed, setSpeed };
+  return { speak, stop, speaking, speakingId, enabled, toggleEnabled, autoRead, toggleAutoRead, intentAnnounce, toggleIntentAnnounce, speed, setSpeed };
 }
