@@ -32,12 +32,7 @@ import {
   type QueueStatus,
   type BuildPlan,
 } from "./types";
-import {
-  runDevCockpitAnalysis,
-  formatPlanMessage,
-  isTaskDestructive,
-  filterOutDestructiveSafetyQuestions,
-} from "@/lib/ai/devCockpitAnalysis";
+import { performAnalyze } from "@/lib/devCockpit/performAnalyze";
 
 // ── Result envelope ─────────────────────────────────────────────────────────
 
@@ -235,106 +230,14 @@ export async function moveTaskToBacklog(id: string): Promise<Result<DevTask>> {
 export async function analyzeTask(
   taskId: string,
 ): Promise<Result<{ task: DevTask; plan: BuildPlan }>> {
-  if (!(await requireAdmin())) return fail("auth");
-  if (!taskId) return fail("missing-id");
-
-  const sb = getSupabaseAdmin();
-
-  // 1. Context gathering
-  const taskRes = await getTask(taskId);
-  if (!taskRes.ok) return taskRes;
-  const task = taskRes.data;
-
-  const msgRes = await listMessages(taskId);
-  const history = msgRes.ok
-    ? msgRes.data.map((m) => ({ role: m.role, content: m.content }))
-    : [];
-
-  const queueRes = await listQueueNotes(taskId);
-  const queuedNotes = queueRes.ok
-    ? queueRes.data.filter((n) => n.status === "queued").map((n) => n.content)
-    : [];
-
-  // 2. Mistral analysis
-  let plan: BuildPlan;
-  try {
-    plan = await runDevCockpitAnalysis({
-      title: task.title,
-      prompt: task.prompt ?? "",
-      history,
-      queuedNotes,
-    });
-  } catch {
-    // Failure path: leave status untouched, log a system message. We do NOT
-    // surface the raw error (no secrets / stack traces to the client).
-    await sb.from("dev_cockpit_messages").insert({
-      task_id: taskId,
-      role: "system",
-      content: "Mistral analysis failed.",
-    });
-    return fail("analysis-failed");
-  }
-
-  // 2b. AUTHORITATIVE final safety pass (persistence layer, deterministic).
-  // The library already gates, but we re-run it here on the SAME current-task
-  // user-authored context (title + prompt + this task's USER messages + queued
-  // notes) so the persisted plan is guaranteed correct regardless of anything
-  // upstream. If the task is NOT destructive, hard-strip any destructive safety
-  // questions the model echoed from old assistant text; if that empties the
-  // blockers → ready_to_build = true (waiting_for_start, no 🔒 message).
-  const userAuthoredContext = [
-    task.title,
-    task.prompt ?? "",
-    ...history.filter((m) => m.role === "user").map((m) => m.content),
-    ...queuedNotes,
-  ].join("\n");
-  const destructive = isTaskDestructive(userAuthoredContext);
-
-  let finalPlan: BuildPlan = plan;
-  if (!destructive) {
-    const filtered = filterOutDestructiveSafetyQuestions(plan.questions);
-    finalPlan = {
-      ...plan,
-      questions: filtered,
-      ready_to_build: filtered.length === 0 ? true : plan.ready_to_build,
-    };
-  }
-
-  // Diagnostic (no secrets) — lets us see whether a task was flagged destructive
-  // and how many questions survived the safety pass.
-  // eslint-disable-next-line no-console
-  console.log(
-    "[dev_cockpit_safety]",
-    JSON.stringify({
-      taskId,
-      destructive,
-      modelQuestions: plan.questions.length,
-      finalQuestions: finalPlan.questions.length,
-      ready_to_build: finalPlan.ready_to_build,
-    }),
-  );
-
-  // 3a. Persist plan + status transition
-  const nextStatus: TaskStatus = finalPlan.ready_to_build
-    ? "waiting_for_start"
-    : "waiting_for_input";
-
-  const { data: updated, error: upErr } = await sb
-    .from("dev_cockpit_tasks")
-    .update({ status: nextStatus, plan_text: JSON.stringify(finalPlan) })
-    .eq("id", taskId)
-    .select(TASK_COLUMNS)
-    .single();
-  if (upErr) return fail(upErr.message);
-
-  // 3b. Human-readable assistant message (persistent)
-  await sb.from("dev_cockpit_messages").insert({
-    task_id: taskId,
-    role: "assistant",
-    content: formatPlanMessage(finalPlan),
-  });
-
-  return { ok: true, data: { task: updated as DevTask, plan: finalPlan } };
+  // Delegates to the shared orchestration so the logic has a single source of
+  // truth. The Dev Cockpit UI now calls the route handler
+  // (POST /api/glev-ops/dev-cockpit/analyze) instead of this server action, so
+  // the long analysis stays off the Server-Action queue and never blocks other
+  // actions. This action is kept for non-UI / programmatic callers.
+  const res = await performAnalyze(taskId);
+  if (!res.ok) return fail(res.error);
+  return { ok: true, data: { task: res.task, plan: res.plan } };
 }
 
 // ── Messages ─────────────────────────────────────────────────────────────────

@@ -155,6 +155,26 @@ und sicherstellen, dass `MISTRAL_API_KEY` als Secret gesetzt ist. App neu starte
   grau. Mehrere Tasks können gleichzeitig rotieren (`analyzingIds`-Set). Der globale
   „lädt…"-Hinweis bleibt sekundär.
 
+### Responsiveness-Fix (2026-06-02): Analyse blockiert die UI nicht mehr
+
+Zwei Ursachen behoben: (1) ein **globaler `useTransition`/`isPending`** sperrte
+alle Buttons, sobald *irgendeine* Action lief; (2) **Next.js serialisiert Server
+Actions** → der lange `analyzeTask`-Action blockierte Cancel/Archive/Reads bis er
+fertig war.
+
+- **Analyze läuft jetzt über einen Route-Handler** (`POST /glev-ops/dev-cockpit/api/analyze`,
+  via `fetch`) statt als Server Action → **raus aus der Server-Action-Queue**, echt
+  parallel, blockiert nichts. Logik extrahiert nach `lib/devCockpit/performAnalyze.ts`
+  (gleiche Analyse + Safety-Gate); der `analyzeTask`-Server-Action delegiert nur noch
+  dorthin. Route liegt unter `/glev-ops`, damit das Admin-Cookie mitgesendet wird.
+- **Globaler `useTransition` entfernt** → **task-/action-spezifische Pending-States:**
+  `analyzingIds` (mehrere Tasks rotieren parallel), `actionPendingByTaskId`
+  (Cancel/Archive/Backlog pro Task), sowie unabhängige `creating`/`queueing`/`answering`
+  für die Composer-Buttons. Nur der jeweils betroffene Button ist „busy".
+- Task-Wechsel, New Task, Cancel/Archive/Backlog, Prompt-/Queue-/Antwort-Eingabe
+  reagieren **sofort**, auch während eine Analyse läuft. Der globale Hinweis zeigt nur
+  noch „Analyse läuft…" (sekundär, blockiert nichts).
+
 ## 5. Offene Punkte für Phase 4
 
 - **Start Build** (regulärer `building`-Übergang), echte Code-Generierung,

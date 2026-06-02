@@ -12,7 +12,7 @@
 // branches, Vercel previews, diff fetching, voice, real file uploads, agent
 // execution — those controls stay visibly disabled / "coming".
 
-import { useEffect, useRef, useState, useTransition } from "react";
+import { useEffect, useRef, useState } from "react";
 import GlevLogo from "@/components/GlevLogo";
 import {
   listTasks,
@@ -27,7 +27,6 @@ import {
   discardQueueNote,
   listAttachments,
   addMessage,
-  analyzeTask,
 } from "./actions";
 import {
   STATUS_LABEL,
@@ -343,9 +342,22 @@ export default function DevCockpit({ initialTasks }: { initialTasks: DevTask[] }
   const [queue, setQueue] = useState<DevQueueNote[]>([]);
   const [attachments, setAttachments] = useState<DevAttachment[]>([]);
 
-  // Per-task transient state. `analyzingIds` = tasks whose analysis is in flight
-  // (drives the spinning sidebar icon; several can run at once).
+  // ── Per-task / per-action pending state (NO global blocking) ───────────────
+  // Each long/async action tracks ONLY the affected task(s), so the rest of the
+  // UI stays fully responsive. There is deliberately no shared useTransition /
+  // global isPending.
+  //
+  // analyzingIds        — tasks whose analysis is in flight (spinning icon; many at once)
+  // actionPendingByTaskId — cancel/archive/backlog in flight, per task
   const [analyzingIds, setAnalyzingIds] = useState<Set<string>>(() => new Set());
+  const [actionPendingByTaskId, setActionPendingByTaskId] = useState<
+    Record<string, "cancel" | "archive" | "backlog">
+  >({});
+  // Small independent pending flags for the central composer actions.
+  const [creating, setCreating] = useState(false);
+  const [queueing, setQueueing] = useState(false);
+  const [answering, setAnswering] = useState(false);
+
   // The task_id whose detail (messages/queue/attachments) is currently valid.
   // Updated synchronously on every switch so out-of-order async loads can be
   // discarded — prevents one task's data from overwriting another's.
@@ -361,8 +373,13 @@ export default function DevCockpit({ initialTasks }: { initialTasks: DevTask[] }
   // flash, then kept globally accurate via refreshSummary() (all statuses).
   const [summary, setSummary] = useState<Summary>(() => countSummary(initialTasks));
 
-  const [isPending, startTransition] = useTransition();
   const promptRef = useRef<HTMLTextAreaElement>(null);
+
+  // Helper: run an async action without any global pending/transition. Errors
+  // are surfaced as a toast and never block the rest of the UI.
+  function run(fn: () => Promise<void>) {
+    fn().catch((e) => setError(errText(e?.message ?? "unknown")));
+  }
 
   const selectedTask = tasks.find((t) => t.id === selectedId) ?? null;
   const plan = selectedTask ? parsePlan(selectedTask.plan_text) : null;
@@ -378,7 +395,7 @@ export default function DevCockpit({ initialTasks }: { initialTasks: DevTask[] }
   }
 
   function refreshList(nextFilter: TaskFilter) {
-    startTransition(async () => {
+    run(async () => {
       const res = await listTasks(nextFilter);
       if (!res.ok) {
         setError(errText(res.error));
@@ -393,7 +410,7 @@ export default function DevCockpit({ initialTasks }: { initialTasks: DevTask[] }
   }
 
   function loadTaskDetail(taskId: string) {
-    startTransition(async () => {
+    run(async () => {
       const [m, q, a] = await Promise.all([
         listMessages(taskId),
         listQueueNotes(taskId),
@@ -472,57 +489,69 @@ export default function DevCockpit({ initialTasks }: { initialTasks: DevTask[] }
   }
 
   // The prompt box ALWAYS creates a NEW task — no hidden "save/edit" mode.
+  // Independent `creating` flag — never blocks other actions.
   function handleCreateTask() {
+    if (creating) return;
     const prompt = promptText.trim();
-    startTransition(async () => {
-      const res = await createTask({ prompt });
-      if (!res.ok) {
-        setError(errText(res.error));
-        return;
+    setCreating(true);
+    run(async () => {
+      try {
+        const res = await createTask({ prompt });
+        if (!res.ok) {
+          setError(errText(res.error));
+          return;
+        }
+        setPromptText("");
+        setNotice("Task erstellt.");
+        // New task is a draft → it belongs to the Active view. Switch there so
+        // it's visible regardless of the current filter, then select it.
+        setFilter("active");
+        const listRes = await listTasks("active");
+        if (listRes.ok) setTasks(listRes.data);
+        setSelectedId(res.data.id);
+        refreshSummary();
+      } finally {
+        setCreating(false);
       }
-      setPromptText("");
-      setNotice("Task erstellt.");
-      // New task is a draft → it belongs to the Active view. Switch there so
-      // it's visible regardless of the current filter, then select it.
-      setFilter("active");
-      const listRes = await listTasks("active");
-      if (listRes.ok) setTasks(listRes.data);
-      setSelectedId(res.data.id);
-      refreshSummary();
     });
   }
 
-  // Phase 3 — Analyze Task with Mistral (plan only, no build). Runs per-task:
-  // the analyzed task spins in the sidebar (via analyzingIds) until it finishes,
-  // independently of which task is currently selected.
+  // Phase 3 — Analyze Task with Mistral (plan only). Runs PER-TASK via a route
+  // handler (fetch) so it stays OFF the Server-Action queue and never blocks
+  // task switching / cancel / archive / create. The analyzed task spins in the
+  // sidebar (analyzingIds) until done, independently of the current selection.
   function handleAnalyze() {
     if (!selectedTask) {
       setError("Erst eine Task auswählen.");
       return;
     }
     const id = selectedTask.id;
+    if (analyzingIds.has(id)) return; // only this task's button is "busy"
     setAnalyzingIds((prev) => new Set(prev).add(id));
     setNotice("Analysiere mit Mistral…");
-    startTransition(async () => {
+    run(async () => {
       try {
-        const res = await analyzeTask(id);
+        const r = await fetch("/glev-ops/dev-cockpit/api/analyze", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ taskId: id }),
+        });
+        const res = (await r.json().catch(() => ({ ok: false, error: "bad-response" }))) as
+          | { ok: true; task: DevTask; plan: BuildPlan }
+          | { ok: false; error: string };
+
         if (!res.ok) {
           setError(errText(res.error));
-          // Reload so the persisted "Mistral analysis failed." message shows —
-          // only if this task is still selected (loadTaskDetail guards staleness).
           if (activeTaskIdRef.current === id) loadTaskDetail(id);
           return;
         }
-        // Reflect the new status + plan_text on the task row (by id, so it's
-        // correct even if the user switched away). The Build Plan + status read
-        // from this row, so the analysis stays visible & persistent.
-        setTasks((prev) => prev.map((t) => (t.id === res.data.task.id ? res.data.task : t)));
-        // Refresh this task's messages only if it's still the active one; if the
-        // user navigated away, returning re-fetches via the selectedId effect.
+        // Update the task row by id (correct even if the user switched away).
+        // Build Plan + status read from this row → analysis stays visible.
+        setTasks((prev) => prev.map((t) => (t.id === res.task.id ? res.task : t)));
         if (activeTaskIdRef.current === id) loadTaskDetail(id);
         refreshSummary();
         setNotice(
-          res.data.plan.ready_to_build
+          res.plan.ready_to_build
             ? "Analyse fertig — bereit für Start Build."
             : "Analyse fertig — Rückfragen offen.",
         );
@@ -538,19 +567,25 @@ export default function DevCockpit({ initialTasks }: { initialTasks: DevTask[] }
 
   // Phase 3 — user answers a follow-up question; stored as a user message.
   function handleSendAnswer() {
-    if (!selectedTask) return;
+    if (!selectedTask || answering) return;
     const text = answerText.trim();
     if (!text) return;
     const id = selectedTask.id;
-    startTransition(async () => {
-      const res = await addMessage(id, "user", text);
-      if (!res.ok) {
-        setError(errText(res.error));
-        return;
+    setAnswering(true);
+    run(async () => {
+      try {
+        const res = await addMessage(id, "user", text);
+        if (!res.ok) {
+          setError(errText(res.error));
+          return;
+        }
+        // Only append to the visible chat if we're still on that task.
+        if (activeTaskIdRef.current === id) setMessages((prev) => [...prev, res.data]);
+        setAnswerText("");
+        setNotice("Antwort gespeichert — jetzt Re-Analyze.");
+      } finally {
+        setAnswering(false);
       }
-      setMessages((prev) => [...prev, res.data]);
-      setAnswerText("");
-      setNotice("Antwort gespeichert — jetzt Re-Analyze.");
     });
   }
 
@@ -559,57 +594,75 @@ export default function DevCockpit({ initialTasks }: { initialTasks: DevTask[] }
       setError("Erst eine Task auswählen oder erstellen.");
       return;
     }
+    if (queueing) return;
+    const id = selectedTask.id;
     const text = queueText.trim();
     if (!text) return;
-    startTransition(async () => {
-      const res = await addQueueNote(selectedTask.id, text);
-      if (!res.ok) {
-        setError(errText(res.error));
-        return;
+    setQueueing(true);
+    run(async () => {
+      try {
+        const res = await addQueueNote(id, text);
+        if (!res.ok) {
+          setError(errText(res.error));
+          return;
+        }
+        if (activeTaskIdRef.current === id) setQueue((prev) => [res.data, ...prev]);
+        setQueueText("");
+        setNotice("Queue-Notiz gespeichert.");
+      } finally {
+        setQueueing(false);
       }
-      setQueue((prev) => [res.data, ...prev]);
-      setQueueText("");
-      setNotice("Queue-Notiz gespeichert.");
     });
   }
 
   function handleDiscardQueue(id: string) {
-    startTransition(async () => {
+    run(async () => {
       const res = await discardQueueNote(id);
       if (!res.ok) {
         setError(errText(res.error));
         return;
       }
-      // Soft discard — keep the row but reflect the new status, or drop it
-      // from the visible list to keep the queue focused on open items.
       setQueue((prev) => prev.filter((q) => q.id !== id));
     });
   }
 
+  // Cancel / Archive / Backlog — per-task pending (actionPendingByTaskId). Runs
+  // independently of any analysis and never waits for it.
   function runStatusChange(
     task: DevTask,
+    action: "cancel" | "archive" | "backlog",
     fn: (id: string) => Promise<{ ok: boolean; error?: string }>,
     successMsg: string,
   ) {
     setMenu(null);
-    startTransition(async () => {
-      const res = await fn(task.id);
-      if (!res.ok) {
-        setError(errText(res.error ?? "unknown"));
-        return;
+    if (actionPendingByTaskId[task.id]) return;
+    setActionPendingByTaskId((prev) => ({ ...prev, [task.id]: action }));
+    run(async () => {
+      try {
+        const res = await fn(task.id);
+        if (!res.ok) {
+          setError(errText(res.error ?? "unknown"));
+          return;
+        }
+        setNotice(successMsg);
+        // Re-fetch the current filter so the task moves in/out of view correctly.
+        const listRes = await listTasks(filter);
+        if (listRes.ok) {
+          setTasks(listRes.data);
+          setSelectedId((cur) =>
+            cur && listRes.data.some((t) => t.id === cur)
+              ? cur
+              : listRes.data[0]?.id ?? null,
+          );
+        }
+        refreshSummary();
+      } finally {
+        setActionPendingByTaskId((prev) => {
+          const next = { ...prev };
+          delete next[task.id];
+          return next;
+        });
       }
-      setNotice(successMsg);
-      // Re-fetch the current filter so the task moves in/out of view correctly.
-      const listRes = await listTasks(filter);
-      if (listRes.ok) {
-        setTasks(listRes.data);
-        setSelectedId((cur) =>
-          cur && listRes.data.some((t) => t.id === cur)
-            ? cur
-            : listRes.data[0]?.id ?? null,
-        );
-      }
-      refreshSummary();
     });
   }
 
@@ -622,7 +675,11 @@ export default function DevCockpit({ initialTasks }: { initialTasks: DevTask[] }
       <div style={pageHeaderStyle}>
         <h1 style={headingStyle}>Dev Cockpit</h1>
         <span style={phaseBadgeStyle}>Phase 2 — Persistenz</span>
-        {isPending && <span style={{ fontSize: 12, color: "#9ca3af" }}>lädt…</span>}
+        {analyzingIds.size > 0 && (
+          <span style={{ fontSize: 12, color: "#6b7280" }}>
+            {analyzingIds.size === 1 ? "Analyse läuft…" : `${analyzingIds.size} Analysen laufen…`}
+          </span>
+        )}
       </div>
 
       {/* ── Toast / notice ── */}
@@ -790,7 +847,7 @@ export default function DevCockpit({ initialTasks }: { initialTasks: DevTask[] }
                     onKeyDown={(e) => {
                       if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
                         e.preventDefault();
-                        if (!isPending) handleSendAnswer();
+                        handleSendAnswer();
                       }
                     }}
                     rows={2}
@@ -799,17 +856,21 @@ export default function DevCockpit({ initialTasks }: { initialTasks: DevTask[] }
                     <button
                       style={btnSecondaryStyle}
                       onClick={handleSendAnswer}
-                      disabled={isPending}
+                      disabled={answering}
                     >
-                      Antwort senden
+                      {answering ? "Speichert…" : "Antwort senden"}
                     </button>
                     <button
                       style={btnPrimaryStyle}
                       onClick={handleAnalyze}
-                      disabled={isPending}
+                      disabled={analyzingIds.has(selectedTask.id)}
                       title="Mistral analysiert die Aufgabe (nur Planung, kein Build)"
                     >
-                      {plan ? "Re-Analyze" : "Analyze Task"}
+                      {analyzingIds.has(selectedTask.id)
+                        ? "Analysiere…"
+                        : plan
+                          ? "Re-Analyze"
+                          : "Analyze Task"}
                     </button>
                   </div>
                 </div>
@@ -881,7 +942,7 @@ export default function DevCockpit({ initialTasks }: { initialTasks: DevTask[] }
                 // newline so the prompt can be multi-line.
                 if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
                   e.preventDefault();
-                  if (!isPending) handleCreateTask();
+                  handleCreateTask();
                 }
               }}
               rows={5}
@@ -892,9 +953,9 @@ export default function DevCockpit({ initialTasks }: { initialTasks: DevTask[] }
               <button
                 style={btnPrimaryStyle}
                 onClick={handleCreateTask}
-                disabled={isPending}
+                disabled={creating}
               >
-                Create Task
+                {creating ? "Erstellt…" : "Create Task"}
               </button>
               <button style={btnDisabledStyle} disabled title="Phase 4">
                 Start Build
@@ -902,9 +963,9 @@ export default function DevCockpit({ initialTasks }: { initialTasks: DevTask[] }
               <button
                 style={btnSecondaryStyle}
                 onClick={handleAddToQueue}
-                disabled={isPending}
+                disabled={queueing}
               >
-                Add To Queue
+                {queueing ? "Speichert…" : "Add To Queue"}
               </button>
               <button
                 style={btnDisabledStyle}
@@ -932,7 +993,7 @@ export default function DevCockpit({ initialTasks }: { initialTasks: DevTask[] }
                 onKeyDown={(e) => {
                   if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
                     e.preventDefault();
-                    if (!isPending) handleAddToQueue();
+                    handleAddToQueue();
                   }
                 }}
                 rows={2}
@@ -1081,7 +1142,7 @@ export default function DevCockpit({ initialTasks }: { initialTasks: DevTask[] }
           <button
             style={ctxItemStyle}
             onClick={() =>
-              runStatusChange(menu.task, cancelTask, "Task abgebrochen (cancelled).")
+              runStatusChange(menu.task, "cancel", cancelTask, "Task abgebrochen (cancelled).")
             }
           >
             Cancel Task
@@ -1099,7 +1160,7 @@ export default function DevCockpit({ initialTasks }: { initialTasks: DevTask[] }
                 : undefined
             }
             onClick={() =>
-              runStatusChange(menu.task, archiveTask, "Task archiviert.")
+              runStatusChange(menu.task, "archive", archiveTask, "Task archiviert.")
             }
           >
             Archive Task
@@ -1107,7 +1168,7 @@ export default function DevCockpit({ initialTasks }: { initialTasks: DevTask[] }
           <button
             style={ctxItemStyle}
             onClick={() =>
-              runStatusChange(menu.task, moveTaskToBacklog, "Task ins Backlog verschoben.")
+              runStatusChange(menu.task, "backlog", moveTaskToBacklog, "Task ins Backlog verschoben.")
             }
           >
             Move to Backlog
