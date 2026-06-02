@@ -1,47 +1,13 @@
 import type { NextConfig } from "next";
 import createNextIntlPlugin from "next-intl/plugin";
-import withSerwistInit from "@serwist/next";
 
 const withNextIntl = createNextIntlPlugin("./i18n/request.ts");
 
-const withSerwist = withSerwistInit({
-  swSrc: "app/sw.ts",
-  swDest: "public/sw.js",
-  // Reload all open tabs when the user comes back online after being offline
-  // so they get fresh data immediately.
-  reloadOnOnline: true,
-  // Disable the SW in development — it intercepts hot-module replacement
-  // requests and breaks fast refresh in the Replit preview.
-  disable: process.env.NODE_ENV === "development",
-});
-
 const nextConfig: NextConfig = {
   reactStrictMode: true,
-  // Prevent WKWebView (Capacitor) and browsers from caching HTML pages.
-  // Static assets (_next/static/*) keep their default immutable cache
-  // since they are content-hashed. Only HTML documents get no-store so
-  // a new Vercel deploy is always picked up on the next app launch.
-  async headers() {
-    return [
-      {
-        source: "/((?!_next/static|_next/image|favicon|icons|mockups|sw\\.js).*)",
-        headers: [
-          { key: "Cache-Control", value: "no-store, must-revalidate" },
-        ],
-      },
-    ];
-  },
   experimental: {
-    // Keep recently visited pages in the Next.js Router Cache longer so
-    // back-navigations (e.g. Engine → Entries) are served instantly from
-    // memory without a round-trip to Vercel. dynamic=60 covers pages
-    // generated per-request (all protected tabs); static=300 covers
-    // fully-static pages like the marketing site.
     staleTimes: { dynamic: 60, static: 300 },
   },
-  // Hide the floating "N" Next.js dev-mode badge in the bottom corner.
-  // Production builds never render it; this just keeps the Replit dev
-  // preview clean too.
   devIndicators: false,
   allowedDevOrigins: [
     "*.replit.dev",
@@ -51,4 +17,4 @@ const nextConfig: NextConfig = {
   ],
 };
 
-export default withSerwist(withNextIntl(nextConfig));
+export default withNextIntl(nextConfig);
