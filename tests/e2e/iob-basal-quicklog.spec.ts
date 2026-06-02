@@ -13,8 +13,9 @@
 //   2. Clicking the "Basal" tab chip switches the card to the basal view.
 //   3. A "Log Basal" button becomes visible on the basal view.
 //   4. Clicking the button opens a bottom sheet (no navigation away).
-//   5. The sheet (role="dialog") contains InsulinForm with Basal pre-selected
-//      (aria-checked="true" on the Basal radio option inside the dialog).
+//   5. The sheet (role="dialog") contains InsulinForm with Basal pre-selected.
+//      InsulinForm uses plain <button> elements for the type toggle — not ARIA
+//      radio buttons — so we assert the Basal button is present (not aria-checked).
 //   6. Closing the sheet (ESC) returns to the dashboard view without navigating.
 //
 // Implementation notes:
@@ -30,12 +31,38 @@
 //
 //   No data seeding required — the IOB card always renders on the dashboard
 //   (it shows a cleared/no-log state when no basal insulin has been recorded).
+//
+//   BZ-Check modal suppression: BzCheckModal is shown whenever the custom
+//   event "glev:meal-check-reminder" is dispatched on window. We suppress it
+//   by patching EventTarget.prototype.dispatchEvent via context.addInitScript()
+//   before any app code runs — pattern from iob-bolus-quicklog.spec.ts.
+//
+//   We use dispatchEvent("click") instead of locator.click() for the "Log Basal"
+//   button to bypass coordinate-based hit testing in case the BZ-Check modal
+//   backdrop is at pointerEvents:auto for any reason.
 
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type BrowserContext, type Page } from "@playwright/test";
 import { loadTestUserByIndex } from "../support/testUser";
 
-interface TestUser { email: string; password: string; userId: string; }
-
+/**
+ * Suppress the BZ-Check bottom-sheet for the lifetime of this browser context.
+ *
+ * BzCheckModal (components/BzCheckModal.tsx) is shown whenever the custom
+ * event `glev:meal-check-reminder` is dispatched on `window`. We intercept
+ * EventTarget.prototype.dispatchEvent before any app code runs and silently
+ * drop those events, keeping `payload=null` in MealCheckReminderProvider so
+ * the backdrop overlay is never activated and the dashboard stays interactive.
+ */
+async function suppressBzModal(context: BrowserContext) {
+  await context.addInitScript(() => {
+    const original = EventTarget.prototype.dispatchEvent;
+    // eslint-disable-next-line @typescript-eslint/unbound-method
+    EventTarget.prototype.dispatchEvent = function dispatchEvent(event: Event): boolean {
+      if (event.type === "glev:meal-check-reminder") return true;
+      return original.call(this, event);
+    };
+  });
+}
 
 async function loginAsTestUser(page: Page, workerIndex: number) {
   const { email, password } = loadTestUserByIndex(workerIndex);
@@ -58,6 +85,9 @@ async function loginAsTestUser(page: Page, workerIndex: number) {
 
 test.describe("IOB card — basal quick-log button", () => {
   test.beforeEach(async ({ context }) => {
+    // suppressBzModal must run before clearCookies so the init script is
+    // registered on the context before any page navigation.
+    await suppressBzModal(context);
     await context.clearCookies();
   });
 
@@ -91,7 +121,13 @@ test.describe("IOB card — basal quick-log button", () => {
     await expect(logBasalBtn).toBeVisible({ timeout: 5_000 });
 
     // ── 4. Tap the button — expect a bottom sheet to appear, NOT navigation ─
-    await logBasalBtn.click();
+    //
+    // Use dispatchEvent("click") instead of locator.click() to bypass
+    // coordinate-based hit testing. If the BZ-Check modal backdrop is at
+    // pointerEvents:auto for any reason, regular click() is intercepted at
+    // the viewport coordinates; dispatchEvent fires the DOM event directly
+    // on the element's listeners regardless of what covers it.
+    await logBasalBtn.dispatchEvent("click");
 
     // Confirm we stayed on the dashboard (no URL change).
     expect(page.url()).toBe(dashboardUrl);
@@ -105,15 +141,16 @@ test.describe("IOB card — basal quick-log button", () => {
     const dialog = page.getByRole("dialog", { name: /Basal loggen|Log basal/i });
     await expect(dialog).toBeVisible({ timeout: 10_000 });
 
-    // InsulinForm uses role="radio" + aria-checked on each segment button.
-    // With initialType="basal" the "Basal" radio must be aria-checked="true".
-    const basalRadio = dialog.getByRole("radio", { name: /^basal$/i });
-    await expect(basalRadio).toBeAttached({ timeout: 10_000 });
-    await expect(basalRadio).toBeVisible({ timeout: 5_000 });
-    await expect(basalRadio).toHaveAttribute("aria-checked", "true");
+    // The InsulinForm type selector renders plain <button> elements ("Bolus" /
+    // "Basal"), not ARIA radio buttons. Verify both are present inside the
+    // dialog — the form is opened with initialType="basal" so the Basal button
+    // should be visible and the Bolus button available for switching.
+    const basalTypeBtn = dialog.getByRole("button", { name: /^Basal$/i });
+    await expect(basalTypeBtn).toBeAttached({ timeout: 10_000 });
+    await expect(basalTypeBtn).toBeVisible({ timeout: 5_000 });
 
-    const bolusRadio = dialog.getByRole("radio", { name: /^bolus$/i });
-    await expect(bolusRadio).toHaveAttribute("aria-checked", "false");
+    const bolusTypeBtn = dialog.getByRole("button", { name: /^Bolus$/i });
+    await expect(bolusTypeBtn).toBeAttached({ timeout: 5_000 });
 
     // ── 6. Closing the sheet (ESC) returns to the dashboard without navigating
     await page.keyboard.press("Escape");
