@@ -51,13 +51,14 @@ async function startCheckout(tier: "smart" | "pro"): Promise<void> {
   }
 }
 
-export default function TrialExpiredModal() {
-  const [expired, setExpired] = useState(false);
-  const [loading, setLoading] = useState(true);
+export default function TrialExpiredModal({ forceOpen = false }: { forceOpen?: boolean }) {
+  const [expired, setExpired] = useState(forceOpen);
+  const [loading, setLoading] = useState(!forceOpen);
   const [busySmart, setBusySmart] = useState(false);
   const [busyPro, setBusyPro] = useState(false);
 
   useEffect(() => {
+    if (forceOpen) return;
     async function check() {
       try {
         if (!supabase) return;
@@ -88,7 +89,7 @@ export default function TrialExpiredModal() {
       }
     }
     check();
-  }, []);
+  }, [forceOpen]);
 
   if (loading || !expired) return null;
 

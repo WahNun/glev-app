@@ -105,18 +105,19 @@ function CategoryRow({ title, description, checked, onChange, disabled }: {
   );
 }
 
-export default function CookieBanner() {
-  const [visible, setVisible] = useState(false);
+export default function CookieBanner({ forceVisible = false }: { forceVisible?: boolean }) {
+  const [visible, setVisible] = useState(forceVisible);
   const [showDetails, setShowDetails] = useState(false);
   const [analytics, setAnalytics] = useState(false);
   const [marketing, setMarketing] = useState(false);
 
   useEffect(() => {
+    if (forceVisible) return;
     const stored = readConsent();
     if (stored) { writeConsent(stored); return; }
     const t = setTimeout(() => setVisible(true), 600);
     return () => clearTimeout(t);
-  }, []);
+  }, [forceVisible]);
 
   if (!visible) return null;
 
