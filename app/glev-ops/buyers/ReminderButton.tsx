@@ -5,10 +5,15 @@ import type { ReminderResult } from "@/app/api/cron/remind-meta-leads/route";
 
 type State = "idle" | "running" | "done";
 
-export default function ReminderButton() {
+export default function ReminderButton({ selectedIds }: { selectedIds?: string[] }) {
   const [state, setState] = useState<State>("idle");
   const [results, setResults] = useState<ReminderResult[]>([]);
   const [error, setError] = useState<string | null>(null);
+
+  const isFiltered = selectedIds && selectedIds.length > 0;
+  const label = isFiltered
+    ? `🔔 Reminder an ${selectedIds.length} ausgewählte${selectedIds.length === 1 ? "n Lead" : " Leads"} (24h)`
+    : "🔔 Reminder jetzt senden (24h-Leads)";
 
   async function run() {
     setState("running");
@@ -50,7 +55,7 @@ export default function ReminderButton() {
             cursor: "pointer",
           }}
         >
-          🔔 Reminder jetzt senden (24h-Leads)
+          {label}
         </button>
       )}
       {state === "running" && <span style={{ fontSize: 12, color: "#666" }}>⏳ Sende Reminder …</span>}

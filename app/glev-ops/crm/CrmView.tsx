@@ -2,9 +2,12 @@
 
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { planColor, planLabel, type EffectivePlan } from "@/lib/admin/effectivePlan";
 import CaseStatusCell from "../_components/CaseStatusCell";
+import BulkSmsButton from "../buyers/BulkSmsButton";
+import ReminderButton from "../buyers/ReminderButton";
+import { softDeleteAction } from "../users/actions";
 
 export type CrmUserRow = {
   id: string;
@@ -337,7 +340,9 @@ function AlleTab({ users, pageSize }: { users: CrmUserRow[]; pageSize: number })
               }
               return (
                 <tr key={r.id} style={{ borderTop: "1px solid #eee", opacity: r.deleted_at ? 0.55 : 1 }}>
-                  <Td>{r.email || "—"}</Td>
+                  <Td>
+                    <Link href={`/glev-ops/users/${r.id}`} style={emailLink}>{r.email || "—"}</Link>
+                  </Td>
                   <Td>{r.display_name ?? "—"}</Td>
                   <Td>
                     <span style={{ display: "inline-flex", alignItems: "center", gap: 4, flexWrap: "wrap" }}>
@@ -377,8 +382,14 @@ function AlleTab({ users, pageSize }: { users: CrmUserRow[]; pageSize: number })
   );
 }
 
+type ContextMenuState = { x: number; y: number; userId: string; email: string } | null;
+
 function TrialTab({ users }: { users: CrmUserRow[] }) {
   const [q, setQ] = useState("");
+  const [selection, setSelection] = useState<Set<string>>(new Set());
+  const [contextMenu, setContextMenu] = useState<ContextMenuState>(null);
+  const [deleting, setDeleting] = useState<string | null>(null);
+  const selectAllRef = useRef<HTMLInputElement>(null);
   const now = new Date();
 
   const filtered = useMemo(() => {
@@ -392,12 +403,89 @@ function TrialTab({ users }: { users: CrmUserRow[] }) {
     );
   }, [users, q]);
 
+  const filteredIds = useMemo(() => filtered.map((u) => u.id), [filtered]);
+
+  const allSelected = filteredIds.length > 0 && filteredIds.every((id) => selection.has(id));
+  const someSelected = filteredIds.some((id) => selection.has(id));
+  const indeterminate = someSelected && !allSelected;
+
+  useEffect(() => {
+    if (selectAllRef.current) {
+      selectAllRef.current.indeterminate = indeterminate;
+    }
+  }, [indeterminate]);
+
+  useEffect(() => {
+    if (!contextMenu) return;
+    function close() { setContextMenu(null); }
+    window.addEventListener("click", close);
+    window.addEventListener("blur", close);
+    window.addEventListener("scroll", close, true);
+    return () => {
+      window.removeEventListener("click", close);
+      window.removeEventListener("blur", close);
+      window.removeEventListener("scroll", close, true);
+    };
+  }, [contextMenu]);
+
+  function toggleAll() {
+    if (allSelected) {
+      setSelection((prev) => {
+        const next = new Set(prev);
+        filteredIds.forEach((id) => next.delete(id));
+        return next;
+      });
+    } else {
+      setSelection((prev) => {
+        const next = new Set(prev);
+        filteredIds.forEach((id) => next.add(id));
+        return next;
+      });
+    }
+  }
+
+  function toggleOne(id: string) {
+    setSelection((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function handleContextMenu(e: React.MouseEvent, userId: string, email: string) {
+    e.preventDefault();
+    if (!selection.has(userId)) {
+      setSelection((prev) => new Set(prev).add(userId));
+    }
+    setContextMenu({ x: e.clientX, y: e.clientY, userId, email });
+  }
+
+  async function handleDelete(userId: string, email: string) {
+    setContextMenu(null);
+    const ok = window.confirm(`Lead „${email}" soft-löschen?\n\nDer Account wird gesperrt und als gelöscht markiert. Dies kann rückgängig gemacht werden.`);
+    if (!ok) return;
+    setDeleting(userId);
+    try {
+      const fd = new FormData();
+      fd.set("userId", userId);
+      fd.set("confirmEmail", email);
+      await softDeleteAction(fd);
+    } finally {
+      setDeleting(null);
+      setSelection((prev) => { const next = new Set(prev); next.delete(userId); return next; });
+    }
+  }
+
+  const selectedIds = Array.from(selection);
+  const selectionCount = selectedIds.length;
+
   return (
     <div>
-      <p style={{ fontSize: 13, color: "#666", margin: "0 0 12px" }}>
-        Nutzer mit aktivem oder abgelaufenem 7-Tage-Trial sowie Meta Leads.
-        Aktionen (Reminder, Bulk-SMS) findest du auf <Link href="/glev-ops/buyers" style={{ color: "#3b4cdc" }}>Käufer</Link>.
-      </p>
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", marginBottom: 12 }}>
+        <BulkSmsButton selectedIds={selectionCount > 0 ? selectedIds : undefined} />
+        <ReminderButton selectedIds={selectionCount > 0 ? selectedIds : undefined} />
+      </div>
       <input
         type="text"
         value={q}
@@ -405,11 +493,35 @@ function TrialTab({ users }: { users: CrmUserRow[] }) {
         placeholder="Suche: E-Mail, Name, Telefon…"
         style={{ ...inputBase, minWidth: 260, marginBottom: 12, display: "block" }}
       />
-      <p style={{ fontSize: 13, color: "#555", margin: "0 0 8px" }}>{filtered.length} Einträge</p>
+      <p style={{ fontSize: 13, color: "#555", margin: "0 0 8px" }}>
+        {filtered.length} Einträge
+        {selectionCount > 0 && (
+          <span style={{ marginLeft: 10, background: "#eff6ff", color: "#1d4ed8", borderRadius: 4, padding: "2px 8px", fontSize: 12, fontWeight: 600 }}>
+            {selectionCount} ausgewählt
+            <button
+              type="button"
+              onClick={() => setSelection(new Set())}
+              style={{ marginLeft: 6, background: "none", border: "none", cursor: "pointer", color: "#6b7280", fontSize: 11, padding: 0 }}
+            >
+              ✕
+            </button>
+          </span>
+        )}
+      </p>
       <div style={tableWrap}>
         <table style={tableBase}>
           <thead>
             <tr style={{ background: "#f9fafb" }}>
+              <th style={{ padding: "10px 8px 10px 12px", width: 32 }}>
+                <input
+                  ref={selectAllRef}
+                  type="checkbox"
+                  checked={allSelected}
+                  onChange={toggleAll}
+                  style={{ cursor: "pointer" }}
+                  title="Alle auswählen"
+                />
+              </th>
               <Th>E-Mail</Th>
               <Th>Name</Th>
               <Th>Telefon</Th>
@@ -431,9 +543,30 @@ function TrialTab({ users }: { users: CrmUserRow[] }) {
               const expired = end ? end < now : false;
               const notYetActivated = !started;
               const daysLeft = end ? Math.ceil((end.getTime() - now.getTime()) / 86400000) : null;
+              const isSelected = selection.has(u.id);
               return (
-                <tr key={u.id} style={{ borderBottom: "1px solid #f1f5f9" }}>
-                  <Td>{u.email}</Td>
+                <tr
+                  key={u.id}
+                  style={{
+                    borderBottom: "1px solid #f1f5f9",
+                    background: isSelected ? "#eff6ff" : undefined,
+                    opacity: deleting === u.id ? 0.4 : 1,
+                    transition: "background 0.1s",
+                  }}
+                  onContextMenu={(e) => handleContextMenu(e, u.id, u.email)}
+                >
+                  <td style={{ padding: "8px 8px 8px 12px", verticalAlign: "middle" }}>
+                    <input
+                      type="checkbox"
+                      checked={isSelected}
+                      onChange={() => toggleOne(u.id)}
+                      style={{ cursor: "pointer" }}
+                      onClick={(e) => e.stopPropagation()}
+                    />
+                  </td>
+                  <Td>
+                    <Link href={`/glev-ops/users/${u.id}`} style={emailLink}>{u.email}</Link>
+                  </Td>
                   <Td>{u.display_name ?? "—"}</Td>
                   <Td>{u.phone ?? "—"}</Td>
                   <Td>
@@ -474,17 +607,65 @@ function TrialTab({ users }: { users: CrmUserRow[] }) {
                   </Td>
                   <Td>{fmtDate(u.created_at)}</Td>
                   <Td>
-                    <Link href={`/glev-ops/buyers/${u.id}`} style={{ fontSize: 14, color: "#6b7280", textDecoration: "none" }} title="Bearbeiten">✏</Link>
+                    <span style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                      <Link href={`/glev-ops/users/${u.id}`} style={openBtn}>Öffnen →</Link>
+                      <Link href={`/glev-ops/buyers/${u.id}`} style={{ fontSize: 14, color: "#6b7280", textDecoration: "none" }} title="Bearbeiten">✏</Link>
+                    </span>
                   </Td>
                 </tr>
               );
             })}
             {filtered.length === 0 && (
-              <tr><td colSpan={12} style={{ padding: 32, textAlign: "center", color: "#999" }}>Keine Trial-Nutzer.</td></tr>
+              <tr><td colSpan={13} style={{ padding: 32, textAlign: "center", color: "#999" }}>Keine Trial-Nutzer.</td></tr>
             )}
           </tbody>
         </table>
       </div>
+
+      {contextMenu && (
+        <div
+          style={{
+            position: "fixed",
+            top: contextMenu.y,
+            left: contextMenu.x,
+            zIndex: 9999,
+            background: "#fff",
+            border: "1px solid #e5e7eb",
+            borderRadius: 8,
+            boxShadow: "0 4px 20px rgba(0,0,0,0.12)",
+            minWidth: 200,
+            overflow: "hidden",
+          }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <button
+            type="button"
+            style={ctxMenuItem}
+            onClick={() => {
+              setContextMenu(null);
+            }}
+          >
+            📨 SMS senden
+          </button>
+          <button
+            type="button"
+            style={ctxMenuItem}
+            onClick={() => {
+              setContextMenu(null);
+            }}
+          >
+            🔔 Reminder senden
+          </button>
+          <div style={{ height: 1, background: "#f3f4f6", margin: "2px 0" }} />
+          <button
+            type="button"
+            style={{ ...ctxMenuItem, color: "#dc2626" }}
+            onClick={() => handleDelete(contextMenu.userId, contextMenu.email)}
+          >
+            🗑 Löschen
+          </button>
+        </div>
+      )}
     </div>
   );
 }
@@ -524,22 +705,27 @@ function BetaTab({ rows }: { rows: CrmBetaRow[] }) {
         <table style={tableBase}>
           <thead>
             <tr style={{ background: "#f8f8f8" }}>
-              <Th>{"Name"}</Th><Th>{"E-Mail"}</Th><Th>{"Status"}</Th><Th>{"Betrag"}</Th><Th>{"Session-ID"}</Th><Th>{"Erstellt"}</Th><Th>{"Fulfilled"}</Th><Th>{"Fall"}</Th>
+              <Th>{"Name"}</Th><Th>{"E-Mail"}</Th><Th>{"Status"}</Th><Th>{"Betrag"}</Th><Th>{"Session-ID"}</Th><Th>{"Erstellt"}</Th><Th>{"Fulfilled"}</Th><Th>{"Fall"}</Th><Th>{""}</Th>
             </tr>
           </thead>
           <tbody>
             {paged.length === 0 ? (
-              <tr><td colSpan={8} style={{ padding: 32, textAlign: "center", color: "#999" }}>Keine Einträge.</td></tr>
+              <tr><td colSpan={9} style={{ padding: 32, textAlign: "center", color: "#999" }}>Keine Einträge.</td></tr>
             ) : paged.map((r) => (
               <tr key={r.id} style={{ borderTop: "1px solid #eee" }}>
                 <Td>{r.full_name ?? "—"}</Td>
-                <Td>{r.email}</Td>
+                <Td>
+                  <Link href={`/glev-ops/users?q=${encodeURIComponent(r.email)}`} style={emailLink}>{r.email}</Link>
+                </Td>
                 <Td>{r.status ?? "—"}</Td>
                 <Td>{fmtAmount(r.amount_cents, r.currency)}</Td>
                 <Td mono title={r.stripe_session_id ?? undefined}>{fmtSessionId(r.stripe_session_id)}</Td>
                 <Td>{fmtDateTime(r.created_at)}</Td>
                 <Td>{fmtDateTime(r.fulfilled_at)}</Td>
                 <Td><CaseStatusCell rowKey={`beta-${r.id}`} /></Td>
+                <Td>
+                  <Link href={`/glev-ops/users?q=${encodeURIComponent(r.email)}`} style={openBtn}>Öffnen →</Link>
+                </Td>
               </tr>
             ))}
           </tbody>
@@ -585,22 +771,27 @@ function ProTab({ rows }: { rows: CrmProRow[] }) {
         <table style={tableBase}>
           <thead>
             <tr style={{ background: "#f8f8f8" }}>
-              <Th>{"Name"}</Th><Th>{"E-Mail"}</Th><Th>{"Status"}</Th><Th>{"Trial endet"}</Th><Th>{"Period endet"}</Th><Th>{"Session-ID"}</Th><Th>{"Erstellt"}</Th><Th>{"Fall"}</Th>
+              <Th>{"Name"}</Th><Th>{"E-Mail"}</Th><Th>{"Status"}</Th><Th>{"Trial endet"}</Th><Th>{"Period endet"}</Th><Th>{"Session-ID"}</Th><Th>{"Erstellt"}</Th><Th>{"Fall"}</Th><Th>{""}</Th>
             </tr>
           </thead>
           <tbody>
             {paged.length === 0 ? (
-              <tr><td colSpan={8} style={{ padding: 32, textAlign: "center", color: "#999" }}>Keine Einträge.</td></tr>
+              <tr><td colSpan={9} style={{ padding: 32, textAlign: "center", color: "#999" }}>Keine Einträge.</td></tr>
             ) : paged.map((r) => (
               <tr key={r.id} style={{ borderTop: "1px solid #eee" }}>
                 <Td>{r.full_name ?? "—"}</Td>
-                <Td>{r.email}</Td>
+                <Td>
+                  <Link href={`/glev-ops/users?q=${encodeURIComponent(r.email)}`} style={emailLink}>{r.email}</Link>
+                </Td>
                 <Td>{r.status ?? "—"}</Td>
                 <Td>{fmtDateTime(r.trial_ends_at)}</Td>
                 <Td>{fmtDateTime(r.current_period_end)}</Td>
                 <Td mono title={r.stripe_session_id ?? undefined}>{fmtSessionId(r.stripe_session_id)}</Td>
                 <Td>{fmtDateTime(r.created_at)}</Td>
                 <Td><CaseStatusCell rowKey={`pro-${r.id}`} /></Td>
+                <Td>
+                  <Link href={`/glev-ops/users?q=${encodeURIComponent(r.email)}`} style={openBtn}>Öffnen →</Link>
+                </Td>
               </tr>
             ))}
           </tbody>
@@ -643,6 +834,7 @@ const inputBase: React.CSSProperties = { padding: "9px 12px", border: "1px solid
 const selectBase: React.CSSProperties = { ...inputBase, minWidth: 140, background: "#fff", cursor: "pointer" };
 const filterChip: React.CSSProperties = { padding: "6px 12px", borderRadius: 999, border: "1px solid #ddd", background: "#fff", color: "#333", fontSize: 13, cursor: "pointer", fontFamily: "inherit" };
 const filterChipActive: React.CSSProperties = { ...filterChip, background: "#111", color: "#fff", border: "1px solid #111" };
+const emailLink: React.CSSProperties = { color: "#1d4ed8", textDecoration: "none", fontWeight: 500, fontSize: 13 };
 const openBtn: React.CSSProperties = { fontSize: 12, color: "#3b4cdc", textDecoration: "none", fontWeight: 600 };
 const giftBadge: React.CSSProperties = { background: "#fef9c3", color: "#92400e", border: "1px solid #fde68a", padding: "2px 6px", borderRadius: 4, fontWeight: 600, fontSize: 11, whiteSpace: "nowrap" };
 const flagBadge: React.CSSProperties = { background: "#f3f4f6", color: "#374151", fontSize: 11, padding: "2px 6px", borderRadius: 4 };
@@ -653,3 +845,4 @@ const badgeActive: React.CSSProperties = { background: "#dcfce7", color: "#16653
 const badgeExpired: React.CSSProperties = { background: "#fef2f2", color: "#991b1b", borderRadius: 4, padding: "2px 7px", fontSize: 11 };
 const badgePending: React.CSSProperties = { background: "#fefce8", color: "#854d0e", borderRadius: 4, padding: "2px 7px", fontSize: 11 };
 const badgeWarn: React.CSSProperties = { background: "#fff7ed", color: "#9a3412", border: "1px solid #fed7aa", borderRadius: 4, padding: "2px 7px", fontSize: 11, fontWeight: 600 };
+const ctxMenuItem: React.CSSProperties = { display: "block", width: "100%", padding: "10px 14px", background: "none", border: "none", textAlign: "left", fontSize: 13, cursor: "pointer", fontFamily: "inherit", color: "#111" };

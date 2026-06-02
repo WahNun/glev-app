@@ -6,11 +6,16 @@ import type { BackfillPhoneResult } from "@/app/api/admin/backfill-phones/route"
 
 type State = "idle" | "confirming" | "backfilling" | "sending" | "done";
 
-export default function BulkSmsButton() {
+export default function BulkSmsButton({ selectedIds }: { selectedIds?: string[] }) {
   const [state, setState] = useState<State>("idle");
   const [backfillResults, setBackfillResults] = useState<BackfillPhoneResult[]>([]);
   const [smsResults, setSmsResults] = useState<BulkSmsResult[]>([]);
   const [error, setError] = useState<string | null>(null);
+
+  const isFiltered = selectedIds && selectedIds.length > 0;
+  const label = isFiltered
+    ? `📨 SMS an ${selectedIds.length} ausgewählte${selectedIds.length === 1 ? "n Lead" : " Leads"} senden`
+    : "📨 SMS an alle Meta-Leads senden";
 
   async function run() {
     setState("backfilling");
@@ -38,9 +43,12 @@ export default function BulkSmsButton() {
     // Schritt 2: Bulk-SMS senden
     setState("sending");
     try {
+      const body = isFiltered ? JSON.stringify({ userIds: selectedIds }) : undefined;
       const sRes = await fetch("/api/admin/bulk-sms", {
         method: "POST",
         credentials: "include",
+        headers: body ? { "Content-Type": "application/json" } : undefined,
+        body,
       });
       const sData = await sRes.json() as { results?: BulkSmsResult[]; error?: string };
       if (!sRes.ok || sData.error) {
@@ -77,7 +85,7 @@ export default function BulkSmsButton() {
             cursor: "pointer",
           }}
         >
-          📨 SMS an alle Meta-Leads senden
+          {label}
         </button>
       )}
 
@@ -91,7 +99,9 @@ export default function BulkSmsButton() {
           maxWidth: 480,
         }}>
           <p style={{ margin: "0 0 6px", fontWeight: 600 }}>
-            SMS an alle Meta-Leads schicken?
+            {isFiltered
+              ? `SMS an ${selectedIds.length} ausgewählte${selectedIds.length === 1 ? "n Lead" : " Leads"} schicken?`
+              : "SMS an alle Meta-Leads schicken?"}
           </p>
           <p style={{ margin: "0 0 12px", color: "#92400e", lineHeight: 1.4 }}>
             Lädt zuerst Telefonnummern aus der meta_leads-Tabelle, dann generiert für jeden Lead mit Nummer einen frischen Invite-Link und schickt eine SMS.
