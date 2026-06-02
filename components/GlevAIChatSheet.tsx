@@ -5,6 +5,7 @@ import type { GlevChatMessage, PendingAction } from "@/lib/useGlevAI";
 import { useVoiceIntents } from "@/hooks/useVoiceIntents";
 import { useTTS } from "@/hooks/useTTS";
 import IntentConfirmChip, { intentLabel } from "@/components/IntentConfirmChip";
+import GlevLogo from "@/components/GlevLogo";
 
 const ACCENT = "#8b5cf6";
 const SHEET_BG = "var(--surface)";
@@ -695,7 +696,7 @@ export default function GlevAIChatSheet({
             borderTop: "1px solid var(--border-soft)",
           }}
         >
-          {/* Mic button — hold to talk */}
+          {/* Mic button — hold to talk; Glev icon rotates while listening */}
           <button
             type="button"
             data-glev-mic="true"
@@ -712,31 +713,33 @@ export default function GlevAIChatSheet({
               width: 36,
               height: 36,
               borderRadius: 18,
-              border: "none",
+              border: isListening ? `1px solid ${ACCENT}` : "1px solid var(--border)",
               cursor: "pointer",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
-              background: isListening ? ACCENT : "var(--surface-alt)",
-              animation: isListening ? "glevBtnGlowFast 0.7s ease-in-out infinite" : "none",
+              background: isListening ? "rgba(139,92,246,0.12)" : "var(--surface-alt)",
+              animation: "none",
               touchAction: "none",
+              transition: "background 0.15s, border-color 0.15s",
             }}
           >
-            <svg
-              width="16"
-              height="16"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="var(--on-accent)"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
+            <span
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                animation: isListening ? "glevIconSpin 1.6s linear infinite" : "none",
+              }}
             >
-              <rect x="9" y="2" width="6" height="11" rx="3" />
-              <path d="M5 10a7 7 0 0 0 14 0" />
-              <line x1="12" y1="19" x2="12" y2="22" />
-              <line x1="8" y1="22" x2="16" y2="22" />
-            </svg>
+              <GlevLogo size={20} color={isListening ? ACCENT : "var(--text-dim)"} bg="transparent" />
+            </span>
+            <style>{`
+              @keyframes glevIconSpin {
+                from { transform: rotate(0deg); }
+                to   { transform: rotate(360deg); }
+              }
+            `}</style>
           </button>
 
           <input

@@ -4,7 +4,7 @@
    button in Layout.tsx handles all taps — this element is purely visual.
 
    Idle state:    blue border + soft static blue glow, no animation.
-   Listening:     blue glow + breathing ring + sweep shimmer + orbital dots (user speaking).
+   Listening:     only the Glev icon rotates (sweep/dots/pulse removed).
    Speaking:      violet/purple fast blink + orbital dots (AI speaking via TTS).
    ──────────────────────────────────────────────────────────────── */
 
@@ -20,19 +20,15 @@
   50%       { box-shadow: inset 0 0 16px rgba(79,110,247,0.14), 0 0 22px rgba(79,110,247,0.35), 0 0 40px rgba(79,110,247,0.16); }
 }
 
-@keyframes glevBtnGlowFast {
-  0%, 100% { box-shadow: inset 0 0 18px rgba(79,110,247,0.12), 0 0 20px rgba(79,110,247,0.40), 0 0 38px rgba(79,110,247,0.20); }
-  50%       { box-shadow: inset 0 0 24px rgba(79,110,247,0.22), 0 0 32px rgba(79,110,247,0.65), 0 0 56px rgba(79,110,247,0.32); }
-}
-
 @keyframes glevIconPulse {
   0%, 100% { opacity: 0.80; transform: scale(0.97); filter: drop-shadow(0 0 2px rgba(255,255,255,0.08)); }
   50%       { opacity: 1;    transform: scale(1.04); filter: drop-shadow(0 0 6px rgba(255,255,255,0.35)) drop-shadow(0 0 12px rgba(79,110,247,0.45)); }
 }
 
-@keyframes glevBreathFast {
-  0%, 100% { opacity: 0.7;  transform: scale(0.97); }
-  50%       { opacity: 1;    transform: scale(1.05); }
+/* Logo spin — used during active recording (listening) */
+@keyframes glevIconSpin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
 }
 
 @keyframes glevSweep {
@@ -64,12 +60,6 @@
   65%  { transform: translateX(16px) translateY(-58px);opacity: 0.85; }
   90%  { transform: translateX(0)    translateY(-58px);opacity: 0.65; }
   100% { transform: translateX(0)    translateY(0);    opacity: 0.85; }
-}
-
-/* Blue icon pulse — user speaking */
-@keyframes glevIconPulseFast {
-  0%, 100% { opacity: 0.70; transform: scale(0.94); filter: drop-shadow(0 0 3px rgba(255,255,255,0.15)); }
-  50%       { opacity: 1;    transform: scale(1.08); filter: drop-shadow(0 0 10px rgba(255,255,255,0.6)) drop-shadow(0 0 18px rgba(79,110,247,0.7)); }
 }
 
 /* Violet blink — AI speaking */
@@ -107,10 +97,10 @@
   pointer-events: none;
 }
 
-/* Blue glow — user is actively speaking (listening) */
+/* Listening: stronger border, no glow animation — only icon spins */
 .btn.listening {
   border-color: rgba(79, 110, 247, 0.80);
-  animation: glevBtnGlowFast 0.9s ease-in-out infinite;
+  animation: none;
 }
 
 /* Violet blink — AI is speaking via TTS */
@@ -142,14 +132,14 @@
 .frame::before { top: 8px;    right: 10px; }
 .frame::after  { bottom: 8px; left:  10px; }
 
+/* Listening: stop frame animation + hide tick marks */
 .listening .frame {
-  animation: glevBreathFast 0.9s ease-in-out infinite !important;
+  animation: none !important;
 }
 
 .listening .frame::before,
 .listening .frame::after {
-  opacity: 1;
-  background: rgba(79, 110, 247, 0.90);
+  opacity: 0;
 }
 
 .speaking .frame::before,
@@ -178,9 +168,10 @@
   animation: glevSweep 5.2s ease-in-out infinite;
 }
 
+/* Listening: hide sweep */
 .listening .sweep {
-  opacity: 1;
-  animation: glevSweep 2.4s ease-in-out infinite !important;
+  opacity: 0;
+  animation: none !important;
 }
 
 /* ── Orbital dots ────────────────────────────────────────────────── */
@@ -208,13 +199,10 @@
 .dot2 { top: -1px; left: 55%; }
 .dot3 { bottom: -1px; right: 25%; }
 
+/* Listening: dots hidden — icon spin is the only indicator */
 .listening .dot {
-  opacity: 1;
+  opacity: 0;
 }
-
-.listening .dot1 { animation: glevDot1 5.6s linear infinite; }
-.listening .dot2 { animation: glevDot2 6.2s linear infinite; }
-.listening .dot3 { animation: glevDot3 5.9s linear infinite; }
 
 /* Violet dots when speaking */
 .speaking .dot {
@@ -241,8 +229,9 @@
   animation: glevIconPulse 3.8s ease-in-out infinite;
 }
 
+/* Listening: continuous rotation replaces pulse */
 .listening .icon {
-  animation: glevIconPulseFast 0.9s ease-in-out infinite !important;
+  animation: glevIconSpin 1.6s linear infinite !important;
 }
 
 .speaking .icon {
