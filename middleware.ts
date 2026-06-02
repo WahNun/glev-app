@@ -9,6 +9,12 @@ const LOCALE_COOKIE = "NEXT_LOCALE";
 // One year — same as the in-app language picker in lib/locale.ts.
 const LOCALE_COOKIE_MAX_AGE = 60 * 60 * 24 * 365;
 
+// Cookie that persists across session expiry so returning users (e.g.
+// iOS home-screen bookmarks or Capacitor web-views) are sent straight
+// to /login instead of seeing the marketing landing page.
+const HAD_SESSION_COOKIE = "glev_had_session";
+const HAD_SESSION_MAX_AGE = 60 * 60 * 24 * 365 * 2; // 2 years
+
 // Persist the geo-resolved locale to a NEXT_LOCALE cookie so subsequent
 // visits stay on the same language even when the geo header is missing
 // (CDN cache, different edge node, etc.). We only set the cookie when:
@@ -34,6 +40,22 @@ function persistGeoLocaleCookie(
     sameSite: "lax",
     secure: req.nextUrl.protocol === "https:",
   });
+}
+
+function setHadSessionCookie(req: NextRequest, res: NextResponse) {
+  res.cookies.set({
+    name: HAD_SESSION_COOKIE,
+    value: "1",
+    path: "/",
+    maxAge: HAD_SESSION_MAX_AGE,
+    sameSite: "lax",
+    secure: req.nextUrl.protocol === "https:",
+    httpOnly: true,
+  });
+}
+
+function hadSession(req: NextRequest): boolean {
+  return req.cookies.get(HAD_SESSION_COOKIE)?.value === "1";
 }
 
 function readSessionRaw(req: NextRequest, cookieName: string): string | null {
@@ -118,7 +140,7 @@ export function middleware(req: NextRequest) {
     return NextResponse.redirect(new URL("/glev-ops" + rest, req.url));
   }
 
-  // `/` is the public marketing homepage — let it render for everyone.
+  // Protected routes: redirect unauthenticated users to /login.
   if (PROTECTED.some(p => pathname === p || pathname.startsWith(p + "/")) && !isAuthed) {
     const res = NextResponse.redirect(new URL("/login", req.url));
     persistGeoLocaleCookie(req, res, country);
@@ -127,18 +149,29 @@ export function middleware(req: NextRequest) {
   if (pathname === "/login" && isAuthed) {
     const res = NextResponse.redirect(new URL("/dashboard", req.url));
     persistGeoLocaleCookie(req, res, country);
+    setHadSessionCookie(req, res);
     return res;
   }
   // Authed users hitting the marketing landing page get fast-forwarded
-  // into the app. Unauthed users continue to see the landing page.
-  // Skip the redirect when `?lang=` is present so the language picker
-  // on the marketing page can still preview the other locale even when
-  // the visitor is logged in (we'd otherwise short-circuit before the
-  // lang-override branch below ever runs).
-  if (pathname === "/" && isAuthed && !searchParams.get("lang")) {
-    const res = NextResponse.redirect(new URL("/dashboard", req.url));
-    persistGeoLocaleCookie(req, res, country);
-    return res;
+  // into the app. Unauthed users continue to see the landing page —
+  // UNLESS they have the `glev_had_session` cookie, which means they
+  // previously logged in (e.g. iOS home-screen bookmark or Capacitor
+  // webview after session expiry). In that case skip the marketing page
+  // and go straight to /login.
+  // Skip all of this when `?lang=` is present so the language picker
+  // can preview locales even when logged in.
+  if (pathname === "/" && !searchParams.get("lang")) {
+    if (isAuthed) {
+      const res = NextResponse.redirect(new URL("/dashboard", req.url));
+      persistGeoLocaleCookie(req, res, country);
+      setHadSessionCookie(req, res);
+      return res;
+    }
+    if (hadSession(req)) {
+      const res = NextResponse.redirect(new URL("/login", req.url));
+      persistGeoLocaleCookie(req, res, country);
+      return res;
+    }
   }
 
   // `?lang=` URL override on marketing pages — forwarded to the
