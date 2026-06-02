@@ -174,3 +174,9 @@ id = "VVrHiBJQ-lbZXn1sH1biO"
 uri = "file://docs/high-fiber-analysis.md"
 type = "text"
 title = "HIGH_FIBER Bolus-Diagnose"
+
+[[outputs]]
+id = "FdbonA8Wo85-uPlgJ8VQa"
+uri = "file://.local/trial-diagnose-report.md"
+type = "text"
+title = "Trial-Diagnosebericht (7-Tage-Trial)"
