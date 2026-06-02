@@ -1,4 +1,4 @@
-// Regression guard for LandscapeGlucoseOverlay (Tasks #641, #642).
+// Regression guard for LandscapeGlucoseOverlay (Tasks #641, #642, #1002).
 //
 // ── Describe block 1 — viewport detection (Task #641) ──────────────────────
 //   The LandscapeGlucoseOverlay was silently broken because the deprecated
@@ -24,6 +24,24 @@
 //     2. The trend SVG arrow element is present (TrendSvg renders an <svg>).
 //     3. The chart SVG contains at least one <path> element (the glucose trace).
 //
+// ── Describe block 3 — fingerstick data consistency (Task #1002) ───────────
+//   The landscape overlay loads fingerstick data via fetchRecentFingersticks()
+//   and applies the same 5-minute override logic as the portrait
+//   CurrentDayGlucoseCard. This block guards against regressions where the
+//   two views diverge (e.g. one stops loading FS data or loses the override).
+//
+//   Test A — fresh fingerstick override (measured_at < 5 min ago):
+//     • The 🩸 chip must appear next to the mg/dL label.
+//     • The TrendSvg must be absent (it is replaced by the chip while the
+//       override is active, mirroring CurrentDayGlucoseCard HeroFront).
+//     • The large glucose number must show the FS value, not the CGM value.
+//
+//   Test B — historical fingerstick dot (measured_at = 90 min ago):
+//     • No 🩸 chip (reading is outside the 5-min override window).
+//     • A fingerstick halo circle (SVG <circle fill-opacity="0.15">) must
+//       be attached in the chart SVG — same visual marker used by the
+//       portrait RollingChart so both views are in sync.
+//
 // Why we navigate to /login (not /dashboard):
 //   LandscapeGlucoseOverlay is mounted in app/layout.tsx (the root layout),
 //   so it is present on *every* page, including the public /login page.
@@ -41,10 +59,21 @@
 //   is returned before the server sees the request. The module-level cache in
 //   clientCache.ts starts empty for each fresh page, so the first fetch always
 //   hits the interceptor.
+//
+// Why **/rest/v1/fingerstick_readings** for the FS mock:
+//   fetchRecentFingersticks() uses the Supabase browser client, which issues
+//   a GET request to https://<project>.supabase.co/rest/v1/fingerstick_readings?…
+//   The wildcard pattern matches regardless of which project URL is configured
+//   in the environment, so the test is hermetic and needs no credentials.
 
 import { expect, test } from "@playwright/test";
 
-const OVERLAY_SELECTOR = '[aria-label="Live-Glukose Querformat"]';
+// Match the overlay regardless of UI locale: the test suite does not pin
+// NEXT_LOCALE, so Next-intl resolves the language from Accept-Language (often
+// "en" in headless Chromium).  The CSS comma selector is a union that matches
+// whichever variant is in the DOM.
+const OVERLAY_SELECTOR =
+  '[aria-label="Live-Glukose Querformat"], [aria-label="Live glucose landscape view"]';
 
 const PORTRAIT  = { width: 375, height: 812 };
 const LANDSCAPE = { width: 844, height: 390 };
@@ -188,5 +217,227 @@ test.describe("LandscapeGlucoseOverlay — CGM data rendering", () => {
       page.locator(`${OVERLAY_SELECTOR} svg path`).first(),
       "Chart SVG should contain at least one <path> element (the glucose trace)",
     ).toBeAttached({ timeout: 8_000 });
+  });
+});
+
+// ── 3. Fingerstick data consistency ───────────────────────────────────────
+
+test.describe("LandscapeGlucoseOverlay — fingerstick override chip and chart dot", () => {
+  test.use({ viewport: PORTRAIT });
+
+  // ── Test A: fresh fingerstick triggers the 🩸 override chip ─────────────
+  //
+  // The overlay applies the same FS_OVERRIDE_WINDOW_MS (5 min) rule as the
+  // portrait CurrentDayGlucoseCard: if the most-recent fingerstick was
+  // measured within 5 minutes, it becomes "current" and a 🩸 chip replaces
+  // the TrendSvg arrow.
+  //
+  // Why CGM_VALUE ≠ FS_VALUE:
+  //   Using distinct values (142 vs 138) lets us assert that the large hero
+  //   number is FS_VALUE and not the CGM reading — the override is active.
+  //
+  // Why **/rest/v1/fingerstick_readings** for the Supabase mock:
+  //   fetchRecentFingersticks() uses the Supabase JS client, which issues a
+  //   GET request to https://<project>.supabase.co/rest/v1/fingerstick_readings
+  //   The wildcard captures this regardless of which project URL is in env.
+  //   On the unauthenticated /login page the client would otherwise return an
+  //   empty array (no session), so we must intercept before the request fires.
+  test("🩸 chip visible and trend arrow absent when fresh fingerstick overrides CGM", async ({ page }) => {
+    const now    = Date.now();
+    const mkTs   = (minsAgo: number) => new Date(now - minsAgo * 60_000).toISOString();
+
+    const CGM_VALUE = 142;
+    const FS_VALUE  = 138; // distinct from CGM so assertion is unambiguous
+
+    // Mock the CGM history endpoint — CGM current is 6 min old so it would
+    // normally be displayed, but the fresh FS (2 min) should override it.
+    await page.route("/api/cgm/history", (route) => {
+      route.fulfill({
+        status:      200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          current: {
+            value:     CGM_VALUE,
+            unit:      "mg/dL",
+            timestamp: mkTs(6),
+            trend:     "flat",
+          },
+          history: [
+            { value: 108, timestamp: mkTs(120), trend: "flat" },
+            { value: 120, timestamp: mkTs(60),  trend: "up"   },
+            { value: 130, timestamp: mkTs(20),  trend: "up"   },
+            { value: CGM_VALUE, timestamp: mkTs(6), trend: "flat" },
+          ],
+        }),
+      });
+    });
+
+    // Mock the Supabase REST fingerstick query with a reading 2 minutes old
+    // — well within the 5-minute FS_OVERRIDE_WINDOW_MS.
+    await page.route("**/rest/v1/fingerstick_readings**", (route) => {
+      route.fulfill({
+        status:      200,
+        contentType: "application/json",
+        body: JSON.stringify([
+          {
+            id:          "mock-fs-fresh-001",
+            user_id:     "mock-user",
+            measured_at: mkTs(2),
+            value_mg_dl: FS_VALUE,
+            notes:       null,
+            created_at:  mkTs(2),
+          },
+        ]),
+      });
+    });
+
+    await page.goto("/login");
+    await page.waitForLoadState("domcontentloaded");
+
+    await page.setViewportSize(LANDSCAPE);
+
+    await expect(
+      page.locator(OVERLAY_SELECTOR),
+      "Overlay should be visible in landscape",
+    ).toBeVisible({ timeout: 8_000 });
+
+    // Scope assertions to the column-flex div that holds "mg/dL" + chip/arrow:
+    //   <div style="flexDirection:column">
+    //     <span>mg/dL</span>
+    //     <span>🩸</span>   ← chip when fsOverride active
+    //     — or —
+    //     <TrendSvg />      ← SVG when no override
+    //   </div>
+    // Scoping prevents a stray 🩸 elsewhere on the page from causing a
+    // false-pass, and mirrors the scope already used for the TrendSvg check.
+    const mgDlColumn = page
+      .locator(OVERLAY_SELECTOR)
+      .getByText("mg/dL")
+      .locator("..");
+
+    // ── A-1. 🩸 chip must appear in the mg/dL column ─────────────────────────
+    await expect(
+      mgDlColumn.getByText("🩸"),
+      "Blood-drop chip (🩸) should be visible in the mg/dL column (fsOverride active)",
+    ).toBeVisible({ timeout: 10_000 });
+
+    // ── A-2. TrendSvg must be absent from the mg/dL column ───────────────────
+    // The 🩸 chip and TrendSvg are mutually exclusive: when fsOverride is on
+    // the component renders the chip instead of the arrow SVG.
+    await expect(
+      mgDlColumn.locator("svg"),
+      "TrendSvg should be absent while fingerstick override is active",
+    ).not.toBeAttached({ timeout: 5_000 });
+
+    // ── A-3. Hero number must show FS value ──────────────────────────────────
+    // fsOverride replaces cgmCurrent, so Math.round(current.v) === FS_VALUE.
+    await expect(
+      page.locator(OVERLAY_SELECTOR).getByText(String(FS_VALUE), { exact: true }),
+      `Hero number should display fingerstick value (${FS_VALUE}), not CGM value (${CGM_VALUE})`,
+    ).toBeVisible({ timeout: 5_000 });
+  });
+
+  // ── Test B: historical fingerstick produces a dot on the landscape chart ─
+  //
+  // A fingerstick from 90 minutes ago is outside the 5-min override window
+  // (so no 🩸 chip), but it falls inside the chart's adaptive window (minimum
+  // 4 hours). LandscapeChart renders each visible FS as a pair of SVG circles:
+  //   <circle r="9"   fill={color} fillOpacity="0.15" />  — halo
+  //   <circle r="4.5" fill={color} stroke=… />             — inner dot
+  //
+  // The halo's fill-opacity="0.15" attribute is unique to fingerstick markers
+  // in this SVG (the CGM trace <path> and last-point <circle> don't use it),
+  // so it is the most reliable selector for "a fingerstick dot is rendered".
+  test("historical fingerstick dot (halo circle) renders on landscape chart", async ({ page }) => {
+    const now  = Date.now();
+    const mkTs = (minsAgo: number) => new Date(now - minsAgo * 60_000).toISOString();
+
+    const FS_VALUE = 115;
+
+    // Mock CGM history — current reading is 5 min old (borderline, but NOT
+    // within the FS override window since FS is 90 min old).
+    await page.route("/api/cgm/history", (route) => {
+      route.fulfill({
+        status:      200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          current: {
+            value:     142,
+            unit:      "mg/dL",
+            timestamp: mkTs(5),
+            trend:     "flat",
+          },
+          history: [
+            { value: 108, timestamp: mkTs(120), trend: "flat" },
+            { value: 120, timestamp: mkTs(60),  trend: "up"   },
+            { value: 130, timestamp: mkTs(30),  trend: "up"   },
+            { value: 142, timestamp: mkTs(5),   trend: "flat" },
+          ],
+        }),
+      });
+    });
+
+    // Fingerstick from 90 minutes ago — inside the 4-hour minimum chart
+    // window (winStart = now − MAX(4h, span+30min)), but outside the 5-min
+    // override window, so no 🩸 chip.
+    await page.route("**/rest/v1/fingerstick_readings**", (route) => {
+      route.fulfill({
+        status:      200,
+        contentType: "application/json",
+        body: JSON.stringify([
+          {
+            id:          "mock-fs-hist-002",
+            user_id:     "mock-user",
+            measured_at: mkTs(90),
+            value_mg_dl: FS_VALUE,
+            notes:       null,
+            created_at:  mkTs(90),
+          },
+        ]),
+      });
+    });
+
+    await page.goto("/login");
+    await page.waitForLoadState("domcontentloaded");
+
+    await page.setViewportSize(LANDSCAPE);
+
+    await expect(
+      page.locator(OVERLAY_SELECTOR),
+      "Overlay should be visible in landscape",
+    ).toBeVisible({ timeout: 8_000 });
+
+    // Chart SVG must be present (LandscapeChart rendered with data).
+    await expect(
+      page.locator(`${OVERLAY_SELECTOR} svg path`).first(),
+      "Chart SVG should contain a CGM glucose trace path",
+    ).toBeAttached({ timeout: 8_000 });
+
+    // ── B-1. Halo circle count must be exactly 2 ────────────────────────────
+    // Two components render circle[fill-opacity="0.15"] inside this SVG:
+    //
+    //   a) CrosshairOverlay (ChartCrosshair.tsx line ~167):
+    //        active = rawActive ?? lastCrosshairPt
+    //        renders <circle r="9" fillOpacity="0.15" /> on the latest point.
+    //        With CGM data present, this is ALWAYS rendered → contributes 1.
+    //
+    //   b) LandscapeChart fingerstick markers (lines ~459–461):
+    //        visibleFs.map(r => <g><circle r="9" fillOpacity="0.15" /></g>)
+    //        One per visible fingerstick → our single 90-min-old reading contributes 1.
+    //
+    // Total with our fixture = 2.  If fingerstick marker rendering regresses,
+    // the count drops to 1 (crosshair only) and the assertion fails.
+    // If the CGM feed is absent, the crosshair is absent too → count = 1 → fail.
+    await expect(
+      page.locator(`${OVERLAY_SELECTOR} svg circle[fill-opacity="0.15"]`),
+      "Exactly 2 halo circles expected: 1 crosshair (latest CGM) + 1 fingerstick marker",
+    ).toHaveCount(2, { timeout: 10_000 });
+
+    // ── B-2. 🩸 chip must NOT appear ─────────────────────────────────────────
+    // The FS is 90 min old — outside the 5-min override window.
+    await expect(
+      page.locator(OVERLAY_SELECTOR).getByText("🩸"),
+      "Blood-drop chip should NOT appear for a 90-min-old fingerstick",
+    ).not.toBeVisible({ timeout: 3_000 });
   });
 });
