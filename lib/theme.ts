@@ -89,7 +89,7 @@ export function applyTheme(resolved: ResolvedTheme) {
   // address bar tint flips with the theme.
   const meta = document.querySelector('meta[name="theme-color"]');
   if (meta) {
-    meta.setAttribute("content", resolved === "light" ? "#FFFFFF" : "#111117");
+    meta.setAttribute("content", resolved === "light" ? "#FAFAFB" : "#0A0A0F");
   }
 }
 

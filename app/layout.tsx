@@ -51,7 +51,7 @@ const BOOTSTRAP_SCRIPT = `
     }
     document.documentElement.setAttribute('data-theme',resolved);
     var m=document.querySelector('meta[name="theme-color"]');
-    if(m)m.setAttribute('content',resolved==='light'?'#FFFFFF':'#111117');
+    if(m)m.setAttribute('content',resolved==='light'?'#FAFAFB':'#0A0A0F');
   }catch(e){
     document.documentElement.setAttribute('data-theme','dark');
   }
@@ -107,7 +107,7 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#111117",
+  themeColor: "#0A0A0F",
   width: "device-width",
   initialScale: 1,
   maximumScale: 1,
