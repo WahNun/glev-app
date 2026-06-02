@@ -1,0 +1,70 @@
+name: Remind — post-launch copy update
+
+# Fires once on 28 June 2026 at 09:00 UTC (3 days before the billing
+# anchor on 1 July 2026). After that date this workflow can be deleted.
+#
+# What it reminds you to do:
+#   • Trial-expiry drip emails mention "free until 1. Juli" → update copy
+#     for post-launch (billing starts immediately after checkout).
+#   • preview-beta/layout.tsx meta description still says "Billing startet
+#     am 1. Juli 2026" → update for the launched product.
+#   • pro/layout.tsx description still mentions "1. Juli 2026" → update.
+#
+# Required GitHub repo secret: RESEND_API_KEY (already set for flush-outbox).
+
+on:
+  schedule:
+    - cron: "0 9 28 6 *"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  remind:
+    name: Send reminder email
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Guard — only run in 2026
+        run: |
+          year=$(date -u +%Y)
+          if [ "$year" != "2026" ]; then
+            echo "Year is $year, not 2026 — skipping."
+            exit 0
+          fi
+
+      - name: Send reminder via Resend
+        env:
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+        run: |
+          set -u
+          if [ -z "${RESEND_API_KEY}" ]; then
+            echo "::error::RESEND_API_KEY not set in repo secrets."
+            exit 1
+          fi
+
+          payload='{
+            "from": "Glev Agent <noreply@glev.app>",
+            "to": ["lucas@glev.app"],
+            "subject": "⏰ Reminder: Post-Launch Copy-Update vor 1. Juli",
+            "html": "<p>Hallo Lucas,</p><p>der Billing-Anchor <strong>1. Juli 2026</strong> ist in 3 Tagen. Bitte folgende Stellen updaten, bevor die erste Abbuchung läuft:</p><ol><li><strong>lib/emails/drip-templates.ts</strong> — <code>trialExpiredEmail</code> + <code>trialDay6ReminderEmail</code>: Copy noch auf \"Glev Smart für 9&nbsp;€/Monat upgraden\" ausgerichtet, aber der Hinweis auf die kostenlose Zeit bis 1. Juli muss raus. Post-Launch startet das Abo sofort nach Checkout.</li><li><strong>app/preview-beta/layout.tsx</strong> — Meta-Description sagt noch \"Billing startet am 1. Juli 2026\" → auf aktuellen Stand bringen.</li><li><strong>app/pro/layout.tsx</strong> — Description sagt \"€14,90 / Monat ab dem 1. Juli 2026\" → Datum entfernen oder aktualisieren.</li></ol><p>Nach dem Update diesen Workflow löschen: <code>.github/workflows/remind-post-launch-copy.yml</code></p><p>— Dein Agent</p>"
+          }'
+
+          status=$(curl -sS -X POST \
+            -H "Authorization: Bearer ${RESEND_API_KEY}" \
+            -H "Content-Type: application/json" \
+            -d "${payload}" \
+            -o /tmp/resend_response.json \
+            -w "%{http_code}" \
+            "https://api.resend.com/emails" || echo "000")
+
+          echo "HTTP ${status}"
+          cat /tmp/resend_response.json || true
+
+          if [ "${status}" != "200" ] && [ "${status}" != "201" ]; then
+            echo "::error::Resend returned HTTP ${status}"
+            exit 1
+          fi
+
+          echo "Reminder sent successfully."
