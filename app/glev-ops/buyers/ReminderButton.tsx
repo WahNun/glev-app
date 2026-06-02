@@ -19,9 +19,12 @@ export default function ReminderButton({ selectedIds }: { selectedIds?: string[]
     setState("running");
     setError(null);
     try {
+      const body = isFiltered ? JSON.stringify({ userIds: selectedIds }) : undefined;
       const res = await fetch("/api/cron/remind-meta-leads", {
         method: "POST",
         credentials: "include",
+        headers: body ? { "Content-Type": "application/json" } : undefined,
+        body,
       });
       const data = await res.json() as { results?: ReminderResult[]; error?: string };
       if (!res.ok || data.error) {

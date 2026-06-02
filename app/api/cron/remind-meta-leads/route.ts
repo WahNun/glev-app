@@ -69,6 +69,17 @@ export async function POST(req: NextRequest) {
   const adminAuthed = cronAuthed ? true : await isAdminAuthed();
   if (!adminAuthed) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
+  // Optional selective filter: only remind these auth user IDs
+  let filterUserIds: Set<string> | null = null;
+  try {
+    const body = await req.json() as { userIds?: string[] };
+    if (Array.isArray(body.userIds) && body.userIds.length > 0) {
+      filterUserIds = new Set(body.userIds);
+    }
+  } catch {
+    // No body or non-JSON body — treat as "send to all eligible leads"
+  }
+
   const sb = getSupabaseAdmin();
 
   // Fetch message templates from DB (with hardcoded fallbacks)
@@ -96,8 +107,16 @@ export async function POST(req: NextRequest) {
     (authData?.users ?? []).map((u) => [u.email?.toLowerCase() ?? "", u]),
   );
 
-  const userIds = emails
-    .map((e) => authByEmail.get(e.toLowerCase())?.id)
+  // If a selective filter was provided, restrict to those leads whose auth user ID matches
+  const filteredLeads = filterUserIds
+    ? leads.filter((l) => {
+        const authUser = authByEmail.get((l.email as string).toLowerCase());
+        return authUser ? filterUserIds!.has(authUser.id) : false;
+      })
+    : leads;
+
+  const userIds = filteredLeads
+    .map((l) => authByEmail.get((l.email as string).toLowerCase())?.id)
     .filter(Boolean) as string[];
 
   const { data: profiles } = await sb
@@ -114,7 +133,7 @@ export async function POST(req: NextRequest) {
   const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
   const results: ReminderResult[] = [];
 
-  for (const lead of leads) {
+  for (const lead of filteredLeads) {
     const email = lead.email as string;
     const phone = (lead.phone as string | null) ?? null;
     const fullName = (lead.full_name as string | null) ?? null;
