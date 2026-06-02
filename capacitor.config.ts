@@ -36,7 +36,8 @@ const config: CapacitorConfig = {
       default: "portrait",
     },
     SplashScreen: {
-      launchAutoHide: false,
+      launchAutoHide: true,
+      launchShowDuration: 2000,
       backgroundColor: "#111117",
       androidSplashResourceName: "splash",
       showSpinner: false,
