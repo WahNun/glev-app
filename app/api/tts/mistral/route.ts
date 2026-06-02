@@ -18,16 +18,22 @@ export async function POST(req: NextRequest) {
   }
 
   const raw = await req.json().catch(() => null);
+  const rawObj = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
   const text =
-    raw && typeof raw === "object" && typeof (raw as Record<string, unknown>).text === "string"
-      ? ((raw as { text: string }).text as string).trim()
-      : "";
+    typeof rawObj.text === "string" ? rawObj.text.trim() : "";
   if (!text) {
     return NextResponse.json({ error: "text is required" }, { status: 400 });
   }
   if (text.length > 1000) {
     return NextResponse.json({ error: "text too long (max 1000 chars)" }, { status: 400 });
   }
+
+  // VOXTRAL_SPEED_TODO: speed parameter not yet supported by voxtral-mini-tts-2603;
+  // stored in client localStorage under glev_tts_speed for future use. When Mistral
+  // ships a stable speed/rate parameter for Voxtral, read it here and forward it in
+  // the upstream request body (e.g. `speed: speedToFloat(speed)`). Until then we
+  // accept the value to avoid breaking the client API contract.
+  const _speed = typeof rawObj.speed === "string" ? rawObj.speed : "normal";
 
   // Load central voice config from admin_tts_config (service-role, fire-and-forget).
   // Priority: ref_audio (admin upload) > voice_id (DB) > env var > Mistral default.

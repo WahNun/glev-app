@@ -130,6 +130,14 @@ export async function transcribeWithFallback(
   }
 }
 
+// TODO(voice-control): Future app-wide voice control architecture.
+// Planned intent types: log_bolus, log_meal, log_exercise, log_symptom, edit_macro.
+// All intents that write data MUST pass through a Confirmation-Gate layer
+// (no auto-save without an explicit user tap — see compliance principle D-003).
+// This hook owns the microphone + transcription pipeline; the confirmation layer
+// lives in useGlevAI / GlevAIChatSheet. When intent-routing is added, extend
+// onTranscript to also receive an intent classification alongside the raw text,
+// or add a separate onIntent callback. See docs/VOICE_ARCHITECTURE.md for details.
 export function useVoxtral({ onTranscript, onPartialTranscript, onError }: UseVoxtralOptions): UseVoxtralReturn {
   const [isListening, setIsListening] = useState(false);
   const recorderRef = useRef<MediaRecorder | null>(null);

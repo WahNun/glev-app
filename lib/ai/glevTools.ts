@@ -1,3 +1,11 @@
+// TODO(voice-control): When app-wide voice control is added, intent-routing belongs here.
+// This file owns the tool schema + executors that produce structured actions from AI responses.
+// A future voice intent layer would classify the user's spoken input into one of the planned
+// intent types (log_bolus, log_meal, log_exercise, log_symptom, edit_macro) and map it onto
+// the appropriate tool call here — bypassing the free-text chat path for common quick-log intents.
+// All write-tool calls MUST still go through the Confirmation-Gate (no auto-save; see D-003).
+// See docs/VOICE_ARCHITECTURE.md for the full design.
+
 /**
  * Glev AI function-calling tools (Phase 3, Task 1 — READ-only).
  *

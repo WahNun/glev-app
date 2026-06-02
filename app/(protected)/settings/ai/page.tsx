@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { supabase } from "@/lib/supabase";
 import { useFeatureFlag } from "@/lib/featureFlags";
+import { type TtsSpeed, TTS_SPEED_KEY, TTS_SPEED_EVENT } from "@/hooks/useTTS";
 
 const ACCENT = "#4F6EF7";
 const BORDER = "var(--border)";
@@ -54,6 +55,22 @@ export default function AiSettingsPage() {
       }
       return next;
     });
+  }, []);
+
+  const [ttsSpeed, setTtsSpeedState] = useState<TtsSpeed>("normal");
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      const v = window.localStorage.getItem(TTS_SPEED_KEY);
+      if (v === "slow" || v === "fast") setTtsSpeedState(v);
+    } catch { /* ignore */ }
+  }, []);
+  const setTtsSpeed = useCallback((next: TtsSpeed) => {
+    setTtsSpeedState(next);
+    try { window.localStorage.setItem(TTS_SPEED_KEY, next); } catch { /* ignore */ }
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new CustomEvent<TtsSpeed>(TTS_SPEED_EVENT, { detail: next }));
+    }
   }, []);
 
   useEffect(() => {
@@ -274,7 +291,7 @@ export default function AiSettingsPage() {
             })}
           </div>
         </div>
-        <div style={{ padding: "14px 16px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+        <div style={{ padding: "14px 16px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, borderBottom: `1px solid ${BORDER}` }}>
           <span style={{ display: "flex", flexDirection: "column", gap: 2 }}>
             <span style={{ fontSize: 14, fontWeight: 600, color: "var(--text-strong)" }}>{t("tts_auto_label")}</span>
             <span style={{ fontSize: 13, color: "var(--text-dim)", lineHeight: 1.3 }}>{t("tts_auto_desc")}</span>
@@ -283,6 +300,25 @@ export default function AiSettingsPage() {
             onClick={toggleTtsAutoRead}
             style={{ width: 44, height: 24, borderRadius: 99, cursor: "pointer", flexShrink: 0, background: ttsAutoRead ? ACCENT : "var(--border-strong)", border: `1px solid ${ttsAutoRead ? ACCENT + "60" : BORDER}`, position: "relative", transition: "background 0.2s" }}>
             <div style={{ position: "absolute", top: 2, left: ttsAutoRead ? 22 : 2, width: 18, height: 18, borderRadius: 99, background: "#fff", transition: "left 0.2s", boxShadow: "0 1px 4px rgba(0,0,0,0.4)" }} />
+          </div>
+        </div>
+        <div style={{ padding: "14px 16px", display: "flex", flexDirection: "column", gap: 10 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+            <span style={{ fontSize: 14, fontWeight: 600, color: "var(--text-strong)" }}>{t("tts_speed_label")}</span>
+            <span style={{ fontSize: 13, color: "var(--text-dim)", lineHeight: 1.3 }}>{t("tts_speed_desc")}</span>
+          </div>
+          <div role="radiogroup" aria-label={t("tts_speed_label")} style={{ display: "flex", gap: 8, padding: 4, borderRadius: 10, background: "var(--surface-soft)", border: `1px solid ${BORDER}` }}>
+            {(["slow", "normal", "fast"] as const).map((opt) => {
+              const active = ttsSpeed === opt;
+              const label = opt === "slow" ? t("tts_speed_slow") : opt === "fast" ? t("tts_speed_fast") : t("tts_speed_normal");
+              return (
+                <button key={opt} type="button" role="radio" aria-checked={active}
+                  onClick={() => setTtsSpeed(opt)}
+                  style={{ flex: 1, padding: "8px 10px", borderRadius: 8, border: "none", cursor: "pointer", fontSize: 13, fontWeight: active ? 600 : 500, color: active ? "var(--on-accent)" : "var(--text-strong)", background: active ? ACCENT : "transparent", transition: "background 0.15s, color 0.15s" }}>
+                  {label}
+                </button>
+              );
+            })}
           </div>
         </div>
       </div>
