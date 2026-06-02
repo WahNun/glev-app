@@ -36,6 +36,10 @@ export async function POST(req: NextRequest) {
   // so that when Mistral ships the parameter the integration activates automatically without
   // a code change. Client-side playbackRate in useTTS.ts (same mapping) handles actual speed
   // today; a prompt-based tempo hint below adds a best-effort LLM-level nudge.
+  // Allow callers to opt out of the style prefix for explicit A/B comparison.
+  // The route is already auth-gated, so this poses no additional security risk.
+  const skipStylePrefix = rawObj.skip_style_prefix === true;
+
   const speed = rawObj.speed === "slow" || rawObj.speed === "fast" ? rawObj.speed : "normal";
   const speedFloat = speed === "slow" ? 0.75 : speed === "fast" ? 1.3 : 1.0;
 
@@ -68,7 +72,7 @@ export async function POST(req: NextRequest) {
   // pace instructions, while playbackRate works precisely on all platforms.
   const stylePrefix =
     "Sprich warm, ruhig und natürlich — wie ein vertrauter Assistent beim Gespräch unter vier Augen. Keine übertriebene Betonung, keine Pausen zwischen Wörtern, fließend und menschlich.";
-  const styledInput = `${stylePrefix}\n\n${text}`;
+  const styledInput = skipStylePrefix ? text : `${stylePrefix}\n\n${text}`;
 
   const body: Record<string, unknown> = {
     model: TTS_MODEL,

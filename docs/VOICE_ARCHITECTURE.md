@@ -128,6 +128,77 @@ Key invariants:
 
 ---
 
-## 4  Related decisions
+## 4  Style prefix evaluation
+
+### 4.1  Background
+
+`app/api/tts/mistral/route.ts` prepends a fixed German style instruction to every
+TTS request:
+
+```
+Sprich warm, ruhig und natürlich — wie ein vertrauter Assistent beim Gespräch unter
+vier Augen. Keine übertriebene Betonung, keine Pausen zwischen Wörtern, fließend
+und menschlich.
+```
+
+This was introduced together with the Voxtral TTS integration.  After the
+tempo-hint experiment (Task #1041, 2026-06-02) confirmed that text-based pace
+instructions have *no reliable audible effect* on the neural vocoder, the
+analogous question arose: does the style prefix actually change the voice
+quality, or does Voxtral's default voice already sound warm and natural?
+
+### 4.2  Evaluation script
+
+`scripts/test-tts-style-prefix.mjs` generates two MP3 files for manual A/B
+listening comparison.  Both variants call `POST /api/tts/mistral` — the same
+route used by the production app — and the route controls the prefix:
+
+| File | How it works |
+|---|---|
+| `/tmp/tts_with_prefix.mp3` | Normal request — route prepends `stylePrefix` server-side (current production behaviour) |
+| `/tmp/tts_no_prefix.mp3`   | Request includes `skip_style_prefix: true` — route sends bare text to Voxtral |
+
+The `skip_style_prefix` flag is accepted by the route (auth-gated, same as every
+other TTS call) and is **only meaningful for this experiment** — normal production
+callers (`useTTS.ts`) never send it.
+
+**How to run:**
+
+```bash
+# Obtain a Supabase access-token from the browser DevTools → Cookies → sb-*-auth-token
+GLEV_SESSION_TOKEN=eyJ... node scripts/test-tts-style-prefix.mjs
+
+# Against production:
+GLEV_SESSION_TOKEN=eyJ... TTS_BASE_URL=https://glev.app node scripts/test-tts-style-prefix.mjs
+```
+
+**Listening criteria:**
+
+1. Warmth and naturalness of tone
+2. Speaking pace and rhythm
+3. Robotic artefacts or unnatural pauses
+
+### 4.3  Hypothesis
+
+Based on the tempo-hint findings: Voxtral's LLM-backed vocoder appears to generate
+a consistent voice character regardless of prose-style instructions in the input.
+The default voice is already natural-sounding, so the style prefix is unlikely to
+produce a *reliable* audible improvement.
+
+### 4.4  Decision guidance
+
+| Finding after listening | Recommended action |
+|---|---|
+| **No audible difference** | Remove `stylePrefix` and the `styledInput` assembly from `route.ts`. Simpler code, same output quality. |
+| **Slight improvement with prefix** | Keep `stylePrefix` as-is. |
+| **ref_audio is active** | Keep `stylePrefix` regardless — when Voxtral clones a reference voice via `ref_audio`, the style instruction may reinforce fidelity to the cloned speaker's character even if it has no effect on the base voice. |
+
+**Status (2026-06-02):** Evaluation pending — `scripts/test-tts-style-prefix.mjs`
+is ready; a developer with access to `MISTRAL_API_KEY` (Vercel env vars) needs to
+run the script locally and update this section with findings.
+
+---
+
+## 5  Related decisions
 
 - **D-003** — Compliance principle: no direct dose instructions; every write action confirmed by user.
