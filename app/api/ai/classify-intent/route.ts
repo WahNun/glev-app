@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { authedClient } from "@/app/api/insulin/_helpers";
 import { getMistralClient, mistralConfigError } from "@/lib/ai/mistralClient";
 import type { IntentEnvelope } from "@/lib/ai/intentClassifier";
+import type { Mistral } from "@mistralai/mistralai";
 
 /**
  * POST /api/ai/classify-intent
@@ -51,7 +52,7 @@ Rules:
 - For log_meal include carbs_grams only when the user states them explicitly.
 - Respond with exactly one JSON object and nothing else.`;
 
-const KNOWN_INTENT_TYPES = new Set([
+export const KNOWN_INTENT_TYPES = new Set([
   "log_bolus",
   "log_meal",
   "log_exercise",
@@ -60,6 +61,49 @@ const KNOWN_INTENT_TYPES = new Set([
   "navigate",
   "fallback_chat",
 ]);
+
+/**
+ * Core Mistral classification logic, extracted so unit tests can inject a
+ * mock Mistral client without spinning up the Next.js runtime or auth layer.
+ *
+ * Returns a NextResponse with shape { intent: IntentEnvelope }.
+ * Never throws — any Mistral error produces a fallback_chat response.
+ */
+export async function handleClassifyPost(
+  mistral: Mistral,
+  transcript: string,
+): Promise<NextResponse> {
+  try {
+    const response = await mistral.chat.complete({
+      model: "mistral-small-latest",
+      messages: [
+        { role: "system", content: CLASSIFICATION_PROMPT },
+        { role: "user", content: transcript },
+      ],
+      maxTokens: 150,
+      temperature: 0.1,
+      responseFormat: { type: "json_object" },
+    });
+
+    const raw = response.choices?.[0]?.message?.content ?? "";
+    const text = typeof raw === "string" ? raw.trim() : "";
+    if (!text) throw new Error("Empty model response");
+
+    const intent = JSON.parse(text) as IntentEnvelope;
+
+    if (!intent?.type || !KNOWN_INTENT_TYPES.has(intent.type)) {
+      return NextResponse.json({
+        intent: { type: "fallback_chat", payload: { transcript } },
+      });
+    }
+
+    return NextResponse.json({ intent });
+  } catch {
+    return NextResponse.json({
+      intent: { type: "fallback_chat", payload: { transcript } },
+    });
+  }
+}
 
 export async function POST(req: NextRequest) {
   const auth = await authedClient(req);
@@ -92,34 +136,5 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: cfg.error }, { status: cfg.status });
   }
 
-  try {
-    const response = await mistral.chat.complete({
-      model: "mistral-small-latest",
-      messages: [
-        { role: "system", content: CLASSIFICATION_PROMPT },
-        { role: "user", content: transcript },
-      ],
-      maxTokens: 150,
-      temperature: 0.1,
-      responseFormat: { type: "json_object" },
-    });
-
-    const raw = response.choices?.[0]?.message?.content ?? "";
-    const text = typeof raw === "string" ? raw.trim() : "";
-    if (!text) throw new Error("Empty model response");
-
-    const intent = JSON.parse(text) as IntentEnvelope;
-
-    if (!intent?.type || !KNOWN_INTENT_TYPES.has(intent.type)) {
-      return NextResponse.json({
-        intent: { type: "fallback_chat", payload: { transcript } },
-      });
-    }
-
-    return NextResponse.json({ intent });
-  } catch {
-    return NextResponse.json({
-      intent: { type: "fallback_chat", payload: { transcript } },
-    });
-  }
+  return handleClassifyPost(mistral, transcript);
 }
