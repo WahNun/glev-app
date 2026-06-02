@@ -214,16 +214,64 @@ function dedupeQuestions(list: string[]): string[] {
   return out;
 }
 
+// Phrases that mark a question as a DESTRUCTIVE safety question. On a
+// non-destructive task these must never survive — the model sometimes echoes
+// them from an old assistant message in the chat history. Matched as
+// lowercase substrings (covers DE + EN wording from MANDATORY_SAFETY_QUESTIONS).
+const DESTRUCTIVE_QUESTION_PHRASES: string[] = [
+  "aktive zahlung",
+  "dry run",
+  "preview",
+  "welche tabellen",
+  "backup",
+  "export vor löschung",
+  "export vor loeschung",
+  "batchweise",
+  "audit log",
+  "audit-log",
+  "wer darf diese aktion auslösen",
+  "wer darf diese aktion ausloesen",
+  "no active payment",
+  "backup before deletion",
+  "affected tables",
+  "which tables",
+];
+
+/** Remove destructive safety questions (used only when the task is NOT destructive). */
+export function filterOutDestructiveSafetyQuestions(questions: string[]): string[] {
+  return questions.filter((q) => {
+    const lo = q.toLowerCase();
+    return !DESTRUCTIVE_QUESTION_PHRASES.some((p) => lo.includes(p));
+  });
+}
+
 /**
- * Enforce the hard safety gate. If the combined task text is destructive, the
- * plan is FORCED to ready_to_build=false and the mandatory safety questions are
- * guaranteed present (merged with any the model already produced). This is
- * deterministic and independent of the model output.
+ * Final safety gate over the plan. Two directions, both deterministic and
+ * independent of model variance:
+ *
+ *  - DESTRUCTIVE current-task context → force ready_to_build=false and ensure
+ *    the mandatory safety questions are present (deduped).
+ *  - NON-destructive context → STRIP any destructive safety questions the model
+ *    may have echoed from old assistant/plan text. If stripping removed the only
+ *    blockers, the task becomes ready again (waiting_for_start, no 🔒 message).
+ *
+ * `taskText` MUST be the current task's user-authored context only (title +
+ * prompt + this task's user messages + queued notes) — see runDevCockpitAnalysis.
  */
 export function enforceSafetyBlock(plan: BuildPlan, taskText: string): BuildPlan {
-  if (!isTaskDestructive(taskText)) return plan;
-  const questions = dedupeQuestions([...plan.questions, ...MANDATORY_SAFETY_QUESTIONS]);
-  return { ...plan, questions, ready_to_build: false };
+  if (isTaskDestructive(taskText)) {
+    const questions = dedupeQuestions([...plan.questions, ...MANDATORY_SAFETY_QUESTIONS]);
+    return { ...plan, questions, ready_to_build: false };
+  }
+
+  // Non-destructive: a destructive safety question here is a leak — strip it.
+  const filtered = filterOutDestructiveSafetyQuestions(plan.questions);
+  const removedSome = filtered.length !== plan.questions.length;
+  // Readiness: if stripping emptied the blockers, it's ready. Only override the
+  // model's `false` when we actually removed leaked safety questions.
+  const ready_to_build =
+    filtered.length === 0 ? (removedSome ? true : plan.ready_to_build) : false;
+  return { ...plan, questions: filtered, ready_to_build };
 }
 
 /**

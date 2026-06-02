@@ -75,6 +75,19 @@ harmlose Tasks (Self-Contamination). Nie wird Kontext anderer Tasks geprüft;
 `plan_text` fließt nicht in die Analyse. `runSafetyGateSelfTest()` deckt den
 Rollen-/Berechtigungs-Fall (nicht destruktiv) zusätzlich ab.
 
+**Question-Filter-Fix (2026-06-02):** Der Scope-Fix verhinderte nur die
+deterministische *Injektion*. Das **Modell** echo'te die alten Safety-Fragen aber
+weiter aus der Assistant-History in seinem `questions`-Output → erneut
+`waiting_for_input`. Jetzt filtert der Gate bei **nicht-destruktivem** Kontext
+destruktive Safety-Fragen deterministisch aus dem finalen Plan heraus
+(`filterOutDestructiveSafetyQuestions()`, Phrasen-basiert DE+EN: „aktive Zahlung",
+„Dry Run", „Preview", „welche Tabellen", „Backup", „Export vor Löschung",
+„batchweise", „Audit Log", „Wer darf diese Aktion auslösen", „no active payment",
+„backup before deletion", „affected tables" …). Wenn das Entfernen die einzigen
+Blocker leert → `ready_to_build = true` (→ `waiting_for_start`, **keine** 🔒-Message).
+Echte (nicht-destruktive) Fragen bleiben erhalten. Safety-Fragen erscheinen
+**ausschließlich**, wenn `isTaskDestructive(currentUserAuthoredContext)` true ist.
+
 ### Infrastruktur (2026-06-02): separate AI-Keys + Usage-Tracking-Prep
 
 Dev-Cockpit-AI nutzt jetzt einen **eigenen Credential-Bucket**, getrennt von der
