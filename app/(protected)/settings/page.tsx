@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { useState, useCallback } from "react";
+import { signOut } from "@/lib/auth";
 import PlanSimulator from "@/components/PlanSimulator";
 
 const ACCENT = "#4F6EF7", GREEN = "#22D3A0", PURPLE = "#A78BFA";
@@ -234,6 +235,28 @@ export default function SettingsPage() {
       }}>
         {t("footer_disclaimer")}
       </p>
+
+      <button
+        type="button"
+        onClick={() => signOut()}
+        style={{
+          display: "block",
+          width: "100%",
+          marginTop: 24,
+          marginBottom: 32,
+          padding: "14px",
+          background: "rgba(239,68,68,0.08)",
+          border: "1px solid rgba(239,68,68,0.25)",
+          borderRadius: 14,
+          fontSize: 15,
+          fontWeight: 600,
+          color: "#ef4444",
+          cursor: "pointer",
+          letterSpacing: "-0.01em",
+        }}
+      >
+        Abmelden
+      </button>
     </div>
   );
 }
