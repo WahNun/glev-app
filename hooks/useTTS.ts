@@ -101,6 +101,21 @@ function pickGermanVoice(): SpeechSynthesisVoice | null {
  * Exported for unit tests.
  */
 export function extractAssistantText(text: string): string {
+  // Nuclear guard: unique phrases that only appear in the system prompt — never
+  // in a legitimate assistant reply. If any is found ANYWHERE in the text, the
+  // whole response is silenced rather than partially read.
+  const SYSTEM_FINGERPRINTS = [
+    "strikte grenzen (niemals brechen)",
+    "ict (pen-therapie)",
+    "gewohnheits- und musterfragen",
+    "kontext-snapshot des nutzers",
+    "awaiting_user_confirmation",
+    "only_one_write_action_per_turn",
+    "pen-therapie)",
+  ];
+  const lowerText = text.toLowerCase();
+  if (SYSTEM_FINGERPRINTS.some((f) => lowerText.includes(f))) return "";
+
   // Known system-prompt and context-preamble starters (lowercased).
   // Checked both bare and with "- " bullet prefix so bullet-point lines
   // are also caught after trim().

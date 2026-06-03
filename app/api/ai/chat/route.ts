@@ -267,6 +267,36 @@ async function loadUserMemoryBlock(
 const AI_OWNER_EMAIL = "lucas@wahnon-connect.com";
 
 /**
+ * Strips system-prompt echoes from assistant history before sending to Mistral.
+ * Prevents the feedback loop: model echoes prompt → echo lands in history →
+ * model echoes it again next turn.
+ *
+ * Strategy: if the assistant turn contains unique system-prompt fingerprints
+ * that never appear in legitimate replies, replace the content with a neutral
+ * placeholder so Mistral doesn't treat the echo as a learned pattern.
+ */
+const HISTORY_FINGERPRINTS = [
+  "strikte grenzen (niemals brechen)",
+  "ict (pen-therapie)",
+  "gewohnheits- und musterfragen",
+  "kontext-snapshot des nutzers",
+  "awaiting_user_confirmation",
+  "only_one_write_action_per_turn",
+  "pen-therapie)",
+  "deine aufgabe:",
+  "read-tools (lesen):",
+  "write-tools (schlagen",
+];
+
+function sanitizeHistoryContent(content: string): string {
+  const lower = content.toLowerCase();
+  if (HISTORY_FINGERPRINTS.some((f) => lower.includes(f))) {
+    return "[Antwort wurde intern bereinigt]";
+  }
+  return content;
+}
+
+/**
  * Loads the active system prompt from `ai_agent_prompts` (key = 'glev_ai_default').
  * Falls back to the hardcoded GLEV_CHAT_SYSTEM_PROMPT if the table has no entry,
  * the entry is empty, or the DB call fails. Never throws — the chat must keep
@@ -390,7 +420,10 @@ export async function POST(req: NextRequest) {
         todayInTimezone(timezone),
       ),
     },
-    ...(history ?? []).map((m) => ({ role: m.role, content: m.content })),
+    ...(history ?? []).map((m) => ({
+      role: m.role,
+      content: m.role === "assistant" ? sanitizeHistoryContent(m.content) : m.content,
+    })),
     { role: "user", content: message },
   ];
 
