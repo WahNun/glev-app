@@ -2,20 +2,28 @@
 /**
  * scripts/generate-sound-assets.mjs
  *
- * Algorithmisch generiert `glev_low_alarm.wav` als reinen PCM-Buffer
- * (keine externen Audio-Libraries nötig) und lädt die Datei optional
- * in den Supabase-Storage-Bucket `sound-assets` hoch.
+ * Algorithmisch generiert alle Glev-Sound-Assets als reine PCM-WAV-Buffer
+ * (keine externen Audio-Libraries nötig) und lädt sie optional in den
+ * Supabase-Storage-Bucket `sound-assets` hoch.
  *
  * Verwendung:
- *   node scripts/generate-sound-assets.mjs [--out-dir <pfad>] [--upload]
+ *   node scripts/generate-sound-assets.mjs [--out-dir <pfad>] [--upload] [--only <name>]
  *
  * Flags:
  *   --out-dir <pfad>   Zielverzeichnis (Default: ./tmp)
  *   --upload           Nach der Generierung in Supabase Storage hochladen
+ *   --only <name>      Nur diesen Asset-Namen generieren/uploaden
  *
  * Env-Variablen (für --upload):
  *   SUPABASE_URL              oder  NEXT_PUBLIC_SUPABASE_URL
  *   SUPABASE_SERVICE_ROLE_KEY
+ *
+ * Sound-Design:
+ *   glev_low_alarm.wav      Hypo  — 880+1046 Hz, 6× dringend, −3 dBFS
+ *   glev_high_alarm.wav     Hyper — 660+784 Hz,  4× mittel,   −3 dBFS
+ *   glev_elevated.wav       Erhöht— 523 Hz,      3× sanft,    −6 dBFS
+ *   glev_pre_check.wav      Pre-Bolus-Erinnerung — 440 Hz, 1× Ping
+ *   glev_post_check.wav     Post-Bolus-Check     — 523→659 Hz aufsteigend
  */
 
 import { writeFileSync, readFileSync, mkdirSync } from "fs";
@@ -30,151 +38,259 @@ const args = process.argv.slice(2);
 const outDirIdx = args.indexOf("--out-dir");
 const outDir = outDirIdx !== -1 ? args[outDirIdx + 1] : "tmp";
 const doUpload = args.includes("--upload");
+const onlyIdx = args.indexOf("--only");
+const onlyName = onlyIdx !== -1 ? args[onlyIdx + 1] : null;
 
 // ---------------------------------------------------------------------------
-// WAV generation — pure Node.js, no external audio library
+// WAV primitives — pure Node.js, no external audio library
 // ---------------------------------------------------------------------------
 
 const SAMPLE_RATE = 44100;
 const BITS_PER_SAMPLE = 16;
 const NUM_CHANNELS = 1;
 
-// -3 dBFS amplitude  (32767 × 10^(−3/20) ≈ 23198)
-const AMPLITUDE = Math.round(32767 * Math.pow(10, -3 / 20));
+function dbfsAmplitude(dbfs) {
+  return Math.round(32767 * Math.pow(10, dbfs / 20));
+}
 
-// Beep pattern (all durations in seconds)
-//   880 Hz  200 ms → silence 75 ms → 1046 Hz 200 ms → silence 75 ms
-//   Repeat 6× → 3.3 s total
-const BEEP_A_FREQ = 880;   // Hz
-const BEEP_B_FREQ = 1046;  // Hz (C6 — distinct from 880 Hz = A5)
-const BEEP_DURATION = 0.2; // seconds per beep
-const SILENCE_SHORT = 0.075; // seconds between beeps within a pair
-const SILENCE_LONG = 0.075;  // seconds between pairs (after second beep)
-const REPEAT_COUNT = 6;
-const RAMP_DURATION = 0.010; // 10 ms ramp to avoid clicks
-
-function generateSine(freq, durationSec, rampSec = RAMP_DURATION) {
+function generateSine(freq, durationSec, amplitude, rampSec = 0.010) {
   const totalSamples = Math.round(durationSec * SAMPLE_RATE);
   const rampSamples = Math.round(rampSec * SAMPLE_RATE);
-  const buf = Buffer.alloc(totalSamples * 2); // 16-bit = 2 bytes per sample
+  const buf = Buffer.alloc(totalSamples * 2);
   for (let i = 0; i < totalSamples; i++) {
     const raw = Math.sin((2 * Math.PI * freq * i) / SAMPLE_RATE);
     let env = 1.0;
     if (i < rampSamples) env = i / rampSamples;
     else if (i > totalSamples - rampSamples) env = (totalSamples - i) / rampSamples;
-    const sample = Math.round(raw * env * AMPLITUDE);
-    buf.writeInt16LE(sample, i * 2);
+    buf.writeInt16LE(Math.round(raw * env * amplitude), i * 2);
+  }
+  return buf;
+}
+
+function generateSweep(freqStart, freqEnd, durationSec, amplitude, rampSec = 0.010) {
+  const totalSamples = Math.round(durationSec * SAMPLE_RATE);
+  const rampSamples = Math.round(rampSec * SAMPLE_RATE);
+  const buf = Buffer.alloc(totalSamples * 2);
+  let phase = 0;
+  for (let i = 0; i < totalSamples; i++) {
+    const t = i / totalSamples;
+    const freq = freqStart + (freqEnd - freqStart) * t;
+    phase += (2 * Math.PI * freq) / SAMPLE_RATE;
+    const raw = Math.sin(phase);
+    let env = 1.0;
+    if (i < rampSamples) env = i / rampSamples;
+    else if (i > totalSamples - rampSamples) env = (totalSamples - i) / rampSamples;
+    buf.writeInt16LE(Math.round(raw * env * amplitude), i * 2);
   }
   return buf;
 }
 
 function generateSilence(durationSec) {
-  const totalSamples = Math.round(durationSec * SAMPLE_RATE);
-  return Buffer.alloc(totalSamples * 2, 0);
+  return Buffer.alloc(Math.round(durationSec * SAMPLE_RATE) * 2, 0);
 }
 
-function buildWavBuffer(pcmData) {
+function buildWav(pcmData) {
   const dataSize = pcmData.length;
-  const fileSize = 36 + dataSize;
   const byteRate = SAMPLE_RATE * NUM_CHANNELS * (BITS_PER_SAMPLE / 8);
   const blockAlign = NUM_CHANNELS * (BITS_PER_SAMPLE / 8);
-
   const header = Buffer.alloc(44);
-  let off = 0;
-
-  // RIFF chunk
-  header.write("RIFF", off); off += 4;
-  header.writeUInt32LE(fileSize, off); off += 4;
-  header.write("WAVE", off); off += 4;
-
-  // fmt sub-chunk
-  header.write("fmt ", off); off += 4;
-  header.writeUInt32LE(16, off); off += 4;           // chunk size
-  header.writeUInt16LE(1, off); off += 2;            // PCM
-  header.writeUInt16LE(NUM_CHANNELS, off); off += 2;
-  header.writeUInt32LE(SAMPLE_RATE, off); off += 4;
-  header.writeUInt32LE(byteRate, off); off += 4;
-  header.writeUInt16LE(blockAlign, off); off += 2;
-  header.writeUInt16LE(BITS_PER_SAMPLE, off); off += 2;
-
-  // data sub-chunk
-  header.write("data", off); off += 4;
-  header.writeUInt32LE(dataSize, off);
-
+  let o = 0;
+  header.write("RIFF", o); o += 4;
+  header.writeUInt32LE(36 + dataSize, o); o += 4;
+  header.write("WAVE", o); o += 4;
+  header.write("fmt ", o); o += 4;
+  header.writeUInt32LE(16, o); o += 4;
+  header.writeUInt16LE(1, o); o += 2;
+  header.writeUInt16LE(NUM_CHANNELS, o); o += 2;
+  header.writeUInt32LE(SAMPLE_RATE, o); o += 4;
+  header.writeUInt32LE(byteRate, o); o += 4;
+  header.writeUInt16LE(blockAlign, o); o += 2;
+  header.writeUInt16LE(BITS_PER_SAMPLE, o); o += 2;
+  header.write("data", o); o += 4;
+  header.writeUInt32LE(dataSize, o);
   return Buffer.concat([header, pcmData]);
 }
 
-function generateAlarmWav() {
+// ---------------------------------------------------------------------------
+// Sound generators — one per asset
+// ---------------------------------------------------------------------------
+
+/**
+ * glev_low_alarm.wav — Hypo-Alarm
+ * 880 Hz + 1046 Hz alternierend, 6× Doppel-Beep, −3 dBFS
+ * Sehr dringend — sofortige Aufmerksamkeit nötig
+ */
+function generateLowAlarm() {
+  const amp = dbfsAmplitude(-3);
   const parts = [];
-  for (let i = 0; i < REPEAT_COUNT; i++) {
-    parts.push(generateSine(BEEP_A_FREQ, BEEP_DURATION));
-    parts.push(generateSilence(SILENCE_SHORT));
-    parts.push(generateSine(BEEP_B_FREQ, BEEP_DURATION));
-    parts.push(generateSilence(SILENCE_LONG));
+  for (let i = 0; i < 6; i++) {
+    parts.push(generateSine(880, 0.20, amp));
+    parts.push(generateSilence(0.075));
+    parts.push(generateSine(1046, 0.20, amp));
+    parts.push(generateSilence(0.075));
   }
-  const pcm = Buffer.concat(parts);
-  return buildWavBuffer(pcm);
+  return buildWav(Buffer.concat(parts));
 }
+
+/**
+ * glev_high_alarm.wav — Hyper-Alarm
+ * 660 Hz + 784 Hz alternierend, 4× Doppel-Beep, −3 dBFS
+ * Dringend aber etwas tiefer/ruhiger als Hypo
+ */
+function generateHighAlarm() {
+  const amp = dbfsAmplitude(-3);
+  const parts = [];
+  for (let i = 0; i < 4; i++) {
+    parts.push(generateSine(660, 0.25, amp));
+    parts.push(generateSilence(0.100));
+    parts.push(generateSine(784, 0.25, amp));
+    parts.push(generateSilence(0.200));
+  }
+  return buildWav(Buffer.concat(parts));
+}
+
+/**
+ * glev_elevated.wav — Erhöhter BZ-Alarm
+ * 523 Hz (C5) einzeln, 3× kurze Beeps, −6 dBFS
+ * Sanfte Erinnerung — kein akuter Notfall
+ */
+function generateElevatedAlarm() {
+  const amp = dbfsAmplitude(-6);
+  const parts = [];
+  for (let i = 0; i < 3; i++) {
+    parts.push(generateSine(523, 0.15, amp));
+    parts.push(generateSilence(0.25));
+  }
+  return buildWav(Buffer.concat(parts));
+}
+
+/**
+ * glev_pre_check.wav — Pre-Bolus-Meal-Timeline-Erinnerung
+ * 440 Hz sanfter Ping, 1×, −9 dBFS
+ * Niedrige Dringlichkeit — "bitte jetzt kurz messen"
+ */
+function generatePreCheck() {
+  const amp = dbfsAmplitude(-9);
+  const parts = [
+    generateSine(440, 0.12, amp),
+    generateSilence(0.08),
+    generateSine(440, 0.08, amp),
+  ];
+  return buildWav(Buffer.concat(parts));
+}
+
+/**
+ * glev_post_check.wav — Post-Bolus-Glukose-Kontrollcheck
+ * 523→659 Hz aufsteigender Sweep + kurze Bestätigung, −6 dBFS
+ * Sanft aufsteigend — "Zeit für deinen Check"
+ */
+function generatePostCheck() {
+  const amp = dbfsAmplitude(-6);
+  const parts = [
+    generateSweep(523, 659, 0.25, amp),
+    generateSilence(0.10),
+    generateSine(659, 0.12, amp),
+  ];
+  return buildWav(Buffer.concat(parts));
+}
+
+// ---------------------------------------------------------------------------
+// Asset registry
+// ---------------------------------------------------------------------------
+
+const ASSETS = [
+  {
+    name: "glev_low_alarm.wav",
+    label: "Hypo-Alarm",
+    description: "880+1046 Hz, 6× Doppel-Beep, −3 dBFS (~3.3 s)",
+    generate: generateLowAlarm,
+  },
+  {
+    name: "glev_high_alarm.wav",
+    label: "Hyper-Alarm",
+    description: "660+784 Hz, 4× Doppel-Beep, −3 dBFS (~2.6 s)",
+    generate: generateHighAlarm,
+  },
+  {
+    name: "glev_elevated.wav",
+    label: "Erhöhter BZ",
+    description: "523 Hz, 3× sanft, −6 dBFS (~1.2 s)",
+    generate: generateElevatedAlarm,
+  },
+  {
+    name: "glev_pre_check.wav",
+    label: "Pre-Bolus-Check",
+    description: "440 Hz Ping, −9 dBFS (~0.3 s)",
+    generate: generatePreCheck,
+  },
+  {
+    name: "glev_post_check.wav",
+    label: "Post-Bolus-Check",
+    description: "523→659 Hz Sweep, −6 dBFS (~0.5 s)",
+    generate: generatePostCheck,
+  },
+];
 
 // ---------------------------------------------------------------------------
 // Main
 // ---------------------------------------------------------------------------
 
-const ASSET_NAME = "glev_low_alarm.wav";
-
 mkdirSync(outDir, { recursive: true });
-const outPath = resolve(join(outDir, ASSET_NAME));
 
-console.log(`Generating ${ASSET_NAME}...`);
-console.log(`  Pattern : ${BEEP_A_FREQ} Hz / ${BEEP_B_FREQ} Hz alternating, ${REPEAT_COUNT}× double-beep`);
-console.log(`  Duration: ~${((BEEP_DURATION * 2 + SILENCE_SHORT + SILENCE_LONG) * REPEAT_COUNT).toFixed(1)} seconds`);
-console.log(`  Format  : 44.1 kHz, 16-bit mono WAV`);
-console.log(`  Amplitude: −3 dBFS (${AMPLITUDE}/32767)`);
+const assetsToProcess = onlyName
+  ? ASSETS.filter((a) => a.name === onlyName)
+  : ASSETS;
 
-const wavBuffer = generateAlarmWav();
-writeFileSync(outPath, wavBuffer);
-console.log(`  Written : ${outPath} (${(wavBuffer.length / 1024).toFixed(1)} KB)`);
+if (onlyName && assetsToProcess.length === 0) {
+  console.error(`ERROR: Unknown asset name "${onlyName}". Valid names: ${ASSETS.map((a) => a.name).join(", ")}`);
+  process.exit(1);
+}
+
+const generatedPaths = [];
+
+for (const asset of assetsToProcess) {
+  console.log(`\nGenerating ${asset.name} (${asset.label})...`);
+  console.log(`  ${asset.description}`);
+  const wav = asset.generate();
+  const outPath = resolve(join(outDir, asset.name));
+  writeFileSync(outPath, wav);
+  console.log(`  Written: ${outPath} (${(wav.length / 1024).toFixed(1)} KB)`);
+  generatedPaths.push({ asset, outPath, wav });
+}
 
 if (doUpload) {
   const url = process.env.SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY ?? "";
   if (!url || !key) {
-    console.error(
-      "ERROR: SUPABASE_URL (or NEXT_PUBLIC_SUPABASE_URL) and SUPABASE_SERVICE_ROLE_KEY must be set for --upload.",
-    );
+    console.error("ERROR: SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY must be set for --upload.");
     process.exit(1);
   }
 
   const supabase = createClient(url, key, { auth: { persistSession: false } });
 
-  // Ensure bucket exists (ignore "already exists" error)
   const { error: bucketErr } = await supabase.storage.createBucket("sound-assets", {
     public: true,
-    fileSizeLimit: 5 * 1024 * 1024, // 5 MB
+    fileSizeLimit: 5 * 1024 * 1024,
     allowedMimeTypes: ["audio/wav", "audio/x-wav"],
   });
   if (bucketErr && !bucketErr.message.includes("already exists")) {
     console.warn(`  Bucket create warning: ${bucketErr.message}`);
   }
 
-  const fileBytes = readFileSync(outPath);
-  const { error: uploadErr } = await supabase.storage
-    .from("sound-assets")
-    .upload(ASSET_NAME, fileBytes, {
-      contentType: "audio/wav",
-      upsert: true,
-    });
+  for (const { asset, outPath } of generatedPaths) {
+    console.log(`\nUploading ${asset.name}...`);
+    const fileBytes = readFileSync(outPath);
+    const { error: uploadErr } = await supabase.storage
+      .from("sound-assets")
+      .upload(asset.name, fileBytes, { contentType: "audio/wav", upsert: true });
 
-  if (uploadErr) {
-    console.error(`ERROR: Upload failed: ${uploadErr.message}`);
-    process.exit(1);
+    if (uploadErr) {
+      console.error(`  ERROR: ${uploadErr.message}`);
+    } else {
+      const { data: urlData } = supabase.storage.from("sound-assets").getPublicUrl(asset.name);
+      console.log(`  ✓ ${urlData.publicUrl}`);
+    }
   }
-
-  const { data: urlData } = supabase.storage
-    .from("sound-assets")
-    .getPublicUrl(ASSET_NAME);
-
-  console.log(`  Uploaded: ${urlData.publicUrl}`);
 }
 
-console.log("Done.");
+console.log("\nDone.");

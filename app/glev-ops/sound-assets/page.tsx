@@ -14,19 +14,31 @@ const KNOWN_ASSETS: Omit<AssetDef, "url">[] = [
   {
     name: "glev_low_alarm.wav",
     purpose:
-      "Hypo-Alarm: spielt auf Android ab, wenn eine Low-Glukose-Push-Benachrichtigung über den Kanal hypo_alarm zugestellt wird (iOS: APNs spielt die Datei ab, wenn sie im App Bundle vorhanden ist). Doppelter Beep 880 Hz + 1046 Hz alternierend, ~3 Sek., −3 dBFS.",
+      "Hypo-Alarm: 880 Hz + 1046 Hz alternierend, 6× Doppel-Beep, ~3.3 Sek., −3 dBFS. Android: Kanal hypo_alarm. iOS: APNs sound field.",
     urgency: "high",
+  },
+  {
+    name: "glev_high_alarm.wav",
+    purpose:
+      "Hyper-Alarm: 660 Hz + 784 Hz alternierend, 4× Doppel-Beep, ~2.6 Sek., −3 dBFS. Android: Kanal hyper_alarm. iOS: APNs sound field.",
+    urgency: "high",
+  },
+  {
+    name: "glev_elevated.wav",
+    purpose:
+      "Erhöhter BZ-Alarm: 523 Hz, 3× sanfte Beeps, ~1.2 Sek., −6 dBFS. Android: Kanal elevated_alarm. iOS: APNs sound field.",
+    urgency: "medium",
   },
   {
     name: "glev_pre_check.wav",
     purpose:
-      "Pre-Bolus-Meal-Timeline-Erinnerung: kurzer sanfter Ton, der an den Check vor dem Bolus erinnert. Niedrige Dringlichkeit.",
+      "Pre-Bolus-Meal-Timeline-Erinnerung: 440 Hz Ping, ~0.3 Sek., −9 dBFS. Niedrige Dringlichkeit.",
     urgency: "low",
   },
   {
     name: "glev_post_check.wav",
     purpose:
-      "Post-Bolus-Meal-Timeline-Check: kurzer sanfter Ton, der nach dem Bolus an den Glukose-Kontrollcheck erinnert. Niedrige Dringlichkeit.",
+      "Post-Bolus-Meal-Timeline-Check: 523→659 Hz aufsteigender Sweep, ~0.5 Sek., −6 dBFS. Niedrige Dringlichkeit.",
     urgency: "low",
   },
 ];
