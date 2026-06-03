@@ -180,3 +180,9 @@ id = "FdbonA8Wo85-uPlgJ8VQa"
 uri = "file://.local/trial-diagnose-report.md"
 type = "text"
 title = "Trial-Diagnosebericht (7-Tage-Trial)"
+
+[[outputs]]
+id = "epCaNEU7BzJW0yitaSM9t"
+uri = "file://docs/mistral-support-style-prefix.md"
+type = "text"
+title = "Mistral Support — Style Prefix Issue"
