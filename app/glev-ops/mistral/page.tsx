@@ -55,6 +55,7 @@ export default function MistralTTSPage() {
   const [msg, setMsg] = useState<{ type: "ok" | "err"; text: string } | null>(null);
   const [testText, setTestText] = useState("Dein Blutzucker liegt bei 104 mg/dL — gut im Zielbereich.");
   const [testAudio, setTestAudio] = useState<string | null>(null);
+  const [skipStylePrefix, setSkipStylePrefix] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const [isPending, startTransition] = useTransition();
 
@@ -195,7 +196,7 @@ export default function MistralTTSPage() {
         const res = await fetch("/api/tts/mistral", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ text: testText }),
+          body: JSON.stringify({ text: testText, skip_style_prefix: skipStylePrefix }),
           credentials: "include",
         });
         if (!res.ok) {
@@ -326,7 +327,10 @@ export default function MistralTTSPage() {
       <div style={S.card}>
         <div style={S.cardTitle}>Stimme live anhören</div>
         <p style={{ fontSize: 12, color: "#666", marginBottom: 12 }}>
-          Ruft <code>/api/tts/mistral</code> mit der aktuellen Konfiguration auf — exakt so, wie echte Nutzer es hören (inkl. Style-Prefix).
+          Ruft <code>/api/tts/mistral</code> auf — exakt wie echte Nutzer es hören.
+          {cfg.hasRefAudio
+            ? " ✦ ref_audio aktiv → Style-Prefix automatisch deaktiviert (würde Stimm-Klon beeinträchtigen)."
+            : " Style-Prefix aktiv."}
         </p>
         <textarea
           style={S.textarea}
@@ -335,6 +339,14 @@ export default function MistralTTSPage() {
           onChange={e => setTestText(e.target.value)}
           placeholder="Test-Text…"
         />
+        <label style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 10, fontSize: 12, color: "#555", cursor: "pointer" }}>
+          <input
+            type="checkbox"
+            checked={skipStylePrefix}
+            onChange={e => setSkipStylePrefix(e.target.checked)}
+          />
+          Style-Prefix überspringen (A/B-Vergleich — bei ref_audio ohnehin automatisch deaktiviert)
+        </label>
         <div style={{ marginTop: 10, display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
           <button
             style={{ ...S.btn, ...S.btnPrimary, opacity: isPending ? 0.6 : 1 }}

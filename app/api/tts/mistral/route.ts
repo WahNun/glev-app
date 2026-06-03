@@ -78,7 +78,11 @@ export async function POST(req: NextRequest) {
   const DEFAULT_STYLE_PREFIX =
     "Sprich warm, ruhig und natürlich — wie ein vertrauter Assistent beim Gespräch unter vier Augen. Keine übertriebene Betonung, keine Pausen zwischen Wörtern, fließend und menschlich.";
   const stylePrefix = dbStylePrefix?.trim() || DEFAULT_STYLE_PREFIX;
-  const styledInput = skipStylePrefix ? text : `${stylePrefix}\n\n${text}`;
+  // When a voice-clone ref_audio is active, skip the style prefix:
+  // the sample already encodes speaking style and tone. Prepending a text
+  // instruction fights the voice-cloning layer and produces robotic output.
+  const useStylePrefix = !refAudio && !skipStylePrefix;
+  const styledInput = useStylePrefix ? `${stylePrefix}\n\n${text}` : text;
 
   const body: Record<string, unknown> = {
     model: TTS_MODEL,
