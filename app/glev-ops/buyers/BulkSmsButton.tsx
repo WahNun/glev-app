@@ -64,10 +64,11 @@ export default function BulkSmsButton({ selectedIds }: { selectedIds?: string[] 
     }
   }
 
-  const smsSent    = smsResults.filter((r) => r.status === "sent").length;
-  const smsNoPhone = smsResults.filter((r) => r.status === "no_phone").length;
-  const smsFailed  = smsResults.filter((r) => r.status === "link_error" || r.status === "sms_error").length;
-  const backfilled = backfillResults.filter((r) => r.status === "updated").length;
+  const smsSent     = smsResults.filter((r) => r.status === "sent").length;
+  const smsOptedOut = smsResults.filter((r) => r.status === "no_phone" && r.error === "opted_out").length;
+  const smsNoPhone  = smsResults.filter((r) => r.status === "no_phone" && r.error !== "opted_out").length;
+  const smsFailed   = smsResults.filter((r) => r.status === "link_error" || r.status === "sms_error").length;
+  const backfilled  = backfillResults.filter((r) => r.status === "updated").length;
 
   return (
     <div style={{ marginBottom: 12 }}>
@@ -168,7 +169,7 @@ export default function BulkSmsButton({ selectedIds }: { selectedIds?: string[] 
           maxWidth: 560,
         }}>
           <p style={{ margin: "0 0 4px", fontWeight: 600 }}>
-            ✓ {smsSent} SMS versendet · {smsNoPhone} ohne Nummer · {smsFailed > 0 ? `${smsFailed} Fehler` : "0 Fehler"}
+            ✓ {smsSent} SMS versendet · {smsNoPhone} ohne Nummer{smsOptedOut > 0 ? ` · 🚫 ${smsOptedOut} Opt-out übersprungen` : ""} · {smsFailed > 0 ? `${smsFailed} Fehler` : "0 Fehler"}
           </p>
           <p style={{ margin: "0 0 10px", fontSize: 12, color: "#6b7280" }}>
             {backfilled} Nummern aus meta_leads geladen
@@ -188,7 +189,8 @@ export default function BulkSmsButton({ selectedIds }: { selectedIds?: string[] 
                   <td style={{ padding: "3px 8px", color: "#374151" }}>{r.phone ?? "—"}</td>
                   <td style={{ padding: "3px 0 3px 8px" }}>
                     {r.status === "sent"       && <span style={{ color: "#16a34a", fontWeight: 600 }}>✓ Gesendet</span>}
-                    {r.status === "no_phone"   && <span style={{ color: "#9ca3af" }}>— Keine Nummer</span>}
+                    {r.status === "no_phone" && r.error === "opted_out" && <span style={{ color: "#991b1b", fontWeight: 600 }}>🚫 SMS Opt-out</span>}
+                    {r.status === "no_phone" && r.error !== "opted_out" && <span style={{ color: "#9ca3af" }}>— Keine Nummer</span>}
                     {r.status === "link_error" && <span style={{ color: "#dc2626" }}>✗ Link-Fehler: {r.error}</span>}
                     {r.status === "sms_error"  && <span style={{ color: "#dc2626" }}>✗ SMS-Fehler: {r.error}</span>}
                   </td>

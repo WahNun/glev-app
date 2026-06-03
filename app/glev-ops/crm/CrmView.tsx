@@ -66,6 +66,7 @@ export type CrmUserRow = {
   sms_clicked: boolean;
   email_clicked: boolean;
   reminder_sent_at: string | null;
+  sms_opted_out: boolean;
 };
 
 export type CrmBetaRow = {
@@ -343,11 +344,13 @@ function AlleTab({ users, pageSize }: { users: CrmUserRow[]; pageSize: number })
                   isTrialActive(r) ? "Trial aktiv" : null,
                   r.signup_source === "meta_lead" ? "Meta Lead" : null,
                   isBetaBuyer(r) ? "Beta" : null,
+                  r.sms_opted_out ? "SMS Opt-out" : null,
                 ].filter(Boolean).join("; "),
                 cgm: cgmLabel(r.cgm),
                 language: r.language ?? "",
                 currency: r.currency ?? "",
                 country: r.country ?? "",
+                sms_opted_out: r.sms_opted_out ? "Ja" : "Nein",
                 last_sign_in_at: r.last_sign_in_at ?? "",
                 created_at: r.created_at,
               })),
@@ -360,6 +363,7 @@ function AlleTab({ users, pageSize }: { users: CrmUserRow[]; pageSize: number })
                 { key: "language", header: "Sprache" },
                 { key: "currency", header: "Currency" },
                 { key: "country", header: "Land" },
+                { key: "sms_opted_out", header: "SMS Opt-out" },
                 { key: "last_sign_in_at", header: "Letzter Login" },
                 { key: "created_at", header: "Angelegt" },
               ],
@@ -415,6 +419,7 @@ function AlleTab({ users, pageSize }: { users: CrmUserRow[]; pageSize: number })
                       : "Beta – veraltet (Legacy)",
                 );
               }
+              if (r.sms_opted_out) flags.push("🚫 SMS Opt-out");
               return (
                 <tr key={r.id} style={{ borderTop: "1px solid #eee", opacity: r.deleted_at ? 0.55 : 1 }}>
                   <Td>
@@ -463,22 +468,23 @@ type ContextMenuState = { x: number; y: number; userId: string; email: string } 
 
 function TrialTab({ users }: { users: CrmUserRow[] }) {
   const [q, setQ] = useState("");
+  const [hideOptedOut, setHideOptedOut] = useState(false);
   const [selection, setSelection] = useState<Set<string>>(new Set());
   const [contextMenu, setContextMenu] = useState<ContextMenuState>(null);
   const [deleting, setDeleting] = useState<string | null>(null);
   const selectAllRef = useRef<HTMLInputElement>(null);
   const now = new Date();
 
+  const optedOutCount = useMemo(() => users.filter((u) => u.sms_opted_out).length, [users]);
+
   const filtered = useMemo(() => {
     const needle = q.trim().toLowerCase();
-    if (!needle) return users;
-    return users.filter((u) =>
-      [u.email, u.display_name ?? "", u.phone ?? "", u.signup_source ?? ""]
-        .join(" ")
-        .toLowerCase()
-        .includes(needle),
-    );
-  }, [users, q]);
+    return users.filter((u) => {
+      if (hideOptedOut && u.sms_opted_out) return false;
+      if (needle && !([u.email, u.display_name ?? "", u.phone ?? "", u.signup_source ?? ""].join(" ").toLowerCase().includes(needle))) return false;
+      return true;
+    });
+  }, [users, q, hideOptedOut]);
 
   const filteredIds = useMemo(() => filtered.map((u) => u.id), [filtered]);
 
@@ -563,13 +569,25 @@ function TrialTab({ users }: { users: CrmUserRow[] }) {
         <BulkSmsButton selectedIds={selectionCount > 0 ? selectedIds : undefined} />
         <ReminderButton selectedIds={selectionCount > 0 ? selectedIds : undefined} />
       </div>
-      <input
-        type="text"
-        value={q}
-        onChange={(e) => setQ(e.target.value)}
-        placeholder="Suche: E-Mail, Name, Telefon…"
-        style={{ ...inputBase, minWidth: 260, marginBottom: 12, display: "block" }}
-      />
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", marginBottom: 12 }}>
+        <input
+          type="text"
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          placeholder="Suche: E-Mail, Name, Telefon…"
+          style={{ ...inputBase, minWidth: 260, flex: "1 1 260px" }}
+        />
+        {optedOutCount > 0 && (
+          <button
+            type="button"
+            onClick={() => setHideOptedOut((v) => !v)}
+            style={hideOptedOut ? filterChipActive : filterChip}
+            title={hideOptedOut ? "Opt-out-Filter aufheben" : `${optedOutCount} Opt-out${optedOutCount === 1 ? "" : "s"} ausblenden`}
+          >
+            🚫 SMS Opt-out ({optedOutCount}){hideOptedOut ? " — ausgeblendet" : ""}
+          </button>
+        )}
+      </div>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
         <p style={{ fontSize: 13, color: "#555", margin: 0 }}>
           {filtered.length} Einträge
@@ -695,7 +713,14 @@ function TrialTab({ users }: { users: CrmUserRow[] }) {
                     <Link href={`/glev-ops/users/${u.id}`} style={emailLink}>{u.email}</Link>
                   </Td>
                   <Td>{u.display_name ?? "—"}</Td>
-                  <Td>{u.phone ?? "—"}</Td>
+                  <Td>
+                    <span style={{ display: "inline-flex", alignItems: "center", gap: 4, flexWrap: "wrap" }}>
+                      <span>{u.phone ?? "—"}</span>
+                      {u.sms_opted_out && (
+                        <span style={badgeSmsOptOut} title="Hat SMS abbestellt">🚫 SMS</span>
+                      )}
+                    </span>
+                  </Td>
                   <Td>
                     {u.signup_source === "meta_lead"
                       ? <span style={badgeMeta}>Meta Lead</span>
@@ -1043,3 +1068,4 @@ const badgePending: React.CSSProperties = { background: "#fefce8", color: "#854d
 const badgeWarn: React.CSSProperties = { background: "#fff7ed", color: "#9a3412", border: "1px solid #fed7aa", borderRadius: 4, padding: "2px 7px", fontSize: 11, fontWeight: 600 };
 const ctxMenuItem: React.CSSProperties = { display: "block", width: "100%", padding: "10px 14px", background: "none", border: "none", textAlign: "left", fontSize: 13, cursor: "pointer", fontFamily: "inherit", color: "#111" };
 const csvBtn: React.CSSProperties = { padding: "6px 14px", background: "#f3f4f6", border: "1px solid #d1d5db", borderRadius: 6, fontSize: 13, fontWeight: 600, cursor: "pointer", color: "#374151", fontFamily: "inherit", whiteSpace: "nowrap" };
+const badgeSmsOptOut: React.CSSProperties = { background: "#fef2f2", color: "#991b1b", border: "1px solid #fecaca", borderRadius: 4, padding: "2px 6px", fontSize: 11, fontWeight: 600, whiteSpace: "nowrap" };

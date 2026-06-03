@@ -76,7 +76,7 @@ export default async function CrmPage({
         .order("created_at", { ascending: false })
         .limit(500),
       sb.from("profiles").select(
-        "user_id, subscription_status, manual_plan_override, manual_plan_expires_at, manual_plan_note, gift_label, deleted_at, created_by_admin",
+        "user_id, subscription_status, manual_plan_override, manual_plan_expires_at, manual_plan_note, gift_label, deleted_at, created_by_admin, sms_opted_out",
       ),
       sb.from("profiles")
         .select("user_id, trial_start_at, trial_end_at, signup_source, created_at, onboarding_completed_at")
@@ -126,6 +126,7 @@ export default async function CrmPage({
     gift_label: string | null;
     deleted_at: string | null;
     created_by_admin: boolean | null;
+    sms_opted_out: boolean | null;
   };
   type ProSubRow = {
     id: string;
@@ -255,6 +256,7 @@ export default async function CrmPage({
       sms_clicked: clicks?.sms ?? false,
       email_clicked: clicks?.email ?? false,
       reminder_sent_at: reminderByEmail.get(u.email.toLowerCase()) ?? null,
+      sms_opted_out: opt?.sms_opted_out ?? false,
     };
   });
 
