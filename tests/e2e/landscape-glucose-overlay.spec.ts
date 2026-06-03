@@ -441,3 +441,237 @@ test.describe("LandscapeGlucoseOverlay — fingerstick override chip and chart d
     ).not.toBeVisible({ timeout: 3_000 });
   });
 });
+
+// ── 4. ScreenOrientation API calls (Task #1068) ────────────────────────────
+//
+// These tests verify that LandscapeGlucoseOverlay correctly calls the
+// @capacitor/screen-orientation plugin at the right moments:
+//
+//   A. unlock() is called on component mount (so iOS WKWebView is allowed to
+//      rotate even if a previous lock() call was in effect).
+//
+//   B. lock({ orientation: "portrait" }) is called when `landscape` state
+//      transitions true → false (so all other screens stay portrait-only
+//      after the overlay is dismissed).
+//
+//   C. Neither call fires in a plain browser context where
+//      window.Capacitor is undefined (isNativePlatform = false). The
+//      loadScreenOrientation() guard exits early, returning null.
+//
+// ── How the Capacitor mock works ──────────────────────────────────────────
+//
+// @capacitor/core's `createCapacitor()` starts with:
+//
+//   const cap = win.Capacitor ?? {};
+//
+// …then adds its own methods, but does NOT overwrite `nativePromise` or
+// `nativeCallback`. This means properties we pre-set via addInitScript()
+// survive the Capacitor bootstrap.
+//
+// Two pre-populated properties are sufficient:
+//
+//   1. PluginHeaders — Capacitor's internal isNativePlatform() checks for
+//      the presence of this array. Setting it makes isNativePlatform()
+//      return true. The component's own isNativePlatformForOrientation()
+//      calls window.Capacitor.isNativePlatform(), so flipping this flag
+//      is enough to open the loadScreenOrientation() gate.
+//
+//   2. nativePromise — Capacitor routes promise-based plugin method calls
+//      through cap.nativePromise(pluginName, methodName, options).
+//      createCapacitor() does NOT overwrite this property, so our spy
+//      function survives initialisation and intercepts every call to
+//      ScreenOrientation.unlock() and ScreenOrientation.lock().
+//
+//   We also include the PluginHeaders methods array so that
+//   getPluginHeader('ScreenOrientation') finds the plugin and routes
+//   unlock()/lock() through nativePromise rather than falling back to the
+//   web JS implementation (ScreenOrientationWeb).
+//
+// Why /login and not /dashboard:
+//   LandscapeGlucoseOverlay is in app/layout.tsx (root layout), so it
+//   renders on every page — including the public /login page. Using /login
+//   avoids auth setup and makes the test self-contained.
+//
+// Why waitForFunction instead of waitForTimeout:
+//   The orientation calls happen inside async useEffect callbacks. Polling
+//   with waitForFunction is more reliable than a fixed sleep because it
+//   stops as soon as the condition is met, making the test faster and
+//   deterministic rather than dependent on an arbitrary delay.
+
+test.describe("LandscapeGlucoseOverlay — screen-orientation API calls", () => {
+  test.use({ viewport: PORTRAIT });
+
+  // addInitScript callback — serialised and evaluated in the browser before
+  // any page scripts run. Must be plain JS (no TypeScript, no imports).
+  // It pre-populates window.Capacitor so that when @capacitor/core
+  // initialises, it treats the environment as native iOS.
+  function nativeCapacitorScript() {
+    // Call log shared across the test assertion boundary.
+    (window as unknown as Record<string, unknown>).__screenOrientationCalls = [];
+
+    const calls = (window as unknown as { __screenOrientationCalls: Array<{ method: string; options: unknown }> }).__screenOrientationCalls;
+
+    const cap = (window as unknown as { Capacitor?: Record<string, unknown> }).Capacitor ?? {};
+
+    // 1. PluginHeaders — makes Capacitor's isNativePlatform() return true.
+    //    The methods array tells createPluginMethod() to use nativePromise
+    //    for unlock() and lock() instead of the JS web implementation.
+    (cap as Record<string, unknown>).PluginHeaders = [
+      {
+        name: "ScreenOrientation",
+        methods: [
+          { name: "unlock", rtype: "promise" },
+          { name: "lock",   rtype: "promise" },
+        ],
+      },
+    ];
+
+    // 2. nativePromise spy — intercepts all promise-based plugin calls.
+    //    createCapacitor() does NOT overwrite this, so our spy survives init.
+    (cap as Record<string, unknown>).nativePromise = (
+      pluginName: string,
+      method: string,
+      options: unknown,
+    ) => {
+      if (pluginName === "ScreenOrientation") {
+        calls.push({ method, options });
+      }
+      return Promise.resolve({});
+    };
+
+    (window as unknown as { Capacitor: unknown }).Capacitor = cap;
+  }
+
+  // ── Test A: unlock() is called on mount ─────────────────────────────────
+  //
+  // The mount useEffect unconditionally calls unlock() so that any previous
+  // lock() left by another page does not prevent iOS WKWebView rotation.
+  // We assert at least one `unlock` entry in the call log.
+  test("unlock() is called on mount when Capacitor is native", async ({ page }) => {
+    await page.addInitScript(nativeCapacitorScript);
+
+    await page.goto("/login");
+    await page.waitForLoadState("domcontentloaded");
+
+    // Poll until the async useEffect resolves and unlock() fires.
+    await page.waitForFunction(
+      () => {
+        const calls = (window as unknown as { __screenOrientationCalls?: Array<{ method: string }> }).__screenOrientationCalls;
+        return Array.isArray(calls) && calls.some((c) => c.method === "unlock");
+      },
+      { timeout: 10_000 },
+    );
+
+    const calls = await page.evaluate(
+      () => (window as unknown as { __screenOrientationCalls: Array<{ method: string; options: unknown }> }).__screenOrientationCalls,
+    );
+    const unlockCalls = calls.filter((c) => c.method === "unlock");
+
+    expect(
+      unlockCalls.length,
+      "unlock() should have been called at least once on mount",
+    ).toBeGreaterThan(0);
+    // unlock() takes no arguments — options must be undefined or absent.
+    expect(
+      unlockCalls[0].options == null,
+      "unlock() should be called without arguments",
+    ).toBe(true);
+  });
+
+  // ── Test B: lock("portrait") fires on landscape true → false ─────────────
+  //
+  // When the user returns from landscape to portrait, the landscape-watcher
+  // useEffect detects the true→false transition and calls
+  // lock({ orientation: "portrait" }) so all other app screens remain locked.
+  test("lock(portrait) is called when rotating back to portrait in native context", async ({ page }) => {
+    await page.addInitScript(nativeCapacitorScript);
+
+    await page.goto("/login");
+    await page.waitForLoadState("domcontentloaded");
+
+    // Rotate to landscape — triggers the false→true branch (unlock again).
+    await page.setViewportSize(LANDSCAPE);
+
+    // Wait for the overlay to confirm landscape=true is active.
+    await expect(
+      page.locator(OVERLAY_SELECTOR),
+      "Overlay should appear in landscape",
+    ).toBeVisible({ timeout: 8_000 });
+
+    // Rotate back to portrait — triggers the true→false branch (lock).
+    await page.setViewportSize(PORTRAIT);
+
+    // Overlay must disappear (landscape=false).
+    await expect(
+      page.locator(OVERLAY_SELECTOR),
+      "Overlay should disappear when returning to portrait",
+    ).not.toBeVisible({ timeout: 8_000 });
+
+    // Poll until a lock call with orientation:"portrait" appears.
+    await page.waitForFunction(
+      () => {
+        const calls = (window as unknown as { __screenOrientationCalls?: Array<{ method: string; options: { orientation?: string } }> }).__screenOrientationCalls;
+        return Array.isArray(calls) && calls.some(
+          (c) => c.method === "lock" && c.options?.orientation === "portrait",
+        );
+      },
+      { timeout: 10_000 },
+    );
+
+    const calls = await page.evaluate(
+      () => (window as unknown as { __screenOrientationCalls: Array<{ method: string; options: unknown }> }).__screenOrientationCalls,
+    );
+    const lockCalls = calls.filter((c) => c.method === "lock");
+
+    expect(
+      lockCalls.length,
+      "lock() should have been called at least once after returning to portrait",
+    ).toBeGreaterThan(0);
+    expect(
+      lockCalls[lockCalls.length - 1].options,
+      "lock() should be called with { orientation: 'portrait' }",
+    ).toMatchObject({ orientation: "portrait" });
+  });
+
+  // ── Test C: no orientation calls in plain browser (isNativePlatform=false) ─
+  //
+  // When window.Capacitor is absent (standard browser environment),
+  // LandscapeGlucoseOverlay's isNativePlatformForOrientation() returns false
+  // and loadScreenOrientation() exits early with null — so ScreenOrientation
+  // is never imported and neither unlock() nor lock() is ever invoked.
+  test("no orientation API calls fire in a plain browser (isNativePlatform = false)", async ({ page }) => {
+    // Install a minimal tracker so we can measure the call count.
+    // We do NOT set window.Capacitor.PluginHeaders — the env stays web-only.
+    await page.addInitScript(() => {
+      (window as unknown as Record<string, unknown>).__screenOrientationCalls = [];
+    });
+
+    await page.goto("/login");
+    await page.waitForLoadState("domcontentloaded");
+
+    // Exercise both landscape-watcher branches (false→true, true→false).
+    await page.setViewportSize(LANDSCAPE);
+    await expect(
+      page.locator(OVERLAY_SELECTOR),
+      "Overlay should appear in landscape",
+    ).toBeVisible({ timeout: 8_000 });
+
+    await page.setViewportSize(PORTRAIT);
+    await expect(
+      page.locator(OVERLAY_SELECTOR),
+      "Overlay should disappear in portrait",
+    ).not.toBeVisible({ timeout: 8_000 });
+
+    // Give any delayed async calls a short window to appear (they shouldn't).
+    await page.waitForTimeout(500);
+
+    const calls = await page.evaluate(
+      () => (window as unknown as { __screenOrientationCalls?: unknown[] }).__screenOrientationCalls ?? [],
+    );
+
+    expect(
+      calls,
+      "No orientation API calls should fire in a plain browser context",
+    ).toHaveLength(0);
+  });
+});
