@@ -1206,6 +1206,8 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
             onClearChat={glevAi.clearMessages}
             onListeningChange={setAiThinking}
             voiceIntentEnabled={voiceIntentEnabled}
+            pendingMealNav={glevAi.pendingMealNav}
+            onMealNavTap={glevAi.fireMealNav}
           />
         </>
       )}

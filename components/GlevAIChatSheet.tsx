@@ -23,6 +23,10 @@ interface Props {
   /** Called whenever the chat sheet's STT listening state changes so the
    *  parent (Layout.tsx) can reflect it on the FAB. */
   onListeningChange?: (listening: boolean) => void;
+  /** When set, a tap chip is shown inviting the user to open the Engine.
+   *  Cleared automatically when the user taps the chip (via onMealNavTap). */
+  pendingMealNav?: string | null;
+  onMealNavTap?: () => void;
   /**
    * When true, voice transcripts are classified into intents before
    * reaching the chat pipeline. Requires voice_intent_routing feature flag.
@@ -191,6 +195,8 @@ export default function GlevAIChatSheet({
   onCancelAction,
   onClearChat,
   onListeningChange,
+  pendingMealNav,
+  onMealNavTap,
   voiceIntentEnabled = false,
 }: Props) {
   const [input, setInput] = useState("");
@@ -682,6 +688,32 @@ export default function GlevAIChatSheet({
             onConfirm={confirmPendingIntent}
             onDismiss={dismissPendingIntent}
           />
+        )}
+
+        {/* Meal-nav tap chip — shown after AI confirms a meal_prep response */}
+        {pendingMealNav && (
+          <button
+            onClick={onMealNavTap}
+            style={{
+              margin: "4px 16px 4px",
+              padding: "10px 16px",
+              borderRadius: 12,
+              border: "1.5px solid " + ACCENT,
+              background: "rgba(139,92,246,0.12)",
+              color: ACCENT,
+              fontWeight: 600,
+              fontSize: 14,
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              width: "calc(100% - 32px)",
+              justifyContent: "center",
+            }}
+          >
+            <span>Engine öffnen</span>
+            <span style={{ fontSize: 16 }}>→</span>
+          </button>
         )}
 
         {/* Input row */}

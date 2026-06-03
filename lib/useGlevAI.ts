@@ -135,6 +135,10 @@ export function useGlevAI(opts?: {
   // text response ("Ich habe X Gramm KH eingetragen…") has a chance to
   // arrive before the stream is aborted by closeSheet.
   const pendingNavigateRef = useRef<string | null>(null);
+  // After the stream ends, pendingNavigateRef is promoted to this state
+  // so the chat sheet can render a tap-to-open chip. The user taps it
+  // instead of being auto-navigated — gives them time to read the response.
+  const [pendingMealNav, setPendingMealNav] = useState<string | null>(null);
   // Keep a ref to the latest opts so sendMessage always reads the current
   // contextSnapshot without needing opts?.contextSnapshot in its dep array.
   // Including an inline object in useCallback deps would recreate sendMessage
@@ -491,16 +495,12 @@ export function useGlevAI(opts?: {
             m.id === assistantId ? { ...m, isStreaming: false } : m,
           ),
         );
-        // Execute any deferred navigation (meal_prep) now that the stream
-        // is done and the AI's text response is visible in the bubble.
+        // Promote deferred navigation to visible tap-chip state.
+        // The user taps the chip to open the engine — no auto-navigate.
         if (pendingNavigateRef.current) {
           const path = pendingNavigateRef.current;
           pendingNavigateRef.current = null;
-          // Short delay so the final token render commits before navigation.
-          window.setTimeout(() => {
-            window.dispatchEvent(new CustomEvent("glev:meal-prefill"));
-            optsRef.current?.onNavigate?.(path);
-          }, 300);
+          setPendingMealNav(path);
         }
       }
     },
@@ -630,6 +630,20 @@ export function useGlevAI(opts?: {
     sendMessage,
     confirmAction,
     cancelAction,
+    /** Non-null when a meal_prep response is ready and waiting for the user
+     *  to tap through to the Engine screen. Set after stream ends; cleared
+     *  by fireMealNav() when the user taps the chip. */
+    pendingMealNav,
+    /** Called by the chat sheet's meal-nav tap chip. Fires the prefill event,
+     *  navigates, and clears the pending state. */
+    fireMealNav: () => {
+      if (!pendingMealNav) return;
+      setPendingMealNav(null);
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new CustomEvent("glev:meal-prefill"));
+      }
+      optsRef.current?.onNavigate?.(pendingMealNav);
+    },
   };
 }
 
