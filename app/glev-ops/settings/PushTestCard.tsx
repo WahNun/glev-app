@@ -25,14 +25,23 @@ export default function PushTestCard() {
         headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
         body: JSON.stringify({ email, sandbox }),
       });
-      const json = await res.json() as { ok?: boolean; error?: string; platform?: string };
-      if (json.ok) {
+      const rawText = await res.text();
+      let json: { ok?: boolean; error?: string; platform?: string; [k: string]: unknown } | null = null;
+      try { json = JSON.parse(rawText); } catch { /* not JSON */ }
+
+      if (json?.ok) {
         setResult({ ok: true, msg: `✅ Gesendet (${json.platform ?? "?"}, sandbox=${sandbox})` });
+      } else if (json) {
+        const detail = typeof json.error === "string" ? json.error
+          : typeof json.stack === "string" ? json.stack.split("\n")[0]
+          : JSON.stringify(json).slice(0, 300);
+        setResult({ ok: false, msg: `❌ HTTP ${res.status} — ${detail}` });
       } else {
-        setResult({ ok: false, msg: `❌ ${json.error ?? "Unbekannter Fehler"}` });
+        // Server returned HTML or non-JSON — show status + first 300 chars so we can debug
+        setResult({ ok: false, msg: `❌ HTTP ${res.status} — Server-Antwort kein JSON:\n${rawText.slice(0, 300)}` });
       }
     } catch (e) {
-      setResult({ ok: false, msg: `❌ ${String(e)}` });
+      setResult({ ok: false, msg: `❌ Netzwerkfehler: ${String(e)}` });
     } finally {
       setPending(false);
     }
@@ -96,6 +105,8 @@ export default function PushTestCard() {
             background: result.ok ? "#ecfdf5" : "#fef2f2",
             color: result.ok ? "#047857" : "#dc2626",
             border: `1px solid ${result.ok ? "#a7f3d0" : "#fecaca"}`,
+            whiteSpace: "pre-wrap",
+            wordBreak: "break-all",
           }}>
             {result.msg}
           </p>
