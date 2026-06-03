@@ -1,4 +1,5 @@
 export const runtime = "nodejs";
+export const maxDuration = 30;
 
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
@@ -60,7 +61,8 @@ function sendAPNs(
   return new Promise((resolve, reject) => {
     const host = sandbox ? "api.sandbox.push.apple.com" : "api.push.apple.com";
     const client = http2.connect(`https://${host}`);
-    client.on("error", reject);
+    client.on("error", (err) => { try { client.close(); } catch { /* ignore */ } reject(err); });
+    client.on("close", () => { /* noop */ });
 
     const payload = JSON.stringify({
       aps: { alert: { title: "🔔 Glev Test-Push", body: "Push-Benachrichtigungen funktionieren!" }, sound: "default", badge: 1 },
@@ -83,8 +85,8 @@ function sendAPNs(
     let body = "";
     req.on("response", (h) => { status = h[":status"] as number; });
     req.on("data", (c) => { body += c; });
-    req.on("end", () => { client.close(); resolve({ status, body }); });
-    req.on("error", (e) => { client.close(); reject(e); });
+    req.on("end", () => { try { client.close(); } catch { /* ignore */ } resolve({ status, body }); });
+    req.on("error", (e) => { try { client.close(); } catch { /* ignore */ } reject(e); });
   });
 }
 
@@ -102,7 +104,6 @@ async function sendFCM(token: string, serverKey: string): Promise<{ status: numb
 }
 
 export async function POST(req: NextRequest) {
-  // Read env vars up front so they appear in diagnostics even if we crash early.
   const keyP8    = process.env.APNS_KEY_P8    ?? "";
   const keyId    = process.env.APNS_KEY_ID    ?? "";
   const teamId   = process.env.APNS_TEAM_ID   ?? "";
@@ -118,8 +119,6 @@ export async function POST(req: NextRequest) {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return NextResponse.json({ error: "Nicht eingeloggt" }, { status: 401 });
 
-    // sandbox defaults to FALSE — TestFlight + App Store builds use production tokens.
-    // Only raw Xcode direct-installs (rare) would need sandbox=true.
     const { sandbox = false } = await req.json() as { sandbox?: boolean };
 
     const admin = getSupabaseAdmin();
@@ -150,22 +149,59 @@ export async function POST(req: NextRequest) {
       }
 
       const kd = diagnoseKey(keyP8);
-      let jwt: string;
+
+      // Step 1: Pre-validate key — crypto.createPrivateKey throws synchronously
+      // (catchable) whereas crypto.createSign().sign() can kill the Node worker
+      // process via an OpenSSL abort if the key is malformed.
+      let privKey: crypto.KeyObject;
       try {
-        jwt = generateAPNsJWT(keyP8, keyId, teamId);
-      } catch (jwtErr) {
+        privKey = crypto.createPrivateKey({ key: normalizeP8Key(keyP8), format: "pem", type: "pkcs8" });
+        console.log("[glev] self-test p8 key valid, type=" + privKey.asymmetricKeyType);
+      } catch (keyErr) {
         const errInfo = {
-          error:    `JWT-Fehler: ${jwtErr instanceof Error ? `${jwtErr.name}: ${jwtErr.message}` : String(jwtErr)}`,
-          stack:    jwtErr instanceof Error ? (jwtErr.stack ?? "") : "",
-          keyDiag:  kd,
+          error:   `Key-Validierung fehlgeschlagen: ${keyErr instanceof Error ? `${keyErr.name}: ${keyErr.message}` : String(keyErr)}`,
+          stack:   keyErr instanceof Error ? (keyErr.stack ?? "") : "",
+          keyDiag: kd,
         };
-        console.error("[glev] /api/push/self-test JWT crash:", JSON.stringify(errInfo));
+        console.error("[glev] self-test key-validate fail:", JSON.stringify(errInfo));
         return NextResponse.json(errInfo, { status: 500 });
       }
 
-      const { status, body } = await sendAPNs(token, jwt, bundleId, sandbox);
-      if (status === 200) return NextResponse.json({ ok: true, platform: "ios", sandbox });
-      return NextResponse.json({ error: `APNs ${status}`, detail: body }, { status: 502 });
+      // Step 2: JWT
+      let jwt: string;
+      try {
+        jwt = generateAPNsJWT(keyP8, keyId, teamId);
+        console.log("[glev] self-test jwt generated, len=" + jwt.length);
+      } catch (jwtErr) {
+        const errInfo = {
+          error:   `JWT-Fehler: ${jwtErr instanceof Error ? `${jwtErr.name}: ${jwtErr.message}` : String(jwtErr)}`,
+          stack:   jwtErr instanceof Error ? (jwtErr.stack ?? "") : "",
+          keyDiag: kd,
+        };
+        console.error("[glev] self-test jwt fail:", JSON.stringify(errInfo));
+        return NextResponse.json(errInfo, { status: 500 });
+      }
+
+      // Step 3: APNs call with hard 10s timeout
+      try {
+        const { status, body } = await Promise.race([
+          sendAPNs(token, jwt, bundleId, sandbox),
+          new Promise<never>((_, rej) =>
+            setTimeout(() => rej(new Error("APNs timeout nach 10s")), 10000),
+          ),
+        ]);
+        console.log("[glev] self-test APNs response:", status, body.slice(0, 200));
+        if (status === 200) return NextResponse.json({ ok: true, platform: "ios", sandbox });
+        return NextResponse.json({ error: `APNs ${status}`, detail: body }, { status: 502 });
+      } catch (apnsErr) {
+        const errInfo = {
+          error:   `APNs-Fehler: ${apnsErr instanceof Error ? `${apnsErr.name}: ${apnsErr.message}` : String(apnsErr)}`,
+          stack:   apnsErr instanceof Error ? (apnsErr.stack ?? "") : "",
+          keyDiag: kd,
+        };
+        console.error("[glev] self-test APNs fail:", JSON.stringify(errInfo));
+        return NextResponse.json(errInfo, { status: 502 });
+      }
     }
 
     if (platform === "android") {
@@ -184,7 +220,7 @@ export async function POST(req: NextRequest) {
       stack:   err instanceof Error ? (err.stack ?? "") : "",
       keyDiag: diagnoseKey(keyP8),
     };
-    console.error("[glev] /api/push/self-test unhandled crash:", JSON.stringify(errInfo));
+    console.error("[glev] self-test unhandled crash:", JSON.stringify(errInfo));
     return NextResponse.json(errInfo, { status: 500 });
   }
 }

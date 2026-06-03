@@ -1,4 +1,5 @@
 export const runtime = "nodejs";
+export const maxDuration = 30;
 
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
@@ -219,22 +220,59 @@ export async function POST(req: NextRequest) {
       }
 
       const kd = diagnoseKey(keyP8);
+
+      // Step 1: Pre-validate key — crypto.createPrivateKey throws synchronously
+      // (catchable) whereas crypto.createSign().sign() can kill the Node worker
+      // via an OpenSSL abort if the key is malformed.
+      let privKey: crypto.KeyObject;
+      try {
+        privKey = crypto.createPrivateKey({ key: normalizeP8Key(keyP8), format: "pem", type: "pkcs8" });
+        console.log("[glev] admin push-test p8 key valid, type=" + privKey.asymmetricKeyType);
+      } catch (keyErr) {
+        const errInfo = {
+          error:   `Key-Validierung fehlgeschlagen: ${keyErr instanceof Error ? `${keyErr.name}: ${keyErr.message}` : String(keyErr)}`,
+          stack:   keyErr instanceof Error ? (keyErr.stack ?? "") : "",
+          keyDiag: kd,
+        };
+        console.error("[glev] admin push-test key-validate fail:", JSON.stringify(errInfo));
+        return NextResponse.json(errInfo, { status: 500 });
+      }
+
+      // Step 2: JWT
       let jwt: string;
       try {
         jwt = generateAPNsJWT(keyP8, keyId, teamId);
+        console.log("[glev] admin push-test jwt generated, len=" + jwt.length);
       } catch (jwtErr) {
         const errInfo = {
           error:   `JWT-Fehler: ${jwtErr instanceof Error ? `${jwtErr.name}: ${jwtErr.message}` : String(jwtErr)}`,
           stack:   jwtErr instanceof Error ? (jwtErr.stack ?? "") : "",
           keyDiag: kd,
         };
-        console.error("[glev] /api/admin/push-test JWT crash:", JSON.stringify(errInfo));
+        console.error("[glev] admin push-test jwt fail:", JSON.stringify(errInfo));
         return NextResponse.json(errInfo, { status: 500 });
       }
 
-      const { status, responseBody } = await sendAPNs(token, jwt, bundleId, title, body, sandbox as boolean);
-      if (status === 200) return NextResponse.json({ ok: true, platform: "ios", sandbox });
-      return NextResponse.json({ error: `APNs returned ${status}`, detail: responseBody }, { status: 502 });
+      // Step 3: APNs call with hard 10s timeout
+      try {
+        const { status, responseBody } = await Promise.race([
+          sendAPNs(token, jwt, bundleId, title, body, sandbox as boolean),
+          new Promise<never>((_, rej) =>
+            setTimeout(() => rej(new Error("APNs timeout nach 10s")), 10000),
+          ),
+        ]);
+        console.log("[glev] admin push-test APNs response:", status, responseBody.slice(0, 200));
+        if (status === 200) return NextResponse.json({ ok: true, platform: "ios", sandbox });
+        return NextResponse.json({ error: `APNs returned ${status}`, detail: responseBody }, { status: 502 });
+      } catch (apnsErr) {
+        const errInfo = {
+          error:   `APNs-Fehler: ${apnsErr instanceof Error ? `${apnsErr.name}: ${apnsErr.message}` : String(apnsErr)}`,
+          stack:   apnsErr instanceof Error ? (apnsErr.stack ?? "") : "",
+          keyDiag: kd,
+        };
+        console.error("[glev] admin push-test APNs fail:", JSON.stringify(errInfo));
+        return NextResponse.json(errInfo, { status: 502 });
+      }
     }
 
     if (platform === "android") {
