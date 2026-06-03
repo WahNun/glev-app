@@ -964,7 +964,7 @@ export async function createUserAction(formData: FormData): Promise<void> {
   } else if (authMode === "invite") {
     const appUrl = (process.env.NEXT_PUBLIC_APP_URL ?? "").replace(/\/$/, "");
     const { data, error } = await sb.auth.admin.inviteUserByEmail(email, {
-      redirectTo: appUrl ? `${appUrl}/auth/confirm` : undefined,
+      redirectTo: appUrl ? `${appUrl}/auth/callback?next=/auth/confirm` : undefined,
       data: fullName ? { full_name: fullName } : undefined,
     });
     if (error || !data?.user?.id) {
@@ -1324,7 +1324,7 @@ export async function sendPasswordResetAction(
   const { data: linkData, error: linkErr } = await sb.auth.admin.generateLink({
     type: "recovery",
     email,
-    options: { redirectTo: `${appUrl}/auth/confirm` },
+    options: { redirectTo: `${appUrl}/auth/callback?next=/auth/confirm` },
   });
   if (linkErr || !linkData?.properties?.action_link) {
     return {

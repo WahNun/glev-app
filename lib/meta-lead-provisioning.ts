@@ -106,7 +106,7 @@ export async function provisionMetaLead(
       email,
       options: {
         data: name ? { full_name: name } : undefined,
-        redirectTo: `${APP_URL}/auth/confirm`,
+        redirectTo: `${APP_URL}/auth/callback?next=/auth/confirm`,
       },
     });
 
@@ -132,7 +132,7 @@ export async function provisionMetaLead(
       const { data: rec } = await sb.auth.admin.generateLink({
         type: "recovery",
         email,
-        options: { redirectTo: `${APP_URL}/auth/confirm` },
+        options: { redirectTo: `${APP_URL}/auth/callback?next=/auth/confirm` },
       });
       inviteUrl = rec?.properties?.action_link ?? null;
       if (!inviteUrl) {

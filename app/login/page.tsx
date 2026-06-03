@@ -132,7 +132,7 @@ export default function LoginPage() {
 
     setResetLoading(true);
     const { error: resetErr } = await supabase.auth.resetPasswordForEmail(target, {
-      redirectTo: `${appUrl}/auth/confirm`,
+      redirectTo: `${appUrl}/auth/callback?next=/auth/confirm`,
     });
 
     setResetLoading(false);

@@ -72,6 +72,14 @@ export async function GET(req: NextRequest) {
           }
         }
       }
+      // For password-reset flows the code is single-use and has already been
+      // exchanged server-side here. Redirect to /auth/confirm WITHOUT the code
+      // param so the page doesn't attempt a second (failing) exchange. Pass
+      // session=ready&type=recovery so the page can skip straight to the
+      // password form.
+      if (next === "/auth/confirm") {
+        return NextResponse.redirect(`${origin}/auth/confirm?session=ready&type=recovery`);
+      }
       return NextResponse.redirect(`${origin}${next}`);
     }
     // eslint-disable-next-line no-console

@@ -156,13 +156,20 @@ function ConfirmInner() {
   // Slack/Vercel/GitHub): Zwischenseite mit Button. Erst der menschliche
   // Klick auf "Account einrichten" ruft verifyOtp(). Mail-Scanner laden
   // zwar die Seite, klicken aber nichts → Token bleibt unverbraucht.
-  const type      = params.get("type") ?? "recovery";
-  const code      = params.get("code");
-  const tokenHash = params.get("token_hash");
-  const hasParams = Boolean(code || tokenHash);
+  const type        = params.get("type") ?? "recovery";
+  const code        = params.get("code");
+  const tokenHash   = params.get("token_hash");
+  // Set by /auth/callback after it already exchanged the code server-side.
+  // The session is live in cookies; we skip straight to the password form.
+  const sessionReady = params.get("session") === "ready";
+  const hasParams   = Boolean(code || tokenHash || sessionReady);
 
   const [state, setState] = useState<State>(
-    hasParams ? { kind: "needs_confirm" } : { kind: "invalid", reason: "Kein gültiger Bestätigungs-Link — bitte fordere einen neuen Link an." },
+    sessionReady
+      ? { kind: "ready" }
+      : hasParams
+        ? { kind: "needs_confirm" }
+        : { kind: "invalid", reason: "Kein gültiger Bestätigungs-Link — bitte fordere einen neuen Link an." },
   );
   const [password, setPassword] = useState("");
   const [confirm, setConfirm]   = useState("");
@@ -249,8 +256,7 @@ function ConfirmInner() {
 
     setState({ kind: "saved" });
     setTimeout(() => {
-      router.refresh();
-      router.replace("/dashboard");
+      router.replace("/login");
     }, 900);
   }
 
@@ -403,7 +409,7 @@ function ConfirmInner() {
             Passwort aktualisiert ✓
           </div>
           <div style={{ fontSize: 13, color: "rgba(255,255,255,0.55)" }}>
-            Du wirst zum Dashboard weitergeleitet …
+            Du wirst zum Login weitergeleitet …
           </div>
         </div>
       )}
