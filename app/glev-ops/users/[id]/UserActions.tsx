@@ -18,6 +18,17 @@ import {
   sendPasswordResetAction,
 } from "../actions";
 
+function readAdminToken(): string {
+  return (
+    document.cookie
+      .split(";")
+      .find((c) => c.trim().startsWith("glev_ops_token="))
+      ?.split("=")
+      .slice(1)
+      .join("=") ?? ""
+  );
+}
+
 /**
  * All mutating actions for one user, grouped into three blocks
  * matching Stages 1-3 of the concept:
@@ -41,6 +52,8 @@ export default function UserActions({
   cgmConnected,
   deleted,
   hasActiveStripeSub,
+  phone,
+  smsOptedOut,
 }: {
   userId: string;
   email: string;
@@ -53,6 +66,8 @@ export default function UserActions({
   cgmConnected: boolean;
   deleted: boolean;
   hasActiveStripeSub: boolean;
+  phone: string | null;
+  smsOptedOut: boolean;
 }) {
   const [confirmKind, setConfirmKind] = useState<"soft" | "hard" | "cancel_ban" | null>(null);
   const [confirmEmail, setConfirmEmail] = useState("");
@@ -68,6 +83,37 @@ export default function UserActions({
   const [pushPending, setPushPending] = useState(false);
   const [pushSandbox, setPushSandbox] = useState(true);
   const [pushResult, setPushResult] = useState<{ ok: boolean; msg: string } | null>(null);
+
+  // SMS Opt-Out-Relink
+  const [relinkPending, setRelinkPending] = useState(false);
+  const [relinkResult, setRelinkResult] = useState<{ ok: boolean; msg: string } | null>(null);
+
+  async function sendRelink() {
+    if (relinkPending) return;
+    setRelinkPending(true);
+    setRelinkResult(null);
+    try {
+      const tok = readAdminToken();
+      const res = await fetch("/api/admin/sms-relink", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "authorization": `Bearer ${tok}`,
+        },
+        body: JSON.stringify({ userId }),
+      });
+      const json = await res.json() as { ok?: boolean; error?: string; to?: string; sid?: string };
+      if (json.ok) {
+        setRelinkResult({ ok: true, msg: `✅ Opt-Out-Link gesendet an ${json.to ?? "—"} (SID: ${json.sid ?? "?"})` });
+      } else {
+        setRelinkResult({ ok: false, msg: `❌ ${json.error ?? "Unbekannter Fehler"}` });
+      }
+    } catch (e) {
+      setRelinkResult({ ok: false, msg: `❌ ${String(e)}` });
+    } finally {
+      setRelinkPending(false);
+    }
+  }
 
   async function sendTestPush() {
     if (pushPending) return;
@@ -363,6 +409,67 @@ export default function UserActions({
         {pushResult && (
           <p style={{ margin: "10px 0 0", fontSize: 13, color: pushResult.ok ? "#15803d" : "#991b1b" }}>
             {pushResult.msg}
+          </p>
+        )}
+      </section>
+
+      {/* --- SMS Opt-Out-Link erneut senden --- */}
+      <section style={section}>
+        <h2 style={h2}>SMS Opt-Out-Link</h2>
+        <p style={{ ...muted, margin: "0 0 12px" }}>
+          Sendet dem User eine frisch signierte Opt-Out-URL (aktueller{" "}
+          <code>SMS_UNSUB_SECRET</code>). Sinnvoll nach einer Secret-Rotation,
+          wenn der User eine veraltete Link-Version in seiner SMS-History hat.
+          Die Aktion wird mit <code>event_type = &apos;relink&apos;</code> in{" "}
+          <code>sms_optout_events</code> protokolliert.
+        </p>
+        <div style={{ ...row, marginBottom: 8 }}>
+          <span style={lbl}>Telefon:</span>
+          <code style={{ fontSize: 13 }}>{phone ?? "—"}</code>
+          {smsOptedOut && (
+            <span
+              style={{
+                background: "#fef3c7",
+                color: "#92400e",
+                border: "1px solid #fde68a",
+                borderRadius: 6,
+                padding: "2px 8px",
+                fontSize: 12,
+                fontWeight: 600,
+              }}
+            >
+              Bereits abgemeldet
+            </span>
+          )}
+        </div>
+        <button
+          type="button"
+          disabled={relinkPending || !phone || smsOptedOut}
+          onClick={() => { void sendRelink(); }}
+          style={{
+            ...btnSecondary,
+            opacity: relinkPending || !phone || smsOptedOut ? 0.5 : 1,
+            cursor: relinkPending || !phone || smsOptedOut ? "not-allowed" : "pointer",
+          }}
+          title={
+            !phone
+              ? "Keine Telefonnummer für diesen User"
+              : smsOptedOut
+                ? "User hat SMS bereits abbestellt"
+                : "Frischen Opt-Out-Link per SMS senden"
+          }
+        >
+          {relinkPending ? "Sende…" : "📩 Opt-Out-Link erneut senden"}
+        </button>
+        {relinkResult && (
+          <p
+            style={{
+              margin: "10px 0 0",
+              fontSize: 13,
+              color: relinkResult.ok ? "#15803d" : "#991b1b",
+            }}
+          >
+            {relinkResult.msg}
           </p>
         )}
       </section>

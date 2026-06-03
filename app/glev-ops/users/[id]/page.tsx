@@ -278,6 +278,13 @@ export default async function AdminUserDetailPage({
         hasActiveStripeSub={
           !!pro?.stripe_subscription_id && (pro?.status ?? "") !== "cancelled"
         }
+        phone={
+          (authUser.phone ?? "") ||
+          ((authUser.user_metadata?.phone as string | undefined) ?? "")
+            ? (authUser.phone ?? "") || ((authUser.user_metadata?.phone as string | undefined) ?? "")
+            : null
+        }
+        smsOptedOut={!!(profile?.sms_opted_out)}
       />
 
       {/* Audit */}
