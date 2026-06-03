@@ -52,8 +52,9 @@ function diagnoseKey(raw: string): Record<string, unknown> {
   };
 }
 
-function generateAPNsJWT(keyP8: string, keyId: string, teamId: string): string {
-  const key = normalizeP8Key(keyP8);
+// Accepts a pre-validated KeyObject (not a raw string) so sign() never
+// re-parses the PEM and can never trigger an OpenSSL abort for wrong key type.
+function generateAPNsJWT(privKey: crypto.KeyObject, keyId: string, teamId: string): string {
   const header = Buffer.from(JSON.stringify({ alg: "ES256", kid: keyId })).toString("base64url");
   const payload = Buffer.from(
     JSON.stringify({ iss: teamId, iat: Math.floor(Date.now() / 1000) }),
@@ -61,7 +62,7 @@ function generateAPNsJWT(keyP8: string, keyId: string, teamId: string): string {
   const signingInput = `${header}.${payload}`;
   const sign = crypto.createSign("SHA256");
   sign.update(signingInput);
-  const sig = sign.sign({ key, dsaEncoding: "ieee-p1363" }).toString("base64url");
+  const sig = sign.sign({ key: privKey, dsaEncoding: "ieee-p1363" }).toString("base64url");
   return `${signingInput}.${sig}`;
 }
 
@@ -238,10 +239,21 @@ export async function POST(req: NextRequest) {
         return NextResponse.json(errInfo, { status: 500 });
       }
 
-      // Step 2: JWT
+      // Key must be EC (P-256) for APNs ES256 signing.
+      // RSA or other key types cause an OpenSSL abort in sign() — not a catchable JS error.
+      if (privKey.asymmetricKeyType !== "ec") {
+        const errInfo = {
+          error:   `Falscher Key-Typ: ${privKey.asymmetricKeyType ?? "unbekannt"} — APNs braucht einen EC (P-256) Key. Bitte APNS_KEY_P8 in Vercel prüfen.`,
+          keyDiag: kd,
+        };
+        console.error("[glev] admin push-test wrong key type:", JSON.stringify(errInfo));
+        return NextResponse.json(errInfo, { status: 500 });
+      }
+
+      // Step 2: JWT — pass the pre-validated KeyObject, NOT the raw string
       let jwt: string;
       try {
-        jwt = generateAPNsJWT(keyP8, keyId, teamId);
+        jwt = generateAPNsJWT(privKey, keyId, teamId);
         console.log("[glev] admin push-test jwt generated, len=" + jwt.length);
       } catch (jwtErr) {
         const errInfo = {
