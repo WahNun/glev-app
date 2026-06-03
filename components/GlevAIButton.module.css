@@ -231,7 +231,7 @@
 
 /* Listening: continuous rotation replaces pulse */
 .listening .icon {
-  animation: glevIconSpin 2.6s linear infinite !important;
+  animation: glevIconSpin 4.5s linear infinite !important;
 }
 
 .speaking .icon {

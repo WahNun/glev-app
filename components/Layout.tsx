@@ -165,7 +165,7 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
   const [ttsSpeaking, setTtsSpeaking] = useState(false);
 
   // Chat position preference: "tap" = short-tap opens chat (arrow hidden),
-  // "swipe" = chat stays closed, arrow shown, swipe-up on nav bar opens it.
+  // "swipe" = chat stays closed, swipe-up on nav bar opens it.
   const [chatPosition, setChatPosition] = useState<"tap" | "swipe">("swipe");
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -180,6 +180,25 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
     window.addEventListener("glev:chat-position-changed", handler);
     return () => window.removeEventListener("glev:chat-position-changed", handler);
   }, []);
+
+  // arrowHint: briefly show the swipe-up arrow when voice recording starts
+  // while the chat sheet is closed and chatPosition === "swipe".
+  // Auto-clears after 2.4 s — matches the flicker animation duration.
+  const [arrowHint, setArrowHint] = useState(false);
+  const arrowHintTimer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    if (voice.recording && !glevAi.sheetOpen && chatPosition === "swipe" && aiVoiceEnabled) {
+      setArrowHint(true);
+      if (arrowHintTimer.current) clearTimeout(arrowHintTimer.current);
+      arrowHintTimer.current = setTimeout(() => setArrowHint(false), 2400);
+    }
+    // When recording stops or chat opens, hide arrow immediately.
+    if (!voice.recording || glevAi.sheetOpen) {
+      if (arrowHintTimer.current) { clearTimeout(arrowHintTimer.current); arrowHintTimer.current = null; }
+      setArrowHint(false);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [voice.recording, glevAi.sheetOpen, chatPosition, aiVoiceEnabled]);
 
   // aiThinking: true while the chat sheet's STT mic is active (user
   // speaking into the chat) OR while the AI is streaming a reply.
@@ -1148,7 +1167,7 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
           speaking={aiVoiceEnabled ? ttsSpeaking : false}
           sheetOpen={aiVoiceEnabled ? glevAi.sheetOpen : false}
           hasConversation={aiVoiceEnabled ? glevAi.messages.length > 0 && !glevAi.sheetOpen : false}
-          showArrow={aiVoiceEnabled === true && chatPosition === "swipe"}
+          showArrow={arrowHint}
         />
         <MobileTab
           label={tNav("insights")}
@@ -1329,14 +1348,19 @@ function MobileGlevFab({
               top: "50%",
               transform: "translate(-50%, calc(-50% - 53px))",
               pointerEvents: "none",
-              animation: "glevArrowBob 1.8s ease-in-out infinite",
-              opacity: 0.75,
+              animation: "glevArrowFlicker 2.4s ease-in-out forwards",
             }}
           >
             <style>{`
-              @keyframes glevArrowBob {
-                0%, 100% { transform: translate(-50%, calc(-50% - 53px)); opacity: 0.55; }
-                50%       { transform: translate(-50%, calc(-50% - 57px)); opacity: 0.9; }
+              @keyframes glevArrowFlicker {
+                0%   { transform: translate(-50%, calc(-50% - 53px)); opacity: 0; }
+                12%  { transform: translate(-50%, calc(-50% - 57px)); opacity: 0.75; }
+                25%  { transform: translate(-50%, calc(-50% - 53px)); opacity: 0.25; }
+                42%  { transform: translate(-50%, calc(-50% - 57px)); opacity: 0.75; }
+                55%  { transform: translate(-50%, calc(-50% - 53px)); opacity: 0.25; }
+                70%  { transform: translate(-50%, calc(-50% - 57px)); opacity: 0.7; }
+                85%  { transform: translate(-50%, calc(-50% - 54px)); opacity: 0.25; }
+                100% { transform: translate(-50%, calc(-50% - 53px)); opacity: 0; }
               }
             `}</style>
             <svg width="16" height="10" viewBox="0 0 16 10" fill="none">
