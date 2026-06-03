@@ -89,9 +89,21 @@ function FirstNavRow({ iconColor, icon, label, path, router }: NavRowProps) {
 export default function SettingsPage() {
   const t = useTranslations("settings");
   const router = useRouter();
+  const [signingOut, setSigningOut] = useState(false);
   const [referralSharing, setReferralSharing] = useState(false);
   const [referralCopied, setReferralCopied] = useState(false);
   const [referralError, setReferralError] = useState(false);
+
+  const handleSignOut = useCallback(async () => {
+    if (signingOut) return;
+    setSigningOut(true);
+    try {
+      await signOut();
+      router.push("/login");
+    } finally {
+      setSigningOut(false);
+    }
+  }, [signingOut, router]);
 
   const handleShareReferral = useCallback(async () => {
     if (referralSharing) return;
@@ -238,7 +250,8 @@ export default function SettingsPage() {
 
       <button
         type="button"
-        onClick={() => signOut()}
+        onClick={handleSignOut}
+        disabled={signingOut}
         style={{
           display: "block",
           width: "100%",
@@ -250,12 +263,13 @@ export default function SettingsPage() {
           borderRadius: 14,
           fontSize: 15,
           fontWeight: 600,
-          color: "#ef4444",
-          cursor: "pointer",
+          color: signingOut ? "rgba(239,68,68,0.45)" : "#ef4444",
+          cursor: signingOut ? "wait" : "pointer",
           letterSpacing: "-0.01em",
+          opacity: signingOut ? 0.6 : 1,
         }}
       >
-        Abmelden
+        {signingOut ? "Wird abgemeldet…" : "Abmelden"}
       </button>
     </div>
   );
