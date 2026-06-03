@@ -149,16 +149,23 @@ export async function POST(req: NextRequest) {
   if (!resolvedUserId && email) {
     // Supabase GoTrueAdminApi has no getUserByEmail — query auth.users directly
     // via service-role (bypasses RLS on all schemas including auth).
-    const { data: authRow, error: lookupErr } = await admin
-      .schema("auth")
-      .from("users")
-      .select("id")
-      .eq("email", email.toLowerCase())
-      .maybeSingle();
-    if (lookupErr || !authRow?.id) {
+    // GoTrueAdminApi.listUsers() is the only reliable way to look up a user
+    // by email — schema("auth").from("users") is blocked by PostgREST ACL in
+    // some Supabase project configs even with service-role key.
+    const { data: listData, error: listErr } = await admin.auth.admin.listUsers({
+      page: 1,
+      perPage: 1000,
+    });
+    if (listErr) {
+      return NextResponse.json({ error: `Auth-Lookup-Fehler: ${listErr.message}` }, { status: 500 });
+    }
+    const found = listData.users.find(
+      (u) => u.email?.toLowerCase() === email.toLowerCase(),
+    );
+    if (!found) {
       return NextResponse.json({ error: `Kein User mit E-Mail ${email} gefunden.` }, { status: 404 });
     }
-    resolvedUserId = authRow.id as string;
+    resolvedUserId = found.id;
   }
 
   if (!resolvedUserId) {

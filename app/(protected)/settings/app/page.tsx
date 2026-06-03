@@ -39,7 +39,7 @@ function PushDebugSection() {
   const [waitingSecs, setWaitingSecs] = useState(0);
   const [testPending, setTestPending] = useState(false);
   const [testResult, setTestResult] = useState<{ ok: boolean; msg: string } | null>(null);
-  const [sandbox, setSandbox] = useState(true);
+  const [sandbox, setSandbox] = useState(false);
   const [isMasterUser, setIsMasterUser] = useState(false);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const waitRef  = useRef<ReturnType<typeof setInterval> | null>(null);
