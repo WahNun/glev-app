@@ -10,6 +10,8 @@ Glev is a Type 1 Diabetes insulin decision-support system designed to provide pe
 - I want iterative development.
 - Ask before making major changes.
 - I prefer detailed explanations.
+- iOS builds are always done via Xcode directly, never via Fastlane.
+- Always include the full path with `cd` when giving terminal commands.
 
 ## Agent Workflow Rules
 
