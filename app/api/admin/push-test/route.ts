@@ -298,18 +298,24 @@ export async function POST(req: NextRequest) {
         return NextResponse.json(errInfo, { status: 500 });
       }
 
-      // Step 3: APNs call with hard 10s timeout
+      // Step 3: APNs call with hard 10s timeout.
+      // IMPORTANT: always clearTimeout after the race to prevent a dangling
+      // rejected Promise that fires 10s later as an unhandled rejection and
+      // kills the Node process mid-flight on the next request (Node 15+).
+      let _apnsTimer: ReturnType<typeof setTimeout> | undefined;
       try {
         const { status, responseBody } = await Promise.race([
           sendAPNs(token, jwt, bundleId, title, body, sandbox as boolean),
-          new Promise<never>((_, rej) =>
-            setTimeout(() => rej(new Error("APNs timeout nach 10s")), 10000),
-          ),
+          new Promise<never>((_, rej) => {
+            _apnsTimer = setTimeout(() => rej(new Error("APNs timeout nach 10s")), 10000);
+          }),
         ]);
+        clearTimeout(_apnsTimer);
         console.log("[glev] admin push-test APNs response:", status, responseBody.slice(0, 200));
         if (status === 200) return NextResponse.json({ ok: true, platform: "ios", sandbox });
         return NextResponse.json({ error: `APNs returned ${status}`, detail: responseBody }, { status: 502 });
       } catch (apnsErr) {
+        clearTimeout(_apnsTimer);
         const errInfo = {
           error:   `APNs-Fehler: ${apnsErr instanceof Error ? `${apnsErr.name}: ${apnsErr.message}` : String(apnsErr)}`,
           stack:   apnsErr instanceof Error ? (apnsErr.stack ?? "") : "",
