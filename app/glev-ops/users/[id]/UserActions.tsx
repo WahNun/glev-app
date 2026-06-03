@@ -61,6 +61,7 @@ export default function UserActions({
   // Versehen ausgelöst werden — gleiche UX wie der Drip-Send-Confirm.
   const [simpleConfirm, setSimpleConfirm] = useState<"magic" | "reset" | null>(null);
   const [pendingSimple, setPendingSimple] = useState<"magic" | "reset" | null>(null);
+  const [simpleResult, setSimpleResult] = useState<{ ok: boolean; msg: string } | null>(null);
   const [, startTransition] = useTransition();
 
   // Push-Test
@@ -103,13 +104,29 @@ export default function UserActions({
     if (!kind || pendingSimple) return;
     setPendingSimple(kind);
     setSimpleConfirm(null);
+    setSimpleResult(null);
     startTransition(async () => {
       try {
         const fd = new FormData();
         fd.set("userId", userId);
         fd.set("email", email);
-        if (kind === "magic") await sendMagicLinkAction(fd);
-        else await sendPasswordResetAction(fd);
+        const result =
+          kind === "magic"
+            ? await sendMagicLinkAction(fd)
+            : await sendPasswordResetAction(fd);
+        if (result.ok) {
+          setSimpleResult({
+            ok: true,
+            msg:
+              kind === "magic"
+                ? `✅ Magic-Link an ${email} gesendet`
+                : `✅ Passwort-Reset-Mail an ${email} gesendet`,
+          });
+        } else {
+          setSimpleResult({ ok: false, msg: `❌ ${result.error}` });
+        }
+      } catch (e) {
+        setSimpleResult({ ok: false, msg: `❌ ${String(e)}` });
       } finally {
         setPendingSimple(null);
       }
@@ -288,6 +305,12 @@ export default function UserActions({
               : `Passwort-Reset-Mail an ${email || "User"} senden`}
           </button>
         </div>
+
+        {simpleResult && (
+          <p style={{ margin: "10px 0 0", fontSize: 13, color: simpleResult.ok ? "#15803d" : "#991b1b" }}>
+            {simpleResult.msg}
+          </p>
+        )}
 
         {cgmConnected ? (
           <form action={disconnectCgmAction} style={{ ...row, marginTop: 12 }}>

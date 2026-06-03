@@ -1291,14 +1291,19 @@ export async function backfillCurrencyCountryAction(): Promise<void> {
  * klickt und ein neues setzt (Supabase-Standardverhalten, in der
  * Mail explizit erwähnt).
  */
-export async function sendPasswordResetAction(formData: FormData): Promise<void> {
+export async function sendPasswordResetAction(
+  formData: FormData,
+): Promise<{ ok: true } | { ok: false; error: string }> {
   const adminToken = await requireAdminToken();
   const userId = String(formData.get("userId") ?? "");
   const email = String(formData.get("email") ?? "").trim().toLowerCase();
-  if (!userId || !email) redirect((userId ? `/glev-ops/users/${userId}` : "/glev-ops/users") + "?err=action_failed&msg=" + encodeURIComponent("userId und email erforderlich"));
+  if (!userId || !email) {
+    return { ok: false, error: "userId und email erforderlich" };
+  }
 
   const sb = getSupabaseAdmin();
-  const appUrl = (process.env.NEXT_PUBLIC_APP_URL ?? "").replace(/\/$/, "");
+  const _rawAppUrl = process.env.NEXT_PUBLIC_APP_URL?.trim();
+  const appUrl = (_rawAppUrl || "https://glev.app").replace(/\/$/, "");
 
   // Sprache + Anzeigename aus dem Profil ziehen, damit die Mail in der
   // Sprache des Users rausgeht (Default: de).
@@ -1319,10 +1324,13 @@ export async function sendPasswordResetAction(formData: FormData): Promise<void>
   const { data: linkData, error: linkErr } = await sb.auth.admin.generateLink({
     type: "recovery",
     email,
-    options: appUrl ? { redirectTo: `${appUrl}/auth/confirm` } : undefined,
+    options: { redirectTo: `${appUrl}/auth/confirm` },
   });
   if (linkErr || !linkData?.properties?.action_link) {
-    redirect(`/glev-ops/users/${userId}?err=action_failed&msg=` + encodeURIComponent("auth: " + (linkErr?.message ?? "kein action_link")));
+    return {
+      ok: false,
+      error: "auth: " + (linkErr?.message ?? "kein action_link"),
+    };
   }
   const resetUrl = linkData.properties.action_link;
 
@@ -1332,7 +1340,7 @@ export async function sendPasswordResetAction(formData: FormData): Promise<void>
     payload: {
       name: displayName,
       resetUrl,
-      appUrl: appUrl || null,
+      appUrl,
       locale,
     },
   });
@@ -1345,22 +1353,30 @@ export async function sendPasswordResetAction(formData: FormData): Promise<void>
   });
 
   revalidateUserPaths(userId);
+  return { ok: true };
 }
 
-export async function sendMagicLinkAction(formData: FormData): Promise<void> {
+export async function sendMagicLinkAction(
+  formData: FormData,
+): Promise<{ ok: true } | { ok: false; error: string }> {
   const adminToken = await requireAdminToken();
   const userId = String(formData.get("userId") ?? "");
   const email = String(formData.get("email") ?? "").trim().toLowerCase();
-  if (!userId || !email) redirect((userId ? `/glev-ops/users/${userId}` : "/glev-ops/users") + "?err=action_failed&msg=" + encodeURIComponent("userId und email erforderlich"));
+  if (!userId || !email) {
+    return { ok: false, error: "userId und email erforderlich" };
+  }
 
   const sb = getSupabaseAdmin();
-  const appUrl = (process.env.NEXT_PUBLIC_APP_URL ?? "").replace(/\/$/, "");
+  const _rawAppUrl = process.env.NEXT_PUBLIC_APP_URL?.trim();
+  const appUrl = (_rawAppUrl || "https://glev.app").replace(/\/$/, "");
   const { error } = await sb.auth.admin.generateLink({
     type: "magiclink",
     email,
-    options: appUrl ? { redirectTo: `${appUrl}/dashboard` } : undefined,
+    options: { redirectTo: `${appUrl}/dashboard` },
   });
-  if (error) redirect(`/glev-ops/users/${userId}?err=action_failed&msg=` + encodeURIComponent("auth: " + error.message));
+  if (error) {
+    return { ok: false, error: "auth: " + error.message };
+  }
 
   await writeAuditLog({
     action: "send_magic_link",
@@ -1370,4 +1386,5 @@ export async function sendMagicLinkAction(formData: FormData): Promise<void> {
   });
 
   revalidateUserPaths(userId);
+  return { ok: true };
 }
