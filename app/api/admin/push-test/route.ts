@@ -180,9 +180,13 @@ export async function POST(req: NextRequest) {
   const bundleId = process.env.APNS_BUNDLE_ID ?? "";
 
   try {
+  // ?step=N: early-exit for step-by-step debugging without redeploying.
+  // 0=after auth, 1=after json, 2=after listUsers, 3=after profile query,
+  // 4=after JWT, 5=full APNs call. Remove once root-cause is confirmed.
+  const debugStep = Number(req.nextUrl.searchParams.get("step") ?? "99");
+
+  console.log("[push-test] S0 start");
   // Auth: check glev_ops_token session cookie directly from req.cookies
-  // (avoids next/headers which can cause HTML error responses in some Next.js 15 builds).
-  // Bearer-token fallback kept for direct API calls / CI scripts.
   const sessionOk = isAdminAuthedFromRequest(req);
   const bearerAuth = req.headers.get("authorization") ?? "";
   const bearerSecret = bearerAuth.startsWith("Bearer ") ? bearerAuth.slice(7) : "";
@@ -190,22 +194,24 @@ export async function POST(req: NextRequest) {
   if (!sessionOk && !bearerOk) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+  console.log("[push-test] S0 auth ok sessionOk=" + sessionOk + " bearerOk=" + bearerOk);
+  if (debugStep === 0) return NextResponse.json({ step: 0, ok: true });
 
   const { userId, email, sandbox = false } = await req.json() as { userId?: string; email?: string; sandbox?: boolean };
+  console.log("[push-test] S1 json parsed email=" + email + " userId=" + userId);
+  if (debugStep === 1) return NextResponse.json({ step: 1, ok: true, email, userId });
 
   const admin = getSupabaseAdmin();
+  console.log("[push-test] S2 supabase admin client ready");
 
   let resolvedUserId = userId;
   if (!resolvedUserId && email) {
-    // Supabase GoTrueAdminApi has no getUserByEmail — query auth.users directly
-    // via service-role (bypasses RLS on all schemas including auth).
-    // GoTrueAdminApi.listUsers() is the only reliable way to look up a user
-    // by email — schema("auth").from("users") is blocked by PostgREST ACL in
-    // some Supabase project configs even with service-role key.
+    console.log("[push-test] S2 calling listUsers...");
     const { data: listData, error: listErr } = await admin.auth.admin.listUsers({
       page: 1,
       perPage: 1000,
     });
+    console.log("[push-test] S2 listUsers done err=" + (listErr?.message ?? "null") + " count=" + (listData?.users?.length ?? 0));
     if (listErr) {
       return NextResponse.json({ error: `Auth-Lookup-Fehler: ${listErr.message}` }, { status: 500 });
     }
@@ -217,16 +223,20 @@ export async function POST(req: NextRequest) {
     }
     resolvedUserId = found.id;
   }
+  console.log("[push-test] S2 resolvedUserId=" + resolvedUserId);
+  if (debugStep === 2) return NextResponse.json({ step: 2, ok: true, resolvedUserId });
 
   if (!resolvedUserId) {
     return NextResponse.json({ error: "userId oder email erforderlich" }, { status: 400 });
   }
 
+  console.log("[push-test] S3 querying profiles...");
   const { data: profile, error } = await admin
     .from("profiles")
     .select("push_token, push_platform")
     .eq("user_id", resolvedUserId)
     .maybeSingle();
+  console.log("[push-test] S3 profile done err=" + (error?.message ?? "null") + " platform=" + profile?.push_platform + " hasToken=" + !!profile?.push_token);
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
@@ -241,6 +251,8 @@ export async function POST(req: NextRequest) {
   const { push_token: token, push_platform: platform } = profile;
   const title = "🔔 Glev Test-Push";
   const body = "Push-Benachrichtigungen funktionieren!";
+  console.log("[push-test] S3 platform=" + platform + " tokenLen=" + token.length);
+  if (debugStep === 3) return NextResponse.json({ step: 3, ok: true, platform, tokenLen: token.length });
 
     if (platform === "ios") {
       if (!keyP8 || !keyId || !teamId || !bundleId) {
@@ -283,11 +295,13 @@ export async function POST(req: NextRequest) {
         return NextResponse.json(errInfo, { status: 500 });
       }
 
+      console.log("[push-test] S4 generating JWT...");
       // Step 2: JWT — WebCrypto async signing, no OpenSSL abort risk
       let jwt: string;
       try {
         jwt = await generateAPNsJWT(privKey, keyId, teamId);
-        console.log("[glev] admin push-test jwt generated, len=" + jwt.length);
+        console.log("[push-test] S4 jwt generated len=" + jwt.length);
+        if (debugStep === 4) return NextResponse.json({ step: 4, ok: true, jwtLen: jwt.length });
       } catch (jwtErr) {
         const errInfo = {
           error:   `JWT-Fehler: ${jwtErr instanceof Error ? `${jwtErr.name}: ${jwtErr.message}` : String(jwtErr)}`,
