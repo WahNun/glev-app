@@ -139,6 +139,52 @@ async function sendFCM(
   return { status: res.status, responseBody };
 }
 
+// GET — key diagnostics only, no APNs call. Used to pinpoint crash location.
+// Requires admin session cookie (same as POST).
+export async function GET(req: NextRequest) {
+  const keyP8    = process.env.APNS_KEY_P8    ?? "";
+  const keyId    = process.env.APNS_KEY_ID    ?? "";
+  const teamId   = process.env.APNS_TEAM_ID   ?? "";
+  const bundleId = process.env.APNS_BUNDLE_ID ?? "";
+
+  try {
+    const sessionOk = isAdminAuthedFromRequest(req);
+    const bearerAuth = req.headers.get("authorization") ?? "";
+    const bearerSecret = bearerAuth.startsWith("Bearer ") ? bearerAuth.slice(7) : "";
+    const bearerOk = Boolean(process.env.ADMIN_API_SECRET) && bearerSecret === process.env.ADMIN_API_SECRET;
+    if (!sessionOk && !bearerOk) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const kd = diagnoseKey(keyP8);
+    const envPresent = {
+      APNS_KEY_P8:    keyP8.length > 0,
+      APNS_KEY_ID:    keyId.length > 0,
+      APNS_TEAM_ID:   teamId.length > 0,
+      APNS_BUNDLE_ID: bundleId.length > 0,
+    };
+
+    // Try key validation without any APNs call
+    let keyType: string | null = null;
+    let keyError: string | null = null;
+    if (keyP8) {
+      try {
+        const pk = crypto.createPrivateKey({ key: normalizeP8Key(keyP8), format: "pem", type: "pkcs8" });
+        keyType = pk.asymmetricKeyType ?? "unknown";
+      } catch (e) {
+        keyError = e instanceof Error ? `${e.name}: ${e.message}` : String(e);
+      }
+    }
+
+    return NextResponse.json({ ok: true, envPresent, keyDiag: kd, keyType, keyError });
+  } catch (err) {
+    return NextResponse.json({
+      error: err instanceof Error ? `${err.name}: ${err.message}` : String(err),
+      stack: err instanceof Error ? err.stack : "",
+    }, { status: 500 });
+  }
+}
+
 export async function POST(req: NextRequest) {
   // Read env vars up front so they appear in diagnostics even if we crash early.
   const keyP8    = process.env.APNS_KEY_P8    ?? "";
