@@ -198,3 +198,9 @@ id = "qOvSHGPL7bea2Ih8u61pn"
 uri = "file://.local/lru-cache-report.md"
 type = "text"
 title = "LRU-Cache Report (Markdown)"
+
+[[outputs]]
+id = "PKtvE5LMVVRDPkbxzDJLo"
+uri = "file://.local/lru-cache-report.txt"
+type = "text"
+title = "LRU-Cache Report"

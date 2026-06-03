@@ -90,7 +90,7 @@ function sendAPNs(
   return new Promise((resolve, reject) => {
     const host = sandbox ? "api.sandbox.push.apple.com" : "api.push.apple.com";
     const payload = JSON.stringify({
-      aps: { alert: { title, body }, sound: soundName ?? "default", badge: 1 },
+      aps: { alert: { title, body }, sound: soundName ?? "default", badge: 1, "interruption-level": "time-sensitive" },
     });
     const client = http2.connect(`https://${host}`);
     client.on("error", (err) => { try { client.close(); } catch { /* ignore */ } reject(err); });

@@ -271,6 +271,8 @@ async function sendApnsPush(
     aps: {
       alert: { title, body },
       sound: "glev_low_alarm.wav",
+      badge: 1,
+      "interruption-level": "time-sensitive",
       "content-available": 1,
     },
   });
