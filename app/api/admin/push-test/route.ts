@@ -1,14 +1,24 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
+import { isAdminAuthed } from "@/lib/adminAuth";
 import http2 from "http2";
 import crypto from "crypto";
 
-const ADMIN_SECRET = process.env.ADMIN_API_SECRET;
-
 function normalizeP8Key(raw: string): string {
-  // Vercel stores multiline env vars with literal \n instead of real newlines.
-  // crypto.createSign throws SyntaxError if the PEM has no real line breaks.
-  return raw.replace(/\\n/g, "\n");
+  // Normalise all common escape / encoding variants that Vercel or copy-paste
+  // may introduce. Order matters: handle \\r\\n before \\n.
+  let key = raw.replace(/\\r\\n/g, "\n").replace(/\\r/g, "\n").replace(/\\n/g, "\n");
+
+  // If the key still has no real newlines (stored as one long line), reconstruct
+  // the PEM block with proper 64-char-wrapped base64.
+  if (!key.includes("\n")) {
+    const begin = "-----BEGIN PRIVATE KEY-----";
+    const end   = "-----END PRIVATE KEY-----";
+    const body  = key.replace(begin, "").replace(end, "").replace(/\s/g, "");
+    const wrapped = body.match(/.{1,64}/g)?.join("\n") ?? body;
+    key = `${begin}\n${wrapped}\n${end}\n`;
+  }
+  return key;
 }
 
 function generateAPNsJWT(keyP8: string, keyId: string, teamId: string): string {
@@ -98,9 +108,13 @@ async function sendFCM(
 }
 
 export async function POST(req: NextRequest) {
-  const auth = req.headers.get("authorization") ?? "";
-  const secret = auth.startsWith("Bearer ") ? auth.slice(7) : "";
-  if (!ADMIN_SECRET || secret !== ADMIN_SECRET) {
+  // Auth via server-side session cookie (httpOnly — JS cannot read it).
+  // Bearer-token fallback kept for direct API calls / CI scripts.
+  const sessionOk = await isAdminAuthed();
+  const bearerAuth = req.headers.get("authorization") ?? "";
+  const bearerSecret = bearerAuth.startsWith("Bearer ") ? bearerAuth.slice(7) : "";
+  const bearerOk = Boolean(process.env.ADMIN_API_SECRET) && bearerSecret === process.env.ADMIN_API_SECRET;
+  if (!sessionOk && !bearerOk) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

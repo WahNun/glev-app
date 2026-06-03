@@ -6,9 +6,15 @@ import http2 from "http2";
 import crypto from "crypto";
 
 function normalizeP8Key(raw: string): string {
-  // Vercel stores multiline env vars with literal \n instead of real newlines.
-  // crypto.createSign throws SyntaxError if the PEM has no real line breaks.
-  return raw.replace(/\\n/g, "\n");
+  let key = raw.replace(/\\r\\n/g, "\n").replace(/\\r/g, "\n").replace(/\\n/g, "\n");
+  if (!key.includes("\n")) {
+    const begin = "-----BEGIN PRIVATE KEY-----";
+    const end   = "-----END PRIVATE KEY-----";
+    const body  = key.replace(begin, "").replace(end, "").replace(/\s/g, "");
+    const wrapped = body.match(/.{1,64}/g)?.join("\n") ?? body;
+    key = `${begin}\n${wrapped}\n${end}\n`;
+  }
+  return key;
 }
 
 function generateAPNsJWT(keyP8: string, keyId: string, teamId: string): string {
