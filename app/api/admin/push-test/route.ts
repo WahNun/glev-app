@@ -3,7 +3,6 @@ export const maxDuration = 30;
 
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
-import http2 from "http2";
 import crypto from "crypto";
 
 // Read the admin session cookie directly from the request (avoids next/headers
@@ -66,7 +65,7 @@ function generateAPNsJWT(privKey: crypto.KeyObject, keyId: string, teamId: strin
   return `${signingInput}.${sig}`;
 }
 
-function sendAPNs(
+async function sendAPNs(
   token: string,
   jwt: string,
   bundleId: string,
@@ -74,47 +73,23 @@ function sendAPNs(
   body: string,
   sandbox: boolean,
 ): Promise<{ status: number; responseBody: string }> {
-  return new Promise((resolve, reject) => {
-    const host = sandbox ? "api.sandbox.push.apple.com" : "api.push.apple.com";
-    const client = http2.connect(`https://${host}`);
-    client.on("error", reject);
-
-    const payload = JSON.stringify({
-      aps: { alert: { title, body }, sound: "default", badge: 1 },
-    });
-
-    const req = client.request({
-      ":method": "POST",
-      ":path": `/3/device/${token}`,
+  const host = sandbox ? "api.sandbox.push.apple.com" : "api.push.apple.com";
+  const payload = JSON.stringify({
+    aps: { alert: { title, body }, sound: "default", badge: 1 },
+  });
+  const res = await fetch(`https://${host}/3/device/${token}`, {
+    method: "POST",
+    headers: {
       "authorization": `bearer ${jwt}`,
       "apns-topic": bundleId,
       "apns-push-type": "alert",
       "apns-priority": "10",
       "content-type": "application/json",
-      "content-length": Buffer.byteLength(payload).toString(),
-    });
-
-    req.write(payload);
-    req.end();
-
-    let status = 0;
-    let responseBody = "";
-
-    req.on("response", (headers) => {
-      status = headers[":status"] as number;
-    });
-    req.on("data", (chunk) => {
-      responseBody += chunk;
-    });
-    req.on("end", () => {
-      client.close();
-      resolve({ status, responseBody });
-    });
-    req.on("error", (err) => {
-      client.close();
-      reject(err);
-    });
+    },
+    body: payload,
   });
+  const responseBody = await res.text();
+  return { status: res.status, responseBody };
 }
 
 async function sendFCM(

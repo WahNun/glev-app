@@ -5,7 +5,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
-import http2 from "http2";
 import crypto from "crypto";
 
 function normalizeP8Key(raw: string): string {
@@ -59,36 +58,23 @@ function sendAPNs(
   bundleId: string,
   sandbox: boolean,
 ): Promise<{ status: number; body: string }> {
-  return new Promise((resolve, reject) => {
-    const host = sandbox ? "api.sandbox.push.apple.com" : "api.push.apple.com";
-    const client = http2.connect(`https://${host}`);
-    client.on("error", (err) => { try { client.close(); } catch { /* ignore */ } reject(err); });
-    client.on("close", () => { /* noop */ });
-
-    const payload = JSON.stringify({
-      aps: { alert: { title: "🔔 Glev Test-Push", body: "Push-Benachrichtigungen funktionieren!" }, sound: "default", badge: 1 },
-    });
-
-    const req = client.request({
-      ":method": "POST",
-      ":path": `/3/device/${token}`,
+  const host = sandbox ? "api.sandbox.push.apple.com" : "api.push.apple.com";
+  const payload = JSON.stringify({
+    aps: { alert: { title: "🔔 Glev Test-Push", body: "Push-Benachrichtigungen funktionieren!" }, sound: "default", badge: 1 },
+  });
+  const res = await fetch(`https://${host}/3/device/${token}`, {
+    method: "POST",
+    headers: {
       "authorization": `bearer ${jwt}`,
       "apns-topic": bundleId,
       "apns-push-type": "alert",
       "apns-priority": "10",
       "content-type": "application/json",
-      "content-length": Buffer.byteLength(payload).toString(),
-    });
-    req.write(payload);
-    req.end();
-
-    let status = 0;
-    let body = "";
-    req.on("response", (h) => { status = h[":status"] as number; });
-    req.on("data", (c) => { body += c; });
-    req.on("end", () => { try { client.close(); } catch { /* ignore */ } resolve({ status, body }); });
-    req.on("error", (e) => { try { client.close(); } catch { /* ignore */ } reject(e); });
+    },
+    body: payload,
   });
+  const body = await res.text();
+  return { status: res.status, body };
 }
 
 async function sendFCM(token: string, serverKey: string): Promise<{ status: number; body: string }> {
