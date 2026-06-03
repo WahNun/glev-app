@@ -106,6 +106,12 @@ function successHtml(): string {
     Falls dies versehentlich passiert ist, schreib uns:
     <a href="mailto:lucas@glev.app" style="color:#4f8ef0">lucas@glev.app</a>
   </p>
+  <hr style="border:none;border-top:1px solid #2a2a2a;margin:2rem auto;width:100%;max-width:360px">
+  <p style="color:#6b6b6b;max-width:360px;line-height:1.6;font-size:0.875rem">
+    <strong style="color:#888;display:block;margin-bottom:0.25rem">Deine Daten (DSGVO Art. 15 &amp; 17)</strong>
+    Du hast das Recht zu erfahren, welche personenbezogenen Daten Glev über dich speichert, und kannst deren Löschung verlangen. Schreib uns dafür einfach eine E-Mail:
+    <a href="mailto:lucas@glev.app?subject=Datenanfrage%20(DSGVO%20Art.%2015)" style="color:#4f8ef0;display:block;margin-top:0.5rem">lucas@glev.app</a>
+  </p>
 </main></body></html>`;
 }
 
