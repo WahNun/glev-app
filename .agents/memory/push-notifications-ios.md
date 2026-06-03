@@ -3,8 +3,10 @@ name: Push-Notifications iOS Debug
 description: APNs token flow, 502 root cause, server-side push implementation status
 ---
 
-## Echter Root Cause 502 (gefunden 2026-06-03)
-**Vercel Function crasht vor Output** → Cloudflare bekommt keine Response → 502-HTML-Page → `res.json()` → WebKit `SyntaxError: The string did not match the expected pattern`.
+## Echter Root Cause 502 (gefunden + gefixt 2026-06-03)
+**`export const runtime = "nodejs"` fehlte** in beiden Push-Routes. Ohne es laufen sie auf Vercel Edge Runtime — `http2` + `crypto.createSign` sind Node-only → Function crasht beim **Module-Init**, vor jedem Handler-Code, vor jedem Log. Vercel zeigt "No logs found for this request", Filter 0 Errors/Warnings. Fix: erste Zeile in Route = `export const runtime = "nodejs"`.
+
+Diagnose-Indiz: Vercel Observability → Functions → Route → "No logs found" bei jeder 502-Invocation = Module-Init-Crash, kein Handler-Body-Error.
 
 **Nicht** ein Client-Fetch-Problem. Der Crash passiert im Serverhandler (vermutlich JWT-Generierung via `crypto.createSign` mit einem schlecht formatierten P8-Key).
 
