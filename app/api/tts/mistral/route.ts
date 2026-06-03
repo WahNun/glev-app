@@ -90,7 +90,9 @@ export async function POST(req: NextRequest) {
     model: TTS_MODEL,
     input: styledInput,
     response_format: "mp3",
-    speed: speedFloat,
+    // speed is intentionally omitted: Mistral confirmed (2026-06-03, via 422 test) that
+    // voxtral-mini-tts-2603 rejects unknown fields ("Extra inputs are not permitted").
+    // Actual playback speed is handled client-side via HTMLAudioElement.playbackRate in useTTS.ts.
     ...(refAudio ? { ref_audio: refAudio } : { voice_id: voiceId }),
   };
 
