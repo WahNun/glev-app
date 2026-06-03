@@ -1,4 +1,5 @@
 import { isAdminAuthed } from "@/lib/adminAuth";
+import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
 import { NextRequest, NextResponse } from "next/server";
 
 export const runtime = "nodejs";
@@ -7,10 +8,42 @@ export async function POST(req: NextRequest) {
   const authed = await isAdminAuthed();
   if (!authed) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const { phone, message } = await req.json() as { phone?: string; message?: string };
+  const { phone, message, userId } = await req.json() as {
+    phone?: string;
+    message?: string;
+    userId?: string;
+  };
 
   if (!phone || !/^\+[1-9]\d{6,14}$/.test(phone.trim())) {
     return NextResponse.json({ error: "Ungültige Telefonnummer (Format: +4917612345678)" }, { status: 400 });
+  }
+
+  const sb = getSupabaseAdmin();
+
+  // Opt-out guard — resolve the user by userId (preferred) or by matching
+  // phone number in user_metadata so that opted-out users are never sent to.
+  let resolvedUserId: string | null = userId ?? null;
+
+  if (!resolvedUserId) {
+    // Try to find a user whose user_metadata.phone matches the given number
+    const { data: authData } = await sb.auth.admin.listUsers({ perPage: 1000 });
+    const matchedUser = (authData?.users ?? []).find(
+      (u) => (u.user_metadata?.phone as string | undefined) === phone.trim(),
+    );
+    if (matchedUser) resolvedUserId = matchedUser.id;
+  }
+
+  if (resolvedUserId) {
+    const { data: profileRow } = await sb
+      .from("profiles")
+      .select("sms_opted_out")
+      .eq("user_id", resolvedUserId)
+      .single();
+    if (profileRow?.sms_opted_out) {
+      // eslint-disable-next-line no-console
+      console.log("[sms] skipped: user opted out", resolvedUserId);
+      return NextResponse.json({ ok: false, skipped: true, reason: "opted_out" });
+    }
   }
 
   const sid   = process.env.TWILIO_ACCOUNT_SID;

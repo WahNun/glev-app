@@ -20,6 +20,7 @@ import {
 import type { EmailLocale } from "@/lib/emails/beta-welcome";
 import { shortenUrl } from "@/lib/shortLinks";
 import { getTemplate, renderSms } from "@/lib/messageTemplates";
+import { generateUnsubscribeToken } from "@/lib/sms/unsubscribeToken";
 
 const APP_URL = (process.env.NEXT_PUBLIC_APP_URL || "https://glev.app").replace(/\/$/, "");
 const FROM = "Glev <info@glev.app>";
@@ -40,6 +41,7 @@ async function sendTwilioSms(
   inviteUrl: string,
   ownerEmail: string | null,
   smsTemplate: string,
+  userId?: string,
 ): Promise<void> {
   const sid   = process.env.TWILIO_ACCOUNT_SID;
   const token = process.env.TWILIO_AUTH_TOKEN;
@@ -52,7 +54,8 @@ async function sendTwilioSms(
   }
 
   const shortUrl = await shortenUrl(inviteUrl, "sms", ownerEmail ?? undefined);
-  const body = renderSms(smsTemplate, { link: shortUrl });
+  const unsubToken = userId ? generateUnsubscribeToken(userId) : "";
+  const body = renderSms(smsTemplate, { link: shortUrl, token: unsubToken, user_id: userId ?? "" });
   const formData = new URLSearchParams({ From: from, To: phone, Body: body });
 
   fetch(`https://api.twilio.com/2010-04-01/Accounts/${sid}/Messages.json`, {
@@ -226,8 +229,19 @@ export async function provisionMetaLead(
 
     // SMS via Twilio (fire-and-forget, Fehler blockieren nicht den Webhook)
     if (phone) {
-      const smsTpl = await getTemplate("meta_lead_invite_sms");
-      void sendTwilioSms(phone, inviteUrl, email, smsTpl.sms_text ?? "");
+      // Opt-out guard — check profile before sending
+      const { data: profileRow } = await sb
+        .from("profiles")
+        .select("sms_opted_out")
+        .eq("user_id", userId)
+        .single();
+      if (profileRow?.sms_opted_out) {
+        // eslint-disable-next-line no-console
+        console.log("[sms] skipped: user opted out", email);
+      } else {
+        const smsTpl = await getTemplate("meta_lead_invite_sms");
+        void sendTwilioSms(phone, inviteUrl, email, smsTpl.sms_text ?? "", userId);
+      }
     }
   }
 

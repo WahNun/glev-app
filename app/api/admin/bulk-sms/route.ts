@@ -2,6 +2,7 @@ import { isAdminAuthed } from "@/lib/adminAuth";
 import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
 import { shortenUrl } from "@/lib/shortLinks";
 import { getTemplate, renderSms } from "@/lib/messageTemplates";
+import { generateUnsubscribeToken } from "@/lib/sms/unsubscribeToken";
 import { NextResponse, type NextRequest } from "next/server";
 
 export const runtime = "nodejs";
@@ -96,6 +97,15 @@ export async function POST(req: NextRequest) {
   const { data: authData } = await sb.auth.admin.listUsers({ perPage: 1000 });
   const authMap = new Map((authData?.users ?? []).map((u) => [u.id, u]));
 
+  // Opt-out guard — fetch sms_opted_out for all target users in one query
+  const { data: optOutRows } = await sb
+    .from("profiles")
+    .select("user_id, sms_opted_out")
+    .in("user_id", userIdsToProcess.length > 0 ? userIdsToProcess : ["00000000-0000-0000-0000-000000000000"]);
+  const optedOutSet = new Set(
+    (optOutRows ?? []).filter((r) => r.sms_opted_out === true).map((r) => r.user_id),
+  );
+
   const results: BulkSmsResult[] = [];
 
   for (const userId of userIdsToProcess) {
@@ -105,6 +115,13 @@ export async function POST(req: NextRequest) {
 
     if (!phone) {
       results.push({ userId, email, phone: null, status: "no_phone" });
+      continue;
+    }
+
+    if (optedOutSet.has(userId)) {
+      // eslint-disable-next-line no-console
+      console.log("[sms] skipped: user opted out", email);
+      results.push({ userId, email, phone, status: "no_phone", error: "opted_out" });
       continue;
     }
 
@@ -128,7 +145,8 @@ export async function POST(req: NextRequest) {
     }
 
     const shortUrl = await shortenUrl(inviteUrl, "sms_bulk", email);
-    const body = renderSms(tpl.sms_text ?? "", { link: shortUrl });
+    const token = generateUnsubscribeToken(userId);
+    const body = renderSms(tpl.sms_text ?? "", { link: shortUrl, token, user_id: userId });
 
     const smsResult = await sendSms(phone, body);
     results.push({

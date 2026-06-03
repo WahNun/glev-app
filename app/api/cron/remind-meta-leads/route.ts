@@ -16,6 +16,7 @@ import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
 import { isAdminAuthed } from "@/lib/adminAuth";
 import { shortenUrl } from "@/lib/shortLinks";
 import { getTemplate, renderSms } from "@/lib/messageTemplates";
+import { generateUnsubscribeToken } from "@/lib/sms/unsubscribeToken";
 import { Resend } from "resend";
 import {
   metaLeadReminderHtml,
@@ -121,12 +122,17 @@ export async function POST(req: NextRequest) {
 
   const { data: profiles } = await sb
     .from("profiles")
-    .select("user_id, trial_start_at")
+    .select("user_id, trial_start_at, sms_opted_out")
     .in("user_id", userIds.length > 0 ? userIds : ["00000000-0000-0000-0000-000000000000"]);
 
   const activatedIds = new Set(
     (profiles ?? [])
       .filter((p) => p.trial_start_at !== null)
+      .map((p) => p.user_id),
+  );
+  const optedOutIds = new Set(
+    (profiles ?? [])
+      .filter((p) => p.sms_opted_out === true)
       .map((p) => p.user_id),
   );
 
@@ -159,15 +165,38 @@ export async function POST(req: NextRequest) {
       continue;
     }
 
+    // Resolve userId: prefer the pre-fetched auth user; fall back to the user
+    // returned by generateLink (for invite-type calls, Supabase creates a new
+    // auth user and returns its ID in linkData.user.id).
+    const resolvedUserId: string | null = authUser?.id ?? linkData?.user?.id ?? null;
+
     let smsSent: ReminderResult["sms"] = "no_phone";
     let emailSent = false;
 
     // SMS — Text aus DB-Template
     if (phone) {
-      const smsShort = await shortenUrl(inviteUrl, "sms_reminder", email);
-      const smsBody = renderSms(smsTpl.sms_text ?? "", { name: firstName, link: smsShort });
-      const smsRes = await sendSms(phone, smsBody);
-      smsSent = smsRes.ok ? "sent" : "error";
+      if (!resolvedUserId) {
+        // Cannot generate a valid opt-out token without a userId — skip SMS
+        // to avoid sending a non-compliant message (UWG/TKG requirement).
+        // eslint-disable-next-line no-console
+        console.warn("[sms] skipped: no userId resolvable for", email);
+        smsSent = "skipped";
+      } else if (optedOutIds.has(resolvedUserId)) {
+        // eslint-disable-next-line no-console
+        console.log("[sms] skipped: user opted out", email);
+        smsSent = "skipped";
+      } else {
+        const smsShort = await shortenUrl(inviteUrl, "sms_reminder", email);
+        const unsubToken = generateUnsubscribeToken(resolvedUserId);
+        const smsBody = renderSms(smsTpl.sms_text ?? "", {
+          name: firstName,
+          link: smsShort,
+          token: unsubToken,
+          user_id: resolvedUserId,
+        });
+        const smsRes = await sendSms(phone, smsBody);
+        smsSent = smsRes.ok ? "sent" : "error";
+      }
     }
 
     // Email — Subject + Intro aus DB-Template

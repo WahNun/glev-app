@@ -11,12 +11,12 @@ export type MessageTemplate = {
 
 // Hardcoded fallbacks — used when the DB row doesn't exist or a field is null.
 // Must stay in sync with the SQL seed in 20260603_message_templates.sql.
-const DEFAULTS: Record<string, MessageTemplate> = {
+export const DEFAULTS: Record<string, MessageTemplate> = {
   meta_lead_invite_sms: {
     key: "meta_lead_invite_sms",
     label: "Meta Lead — Einladung (SMS)",
     sms_text:
-      "Willkommen bei Glev! Aktiviere deinen kostenlosen 7-Tage-Test: {{link}}\n\nAlternativ kannst du dich auch per E-Mail anmelden – bitte prüfe ggf. auch deinen Spam-Ordner auf eine E-Mail von info@glev.app.",
+      "Willkommen bei Glev! Aktiviere deinen kostenlosen 7-Tage-Test: {{link}}\n\nAlternativ kannst du dich auch per E-Mail anmelden – bitte prüfe ggf. auch deinen Spam-Ordner auf eine E-Mail von info@glev.app.\nAbmelden: https://glev.app/sms-stop?t={{token}}&u={{user_id}}",
     email_subject: null,
     email_intro: null,
     updated_at: null,
@@ -25,7 +25,7 @@ const DEFAULTS: Record<string, MessageTemplate> = {
     key: "meta_lead_bulk_sms",
     label: "Meta Lead — Bulk-SMS",
     sms_text:
-      "Willkommen bei Glev! Aktiviere deinen kostenlosen 7-Tage-Test: {{link}}\n\nAlternativ kannst du dich auch per E-Mail anmelden – bitte prüfe ggf. auch deinen Spam-Ordner auf eine E-Mail von info@glev.app.",
+      "Willkommen bei Glev! Aktiviere deinen kostenlosen 7-Tage-Test: {{link}}\n\nAlternativ kannst du dich auch per E-Mail anmelden – bitte prüfe ggf. auch deinen Spam-Ordner auf eine E-Mail von info@glev.app.\nAbmelden: https://glev.app/sms-stop?t={{token}}&u={{user_id}}",
     email_subject: null,
     email_intro: null,
     updated_at: null,
@@ -34,7 +34,7 @@ const DEFAULTS: Record<string, MessageTemplate> = {
     key: "meta_lead_reminder_sms",
     label: "Meta Lead — Reminder (SMS)",
     sms_text:
-      "Hast du Glev noch nicht ausprobiert? Als T1D-Nutzer:in hilft dir Glev dabei, deine Insulindosierung besser einzuschätzen. Dein kostenloser 7-Tage-Test: {{link}}\n\nFragen? Antworte einfach auf diese SMS.",
+      "Hast du Glev noch nicht ausprobiert? Als T1D-Nutzer:in hilft dir Glev dabei, deine Insulindosierung besser einzuschätzen. Dein kostenloser 7-Tage-Test: {{link}}\n\nFragen? Antworte einfach auf diese SMS.\nAbmelden: glev.app/sms-stop?t={{token}}&u={{user_id}} · Fragen: lucas@glev.app",
     email_subject: null,
     email_intro: null,
     updated_at: null,
@@ -121,14 +121,16 @@ export async function getTemplate(key: string): Promise<MessageTemplate> {
   return def;
 }
 
-/** Renders SMS text replacing {{name}} and {{link}} placeholders. */
+/** Renders SMS text replacing {{name}}, {{link}}, {{token}}, and {{user_id}} placeholders. */
 export function renderSms(
   template: string,
-  vars: { name?: string | null; link: string },
+  vars: { name?: string | null; link: string; token?: string; user_id?: string },
 ): string {
   return template
     .replace(/\{\{name\}\}/g, vars.name?.trim() ?? "")
     .replace(/\{\{link\}\}/g, vars.link)
+    .replace(/\{\{token\}\}/g, vars.token ?? "")
+    .replace(/\{\{user_id\}\}/g, vars.user_id ?? "")
     .trim();
 }
 
