@@ -48,6 +48,7 @@ const GROUPS: ReadonlyArray<NavGroup> = [
     items: [
       { href: "/glev-ops/trial-ui", label: "Trial-UI" },
       { href: "/glev-ops/journey", label: "Journey" },
+      { href: "/glev-ops/sound-assets", label: "Sounds" },
     ],
   },
   {
