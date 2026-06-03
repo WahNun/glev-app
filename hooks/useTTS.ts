@@ -136,8 +136,32 @@ export function extractAssistantText(text: string): string {
     "get_check_history",
     "gewohnheits- und musterfragen",
     "rufe das tool nur auf",
+    "rufe das tool nicht auf",
     "wähle stabile snake",
     "erwähne den speicher",
+    // WRITE-Tools section bullets
+    "bei log_meal_entry",
+    "bei datums-angaben",
+    "bei glukose-werten",
+    "add_timeline_check",
+    "niemals selbst eine bolus",
+    "makros per stimme",
+    "nach dem tool-call",
+    "du bittest in notfällen",
+    // Frequent tool-name-only line starts
+    "get_active_iob",
+    "log_bolus_entry",
+    "log_meal_entry",
+    "log_fingerstick",
+    "add_appointment",
+    "navigate_to",
+    "save_user_observation",
+    "get_glucose_status",
+    "get_meal_history",
+    "get_bolus_history",
+    "get_basal_status",
+    "get_appointments",
+    "edit_macro",
   ];
 
   // Build a set that also catches "- <prefix>" bullet variants.
@@ -155,6 +179,8 @@ export function extractAssistantText(text: string): string {
       if (/^#{1,6}\s/.test(l)) return false;
       // Drop context-preamble key-value bullets like "- Glukose: …"
       if (/^-\s+(glukose|iob|letzte mahlzeit|screen):/i.test(l)) return false;
+      // Drop lines that start with a tool function name (snake_case API calls)
+      if (/^-?\s*(get_|log_|add_|save_|navigate_|edit_)\w/i.test(l)) return false;
       const lower = l.toLowerCase();
       if (allPrefixes.some((p) => lower.startsWith(p))) return false;
       return true;
@@ -182,6 +208,9 @@ export function useTTS() {
   // without user gesture because Capacitor sets requiresUserActionForMediaPlayback=false)
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const audioBlobUrl = useRef<string | null>(null);
+  // Set to true inside stop() so audio.onerror doesn't trigger the Web Speech
+  // fallback when we intentionally interrupted playback (e.g. sheet closed).
+  const stoppedIntentionally = useRef(false);
 
   useEffect(() => {
     setEnabled(readPref(TTS_MUTE_KEY, true));
@@ -249,6 +278,7 @@ export function useTTS() {
   }
 
   const stop = useCallback(() => {
+    stoppedIntentionally.current = true;
     // Stop Mistral HTML audio if playing
     if (audioRef.current) {
       audioRef.current.pause();
@@ -305,6 +335,7 @@ export function useTTS() {
   const speak = useCallback(
     async (text: string, id?: string) => {
       if (!enabled || !text.trim()) return;
+      stoppedIntentionally.current = false;
       stop();
 
       // Apply persona-leak guard: strip any system-prompt fragments before TTS.
@@ -350,7 +381,11 @@ export function useTTS() {
             setSpeakingId(null);
             audioRef.current = null;
             revokeBlob();
-            speakWebSpeech(clean, id);
+            // Only fall back to Web Speech when playback failed on its own —
+            // NOT when stop() intentionally interrupted it (e.g. sheet closed).
+            if (!stoppedIntentionally.current) {
+              speakWebSpeech(clean, id);
+            }
           };
 
           setSpeaking(true);

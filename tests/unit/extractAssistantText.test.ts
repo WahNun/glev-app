@@ -35,7 +35,8 @@ test("extractAssistantText: strips lines starting with 'Deine Aufgabe' (case-ins
 
 test("extractAssistantText: strips lines starting with 'Tools (' (tool-section header)", () => {
   const input = "Tools (Read):\n- get_meals\nHier steht die Antwort.";
-  expect(extractAssistantText(input)).toBe("- get_meals Hier steht die Antwort.");
+  // "- get_meals" is also stripped by the tool-function-name regex
+  expect(extractAssistantText(input)).toBe("Hier steht die Antwort.");
 });
 
 test("extractAssistantText: strips lines starting with 'write-tools'", () => {
@@ -45,7 +46,8 @@ test("extractAssistantText: strips lines starting with 'write-tools'", () => {
 
 test("extractAssistantText: strips lines starting with 'read-tools'", () => {
   const input = "read-tools:\n- get_meals\nDeine Mahlzeiten wurden geladen.";
-  expect(extractAssistantText(input)).toBe("- get_meals Deine Mahlzeiten wurden geladen.");
+  // "- get_meals" is also stripped by the tool-function-name regex
+  expect(extractAssistantText(input)).toBe("Deine Mahlzeiten wurden geladen.");
 });
 
 test("extractAssistantText: strips lines starting with 'user-memory'", () => {
