@@ -156,9 +156,12 @@ export default function SettingsPage() {
       </div>
 
       <NavSection>
+        {row(ACCENT,
+          <svg {...ip}><circle cx="12" cy="8" r="4" /><path d="M4 21c0-4 4-7 8-7s8 3 8 7" /></svg>,
+          "Konto", "/settings/konto", true)}
         {row(PURPLE,
           <svg {...ip}><circle cx="12" cy="12" r="3" /><path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83" /></svg>,
-          "App & Konto", "/settings/app-konto", true)}
+          "App-Einstellungen", "/settings/app")}
       </NavSection>
 
       <NavSection>

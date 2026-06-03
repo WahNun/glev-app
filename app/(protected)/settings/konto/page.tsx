@@ -12,7 +12,6 @@ import {
   fetchUserProfile, saveUserProfile,
   EMPTY_USER_PROFILE, type UserProfile, type Sex,
 } from "@/lib/userProfile";
-import { useFeatureFlag } from "@/lib/featureFlags";
 import { usePlan } from "@/hooks/usePlan";
 import AccountSheet from "@/components/AccountSheet";
 import BottomSheet from "@/components/BottomSheet";
@@ -28,8 +27,6 @@ export default function KontoSettingsPage() {
   const router = useRouter();
   const uiLocale = useLocale();
   const bcp47 = localeToBcp47(uiLocale);
-  const aiVoiceEnabled = useFeatureFlag("ai_voice");
-
   const [accountEmail, setAccountEmail] = useState("");
   const [plan, setPlan] = useState<EffectivePlan>("free");
   const [userProfile, setUserProfile] = useState<UserProfile>(EMPTY_USER_PROFILE);
@@ -202,16 +199,6 @@ export default function KontoSettingsPage() {
           ariaLabel={t("row_open_aria", { label: t("about_me_row_label") })}
           onClick={openAboutMeSheet}
         />
-        {aiVoiceEnabled && (
-          <SettingsRow
-            iconColor={ACCENT}
-            icon={<svg {...iconProps}><path d="M12 3l2 5 5 2-5 2-2 5-2-5-5-2 5-2z" /></svg>}
-            label={t("section_glev_ai")}
-            subtitle={t("ai_settings_row_subtitle")}
-            ariaLabel={t("section_glev_ai")}
-            onClick={() => router.push("/settings/ai")}
-          />
-        )}
         {plan === "plus" && (
           <SettingsRow
             iconColor={PURPLE}
