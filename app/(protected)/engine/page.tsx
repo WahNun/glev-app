@@ -32,6 +32,7 @@ import { useEngineSourceHeader } from "@/lib/engineSourceHeaderContext";
 import { useVoiceRecording } from "@/lib/voiceRecordingContext";
 import { useFeatureFlag } from "@/lib/featureFlags";
 import { fetchLatestCgm } from "@/components/CgmFetchButton";
+import { findCgmReadingNearTime } from "@/lib/postMealCgmAutoFill";
 import { classifyPreReferenceTrend, type TrendClass, type TrendSample } from "@/lib/engine/trend";
 import { fetchLatestFingerstick, FS_OVERRIDE_WINDOW_MS } from "@/lib/fingerstick";
 import { parseDbTs, parseDbDate, parseLluTs } from "@/lib/time";
@@ -908,12 +909,28 @@ export default function EnginePage() {
     let cancelled = false;
     (async () => {
       try {
-        const r = await fetch("/api/cgm/glucose", { cache: "no-store" });
-        if (!r.ok) return;
-        const j = (await r.json()) as { connected?: boolean; glucose?: number | null };
+        // Step 1: prefer a recent fingerstick (same priority order as handlePullCgm).
+        const fs = await fetchLatestFingerstick().catch(() => null);
+        if (!cancelled && fs) {
+          const measuredMs = new Date(fs.measured_at).getTime();
+          if (Number.isFinite(measuredMs) && (Date.now() - measuredMs) <= FS_OVERRIDE_WINDOW_MS) {
+            const reading = Math.round(Number(fs.value_mg_dl));
+            setGlucose(prev => prev === "" ? String(reading) : prev);
+            if (glucoseProvenanceRef.current === null) {
+              glucoseProvenanceRef.current = "live";
+              setGlucoseProvenance("live");
+            }
+            return;
+          }
+        }
         if (cancelled) return;
-        if (j.connected && typeof j.glucose === "number" && j.glucose > 0) {
-          setGlucose(prev => prev === "" ? String(j.glucose) : prev);
+        // Step 2: fall back to CGM via fetchLatestCgm (routes all sources:
+        // LLU, Nightscout, Apple Health). The old /api/cgm/glucose path was
+        // Junction-only and silently missed LLU users — this fixes that gap.
+        const r = await fetchLatestCgm();
+        if (cancelled) return;
+        if (r.ok) {
+          setGlucose(prev => prev === "" ? String(Math.round(r.value)) : prev);
           if (glucoseProvenanceRef.current === null) {
             glucoseProvenanceRef.current = "live";
             setGlucoseProvenance("live");
@@ -980,24 +997,32 @@ export default function EnginePage() {
   }, [trendSamples, mealTime]);
 
   // Historical glucose auto-fill: when the user changes mealTime to a past
-  // time (more than 5 min ago), look up the closest CGM sample in trendSamples
-  // and auto-populate the glucose field — so logging a past meal starts with
-  // the actual historical BZ value, not whatever the current CGM shows.
+  // time (more than 5 min ago), look up the closest CGM sample and auto-
+  // populate the glucose field — so logging a past meal starts with the
+  // actual historical BZ value, not whatever the current CGM shows.
   //
   // Rules:
-  //  - Only fills when glucose is currently empty (never overwrites user input).
+  //  - Never overwrites a value the user typed themselves (provenance="manual").
   //  - Past = mealTime is > 5 min before now (avoids jitter on "now" changes).
-  //  - Closest sample within ±15 min of the target time wins.
-  //  - Falls back silently if no sample is close enough.
+  //  - Fast path: searches cached trendSamples within ±15 min (synchronous).
+  //  - Fallback path: calls findCgmReadingNearTime (±60 min, async) when the
+  //    fast path finds nothing — this handles meal times shifted more than
+  //    15 min into the past which the cached trend window can't cover.
   useEffect(() => {
     if (!mealTime) return;
     const mealMs = Date.parse(mealTime);
     if (!Number.isFinite(mealMs)) return;
     const nowMs = Date.now();
     const PAST_THRESHOLD_MS = 5 * 60_000;       // 5 min
-    const MAX_SAMPLE_DELTA_MS = 15 * 60_000;    // ±15 min tolerance
+    const MAX_SAMPLE_DELTA_MS = 15 * 60_000;    // ±15 min tolerance for fast path
 
     if (nowMs - mealMs < PAST_THRESHOLD_MS) return; // "now" or future — skip
+
+    // Allow overwriting live/auto-filled values, but never overwrite what the
+    // user typed themselves. Use the ref so we read the current value without
+    // adding glucoseProvenance to the dependency array (that would re-trigger
+    // this effect each time provenance changes, causing a harmless but noisy loop).
+    if (glucoseProvenanceRef.current === "manual") return;
 
     // If we have no trend samples yet, trigger a fresh fetch and wait for it.
     // The effect will re-run automatically once trendSamples is populated
@@ -1009,7 +1034,8 @@ export default function EnginePage() {
       return;
     }
 
-    // Find the sample closest to mealMs within ±15 min.
+    // Fast path: find the sample closest to mealMs within ±15 min from the
+    // already-cached trend samples (no additional network call).
     let best: { value: number; delta: number } | null = null;
     for (const s of trendSamples) {
       if (!s.timestamp || s.value == null) continue;
@@ -1019,17 +1045,35 @@ export default function EnginePage() {
         if (!best || delta < best.delta) best = { value: s.value as number, delta };
       }
     }
-    if (!best) return; // nothing close enough
 
-    // Allow overwriting live/auto-filled values, but never overwrite what the
-    // user typed themselves. Use the ref so we read the current value without
-    // adding glucoseProvenance to the dependency array (that would re-trigger
-    // this effect each time provenance changes, causing a harmless but noisy loop).
-    if (glucoseProvenanceRef.current === "manual") return;
+    if (best) {
+      setGlucose(String(best.value));
+      glucoseProvenanceRef.current = "historical";
+      setGlucoseProvenance("historical");
+      return;
+    }
 
-    setGlucose(String(best.value));
-    glucoseProvenanceRef.current = "historical";
-    setGlucoseProvenance("historical");
+    // Fallback path: nothing found within ±15 min in the local cache.
+    // findCgmReadingNearTime uses the same /api/cgm/history endpoint but
+    // with a ±60 min window (MATCH_WINDOW_MIN = 60) and a 30 s in-memory
+    // cache, so rapid mealTime tweaks don't hammer the network. This covers
+    // meal times shifted well into the past (e.g. "30 min ago", "1h ago")
+    // that the ±15 min trendSamples window cannot reach.
+    let cancelled = false;
+    void (async () => {
+      try {
+        const match = await findCgmReadingNearTime(mealMs);
+        if (cancelled) return;
+        if (!match) return;
+        if (glucoseProvenanceRef.current === "manual") return;
+        setGlucose(String(match.value));
+        glucoseProvenanceRef.current = "historical";
+        setGlucoseProvenance("historical");
+      } catch {
+        // Silent — never block manual entry
+      }
+    })();
+    return () => { cancelled = true; };
   }, [mealTime, trendSamples]);
 
   // Hydrate the dismissed-suggestion cooldown map from localStorage. Each
@@ -3212,19 +3256,23 @@ export default function EnginePage() {
                         <button
                           onClick={handlePullCgm}
                           disabled={cgmPulling}
-                          title={lastReading ? `${tEngine("glucose_last_prefix")}: ${lastReading}` : undefined}
+                          title={lastReading ? `${tEngine("glucose_last_prefix")}: ${lastReading}` : tEngine("cgm_button")}
                           aria-label={tEngine("cgm_button")}
                           style={{
                             display: "inline-flex", alignItems: "center", gap: 4,
-                            padding: "3px 6px", borderRadius: 6,
-                            border: "none", background: "transparent",
+                            padding: "3px 8px", borderRadius: 6,
+                            border: `1px solid ${glucose ? "transparent" : `${ACCENT}44`}`,
+                            background: glucose ? "transparent" : `${ACCENT}10`,
                             color: ACCENT, fontSize: 11, fontWeight: 600, letterSpacing: "0.02em",
                             cursor: cgmPulling ? "wait" : "pointer",
                             textTransform: "uppercase",
+                            animation: !glucose && !cgmPulling ? "cgm-btn-pulse 2s ease-in-out infinite" : "none",
+                            transition: "background 200ms, border-color 200ms",
                           }}
                         >
-                          <span style={{ width: 5, height: 5, borderRadius: "50%", background: GREEN, boxShadow: `0 0 4px ${GREEN}` }}/>
+                          <span style={{ width: 5, height: 5, borderRadius: "50%", background: GREEN, boxShadow: `0 0 4px ${GREEN}`, flexShrink: 0 }}/>
                           {cgmPulling ? tEngine("cgm_pulling") : tEngine("cgm_button")}
+                          <style>{`@keyframes cgm-btn-pulse{0%,100%{box-shadow:0 0 0 0 ${ACCENT}33}50%{box-shadow:0 0 0 4px ${ACCENT}00}}`}</style>
                         </button>
                       </div>
                       {/* Row 2: unit + provenance chip */}
