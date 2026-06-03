@@ -1,3 +1,4 @@
 - [Push-Notifications iOS Debug](push-notifications-ios.md) — register() fired, permission granted, aber kein Token — Ursache & nächste Schritte dokumentiert
 - [Admin Panel Paths](admin-paths.md) — /admin/* existiert nicht mehr, alles unter /glev-ops/* — falsche Pfade brechen Navigation und revalidatePath
 - [BzCheckModal Playwright Dismiss](bzcheck-modal-playwright.md) — CSS-transform bottom-sheet: focus off-screen input + Escape to close; never use click() or evaluate(btn.click())
+- [Supabase Prod Queries](supabase-prod-queries.md) — Credentials sind in Replit Secrets, Abfragen via bash mit $SUPABASE_URL + $SUPABASE_SERVICE_ROLE_KEY
