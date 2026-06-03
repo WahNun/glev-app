@@ -52,7 +52,7 @@ function generateAPNsJWT(privKey: crypto.KeyObject, keyId: string, teamId: strin
   return `${signingInput}.${sig}`;
 }
 
-function sendAPNs(
+async function sendAPNs(
   token: string,
   jwt: string,
   bundleId: string,
