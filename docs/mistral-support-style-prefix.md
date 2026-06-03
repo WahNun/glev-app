@@ -55,3 +55,20 @@ Any guidance appreciated — happy to share more context or test specific API sh
 
 Thanks,
 Lucas / Glev Team
+
+---
+
+## Mistral Support Response (2026-06-03)
+
+> Your observation is correct: voxtral-mini-tts-2603 treats all input as speech content, not instructions.
+> There is no dedicated field like `speaking_style` or `system_prompt` for TTS control.
+> Any prepended text will be synthesized verbatim.
+>
+> For style control, Voxtral uses **"voice-as-an-instruction"**:
+> Provide a `ref_audio` sample to convey tone (warm, calm, conversational).
+> The model follows its intonation, rhythm, and emotion directly.
+>
+> Delimiters or tags (e.g. `<style>`) are not supported and will still be read aloud.
+> This behavior is expected for current versions; style is driven by voice selection and audio prompting, not text instructions.
+
+**Takeaway:** Style = `ref_audio` only. No text-based style control exists in the current API. Our fix (removing the prefix, relying on voice clone) is the correct and intended approach.
