@@ -63,11 +63,13 @@ async function loadPlugin(): Promise<PushModule | null> {
 }
 
 const TOKEN_STORAGE_KEY = "glev_push_token";
+const PLATFORM_STORAGE_KEY = "glev_push_platform";
 
 function persistToken(token: string, platform: "ios" | "android"): void {
   try {
     if (isBrowser()) {
       window.localStorage.setItem(TOKEN_STORAGE_KEY, token);
+      window.localStorage.setItem(PLATFORM_STORAGE_KEY, platform);
       window.dispatchEvent(
         new CustomEvent("glev:push-token", { detail: { token } }),
       );
@@ -80,6 +82,24 @@ function persistToken(token: string, platform: "ios" | "android"): void {
   // background pushes even when the app is closed. Fire-and-forget —
   // a failed write is non-fatal; the next registration event will retry.
   void saveTokenToServer(token, platform);
+}
+
+/**
+ * Re-syncs a push token that was cached in localStorage before the user
+ * was logged in. Call this immediately after a successful signIn() so
+ * the token reaches Supabase even if the initial save attempt failed
+ * with 401 (session not yet established at registration time).
+ */
+export async function syncCachedPushToken(): Promise<void> {
+  if (!isBrowser()) return;
+  try {
+    const token = window.localStorage.getItem(TOKEN_STORAGE_KEY);
+    const platform = window.localStorage.getItem(PLATFORM_STORAGE_KEY) as "ios" | "android" | null;
+    if (!token || !platform) return;
+    await saveTokenToServer(token, platform);
+  } catch {
+    /* non-fatal */
+  }
 }
 
 /**

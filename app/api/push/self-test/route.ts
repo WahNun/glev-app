@@ -77,7 +77,7 @@ export async function POST(req: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Nicht eingeloggt" }, { status: 401 });
 
-  const { sandbox = true } = await req.json() as { sandbox?: boolean };
+  const { sandbox = false } = await req.json() as { sandbox?: boolean };
 
   const admin = getSupabaseAdmin();
   const { data: profile } = await admin
