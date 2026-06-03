@@ -58,9 +58,8 @@ async function loadModule(): Promise<LocalNotificationsModule | null> {
   return modCache;
 }
 
-export function soundForCheckType(checkType: MealCheckType | string): string {
-  if (checkType === "pre") return "glev_pre_check.wav";
-  return "glev_post_check.wav";
+export function soundForCheckType(_checkType: MealCheckType | string): undefined {
+  return undefined;
 }
 
 /**
