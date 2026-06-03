@@ -186,3 +186,9 @@ id = "epCaNEU7BzJW0yitaSM9t"
 uri = "file://docs/mistral-support-style-prefix.md"
 type = "text"
 title = "Mistral Support — Style Prefix Issue"
+
+[[outputs]]
+id = "AByMUBS3oEuJadh7KIESO"
+uri = "file://docs/handover-push-debug.md"
+type = "text"
+title = "Handover: APNs Push SyntaxError"
