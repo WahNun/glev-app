@@ -441,18 +441,20 @@ function evalBadge(style: React.CSSProperties, text: string) {
   );
 }
 
-// Enabled queue-note action button style (disabled handled via the attribute).
-function qBtn(danger: boolean): React.CSSProperties {
+// Queue-note action button style. Dims clearly when disabled so completed
+// actions read as done ("Already …") instead of looking clickable.
+function qBtn(danger: boolean, disabled?: boolean): React.CSSProperties {
   return {
     padding: "4px 10px",
-    background: "#fff",
-    color: danger ? "#991b1b" : "#374151",
-    border: `1px solid ${danger ? "#fca5a5" : "#d1d5db"}`,
+    background: disabled ? "#f9fafb" : "#fff",
+    color: disabled ? "#9ca3af" : danger ? "#991b1b" : "#374151",
+    border: `1px solid ${disabled ? "#e5e7eb" : danger ? "#fca5a5" : "#d1d5db"}`,
     borderRadius: 5,
     fontSize: 12,
     fontWeight: 500,
     fontFamily: "system-ui, -apple-system, sans-serif",
-    cursor: "pointer",
+    cursor: disabled ? "not-allowed" : "pointer",
+    opacity: disabled ? 0.7 : 1,
   };
 }
 
@@ -851,14 +853,26 @@ export default function DevCockpit({ initialTasks }: { initialTasks: DevTask[] }
     noteId: string,
     fn: (id: string) => Promise<{ ok: boolean; error?: string; data?: DevQueueNote }>,
     successMsg: string,
+    optimistic?: Partial<DevQueueNote>,
   ) {
     if (noteBusyIds.has(noteId)) return;
     setNoteBusyIds((prev) => new Set(prev).add(noteId));
+    // Optimistic: patch the visible note immediately so the badge + buttons react
+    // instantly, without waiting for the server round-trip.
+    if (optimistic) {
+      setQueue((prev) => prev.map((q) => (q.id === noteId ? { ...q, ...optimistic } : q)));
+    }
     run(async () => {
       try {
         const res = await fn(noteId);
         if (!res.ok) {
           setError(errText(res.error ?? "unknown"));
+          // Reconcile the optimistic change with the real DB state.
+          const taskId = activeTaskIdRef.current;
+          if (taskId) {
+            const q = await listQueueNotes(taskId);
+            if (q.ok && activeTaskIdRef.current === taskId) setQueue(q.data);
+          }
           return;
         }
         if (res.data) applyNoteUpdate(res.data);
@@ -884,13 +898,18 @@ export default function DevCockpit({ initialTasks }: { initialTasks: DevTask[] }
   }
 
   function handleApplyCurrent(noteId: string) {
-    runNoteAction(noteId, applyQueueNoteToCurrentBuild, "In aktuellen Build übernommen.");
+    runNoteAction(noteId, applyQueueNoteToCurrentBuild, "In aktuellen Build übernommen.", {
+      status: "applied",
+      approved_for_current_build: true,
+    });
   }
   function handleApplyAfter(noteId: string) {
-    runNoteAction(noteId, applyQueueNoteAfterBuild, "Für späteren Build vorgemerkt.");
+    runNoteAction(noteId, applyQueueNoteAfterBuild, "Für späteren Build vorgemerkt.", {
+      status: "after_build_pending",
+    });
   }
   function handleDiscardQueue(noteId: string) {
-    runNoteAction(noteId, discardQueueNote, "Queue-Notiz verworfen.");
+    runNoteAction(noteId, discardQueueNote, "Queue-Notiz verworfen.", { status: "discarded" });
   }
 
   // Create New Task from a queue note → note becomes converted_to_task, a new
@@ -898,6 +917,8 @@ export default function DevCockpit({ initialTasks }: { initialTasks: DevTask[] }
   function handleConvertNote(noteId: string) {
     if (noteBusyIds.has(noteId)) return;
     setNoteBusyIds((prev) => new Set(prev).add(noteId));
+    // Optimistic: mark converted immediately.
+    setQueue((prev) => prev.map((q) => (q.id === noteId ? { ...q, status: "converted_to_task" } : q)));
     run(async () => {
       try {
         const res = await convertQueueNoteToTask(noteId);
@@ -1480,6 +1501,15 @@ export default function DevCockpit({ initialTasks }: { initialTasks: DevTask[] }
                   const risks = Array.isArray(item.risks)
                     ? (item.risks as unknown[]).map(String)
                     : [];
+                  // Per-note applied-state flags → robust button disabling.
+                  const isAfterBuild = item.status === "after_build_pending";
+                  const isCurrentBuild = item.status === "applied" && item.approved_for_current_build === true;
+                  const isConverted = item.status === "converted_to_task";
+                  const isDiscarded = item.status === "discarded";
+                  // discarded → no Apply/Create at all; terminal states block their own button.
+                  const disCurrent = busy || isDiscarded || isConverted || isCurrentBuild;
+                  const disAfter = busy || isDiscarded || isConverted || isAfterBuild;
+                  const disConvert = busy || isDiscarded || isConverted;
                   return (
                     <div key={item.id} style={queueItemStyle}>
                       <p style={{ margin: "0 0 8px", fontSize: 14, color: "#111", lineHeight: 1.4, whiteSpace: "pre-wrap" }}>
@@ -1536,32 +1566,32 @@ export default function DevCockpit({ initialTasks }: { initialTasks: DevTask[] }
                           {evaluating ? "Bewerte…" : item.status === "queued" ? "Evaluate Queue" : "Re-Evaluate"}
                         </button>
                         <button
-                          style={qBtn(false)}
+                          style={qBtn(false, disCurrent)}
                           onClick={() => handleApplyCurrent(item.id)}
-                          disabled={busy}
+                          disabled={disCurrent}
                         >
-                          Apply To Current Build
+                          {isCurrentBuild ? "Already Current Build" : "Apply To Current Build"}
                         </button>
                         <button
-                          style={qBtn(false)}
+                          style={qBtn(false, disAfter)}
                           onClick={() => handleApplyAfter(item.id)}
-                          disabled={busy}
+                          disabled={disAfter}
                         >
-                          Apply After Build
+                          {isAfterBuild ? "Already After Build" : "Apply After Build"}
                         </button>
                         <button
-                          style={qBtn(false)}
+                          style={qBtn(false, disConvert)}
                           onClick={() => handleConvertNote(item.id)}
-                          disabled={busy}
+                          disabled={disConvert}
                         >
-                          Create New Task
+                          {isConverted ? "Already Converted" : "Create New Task"}
                         </button>
                         <button
-                          style={qBtn(true)}
+                          style={qBtn(true, busy || isDiscarded)}
                           onClick={() => handleDiscardQueue(item.id)}
-                          disabled={busy}
+                          disabled={busy || isDiscarded}
                         >
-                          Discard
+                          {isDiscarded ? "Discarded" : "Discard"}
                         </button>
                       </div>
                     </div>
