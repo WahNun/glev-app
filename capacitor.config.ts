@@ -24,6 +24,7 @@ const config: CapacitorConfig = {
     url: "https://glev.app/dashboard",
     cleartext: false,
     androidScheme: "https",
+    allowNavigation: ["glev.app"],
   },
   plugins: {
     // Glev ist Portrait-only — Querformat ist auf Pen-T1D-Logs nicht
