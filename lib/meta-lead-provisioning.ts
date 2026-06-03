@@ -176,6 +176,28 @@ export async function provisionMetaLead(
     { onConflict: "user_id" },
   );
 
+  // Auch in meta_leads eintragen, damit die Reminder-Route (remind-meta-leads)
+  // diesen Lead findet und reminder_sent_at setzen kann.
+  // meta_leads.leadgen_id ist NOT NULL mit Unique-Constraint, email hat nur einen
+  // Index (kein Unique-Constraint). Daher: erst prüfen, ob ein Eintrag mit dieser
+  // E-Mail existiert; nur wenn nicht, neu anlegen (mit synthetischer leadgen_id).
+  const { data: existingMetaLead } = await sb
+    .from("meta_leads")
+    .select("id")
+    .eq("email", email)
+    .limit(1)
+    .maybeSingle();
+
+  if (!existingMetaLead) {
+    await sb.from("meta_leads").insert({
+      leadgen_id: `admin-${userId}`,
+      email,
+      full_name: name ?? null,
+      phone: phone ?? null,
+      received_at: new Date().toISOString(),
+    });
+  }
+
   // Gebrandete Email via Resend — nur wenn ein Link vorhanden ist
   if (inviteUrl) {
     const resendKey = process.env.RESEND_API_KEY;

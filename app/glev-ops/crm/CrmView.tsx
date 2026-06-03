@@ -9,6 +9,32 @@ import BulkSmsButton from "../buyers/BulkSmsButton";
 import ReminderButton from "../buyers/ReminderButton";
 import { softDeleteAction } from "../users/actions";
 
+function exportCsv(
+  rows: Record<string, string | number | boolean | null | undefined>[],
+  columns: { key: string; header: string }[],
+  filename: string,
+): void {
+  const BOM = "\uFEFF";
+  const escape = (v: string | number | boolean | null | undefined): string => {
+    const s = v == null ? "" : String(v);
+    if (s.includes('"') || s.includes(",") || s.includes("\n")) {
+      return `"${s.replace(/"/g, '""')}"`;
+    }
+    return s;
+  };
+  const header = columns.map((c) => escape(c.header)).join(",");
+  const body = rows
+    .map((row) => columns.map((c) => escape(row[c.key])).join(","))
+    .join("\n");
+  const blob = new Blob([BOM + header + "\n" + body], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 export type CrmUserRow = {
   id: string;
   email: string;
@@ -293,9 +319,57 @@ function AlleTab({ users, pageSize }: { users: CrmUserRow[]; pageSize: number })
           <option value="__none__">— ohne —</option>
         </select>
       </div>
-      <p style={{ fontSize: 13, color: "#555", margin: "0 0 8px" }}>
-        {filtered.length} von {users.length} angezeigt{users.length >= pageSize ? ` · Limit ${pageSize}` : ""}
-      </p>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+        <p style={{ fontSize: 13, color: "#555", margin: 0 }}>
+          {filtered.length} von {users.length} angezeigt{users.length >= pageSize ? ` · Limit ${pageSize}` : ""}
+        </p>
+        <button
+          type="button"
+          style={csvBtn}
+          onClick={() => {
+            const today = new Date().toISOString().slice(0, 10);
+            exportCsv(
+              filtered.map((r) => ({
+                email: r.email,
+                name: r.display_name ?? "",
+                plan: r.plan,
+                status: [
+                  r.deleted_at ? "Gelöscht" : null,
+                  r.banned_until ? "Gebannt" : null,
+                  r.manual_plan_override ? "Manuell" : null,
+                  r.created_by_admin ? "Admin-angelegt" : null,
+                  r.role === "admin" ? "Admin-Rolle" : null,
+                  !r.email_confirmed_at ? "Unbestätigt" : null,
+                  isTrialActive(r) ? "Trial aktiv" : null,
+                  r.signup_source === "meta_lead" ? "Meta Lead" : null,
+                  isBetaBuyer(r) ? "Beta" : null,
+                ].filter(Boolean).join("; "),
+                cgm: cgmLabel(r.cgm),
+                language: r.language ?? "",
+                currency: r.currency ?? "",
+                country: r.country ?? "",
+                last_sign_in_at: r.last_sign_in_at ?? "",
+                created_at: r.created_at,
+              })),
+              [
+                { key: "email", header: "E-Mail" },
+                { key: "name", header: "Name" },
+                { key: "plan", header: "Plan" },
+                { key: "status", header: "Status" },
+                { key: "cgm", header: "CGM" },
+                { key: "language", header: "Sprache" },
+                { key: "currency", header: "Currency" },
+                { key: "country", header: "Land" },
+                { key: "last_sign_in_at", header: "Letzter Login" },
+                { key: "created_at", header: "Angelegt" },
+              ],
+              `crm-alle-${today}.csv`,
+            );
+          }}
+        >
+          ↓ CSV exportieren
+        </button>
+      </div>
       <div style={tableWrap}>
         <table style={tableBase}>
           <thead>
@@ -496,21 +570,70 @@ function TrialTab({ users }: { users: CrmUserRow[] }) {
         placeholder="Suche: E-Mail, Name, Telefon…"
         style={{ ...inputBase, minWidth: 260, marginBottom: 12, display: "block" }}
       />
-      <p style={{ fontSize: 13, color: "#555", margin: "0 0 8px" }}>
-        {filtered.length} Einträge
-        {selectionCount > 0 && (
-          <span style={{ marginLeft: 10, background: "#eff6ff", color: "#1d4ed8", borderRadius: 4, padding: "2px 8px", fontSize: 12, fontWeight: 600 }}>
-            {selectionCount} ausgewählt
-            <button
-              type="button"
-              onClick={() => setSelection(new Set())}
-              style={{ marginLeft: 6, background: "none", border: "none", cursor: "pointer", color: "#6b7280", fontSize: 11, padding: 0 }}
-            >
-              ✕
-            </button>
-          </span>
-        )}
-      </p>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+        <p style={{ fontSize: 13, color: "#555", margin: 0 }}>
+          {filtered.length} Einträge
+          {selectionCount > 0 && (
+            <span style={{ marginLeft: 10, background: "#eff6ff", color: "#1d4ed8", borderRadius: 4, padding: "2px 8px", fontSize: 12, fontWeight: 600 }}>
+              {selectionCount} ausgewählt
+              <button
+                type="button"
+                onClick={() => setSelection(new Set())}
+                style={{ marginLeft: 6, background: "none", border: "none", cursor: "pointer", color: "#6b7280", fontSize: 11, padding: 0 }}
+              >
+                ✕
+              </button>
+            </span>
+          )}
+        </p>
+        <button
+          type="button"
+          style={csvBtn}
+          onClick={() => {
+            const today = new Date().toISOString().slice(0, 10);
+            exportCsv(
+              filtered.map((u) => {
+                const end = u.profile_trial_end_at ? new Date(u.profile_trial_end_at) : null;
+                const started = u.profile_trial_start_at ? new Date(u.profile_trial_start_at) : null;
+                const expired = end ? end < now : false;
+                const daysLeft = end ? Math.ceil((end.getTime() - now.getTime()) / 86400000) : null;
+                const status = !started ? "Wartet" : expired ? "Abgelaufen" : "Aktiv";
+                return {
+                  email: u.email,
+                  name: u.display_name ?? "",
+                  phone: u.phone ?? "",
+                  source: u.signup_source ?? "Direkt",
+                  trial_start: u.profile_trial_start_at ?? "",
+                  trial_end: u.profile_trial_end_at ?? "",
+                  days_left: daysLeft != null ? String(daysLeft) : "",
+                  status,
+                  reminder: u.reminder_sent_at ?? "",
+                  onboarding: u.onboarding_completed_at ? "Abgeschlossen" : u.profile_trial_start_at ? "Ausstehend" : "",
+                  link_clicks: [u.sms_clicked ? "SMS" : null, u.email_clicked ? "Email" : null].filter(Boolean).join("; "),
+                  created_at: u.created_at,
+                };
+              }),
+              [
+                { key: "email", header: "E-Mail" },
+                { key: "name", header: "Name" },
+                { key: "phone", header: "Telefon" },
+                { key: "source", header: "Quelle" },
+                { key: "trial_start", header: "Trial gestartet" },
+                { key: "trial_end", header: "Trial endet" },
+                { key: "days_left", header: "Tage übrig" },
+                { key: "status", header: "Status" },
+                { key: "reminder", header: "Reminder" },
+                { key: "onboarding", header: "Onboarding" },
+                { key: "link_clicks", header: "Link-Klicks" },
+                { key: "created_at", header: "Angelegt" },
+              ],
+              `crm-trial-${today}.csv`,
+            );
+          }}
+        >
+          ↓ CSV exportieren
+        </button>
+      </div>
       <div style={tableWrap}>
         <table style={tableBase}>
           <thead>
@@ -533,9 +656,9 @@ function TrialTab({ users }: { users: CrmUserRow[] }) {
               <Th>Trial endet</Th>
               <Th>Tage übrig</Th>
               <Th>Status</Th>
+              <Th>Link-Klicks</Th>
               <Th>Reminder</Th>
               <Th>Onboarding</Th>
-              <Th>Link-Klicks</Th>
               <Th>Angelegt</Th>
               <Th></Th>
             </tr>
@@ -595,6 +718,14 @@ function TrialTab({ users }: { users: CrmUserRow[] }) {
                       : <span style={badgeActive}>Aktiv</span>}
                   </Td>
                   <Td>
+                    {(u.sms_clicked || u.email_clicked) ? (
+                      <span style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
+                        {u.sms_clicked && <span style={badgeClicked} title="SMS-Link geklickt">📱 SMS</span>}
+                        {u.email_clicked && <span style={badgeClicked} title="E-Mail-Link geklickt">📧 Email</span>}
+                      </span>
+                    ) : <span style={{ color: "#d1d5db", fontSize: 12 }}>—</span>}
+                  </Td>
+                  <Td>
                     {u.reminder_sent_at
                       ? <span style={badgeClicked} title={u.reminder_sent_at}>🔔 {fmtDate(u.reminder_sent_at)}</span>
                       : <span style={{ color: "#d1d5db", fontSize: 12 }}>—</span>}
@@ -605,14 +736,6 @@ function TrialTab({ users }: { users: CrmUserRow[] }) {
                       : u.profile_trial_start_at
                         ? <span style={badgePending}>Ausstehend</span>
                         : <span style={{ color: "#d1d5db", fontSize: 12 }}>—</span>}
-                  </Td>
-                  <Td>
-                    {(u.sms_clicked || u.email_clicked) ? (
-                      <span style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
-                        {u.sms_clicked && <span style={badgeClicked} title="SMS-Link geklickt">📱 SMS</span>}
-                        {u.email_clicked && <span style={badgeClicked} title="E-Mail-Link geklickt">📧 Email</span>}
-                      </span>
-                    ) : <span style={{ color: "#d1d5db", fontSize: 12 }}>—</span>}
                   </Td>
                   <Td>{fmtDate(u.created_at)}</Td>
                   <Td>
@@ -708,7 +831,39 @@ function BetaTab({ rows }: { rows: CrmBetaRow[] }) {
   return (
     <div style={{ opacity: isPending ? 0.6 : 1 }}>
       <input type="text" value={q} onChange={(e) => { setQ(e.target.value); }} placeholder="Suche: Name, E-Mail…" style={{ ...inputBase, minWidth: 260, marginBottom: 12, display: "block" }} />
-      <p style={{ fontSize: 13, color: "#555", margin: "0 0 8px" }}>{filtered.length} Einträge</p>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+        <p style={{ fontSize: 13, color: "#555", margin: 0 }}>{filtered.length} Einträge</p>
+        <button
+          type="button"
+          style={csvBtn}
+          onClick={() => {
+            const today = new Date().toISOString().slice(0, 10);
+            exportCsv(
+              filtered.map((r) => ({
+                name: r.full_name ?? "",
+                email: r.email,
+                status: r.status ?? "",
+                amount: fmtAmount(r.amount_cents, r.currency),
+                session_id: r.stripe_session_id ?? "",
+                created_at: r.created_at ?? "",
+                fulfilled_at: r.fulfilled_at ?? "",
+              })),
+              [
+                { key: "name", header: "Name" },
+                { key: "email", header: "E-Mail" },
+                { key: "status", header: "Status" },
+                { key: "amount", header: "Betrag" },
+                { key: "session_id", header: "Session-ID" },
+                { key: "created_at", header: "Erstellt" },
+                { key: "fulfilled_at", header: "Fulfilled" },
+              ],
+              `crm-beta-${today}.csv`,
+            );
+          }}
+        >
+          ↓ CSV exportieren
+        </button>
+      </div>
       {totalPages > 1 && <Pagination page={page} total={totalPages} onGo={goPage} />}
       <div style={tableWrap}>
         <table style={tableBase}>
@@ -774,7 +929,39 @@ function ProTab({ rows }: { rows: CrmProRow[] }) {
   return (
     <div style={{ opacity: isPending ? 0.6 : 1 }}>
       <input type="text" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Suche: Name, E-Mail…" style={{ ...inputBase, minWidth: 260, marginBottom: 12, display: "block" }} />
-      <p style={{ fontSize: 13, color: "#555", margin: "0 0 8px" }}>{filtered.length} Einträge</p>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+        <p style={{ fontSize: 13, color: "#555", margin: 0 }}>{filtered.length} Einträge</p>
+        <button
+          type="button"
+          style={csvBtn}
+          onClick={() => {
+            const today = new Date().toISOString().slice(0, 10);
+            exportCsv(
+              filtered.map((r) => ({
+                name: r.full_name ?? "",
+                email: r.email,
+                status: r.status ?? "",
+                trial_ends_at: r.trial_ends_at ?? "",
+                current_period_end: r.current_period_end ?? "",
+                session_id: r.stripe_session_id ?? "",
+                created_at: r.created_at ?? "",
+              })),
+              [
+                { key: "name", header: "Name" },
+                { key: "email", header: "E-Mail" },
+                { key: "status", header: "Status" },
+                { key: "trial_ends_at", header: "Trial endet" },
+                { key: "current_period_end", header: "Period endet" },
+                { key: "session_id", header: "Session-ID" },
+                { key: "created_at", header: "Erstellt" },
+              ],
+              `crm-pro-${today}.csv`,
+            );
+          }}
+        >
+          ↓ CSV exportieren
+        </button>
+      </div>
       {totalPages > 1 && <Pagination page={page} total={totalPages} onGo={goPage} />}
       <div style={tableWrap}>
         <table style={tableBase}>
@@ -855,3 +1042,4 @@ const badgeExpired: React.CSSProperties = { background: "#fef2f2", color: "#991b
 const badgePending: React.CSSProperties = { background: "#fefce8", color: "#854d0e", borderRadius: 4, padding: "2px 7px", fontSize: 11 };
 const badgeWarn: React.CSSProperties = { background: "#fff7ed", color: "#9a3412", border: "1px solid #fed7aa", borderRadius: 4, padding: "2px 7px", fontSize: 11, fontWeight: 600 };
 const ctxMenuItem: React.CSSProperties = { display: "block", width: "100%", padding: "10px 14px", background: "none", border: "none", textAlign: "left", fontSize: 13, cursor: "pointer", fontFamily: "inherit", color: "#111" };
+const csvBtn: React.CSSProperties = { padding: "6px 14px", background: "#f3f4f6", border: "1px solid #d1d5db", borderRadius: 6, fontSize: 13, fontWeight: 600, cursor: "pointer", color: "#374151", fontFamily: "inherit", whiteSpace: "nowrap" };
