@@ -2,9 +2,23 @@ export const runtime = "nodejs";
 
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
-import { isAdminAuthed } from "@/lib/adminAuth";
 import http2 from "http2";
 import crypto from "crypto";
+
+// Read the admin session cookie directly from the request (avoids next/headers
+// cookies() which can throw before the mega try/catch runs in some Next.js 15
+// edge cases, causing Next.js to return an HTML error page instead of JSON).
+function isAdminAuthedFromRequest(req: NextRequest): boolean {
+  const secret = process.env.ADMIN_API_SECRET ?? "";
+  if (!secret || secret.length < 16) return false;
+  const tok = req.cookies.get("glev_ops_token")?.value ?? "";
+  if (!tok) return false;
+  const expected = crypto.createHmac("sha256", secret).update("glev-ops-session-v2").digest("hex");
+  const aBuf = Buffer.from(tok);
+  const bBuf = Buffer.from(expected);
+  if (aBuf.length !== bBuf.length) return false;
+  return crypto.timingSafeEqual(aBuf, bBuf);
+}
 
 function normalizeP8Key(raw: string): string {
   let key = raw
@@ -131,9 +145,10 @@ export async function POST(req: NextRequest) {
   const bundleId = process.env.APNS_BUNDLE_ID ?? "";
 
   try {
-  // Auth via server-side session cookie (httpOnly — JS cannot read it).
+  // Auth: check glev_ops_token session cookie directly from req.cookies
+  // (avoids next/headers which can cause HTML error responses in some Next.js 15 builds).
   // Bearer-token fallback kept for direct API calls / CI scripts.
-  const sessionOk = await isAdminAuthed();
+  const sessionOk = isAdminAuthedFromRequest(req);
   const bearerAuth = req.headers.get("authorization") ?? "";
   const bearerSecret = bearerAuth.startsWith("Bearer ") ? bearerAuth.slice(7) : "";
   const bearerOk = Boolean(process.env.ADMIN_API_SECRET) && bearerSecret === process.env.ADMIN_API_SECRET;
