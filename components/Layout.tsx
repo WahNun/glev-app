@@ -185,7 +185,7 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
   // while the chat sheet is closed and chatPosition === "swipe".
   // Auto-clears after 2.4 s — matches the flicker animation duration.
   const [arrowHint, setArrowHint] = useState(false);
-  const arrowHintTimer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  const arrowHintTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
     if (voice.recording && !glevAi.sheetOpen && chatPosition === "swipe" && aiVoiceEnabled) {
       setArrowHint(true);
