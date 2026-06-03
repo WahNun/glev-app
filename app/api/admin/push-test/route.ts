@@ -124,12 +124,11 @@ export async function POST(req: NextRequest) {
 
   let resolvedUserId = userId;
   if (!resolvedUserId && email) {
-    const { data: authUser } = await admin.auth.admin.listUsers();
-    const match = authUser?.users?.find((u) => u.email?.toLowerCase() === email.toLowerCase());
-    if (!match) {
+    const { data: authUser, error: lookupErr } = await admin.auth.admin.getUserByEmail(email);
+    if (lookupErr || !authUser?.user) {
       return NextResponse.json({ error: `Kein User mit E-Mail ${email} gefunden.` }, { status: 404 });
     }
-    resolvedUserId = match.id;
+    resolvedUserId = authUser.user.id;
   }
 
   if (!resolvedUserId) {

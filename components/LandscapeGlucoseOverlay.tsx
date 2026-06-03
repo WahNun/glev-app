@@ -99,7 +99,15 @@ export default function LandscapeGlucoseOverlay() {
     function check() {
       const w = window.innerWidth;
       const h = window.innerHeight;
-      setLandscape(w > h && h <= 600);
+      // matchMedia is the most reliable landscape signal on iOS WKWebView.
+      // Dimension check (w > h) serves as fallback for older WebViews that
+      // don't implement matchMedia. Height cap (≤ 768) excludes iPads in
+      // landscape (iPad mini 6 landscape = 744px, so 768 covers all phones
+      // and the smallest iPad without showing on full-size iPads ≥ 810px).
+      const mqLandscape =
+        typeof window.matchMedia === "function" &&
+        window.matchMedia("(orientation: landscape)").matches;
+      setLandscape((mqLandscape || w > h) && h <= 768);
     }
     check();
     window.addEventListener("resize", check);

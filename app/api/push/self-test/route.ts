@@ -6,15 +6,37 @@ import http2 from "http2";
 import crypto from "crypto";
 
 function normalizeP8Key(raw: string): string {
-  let key = raw.replace(/\\r\\n/g, "\n").replace(/\\r/g, "\n").replace(/\\n/g, "\n");
+  // Step 1: Replace literal escape sequences that Vercel stores env vars as
+  let key = raw
+    .replace(/\\r\\n/g, "\n")
+    .replace(/\\r/g, "\n")
+    .replace(/\\n/g, "\n")
+    .trim();
+
+  // Step 2: If still no real newlines → the key body is one long base64 string.
+  // Reconstruct proper PEM with 64-char-wrapped lines.
   if (!key.includes("\n")) {
     const begin = "-----BEGIN PRIVATE KEY-----";
     const end   = "-----END PRIVATE KEY-----";
     const body  = key.replace(begin, "").replace(end, "").replace(/\s/g, "");
     const wrapped = body.match(/.{1,64}/g)?.join("\n") ?? body;
-    key = `${begin}\n${wrapped}\n${end}\n`;
+    key = `${begin}\n${wrapped}\n${end}`;
   }
+
+  // Step 3: Ensure exactly one trailing newline (OpenSSL expects it)
+  if (!key.endsWith("\n")) key += "\n";
+
   return key;
+}
+
+/** Returns a short diagnostic string without leaking the key body */
+function diagnoseKey(raw: string): string {
+  const len = raw.length;
+  const hasBegin = raw.includes("-----BEGIN PRIVATE KEY-----");
+  const hasRealNewlines = /\n/.test(raw);
+  const hasEscapedNewlines = /\\n/.test(raw);
+  const lineCount = raw.split("\n").filter(Boolean).length;
+  return `len=${len} hasBegin=${hasBegin} realNewlines=${hasRealNewlines} escapedNewlines=${hasEscapedNewlines} lines=${lineCount}`;
 }
 
 function generateAPNsJWT(keyP8: string, keyId: string, teamId: string): string {
@@ -115,9 +137,19 @@ export async function POST(req: NextRequest) {
       const teamId = process.env.APNS_TEAM_ID;
       const bundleId = process.env.APNS_BUNDLE_ID;
       if (!keyP8 || !keyId || !teamId || !bundleId) {
-        return NextResponse.json({ error: "APNS-Env-Variablen fehlen in Vercel." }, { status: 500 });
+        const missing = [!keyP8 && "APNS_KEY_P8", !keyId && "APNS_KEY_ID", !teamId && "APNS_TEAM_ID", !bundleId && "APNS_BUNDLE_ID"].filter(Boolean).join(", ");
+        return NextResponse.json({ error: `APNS-Env-Variablen fehlen: ${missing}` }, { status: 500 });
       }
-      const jwt = generateAPNsJWT(keyP8, keyId, teamId);
+      const keyDiag = diagnoseKey(keyP8);
+      let jwt: string;
+      try {
+        jwt = generateAPNsJWT(keyP8, keyId, teamId);
+      } catch (jwtErr) {
+        return NextResponse.json(
+          { error: `JWT-Fehler: ${String(jwtErr)} | key-diag: ${keyDiag}` },
+          { status: 500 },
+        );
+      }
       const { status, body } = await sendAPNs(token, jwt, bundleId, sandbox);
       if (status === 200) return NextResponse.json({ ok: true, platform: "ios", sandbox });
       return NextResponse.json({ error: `APNs ${status}`, detail: body }, { status: 502 });
