@@ -32,7 +32,8 @@ export default function PushTestCard() {
       if (json?.ok) {
         setResult({ ok: true, msg: `✅ Gesendet (${json.platform ?? "?"}, sandbox=${sandbox})` });
       } else if (json) {
-        const detail = typeof json.error === "string" ? json.error
+        const detail = typeof json.error === "string"
+          ? json.error + (typeof json.detail === "string" && json.detail ? ` → ${json.detail}` : "")
           : typeof json.stack === "string" ? json.stack.split("\n")[0]
           : JSON.stringify(json).slice(0, 300);
         setResult({ ok: false, msg: `❌ HTTP ${res.status} — ${detail}` });
