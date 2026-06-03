@@ -373,8 +373,23 @@ export function calcBasalFraction(
 ): number {
   if (elapsedMin <= 0) return 1;
   if (elapsedMin >= windowMin) return 0;
+
+  // Two-phase piecewise linear decay:
+  //   Plateau phase  [0 … plateauEnd]       — slow decay, rate = 0.5 / windowMin
+  //   Tail phase     [plateauEnd … windowMin] — faster decay, rate ≈ 3.5× plateau
+  //
+  // midValue = value at plateau/tail boundary = 1 − peakFraction × 0.5
+  // (e.g. peakFraction=0.6 → midValue=0.70 at 14.4 h of a 24 h window)
   const plateauEnd = windowMin * peakFraction;
-  if (elapsedMin <= plateauEnd) return 1;
-  const tailLen = windowMin - plateauEnd;
-  return Math.max(0, 1 - (elapsedMin - plateauEnd) / tailLen);
+  const midValue   = 1 - peakFraction * 0.5;
+
+  if (elapsedMin <= plateauEnd) {
+    // Slow linear decay: drops by peakFraction×0.5 over the plateau phase
+    return 1 - (elapsedMin / windowMin) * 0.5;
+  }
+
+  // Faster linear decay from midValue → 0 over the tail
+  const tailLen      = windowMin - plateauEnd;
+  const tailProgress = (elapsedMin - plateauEnd) / tailLen;
+  return Math.max(0, midValue * (1 - tailProgress));
 }
