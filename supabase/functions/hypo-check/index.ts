@@ -315,6 +315,21 @@ Deno.serve(async (_req: Request) => {
     auth: { persistSession: false },
   });
 
+  // Load push template from DB (fallback to hardcoded defaults)
+  let pushTitle = "🔴 Hypo-Alarm · {{value}} mg/dL";
+  let pushBody = "Dein BZ liegt bei {{value}} mg/dL — prüf dich jetzt.";
+  try {
+    const { data: tpl } = await sb
+      .from("message_templates")
+      .select("push_title, push_body")
+      .eq("key", "push_hypo")
+      .maybeSingle();
+    if (tpl?.push_title) pushTitle = tpl.push_title as string;
+    if (tpl?.push_body) pushBody = tpl.push_body as string;
+  } catch {
+    // use defaults
+  }
+
   const now = new Date();
   const cutoff = new Date(now.getTime() - CGM_LOOKBACK_MINUTES * 60 * 1000);
   const cooldownCutoff = new Date(now.getTime() - COOLDOWN_MS);
@@ -440,8 +455,9 @@ Deno.serve(async (_req: Request) => {
       if (latestValue >= threshold) continue;
 
       /* 8. Send push */
-      const title = "⚠️ Glev";
-      const body = `Dein BZ liegt bei ${Math.round(latestValue)} mg/dL — prüf dich jetzt.`;
+      const valueStr = String(Math.round(latestValue));
+      const title = pushTitle.replace(/\{\{value\}\}/g, valueStr);
+      const body = pushBody.replace(/\{\{value\}\}/g, valueStr);
 
       if (user.push_platform === "android") {
         if (!firebaseProjectId || !firebaseServiceAccountJson) {

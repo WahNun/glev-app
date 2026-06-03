@@ -85,11 +85,12 @@ function sendAPNs(
   title: string,
   body: string,
   sandbox: boolean,
+  soundName?: string,
 ): Promise<{ status: number; responseBody: string }> {
   return new Promise((resolve, reject) => {
     const host = sandbox ? "api.sandbox.push.apple.com" : "api.push.apple.com";
     const payload = JSON.stringify({
-      aps: { alert: { title, body }, sound: "default", badge: 1 },
+      aps: { alert: { title, body }, sound: soundName ?? "default", badge: 1 },
     });
     const client = http2.connect(`https://${host}`);
     client.on("error", (err) => { try { client.close(); } catch { /* ignore */ } reject(err); });
@@ -121,6 +122,7 @@ async function sendFCM(
   title: string,
   body: string,
   serverKey: string,
+  channelId?: string,
 ): Promise<{ status: number; responseBody: string }> {
   const res = await fetch("https://fcm.googleapis.com/fcm/send", {
     method: "POST",
@@ -131,6 +133,7 @@ async function sendFCM(
     body: JSON.stringify({
       to: token,
       notification: { title, body, sound: "default" },
+      android: channelId ? { notification: { channel_id: channelId } } : undefined,
       priority: "high",
     }),
   });
@@ -184,6 +187,14 @@ export async function GET(req: NextRequest) {
   }
 }
 
+// Map alertType → { sound name for APNs, channel id for FCM }
+const ALERT_TYPE_SOUND: Record<string, { apnsSound: string; fcmChannel: string }> = {
+  hypo:     { apnsSound: "glev_low_alarm.wav",  fcmChannel: "hypo_alarm" },
+  hyper:    { apnsSound: "glev_high_alarm.wav", fcmChannel: "hyper_alarm" },
+  elevated: { apnsSound: "glev_elevated.wav",   fcmChannel: "elevated_alarm" },
+  generic:  { apnsSound: "default",             fcmChannel: "default" },
+};
+
 export async function POST(req: NextRequest) {
   // Read env vars up front so they appear in diagnostics even if we crash early.
   const keyP8    = process.env.APNS_KEY_P8    ?? "";
@@ -193,8 +204,6 @@ export async function POST(req: NextRequest) {
 
   try {
   // ?step=N: early-exit for step-by-step debugging without redeploying.
-  // 0=after auth, 1=after json, 2=after listUsers, 3=after profile query,
-  // 4=after JWT, 5=full APNs call. Remove once root-cause is confirmed.
   const debugStep = Number(req.nextUrl.searchParams.get("step") ?? "99");
 
   console.log("[push-test] S0 start");
@@ -209,8 +218,22 @@ export async function POST(req: NextRequest) {
   console.log("[push-test] S0 auth ok sessionOk=" + sessionOk + " bearerOk=" + bearerOk);
   if (debugStep === 0) return NextResponse.json({ step: 0, ok: true });
 
-  const { userId, email, sandbox = false } = await req.json() as { userId?: string; email?: string; sandbox?: boolean };
-  console.log("[push-test] S1 json parsed email=" + email + " userId=" + userId);
+  const {
+    userId,
+    email,
+    sandbox = false,
+    alertType,
+    customTitle,
+    customBody,
+  } = await req.json() as {
+    userId?: string;
+    email?: string;
+    sandbox?: boolean;
+    alertType?: "hypo" | "hyper" | "elevated" | "generic";
+    customTitle?: string;
+    customBody?: string;
+  };
+  console.log("[push-test] S1 json parsed email=" + email + " userId=" + userId + " alertType=" + alertType);
   if (debugStep === 1) return NextResponse.json({ step: 1, ok: true, email, userId });
 
   const admin = getSupabaseAdmin();
@@ -261,10 +284,32 @@ export async function POST(req: NextRequest) {
   }
 
   const { push_token: token, push_platform: platform } = profile;
-  const title = "🔔 Glev Test-Push";
-  const body = "Push-Benachrichtigungen funktionieren!";
   console.log("[push-test] S3 platform=" + platform + " tokenLen=" + token.length);
   if (debugStep === 3) return NextResponse.json({ step: 3, ok: true, platform, tokenLen: token.length });
+
+  // Resolve title/body:
+  // 1. If customTitle/customBody provided, use those.
+  // 2. If alertType is set (and not generic), load template from DB.
+  // 3. Fall back to generic test message.
+  let title = customTitle ?? "🔔 Glev Test-Push";
+  let body = customBody ?? "Push-Benachrichtigungen funktionieren!";
+
+  if (!customTitle && !customBody && alertType && alertType !== "generic") {
+    const templateKey = `push_${alertType}`;
+    const { data: tplRow } = await admin
+      .from("message_templates")
+      .select("push_title, push_body")
+      .eq("key", templateKey)
+      .maybeSingle();
+    if (tplRow?.push_title) {
+      title = (tplRow.push_title as string).replace("{{value}}", "-- mg/dL");
+    }
+    if (tplRow?.push_body) {
+      body = (tplRow.push_body as string).replace("{{value}}", "-- mg/dL");
+    }
+  }
+
+  const soundCfg = ALERT_TYPE_SOUND[alertType ?? "generic"] ?? ALERT_TYPE_SOUND.generic;
 
     if (platform === "ios") {
       if (!keyP8 || !keyId || !teamId || !bundleId) {
@@ -279,9 +324,6 @@ export async function POST(req: NextRequest) {
 
       const kd = diagnoseKey(keyP8);
 
-      // Step 1: Pre-validate key — crypto.createPrivateKey throws synchronously
-      // (catchable) whereas crypto.createSign().sign() can kill the Node worker
-      // via an OpenSSL abort if the key is malformed.
       let privKey: crypto.KeyObject;
       try {
         privKey = crypto.createPrivateKey({ key: normalizeP8Key(keyP8), format: "pem", type: "pkcs8" });
@@ -296,8 +338,6 @@ export async function POST(req: NextRequest) {
         return NextResponse.json(errInfo, { status: 500 });
       }
 
-      // Key must be EC (P-256) for APNs ES256 signing.
-      // RSA or other key types cause an OpenSSL abort in sign() — not a catchable JS error.
       if (privKey.asymmetricKeyType !== "ec") {
         const errInfo = {
           error:   `Falscher Key-Typ: ${privKey.asymmetricKeyType ?? "unbekannt"} — APNs braucht einen EC (P-256) Key. Bitte APNS_KEY_P8 in Vercel prüfen.`,
@@ -308,7 +348,6 @@ export async function POST(req: NextRequest) {
       }
 
       console.log("[push-test] S4 generating JWT...");
-      // Step 2: JWT — WebCrypto async signing, no OpenSSL abort risk
       let jwt: string;
       try {
         jwt = await generateAPNsJWT(privKey, keyId, teamId);
@@ -324,21 +363,17 @@ export async function POST(req: NextRequest) {
         return NextResponse.json(errInfo, { status: 500 });
       }
 
-      // Step 3: APNs call with hard 10s timeout.
-      // IMPORTANT: always clearTimeout after the race to prevent a dangling
-      // rejected Promise that fires 10s later as an unhandled rejection and
-      // kills the Node process mid-flight on the next request (Node 15+).
       let _apnsTimer: ReturnType<typeof setTimeout> | undefined;
       try {
         const { status, responseBody } = await Promise.race([
-          sendAPNs(token, jwt, bundleId, title, body, sandbox as boolean),
+          sendAPNs(token, jwt, bundleId, title, body, sandbox as boolean, soundCfg.apnsSound),
           new Promise<never>((_, rej) => {
             _apnsTimer = setTimeout(() => rej(new Error("APNs timeout nach 10s")), 10000);
           }),
         ]);
         clearTimeout(_apnsTimer);
         console.log("[glev] admin push-test APNs response:", status, responseBody.slice(0, 200));
-        if (status === 200) return NextResponse.json({ ok: true, platform: "ios", sandbox });
+        if (status === 200) return NextResponse.json({ ok: true, platform: "ios", sandbox, alertType: alertType ?? "generic" });
         return NextResponse.json({ error: `APNs returned ${status}`, detail: responseBody }, { status: 500 });
       } catch (apnsErr) {
         clearTimeout(_apnsTimer);
@@ -355,8 +390,8 @@ export async function POST(req: NextRequest) {
     if (platform === "android") {
       const serverKey = process.env.FIREBASE_SERVER_KEY;
       if (!serverKey) return NextResponse.json({ error: "FIREBASE_SERVER_KEY fehlt." }, { status: 500 });
-      const { status, responseBody } = await sendFCM(token, title, body, serverKey);
-      if (status === 200) return NextResponse.json({ ok: true, platform: "android" });
+      const { status, responseBody } = await sendFCM(token, title, body, serverKey, soundCfg.fcmChannel);
+      if (status === 200) return NextResponse.json({ ok: true, platform: "android", alertType: alertType ?? "generic" });
       return NextResponse.json({ error: `FCM returned ${status}`, detail: responseBody }, { status: 500 });
     }
 
