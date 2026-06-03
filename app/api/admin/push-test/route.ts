@@ -4,6 +4,7 @@ export const maxDuration = 30;
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
 import crypto from "crypto";
+import http2 from "http2";
 
 // Read the admin session cookie directly from the request (avoids next/headers
 // cookies() which can throw before the mega try/catch runs in some Next.js 15
@@ -77,7 +78,7 @@ async function generateAPNsJWT(privKey: crypto.KeyObject, keyId: string, teamId:
   return `${signingInput}.${sig}`;
 }
 
-async function sendAPNs(
+function sendAPNs(
   token: string,
   jwt: string,
   bundleId: string,
@@ -85,23 +86,34 @@ async function sendAPNs(
   body: string,
   sandbox: boolean,
 ): Promise<{ status: number; responseBody: string }> {
-  const host = sandbox ? "api.sandbox.push.apple.com" : "api.push.apple.com";
-  const payload = JSON.stringify({
-    aps: { alert: { title, body }, sound: "default", badge: 1 },
-  });
-  const res = await fetch(`https://${host}/3/device/${token}`, {
-    method: "POST",
-    headers: {
+  return new Promise((resolve, reject) => {
+    const host = sandbox ? "api.sandbox.push.apple.com" : "api.push.apple.com";
+    const payload = JSON.stringify({
+      aps: { alert: { title, body }, sound: "default", badge: 1 },
+    });
+    const client = http2.connect(`https://${host}`);
+    client.on("error", (err) => { try { client.close(); } catch { /* ignore */ } reject(err); });
+
+    const req = client.request({
+      ":method": "POST",
+      ":path": `/3/device/${token}`,
       "authorization": `bearer ${jwt}`,
       "apns-topic": bundleId,
       "apns-push-type": "alert",
       "apns-priority": "10",
       "content-type": "application/json",
-    },
-    body: payload,
+      "content-length": String(Buffer.byteLength(payload)),
+    });
+    req.write(payload);
+    req.end();
+
+    let status = 0;
+    let responseBody = "";
+    req.on("response", (headers) => { status = headers[":status"] as number; });
+    req.on("data", (chunk) => { responseBody += chunk; });
+    req.on("end", () => { try { client.close(); } catch { /* ignore */ } resolve({ status, responseBody }); });
+    req.on("error", (err) => { try { client.close(); } catch { /* ignore */ } reject(err); });
   });
-  const responseBody = await res.text();
-  return { status: res.status, responseBody };
 }
 
 async function sendFCM(
@@ -327,7 +339,7 @@ export async function POST(req: NextRequest) {
         clearTimeout(_apnsTimer);
         console.log("[glev] admin push-test APNs response:", status, responseBody.slice(0, 200));
         if (status === 200) return NextResponse.json({ ok: true, platform: "ios", sandbox });
-        return NextResponse.json({ error: `APNs returned ${status}`, detail: responseBody }, { status: 502 });
+        return NextResponse.json({ error: `APNs returned ${status}`, detail: responseBody }, { status: 500 });
       } catch (apnsErr) {
         clearTimeout(_apnsTimer);
         const errInfo = {
@@ -336,7 +348,7 @@ export async function POST(req: NextRequest) {
           keyDiag: kd,
         };
         console.error("[glev] admin push-test APNs fail:", JSON.stringify(errInfo));
-        return NextResponse.json(errInfo, { status: 502 });
+        return NextResponse.json(errInfo, { status: 500 });
       }
     }
 
@@ -345,7 +357,7 @@ export async function POST(req: NextRequest) {
       if (!serverKey) return NextResponse.json({ error: "FIREBASE_SERVER_KEY fehlt." }, { status: 500 });
       const { status, responseBody } = await sendFCM(token, title, body, serverKey);
       if (status === 200) return NextResponse.json({ ok: true, platform: "android" });
-      return NextResponse.json({ error: `FCM returned ${status}`, detail: responseBody }, { status: 502 });
+      return NextResponse.json({ error: `FCM returned ${status}`, detail: responseBody }, { status: 500 });
     }
 
     return NextResponse.json({ error: `Unbekannte Plattform: ${platform}` }, { status: 400 });
