@@ -101,13 +101,49 @@ function pickGermanVoice(): SpeechSynthesisVoice | null {
  * Exported for unit tests.
  */
 export function extractAssistantText(text: string): string {
-  const STRIP_PREFIXES = [
+  // Known system-prompt and context-preamble starters (lowercased).
+  // Checked both bare and with "- " bullet prefix so bullet-point lines
+  // are also caught after trim().
+  const STRIP_BARE = [
+    // Section headers
     "strikte grenzen",
     "deine aufgabe",
     "tools (",
     "write-tools",
     "read-tools",
     "user-memory",
+    "stil:",
+    "du bist glev",
+    // Context preamble
+    "heute ist",
+    "kontext-snapshot",
+    "was du über diesen user weißt",
+    // Common bullet content from the system prompt
+    "beantworte fragen rund",
+    "sprich in einfacher",
+    "antworte immer in der sprache",
+    "du bist kein medizinprodukt",
+    "du stellst keine diagnose",
+    "auffälligkeiten",
+    "höflich, sachlich",
+    "verwende keine markdown",
+    "bolus-berechnung",
+    "wichtig — bolus vs",
+    "wichtig — zeitangaben",
+    "nutze die read-tools",
+    "nenne nur daten",
+    "wenn ein tool keine daten",
+    "get_check_history",
+    "gewohnheits- und musterfragen",
+    "rufe das tool nur auf",
+    "wähle stabile snake",
+    "erwähne den speicher",
+  ];
+
+  // Build a set that also catches "- <prefix>" bullet variants.
+  const allPrefixes = [
+    ...STRIP_BARE,
+    ...STRIP_BARE.map((p) => `- ${p}`),
   ];
 
   const lines = text
@@ -117,8 +153,10 @@ export function extractAssistantText(text: string): string {
       if (!l) return false;
       // Drop markdown headings (##, ###, etc.)
       if (/^#{1,6}\s/.test(l)) return false;
+      // Drop context-preamble key-value bullets like "- Glukose: …"
+      if (/^-\s+(glukose|iob|letzte mahlzeit|screen):/i.test(l)) return false;
       const lower = l.toLowerCase();
-      if (STRIP_PREFIXES.some((p) => lower.startsWith(p))) return false;
+      if (allPrefixes.some((p) => lower.startsWith(p))) return false;
       return true;
     });
 
