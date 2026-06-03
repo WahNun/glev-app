@@ -120,11 +120,22 @@ export default function LandscapeGlucoseOverlay() {
     if (screenOrientation && typeof screenOrientation.addEventListener === "function") {
       screenOrientation.addEventListener("change", check);
     }
+    // matchMedia change listener — most reliable on iOS WKWebView; fires even
+    // when resize/orientationchange are delayed by the WKWebView layout engine.
+    const mql = typeof window.matchMedia === "function"
+      ? window.matchMedia("(orientation: landscape)")
+      : null;
+    if (mql && typeof (mql as EventTarget).addEventListener === "function") {
+      (mql as EventTarget).addEventListener("change", check);
+    }
     return () => {
       window.removeEventListener("resize", check);
       window.removeEventListener("orientationchange", check);
       if (screenOrientation && typeof screenOrientation.removeEventListener === "function") {
         screenOrientation.removeEventListener("change", check);
+      }
+      if (mql && typeof (mql as EventTarget).removeEventListener === "function") {
+        (mql as EventTarget).removeEventListener("change", check);
       }
     };
   }, []);
