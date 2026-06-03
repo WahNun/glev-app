@@ -4,3 +4,4 @@
 - [BzCheckModal Playwright Dismiss](bzcheck-modal-playwright.md) — CSS-transform bottom-sheet: focus off-screen input + Escape to close; never use click() or evaluate(btn.click())
 - [Supabase Prod Queries](supabase-prod-queries.md) — Credentials sind in Replit Secrets, Abfragen via bash mit $SUPABASE_URL + $SUPABASE_SERVICE_ROLE_KEY
 - [iOS Build Workflow](ios-build-workflow.md) — Lucas baut immer mit Xcode, nie mit Fastlane; lokaler Mac-Pfad: /Users/lucas/Documents/glev-app
+- [Sound Assets Policy](sound-assets-policy.md) — nur 3 Alarm-WAVs erwünscht: hypo/hyper/elevated — KEINE pre_check/post_check WAVs

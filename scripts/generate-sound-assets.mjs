@@ -164,36 +164,6 @@ function generateElevatedAlarm() {
   return buildWav(Buffer.concat(parts));
 }
 
-/**
- * glev_pre_check.wav — Pre-Bolus-Meal-Timeline-Erinnerung
- * 440 Hz sanfter Ping, 1×, −9 dBFS
- * Niedrige Dringlichkeit — "bitte jetzt kurz messen"
- */
-function generatePreCheck() {
-  const amp = dbfsAmplitude(-9);
-  const parts = [
-    generateSine(440, 0.12, amp),
-    generateSilence(0.08),
-    generateSine(440, 0.08, amp),
-  ];
-  return buildWav(Buffer.concat(parts));
-}
-
-/**
- * glev_post_check.wav — Post-Bolus-Glukose-Kontrollcheck
- * 523→659 Hz aufsteigender Sweep + kurze Bestätigung, −6 dBFS
- * Sanft aufsteigend — "Zeit für deinen Check"
- */
-function generatePostCheck() {
-  const amp = dbfsAmplitude(-6);
-  const parts = [
-    generateSweep(523, 659, 0.25, amp),
-    generateSilence(0.10),
-    generateSine(659, 0.12, amp),
-  ];
-  return buildWav(Buffer.concat(parts));
-}
-
 // ---------------------------------------------------------------------------
 // Asset registry
 // ---------------------------------------------------------------------------
@@ -216,18 +186,6 @@ const ASSETS = [
     label: "Erhöhter BZ",
     description: "523 Hz, 3× sanft, −6 dBFS (~1.2 s)",
     generate: generateElevatedAlarm,
-  },
-  {
-    name: "glev_pre_check.wav",
-    label: "Pre-Bolus-Check",
-    description: "440 Hz Ping, −9 dBFS (~0.3 s)",
-    generate: generatePreCheck,
-  },
-  {
-    name: "glev_post_check.wav",
-    label: "Post-Bolus-Check",
-    description: "523→659 Hz Sweep, −6 dBFS (~0.5 s)",
-    generate: generatePostCheck,
   },
 ];
 

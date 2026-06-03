@@ -29,18 +29,6 @@ const KNOWN_ASSETS: Omit<AssetDef, "url">[] = [
       "Erhöhter BZ-Alarm: 523 Hz, 3× sanfte Beeps, ~1.2 Sek., −6 dBFS. Android: Kanal elevated_alarm. iOS: APNs sound field.",
     urgency: "medium",
   },
-  {
-    name: "glev_pre_check.wav",
-    purpose:
-      "Pre-Bolus-Meal-Timeline-Erinnerung: 440 Hz Ping, ~0.3 Sek., −9 dBFS. Niedrige Dringlichkeit.",
-    urgency: "low",
-  },
-  {
-    name: "glev_post_check.wav",
-    purpose:
-      "Post-Bolus-Meal-Timeline-Check: 523→659 Hz aufsteigender Sweep, ~0.5 Sek., −6 dBFS. Niedrige Dringlichkeit.",
-    urgency: "low",
-  },
 ];
 
 const BUCKET = "sound-assets";
