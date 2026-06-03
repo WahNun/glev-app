@@ -27,15 +27,28 @@ const config: CapacitorConfig = {
     allowNavigation: ["glev.app"],
   },
   plugins: {
-    // Glev ist Portrait-only — Querformat ist auf Pen-T1D-Logs nicht
-    // sinnvoll (Sliders, BG-Eingabe, Engine-Chat sind alle vertikal
-    // gedacht) und produziert Header/Footer-Regressionen, die nicht
-    // mehr eintreten können wenn das System die Rotation hart sperrt.
-    // iOS-Pendant: UISupportedInterfaceOrientations in Info.plist.
-    // Android-Pendant: android:screenOrientation="portrait" im Manifest.
-    ScreenOrientation: {
-      default: "portrait",
-    },
+    // ScreenOrientation: default portrait-lock intentionally removed.
+    //
+    // Previously `ScreenOrientation: { default: "portrait" }` locked the
+    // entire app at the Capacitor plugin level. That prevented the
+    // LandscapeGlucoseOverlay from ever receiving an orientation-change
+    // event inside the WKWebView — iOS simply never rotated the view.
+    //
+    // Orientation control is now handled per-component in JS:
+    //  - LandscapeGlucoseOverlay calls ScreenOrientation.unlock() on
+    //    mount so iOS is allowed to rotate when the user tilts the phone.
+    //  - When the overlay closes (landscape → portrait), it calls
+    //    ScreenOrientation.lock({ orientation: "portrait" }) to restore
+    //    the lock for all other screens.
+    //
+    // iOS-Pendant: UISupportedInterfaceOrientations in Info.plist now
+    //   includes LandscapeLeft + LandscapeRight for iPhone (required;
+    //   without those entries iOS ignores JS unlock calls entirely).
+    //   A new Xcode archive + TestFlight build is required for that
+    //   Info.plist change to take effect — npx cap sync ios is not enough.
+    // Android-Pendant: android:screenOrientation="portrait" in the
+    //   Manifest remains unchanged (Android task is out of scope).
+    //
     // Show push notification banners even when the app is in the foreground.
     // Without this iOS suppresses banners while the app is open.
     // Requires a new native build (npx cap sync ios) to take effect.

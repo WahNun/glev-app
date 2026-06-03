@@ -1,5 +1,29 @@
 "use client";
 
+/**
+ * LandscapeGlucoseOverlay — full-screen CGM overlay shown when the phone
+ * is rotated to landscape inside the Capacitor iOS shell.
+ *
+ * ── Native-build note (iOS) ────────────────────────────────────────────
+ * Landscape support requires two native-side changes that cannot be hot-
+ * patched via the live server.url Capacitor mode:
+ *
+ *   1. Info.plist must list UIInterfaceOrientationLandscapeLeft and
+ *      UIInterfaceOrientationLandscapeRight under
+ *      UISupportedInterfaceOrientations (iPhone key, not iPad).
+ *      Done in ios/App/App/Info.plist.
+ *
+ *   2. capacitor.config.ts must NOT set ScreenOrientation.default to
+ *      "portrait" — that plugin-level lock blocks JS unlock calls.
+ *      Removed in capacitor.config.ts.
+ *
+ * After any change to Info.plist you must run:
+ *   npx cap sync ios
+ * …and then create a new Xcode archive + TestFlight/App Store build.
+ * A simple content deploy (git push → Vercel) is not sufficient.
+ * ───────────────────────────────────────────────────────────────────────
+ */
+
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import { fetchCgmHistory, invalidateCgmCache } from "@/lib/cgm/clientCache";
@@ -88,12 +112,95 @@ type State =
   | { kind: "no-data" }
   | { kind: "ok"; current: CgmPoint; history: CgmPoint[]; trend: string; fingersticks: CgmPoint[] };
 
+// ── Screen-orientation helpers ─────────────────────────────────────────────
+// Mirrors the lazy-load pattern in lib/haptics.ts: the @capacitor/screen-
+// orientation module is only imported on native platforms (iOS / Android)
+// and never during SSR, avoiding build-time / hydration crashes.
+
+type ScreenOrientationModule = typeof import("@capacitor/screen-orientation");
+let screenOrientationCache: ScreenOrientationModule | null | undefined;
+
+function isNativePlatformForOrientation(): boolean {
+  if (typeof window === "undefined") return false;
+  const w = window as unknown as { Capacitor?: { isNativePlatform?: () => boolean } };
+  return !!w.Capacitor?.isNativePlatform?.();
+}
+
+async function loadScreenOrientation(): Promise<ScreenOrientationModule | null> {
+  if (screenOrientationCache !== undefined) return screenOrientationCache;
+  if (!isNativePlatformForOrientation()) {
+    screenOrientationCache = null;
+    return null;
+  }
+  try {
+    screenOrientationCache = await import("@capacitor/screen-orientation");
+    return screenOrientationCache;
+  } catch {
+    screenOrientationCache = null;
+    return null;
+  }
+}
+
+// ── Component ──────────────────────────────────────────────────────────────
+
 export default function LandscapeGlucoseOverlay() {
   const t = useTranslations("LandscapeGlucoseOverlay");
   const formatAgo = makeFormatAgo(t);
   const [landscape, setLandscape] = useState(false);
   const [state, setState] = useState<State>({ kind: "loading" });
   const [, setTick] = useState(0);
+
+  // Unlock screen rotation on mount so iOS WKWebView is allowed to rotate.
+  // Without this, Info.plist listing landscape orientations is not enough —
+  // the plugin-level lock (now removed from capacitor.config.ts) or any
+  // previous lock() call will still block rotation until unlock() is called.
+  // We re-lock to portrait in the landscape-watcher effect below.
+  useEffect(() => {
+    void (async () => {
+      const so = await loadScreenOrientation();
+      if (!so) return;
+      try { await so.ScreenOrientation.unlock(); } catch { /* noop */ }
+    })();
+    return () => {
+      // Re-lock portrait on unmount (e.g. component removed from tree).
+      void (async () => {
+        const so = await loadScreenOrientation();
+        if (!so) return;
+        try { await so.ScreenOrientation.lock({ orientation: "portrait" }); } catch { /* noop */ }
+      })();
+    };
+  }, []);
+
+  // Track landscape transitions to lock/unlock per cycle — enabling repeated
+  // rotate → portrait → rotate sequences without an app restart:
+  //
+  //  false → true  (overlay opens):  unlock() so iOS allows the rotation.
+  //                                   Needed on every open because a previous
+  //                                   true→false transition already locked us.
+  //  true  → false (overlay closes): lock("portrait") so all other screens
+  //                                   remain portrait-only.
+  //
+  // The mount useEffect above handles the very first unlock on app start.
+  // Using a ref to track the previous value avoids re-running on mount
+  // (landscape starts false, prevLandscape starts false → no initial action).
+  const prevLandscape = useRef(false);
+  useEffect(() => {
+    const prev = prevLandscape.current;
+    prevLandscape.current = landscape;
+    if (landscape === prev) return; // no transition — skip
+    void (async () => {
+      const so = await loadScreenOrientation();
+      if (!so) return;
+      if (landscape) {
+        // false → true: re-unlock so iOS allows the WKWebView to rotate again
+        // (without this, after the first lock the overlay is one-shot per session).
+        try { await so.ScreenOrientation.unlock(); } catch { /* noop */ }
+      } else {
+        // true → false: re-lock portrait so Engine, Entries, Log forms etc. stay portrait
+        try { await so.ScreenOrientation.lock({ orientation: "portrait" }); } catch { /* noop */ }
+      }
+    })();
+  }, [landscape]);
 
   useEffect(() => {
     function check() {
