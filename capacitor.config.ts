@@ -36,6 +36,12 @@ const config: CapacitorConfig = {
     ScreenOrientation: {
       default: "portrait",
     },
+    // Show push notification banners even when the app is in the foreground.
+    // Without this iOS suppresses banners while the app is open.
+    // Requires a new native build (npx cap sync ios) to take effect.
+    PushNotifications: {
+      presentationOptions: ["badge", "sound", "alert"],
+    },
   },
   ios: {
     // 2026-05-18: switched from "always" → "never" so the WKWebView
