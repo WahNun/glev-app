@@ -78,10 +78,12 @@ export async function POST(req: NextRequest) {
   const DEFAULT_STYLE_PREFIX =
     "Sprich warm, ruhig und natürlich — wie ein vertrauter Assistent beim Gespräch unter vier Augen. Keine übertriebene Betonung, keine Pausen zwischen Wörtern, fließend und menschlich.";
   const stylePrefix = dbStylePrefix?.trim() || DEFAULT_STYLE_PREFIX;
-  // When a voice-clone ref_audio is active, skip the style prefix:
-  // the sample already encodes speaking style and tone. Prepending a text
-  // instruction fights the voice-cloning layer and produces robotic output.
-  const useStylePrefix = !refAudio && !skipStylePrefix;
+  // Style prefix is always applied — even when a ref_audio voice clone is active.
+  // Testing showed that for voxtral-mini-tts-2603 the style instruction improves
+  // naturalness regardless of the clone sample; disabling it produced robotic output.
+  // The skip_style_prefix flag (A/B test checkbox in ops panel) still allows
+  // explicit opt-out for comparison.
+  const useStylePrefix = !skipStylePrefix;
   const styledInput = useStylePrefix ? `${stylePrefix}\n\n${text}` : text;
 
   const body: Record<string, unknown> = {
