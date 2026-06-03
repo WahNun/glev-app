@@ -68,6 +68,22 @@
 
 import { expect, test } from "@playwright/test";
 
+// ── Version guard for the @capacitor/core spy setup ────────────────────────
+//
+// The spy in describe block 4 relies on internal Capacitor bridge-init details
+// (CapacitorCustomPlatform priority, nativePromise NOT being overwritten by
+// createCapacitor(), PluginHeaders controlling registerPlugin() dispatch).
+// If @capacitor/core is upgraded, a maintainer must re-read dist/capacitor.js
+// and re-validate all three stubs before bumping KNOWN_GOOD_SPY_VERSION.
+//
+// This constant records the version the spy was last verified against.
+// The companion test ("@capacitor/core version matches known-good spy version")
+// at the top of describe block 4 fails immediately if the installed version
+// differs, ensuring the spy is never silently broken by a package upgrade.
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const INSTALLED_CAPACITOR_CORE_VERSION = (require("@capacitor/core/package.json") as { version: string }).version;
+const KNOWN_GOOD_SPY_VERSION = "8.3.1";
+
 // Match the overlay regardless of UI locale: the test suite does not pin
 // NEXT_LOCALE, so Next-intl resolves the language from Accept-Language (often
 // "en" in headless Chromium).  The CSS comma selector is a union that matches
@@ -500,6 +516,123 @@ test.describe("LandscapeGlucoseOverlay — fingerstick override chip and chart d
 
 test.describe("LandscapeGlucoseOverlay — screen-orientation API calls", () => {
   test.use({ viewport: PORTRAIT });
+
+  // ── Spy version guard ─────────────────────────────────────────────────────
+  //
+  // This test fails immediately when @capacitor/core has been upgraded since
+  // the spy stubs in nativeCapacitorScript were last verified. Failing early
+  // is safer than letting Tests A/B/C pass silently while the spy no longer
+  // intercepts calls (Test C — no-native — would pass regardless of whether
+  // the spy is broken, masking the regression).
+  //
+  // Before bumping KNOWN_GOOD_SPY_VERSION, re-read:
+  //
+  //   node_modules/@capacitor/core/dist/capacitor.js
+  //
+  // and confirm that createCapacitor() still:
+  //   (a) reads window.CapacitorCustomPlatform.name as the highest-priority
+  //       platform signal (so stub 0 keeps isNativePlatform() true post-IIFE)
+  //   (b) does NOT overwrite nativePromise on the existing cap object
+  //       (so the spy in stub 3 survives Capacitor's init)
+  //   (c) uses PluginHeaders to route plugin calls through nativePromise
+  //       (so unlock()/lock() reach the spy, not the JS web fallback)
+  //
+  // After re-verifying all three invariants, update KNOWN_GOOD_SPY_VERSION.
+  test("@capacitor/core version matches known-good spy version", () => {
+    expect(
+      INSTALLED_CAPACITOR_CORE_VERSION,
+      `@capacitor/core was upgraded from ${KNOWN_GOOD_SPY_VERSION} to ` +
+      `${INSTALLED_CAPACITOR_CORE_VERSION}. ` +
+      `Before bumping KNOWN_GOOD_SPY_VERSION, re-read ` +
+      `node_modules/@capacitor/core/dist/capacitor.js and verify that ` +
+      `createCapacitor() still: ` +
+      `(a) treats CapacitorCustomPlatform as the highest-priority platform signal, ` +
+      `(b) does NOT overwrite nativePromise on the existing cap object, ` +
+      `(c) uses PluginHeaders to route plugin methods through nativePromise. ` +
+      `See tests/e2e/ORIENTATION_SPY_WKWEBVIEW_GUIDE.md for the full rationale.`,
+    ).toBe(KNOWN_GOOD_SPY_VERSION);
+  });
+
+  // ── Spy post-init invariant ───────────────────────────────────────────────
+  //
+  // This test directly verifies the post-init state that Tests A and B depend
+  // on. If @capacitor/core changes its bridge-init logic and the spy setup
+  // stops working, this test catches the breakage. Unlike Test C (no-native),
+  // which would still pass even when the spy is silently broken, this test
+  // asserts the three properties that must hold AFTER Capacitor's IIFE runs:
+  //
+  //   1. window.Capacitor.isNativePlatform() === true
+  //      CapacitorCustomPlatform stub was still read by getPlatform() as the
+  //      highest-priority platform signal. If Capacitor stops reading it, the
+  //      dynamic import inside loadScreenOrientation() never fires and the spy
+  //      never intercepts any calls.
+  //
+  //   2. typeof window.Capacitor.nativePromise === "function"
+  //      createCapacitor() still does NOT overwrite nativePromise on the
+  //      existing cap object. If it did, our spy would be replaced by the real
+  //      (or no-op) implementation and Tests A/B would silently pass with zero
+  //      intercepted calls — the poll in waitForFunction would time out.
+  //
+  //   3. window.__screenOrientationCalls is an array
+  //      The init script ran before page scripts — a sanity check that
+  //      addInitScript() ordering is still respected by Playwright.
+  test("spy post-init invariant: isNativePlatform() true and nativePromise spy survives Capacitor IIFE", async ({ page }) => {
+    await page.addInitScript(nativeCapacitorScript);
+
+    await page.goto("/login");
+    await page.waitForLoadState("domcontentloaded");
+
+    // Wait for the Capacitor IIFE to have run. The IIFE fires as a side-effect
+    // of the dynamic import triggered inside loadScreenOrientation() when
+    // isNativePlatformForOrientation() returns true (via stub 1). Once the IIFE
+    // has run, createCapacitor() will have mutated window.Capacitor in-place —
+    // adding getPlatform, isNativePlatform, registerPlugin, etc. — while leaving
+    // our nativePromise spy intact. We poll until isNativePlatform() is callable
+    // and still returns true (confirming CapacitorCustomPlatform was honoured).
+    await page.waitForFunction(
+      () => {
+        const cap = (window as unknown as {
+          Capacitor?: { isNativePlatform?: () => boolean; nativePromise?: unknown };
+        }).Capacitor;
+        return typeof cap?.isNativePlatform === "function" && cap.isNativePlatform() === true;
+      },
+      { timeout: 10_000 },
+    );
+
+    const result = await page.evaluate(() => {
+      const cap = (window as unknown as {
+        Capacitor?: { isNativePlatform?: () => boolean; nativePromise?: unknown };
+      }).Capacitor;
+      return {
+        isNative:             cap?.isNativePlatform?.() === true,
+        nativePromiseIsFunction: typeof cap?.nativePromise === "function",
+        callLogInitialised:   Array.isArray(
+          (window as unknown as { __screenOrientationCalls?: unknown[] }).__screenOrientationCalls,
+        ),
+      };
+    });
+
+    expect(
+      result.isNative,
+      "window.Capacitor.isNativePlatform() must return true after Capacitor IIFE — " +
+      "CapacitorCustomPlatform stub was not honoured by getPlatform(). " +
+      "Check if @capacitor/core changed the platform-detection priority order " +
+      "in dist/capacitor.js.",
+    ).toBe(true);
+
+    expect(
+      result.nativePromiseIsFunction,
+      "window.Capacitor.nativePromise must still be a function after Capacitor IIFE — " +
+      "createCapacitor() may now overwrite nativePromise, destroying the spy. " +
+      "If so, the spy must be reinstalled after Capacitor's init instead of before.",
+    ).toBe(true);
+
+    expect(
+      result.callLogInitialised,
+      "window.__screenOrientationCalls must be an Array — " +
+      "the addInitScript() init script did not run before page scripts.",
+    ).toBe(true);
+  });
 
   // addInitScript callback — serialised and evaluated in the browser before
   // any page scripts run. Must be plain JS (no TypeScript, no imports).
