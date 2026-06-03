@@ -45,24 +45,18 @@ const TARGETS = [ANDROID_RAW_DIR, IOS_BUNDLE_DIR];
 
 const supabase = createClient(url, key, { auth: { persistSession: false } });
 
-console.log(`Pulling files from Supabase Storage bucket "${BUCKET}"...`);
+// Hardcoded — only alarm sounds go into the app bundle.
+// Pre/Post-Check sounds are intentionally excluded (no sound for meal reminders).
+const KNOWN_FILES = [
+  "glev_low_alarm.wav",
+  "glev_high_alarm.wav",
+  "glev_elevated.wav",
+];
 
-const { data: files, error: listErr } = await supabase.storage
-  .from(BUCKET)
-  .list("", { limit: 100 });
+console.log(`Pulling ${KNOWN_FILES.length} files from Supabase Storage bucket "${BUCKET}"...`);
 
-if (listErr) {
-  console.error(`ERROR: Could not list bucket: ${listErr.message}`);
-  process.exit(1);
-}
-
-if (!files || files.length === 0) {
-  console.log("No files found in bucket. Nothing to pull.");
-  process.exit(0);
-}
-
-for (const file of files) {
-  if (!file.name) continue;
+for (const fileName of KNOWN_FILES) {
+  const file = { name: fileName };
 
   const { data: urlData } = supabase.storage
     .from(BUCKET)
