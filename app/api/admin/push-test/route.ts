@@ -51,17 +51,29 @@ function diagnoseKey(raw: string): Record<string, unknown> {
   };
 }
 
-// Accepts a pre-validated KeyObject (not a raw string) so sign() never
-// re-parses the PEM and can never trigger an OpenSSL abort for wrong key type.
-function generateAPNsJWT(privKey: crypto.KeyObject, keyId: string, teamId: string): string {
+// Uses WebCrypto (crypto.subtle) instead of legacy crypto.createSign() +
+// dsaEncoding:"ieee-p1363" which triggers an OpenSSL abort on Vercel Lambda
+// even with a valid EC KeyObject. WebCrypto uses a separate code path and
+// natively outputs IEEE P1363 format for ECDSA — no dsaEncoding option needed.
+async function generateAPNsJWT(privKey: crypto.KeyObject, keyId: string, teamId: string): Promise<string> {
   const header = Buffer.from(JSON.stringify({ alg: "ES256", kid: keyId })).toString("base64url");
   const payload = Buffer.from(
     JSON.stringify({ iss: teamId, iat: Math.floor(Date.now() / 1000) }),
   ).toString("base64url");
   const signingInput = `${header}.${payload}`;
-  const sign = crypto.createSign("SHA256");
-  sign.update(signingInput);
-  const sig = sign.sign({ key: privKey, dsaEncoding: "ieee-p1363" }).toString("base64url");
+
+  const jwk = privKey.export({ format: "jwk" }) as JsonWebKey;
+  const subtleKey = await crypto.subtle.importKey(
+    "jwk", jwk,
+    { name: "ECDSA", namedCurve: "P-256" },
+    false, ["sign"],
+  );
+  const sigBuffer = await crypto.subtle.sign(
+    { name: "ECDSA", hash: { name: "SHA-256" } },
+    subtleKey,
+    Buffer.from(signingInput),
+  );
+  const sig = Buffer.from(sigBuffer).toString("base64url");
   return `${signingInput}.${sig}`;
 }
 
@@ -271,10 +283,10 @@ export async function POST(req: NextRequest) {
         return NextResponse.json(errInfo, { status: 500 });
       }
 
-      // Step 2: JWT — pass the pre-validated KeyObject, NOT the raw string
+      // Step 2: JWT — WebCrypto async signing, no OpenSSL abort risk
       let jwt: string;
       try {
-        jwt = generateAPNsJWT(privKey, keyId, teamId);
+        jwt = await generateAPNsJWT(privKey, keyId, teamId);
         console.log("[glev] admin push-test jwt generated, len=" + jwt.length);
       } catch (jwtErr) {
         const errInfo = {
