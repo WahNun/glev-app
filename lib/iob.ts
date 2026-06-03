@@ -369,8 +369,12 @@ export function calcBasalRemaining(
 export function calcBasalFraction(
   elapsedMin: number,
   windowMin: number,
+  peakFraction: number = 0.6,
 ): number {
   if (elapsedMin <= 0) return 1;
   if (elapsedMin >= windowMin) return 0;
-  return Math.max(0, 1 - elapsedMin / windowMin);
+  const plateauEnd = windowMin * peakFraction;
+  if (elapsedMin <= plateauEnd) return 1;
+  const tailLen = windowMin - plateauEnd;
+  return Math.max(0, 1 - (elapsedMin - plateauEnd) / tailLen);
 }
