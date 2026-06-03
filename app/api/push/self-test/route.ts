@@ -5,7 +5,14 @@ import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
 import http2 from "http2";
 import crypto from "crypto";
 
+function normalizeP8Key(raw: string): string {
+  // Vercel stores multiline env vars with literal \n instead of real newlines.
+  // crypto.createSign throws SyntaxError if the PEM has no real line breaks.
+  return raw.replace(/\\n/g, "\n");
+}
+
 function generateAPNsJWT(keyP8: string, keyId: string, teamId: string): string {
+  const key = normalizeP8Key(keyP8);
   const header = Buffer.from(JSON.stringify({ alg: "ES256", kid: keyId })).toString("base64url");
   const payload = Buffer.from(
     JSON.stringify({ iss: teamId, iat: Math.floor(Date.now() / 1000) }),
@@ -13,7 +20,7 @@ function generateAPNsJWT(keyP8: string, keyId: string, teamId: string): string {
   const signingInput = `${header}.${payload}`;
   const sign = crypto.createSign("SHA256");
   sign.update(signingInput);
-  const sig = sign.sign({ key: keyP8, dsaEncoding: "ieee-p1363" }).toString("base64url");
+  const sig = sign.sign({ key, dsaEncoding: "ieee-p1363" }).toString("base64url");
   return `${signingInput}.${sig}`;
 }
 

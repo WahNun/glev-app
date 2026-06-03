@@ -13,10 +13,13 @@ export default function PushTestCard() {
     setPending(true);
     setResult(null);
     try {
-      const token = document.cookie
+      const cookiePair = document.cookie
         .split(";")
-        .find((c) => c.trim().startsWith("glev_admin_token="))
-        ?.split("=")[1] ?? "";
+        .find((c) => c.trim().startsWith("glev_admin_token="));
+      // Use slice(1).join("=") to preserve any "=" padding in Base64 tokens.
+      const token = cookiePair
+        ? cookiePair.trim().split("=").slice(1).join("=")
+        : "";
       const res = await fetch("/api/admin/push-test", {
         method: "POST",
         headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
