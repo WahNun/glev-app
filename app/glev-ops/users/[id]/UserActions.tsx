@@ -61,7 +61,7 @@ export default function UserActions({
   // Versehen ausgelöst werden — gleiche UX wie der Drip-Send-Confirm.
   const [simpleConfirm, setSimpleConfirm] = useState<"magic" | "reset" | null>(null);
   const [pendingSimple, setPendingSimple] = useState<"magic" | "reset" | null>(null);
-  const [simpleResult, setSimpleResult] = useState<{ ok: boolean; msg: string } | null>(null);
+  const [simpleResult, setSimpleResult] = useState<{ ok: boolean; msg: string; kind?: "magic" | "reset" } | null>(null);
   const [, startTransition] = useTransition();
 
   // Push-Test
@@ -117,6 +117,7 @@ export default function UserActions({
         if (result.ok) {
           setSimpleResult({
             ok: true,
+            kind,
             msg:
               kind === "magic"
                 ? `✅ Magic-Link an ${email} gesendet`
@@ -309,6 +310,14 @@ export default function UserActions({
         {simpleResult && (
           <p style={{ margin: "10px 0 0", fontSize: 13, color: simpleResult.ok ? "#15803d" : "#991b1b" }}>
             {simpleResult.msg}
+            {simpleResult.ok && simpleResult.kind === "reset" && (
+              <a
+                href="/glev-ops/emails?t=password-reset"
+                style={{ marginLeft: 10, color: "#15803d", textDecoration: "underline" }}
+              >
+                Vorschau in Outbox →
+              </a>
+            )}
           </p>
         )}
 

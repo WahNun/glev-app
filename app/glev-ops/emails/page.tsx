@@ -7,6 +7,10 @@ import {
   supabaseConfirmHtml,
   SUPABASE_CONFIRM_SUBJECT,
 } from "@/lib/emails/supabase-confirm";
+import {
+  passwordResetHtml,
+  passwordResetSubject,
+} from "@/lib/emails/password-reset";
 import { proWelcomeHtml, proWelcomeSubject } from "@/lib/emails/pro-welcome";
 import { plusWelcomeHtml, plusWelcomeSubject } from "@/lib/emails/plus-welcome";
 import {
@@ -260,6 +264,16 @@ function buildTemplates(
       html: betaFreeYearWelcomeHtml(name, appUrl, bfyExpiresAt, locale, bfySignupUrl, "pro"),
     },
     // ── System ─────────────────────────────────────────────────────────
+    {
+      key: "password-reset",
+      label: isEn ? "Password Reset (admin-triggered)" : "Passwort-Reset (admin-ausgelöst)",
+      campaign: "system",
+      whenSent: isEn
+        ? "When admin clicks 'Send password-reset email' on a user detail page"
+        : "Wenn admin 'Passwort-Reset-Mail senden' auf der User-Detailseite klickt",
+      subject: passwordResetSubject(name, locale),
+      html: passwordResetHtml(name, `${appUrl}/auth/confirm#access_token=preview_only&type=recovery`, appUrl, locale),
+    },
     {
       key: "supabase-confirm",
       label: isEn ? "Supabase — Email Confirmation" : "Supabase — E-Mail-Bestätigung",
