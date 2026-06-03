@@ -160,7 +160,7 @@ export async function GET(req: NextRequest) {
       APNS_KEY_P8:    keyP8.length > 0,
       APNS_KEY_ID:    keyId.length > 0,
       APNS_TEAM_ID:   teamId.length > 0,
-      APNS_BUNDLE_ID: bundleId.length > 0,
+      APNS_BUNDLE_ID: bundleId.length > 0 ? bundleId : false,
     };
 
     // Try key validation without any APNs call
