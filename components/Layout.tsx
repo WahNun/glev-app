@@ -164,6 +164,23 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
   // GlevAIChatSheet so the FAB can show a green glow while AI speaks.
   const [ttsSpeaking, setTtsSpeaking] = useState(false);
 
+  // Chat position preference: "tap" = short-tap opens chat (arrow hidden),
+  // "swipe" = chat stays closed, arrow shown, swipe-up on nav bar opens it.
+  const [chatPosition, setChatPosition] = useState<"tap" | "swipe">("swipe");
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      const v = window.localStorage.getItem("glev_chat_position");
+      if (v === "tap" || v === "swipe") setChatPosition(v);
+    } catch { /* ignore */ }
+    const handler = (e: Event) => {
+      const v = (e as CustomEvent<string>).detail;
+      if (v === "tap" || v === "swipe") setChatPosition(v);
+    };
+    window.addEventListener("glev:chat-position-changed", handler);
+    return () => window.removeEventListener("glev:chat-position-changed", handler);
+  }, []);
+
   // aiThinking: true while the chat sheet's STT mic is active (user
   // speaking into the chat) OR while the AI is streaming a reply.
   // Kept separate from voice.recording (engine STT) so both can be true
@@ -312,6 +329,22 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
     let storedMode: string | null = null;
     if (typeof window !== "undefined") {
       try { storedMode = window.localStorage.getItem("glev_fab_mode"); } catch { /* ignore */ }
+    }
+
+    // "tap" chat-position overrides fabMode: always open the AI chat on short-tap.
+    // This is independent of the stored fabMode so the user doesn't need to
+    // set two separate prefs for the same goal.
+    const chatPos = (() => { try { return window.localStorage.getItem("glev_chat_position"); } catch { return null; } })();
+    if (chatPos === "tap" && aiVoiceEnabled && glevAi.consentGranted) {
+      if (glevAi.sheetOpen) {
+        window.dispatchEvent(new CustomEvent("glev:voice-start"));
+        return;
+      }
+      glevAi.openFromButton();
+      window.setTimeout(() => {
+        window.dispatchEvent(new CustomEvent("glev:voice-start"));
+      }, 350);
+      return;
     }
 
     // AI mode: only when user explicitly chose "ai", feature flag is on,
@@ -1037,7 +1070,21 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
           straight to /engine (Step 1 voice input). The three logging
           shortcuts live in the header "+" QuickAddMenu, so each
           bottom-nav tap stays a single decisive gesture. */}
-      <nav className="glev-mobile-nav" style={{
+      <nav className="glev-mobile-nav"
+        onTouchStart={(e) => {
+          (e.currentTarget as HTMLElement & { _swipeStartY?: number })._swipeStartY = e.touches[0].clientY;
+        }}
+        onTouchEnd={(e) => {
+          const el = e.currentTarget as HTMLElement & { _swipeStartY?: number };
+          const startY = el._swipeStartY;
+          if (startY == null) return;
+          el._swipeStartY = undefined;
+          const dy = startY - e.changedTouches[0].clientY;
+          if (dy >= 60 && aiVoiceEnabled && !glevAi.sheetOpen) {
+            glevAi.openFromButton();
+          }
+        }}
+        style={{
         position: "fixed", bottom: 0, left: 0, right: 0,
         background: NAV_SURFACE, borderTop: `1px solid ${NAV_BORDER}`,
         // 2026-05-18 round 8: with capacitor `contentInset: "never"`
@@ -1101,7 +1148,7 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
           speaking={aiVoiceEnabled ? ttsSpeaking : false}
           sheetOpen={aiVoiceEnabled ? glevAi.sheetOpen : false}
           hasConversation={aiVoiceEnabled ? glevAi.messages.length > 0 && !glevAi.sheetOpen : false}
-          showArrow={aiVoiceEnabled === true}
+          showArrow={aiVoiceEnabled === true && chatPosition === "swipe"}
         />
         <MobileTab
           label={tNav("insights")}
