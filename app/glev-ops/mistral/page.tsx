@@ -201,7 +201,8 @@ export default function MistralTTSPage() {
         });
         if (!res.ok) {
           const errJson = await res.json().catch(() => null);
-          flash("err", errJson?.error ?? `TTS-Fehler (${res.status})`);
+          const detail = errJson?.detail ? ` — ${errJson.detail}` : "";
+          flash("err", (errJson?.error ?? `TTS-Fehler (${res.status})`) + detail);
           return;
         }
         const blob = await res.blob();
@@ -329,7 +330,7 @@ export default function MistralTTSPage() {
         <p style={{ fontSize: 12, color: "#666", marginBottom: 12 }}>
           Ruft <code>/api/tts/mistral</code> auf — exakt wie echte Nutzer es hören.
           {cfg.hasRefAudio
-            ? " ✦ ref_audio aktiv → Style-Prefix automatisch deaktiviert (würde Stimm-Klon beeinträchtigen)."
+            ? " ✦ ref_audio aktiv → Style-Prefix weiterhin aktiv (verbessert Natürlichkeit auch beim Stimm-Klon)."
             : " Style-Prefix aktiv."}
         </p>
         <textarea
@@ -345,7 +346,7 @@ export default function MistralTTSPage() {
             checked={skipStylePrefix}
             onChange={e => setSkipStylePrefix(e.target.checked)}
           />
-          Style-Prefix überspringen (A/B-Vergleich — bei ref_audio ohnehin automatisch deaktiviert)
+          Style-Prefix überspringen (A/B-Vergleich)
         </label>
         <div style={{ marginTop: 10, display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
           <button
