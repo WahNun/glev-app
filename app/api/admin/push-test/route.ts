@@ -124,11 +124,18 @@ export async function POST(req: NextRequest) {
 
   let resolvedUserId = userId;
   if (!resolvedUserId && email) {
-    const { data: authUser, error: lookupErr } = await admin.auth.admin.getUserByEmail(email);
-    if (lookupErr || !authUser?.user) {
+    // Supabase GoTrueAdminApi has no getUserByEmail — query auth.users directly
+    // via service-role (bypasses RLS on all schemas including auth).
+    const { data: authRow, error: lookupErr } = await admin
+      .schema("auth")
+      .from("users")
+      .select("id")
+      .eq("email", email.toLowerCase())
+      .maybeSingle();
+    if (lookupErr || !authRow?.id) {
       return NextResponse.json({ error: `Kein User mit E-Mail ${email} gefunden.` }, { status: 404 });
     }
-    resolvedUserId = authUser.user.id;
+    resolvedUserId = authRow.id as string;
   }
 
   if (!resolvedUserId) {
