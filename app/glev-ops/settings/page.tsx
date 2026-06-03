@@ -4,6 +4,7 @@ import {
   backfillCurrencyCountryAction,
 } from "../users/actions";
 import AdminLoginForm from "../_components/AdminLoginForm";
+import PushTestCard from "./PushTestCard";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -81,6 +82,8 @@ export default async function AdminSettingsPage({
           </button>
         </form>
       </section>
+
+      <PushTestCard />
 
       <p style={{ fontSize: 12, color: "#999", marginTop: 24 }}>
         Mehr Wartungs-Tools werden hier ergänzt, wenn der Bedarf da ist.

@@ -97,16 +97,28 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const { userId, sandbox = true } = await req.json() as { userId: string; sandbox?: boolean };
-  if (!userId) {
-    return NextResponse.json({ error: "userId required" }, { status: 400 });
-  }
+  const { userId, email, sandbox = false } = await req.json() as { userId?: string; email?: string; sandbox?: boolean };
 
   const admin = getSupabaseAdmin();
+
+  let resolvedUserId = userId;
+  if (!resolvedUserId && email) {
+    const { data: authUser } = await admin.auth.admin.listUsers();
+    const match = authUser?.users?.find((u) => u.email?.toLowerCase() === email.toLowerCase());
+    if (!match) {
+      return NextResponse.json({ error: `Kein User mit E-Mail ${email} gefunden.` }, { status: 404 });
+    }
+    resolvedUserId = match.id;
+  }
+
+  if (!resolvedUserId) {
+    return NextResponse.json({ error: "userId oder email erforderlich" }, { status: 400 });
+  }
+
   const { data: profile, error } = await admin
     .from("profiles")
     .select("push_token, push_platform")
-    .eq("user_id", userId)
+    .eq("user_id", resolvedUserId)
     .maybeSingle();
 
   if (error) {
