@@ -1,52 +1,34 @@
 ---
 name: Push-Notifications iOS Debug
-description: register() fired, Permission granted, aber kein APNs-Token — Debugging-Stand und nächste Schritte
+description: APNs token flow, 502 root cause, server-side push implementation status
 ---
 
-## Symptom
-- TestFlight-App zeigt: Platform iOS (native ✓), Permission: granted, Letzter Schritt: register() called → Kein Token
-- Kein Error, kein Token — APNs antwortet einfach nicht (silent timeout)
+## Echter Root Cause 502 (gefunden 2026-06-03)
+**Vercel Function crasht vor Output** → Cloudflare bekommt keine Response → 502-HTML-Page → `res.json()` → WebKit `SyntaxError: The string did not match the expected pattern`.
 
-## Was korrekt ist (Code-seitig)
-- `App.entitlements` hat `aps-environment: production` ✅
-- `AppDelegate.swift` ruft `ApplicationDelegateProxy.shared.application(...)` auf ✅ (Capacitor-Bridge korrekt initialisiert)
-- `lib/pushNotifications.ts` — register() wird korrekt aufgerufen ✅
-- Push-Debug-Panel in Einstellungen eingebaut ✅
+**Nicht** ein Client-Fetch-Problem. Der Crash passiert im Serverhandler (vermutlich JWT-Generierung via `crypto.createSign` mit einem schlecht formatierten P8-Key).
 
-## Wahrscheinliche Ursache
-Das Provisioning-Profil im aktuellen TestFlight-Build (Build 1) enthält **nicht** die Push-Notifications-Capability.
-Ein Provisioning-Profil ist nicht dasselbe wie die Entitlements-Datei — beide müssen übereinstimmen.
-Wenn die App ID in Apple Developer → Identifiers nicht explizit Push Notifications aktiviert hat UND das Profil nicht mit dieser Capability generiert wurde, antwortet APNs nie (kein Error, kein Token).
+**Fix deployed:**
+- Mega try/catch um GESAMTEN Handler in beiden Routes: `app/api/push/self-test/route.ts` + `app/api/admin/push-test/route.ts`
+- `console.error(JSON.stringify(diag))` für Vercel Function Logs
+- `diagnoseKey()` in beiden Routes (vorher nur Self-Test): zeigt `len`, `hasBegin`, `realNewlines`, `escapedNewlines`, `lineCount`, `firstChars`
+- JWT-Crash in eigenem inneren try/catch mit keyDiag im Response-Body
 
-## Checkliste für Fix
-1. Apple Developer → Identifiers → App-ID → Edit → Push Notifications = ON ← prüfen
-2. fastlane match neu ausführen (regeneriert Profil mit Push-Capability): `bundle exec fastlane match appstore --force`
-3. Neuen Build hochladen: `bundle exec fastlane ios beta`
-4. Neuen TestFlight-Build installieren und testen
+**Nächster Schritt nach Deploy:** `/glev-ops/settings` → Push-Test ausführen → bei Fehler erscheint jetzt JSON statt 502. Vercel Logs zeigen `[glev] unhandled crash:` mit vollem Stack.
 
-## Was danach noch fehlt (Server-Push)
-Supabase Edge Function Secrets für hypo-check Edge Function:
-- FIREBASE_SERVER_KEY (Android)
-- APNS_KEY_P8, APNS_KEY_ID, APNS_TEAM_ID, APNS_BUNDLE_ID (iOS)
-→ Supabase Dashboard → Project Settings → Edge Functions → Secrets
+## syncCachedPushToken Login-Gap (gefunden 2026-06-03)
+`lib/auth.ts` `signIn()` ruft `syncCachedPushToken()` auf — aber `app/login/page.tsx` nutzt `supabase.auth.signInWithPassword()` direkt (nicht `lib/auth.ts`). Token-Sync fand nach Login nicht statt.
+**Fix:** `app/login/page.tsx` ruft `syncCachedPushToken()` via dynamischem Import nach erfolgreichem Login.
 
-## Echter Root Cause (gefunden 2026-05-30)
-**AppDelegate.swift fehlten zwei Pflichtmethoden** für Capacitor 4+:
+## APNs Key Format
+Vercel speichert `APNS_KEY_P8` oft als Single-Line mit literal `\n` (escaped). `normalizeP8Key()` dekodiert alle Varianten (`\\r\\n`, `\\r`, `\\n`, Zero-Newlines) und rekonstruiert PEM mit 64-char-wrapped Base64. Muss in BEIDEN Routes vorhanden sein.
 
-```swift
-func application(_ application: UIApplication, didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {
-    NotificationCenter.default.post(name: .capacitorDidRegisterForRemoteNotifications, object: deviceToken)
-}
-func application(_ application: UIApplication, didFailToRegisterForRemoteNotificationsWithError error: Error) {
-    NotificationCenter.default.post(name: .capacitorDidFailToRegisterForRemoteNotifications, object: error)
-}
-```
+## Frühere Root Causes
+- **AppDelegate.swift fehlten Push-Delegate-Methoden** (2026-05-30) — `didRegisterForRemoteNotificationsWithDeviceToken` + `didFailToRegisterForRemoteNotifications` → Capacitor empfängt Token nie. Fix committed, neuer Build deployed.
+- **Provisioning-Profil** musste Push Notifications Capability explizit einschließen (Apple Developer → Identifiers → App-ID).
 
-Ohne diese leitet iOS den APNs-Token ans AppDelegate zurück, aber das Capacitor-Plugin empfängt ihn nie → `registration`- und `registrationError`-Events feuern nicht → JS hängt still nach `register() called`.
-
-**Fix:** Beide Methoden in `ios/App/App/AppDelegate.swift` ergänzt (2026-05-30). Neuen Build nötig.
-
-## Status (2026-05-30)
-- Root Cause: AppDelegate-Methoden fehlten → Fix committed
-- Client-seitige Token-Registrierung: ⏳ Fix deployed, neuer TestFlight-Build ausstehend
-- Server-seitiger Hypo-Push (hypo-check Edge Function): ❓ ungetestet (erst wenn Token funktioniert)
+## Status
+- Client-seitige Token-Registrierung + Sync nach Login: ✅ Fixed
+- Server-Handler 502-Absicherung: ✅ Fixed (mega try/catch + diagnostics)
+- Sandbox-Default: ✅ `false` in beiden Routes (TestFlight/App Store = Production APNs)
+- Eigentlicher Push-Test gegen APNs: ⏳ Ungetestet bis nächster Vercel-Deploy

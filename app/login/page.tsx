@@ -171,6 +171,14 @@ export default function LoginPage() {
     }
 
     if (data?.session) {
+      // Re-sync push token: the first registration attempt may have failed
+      // with 401 if the user wasn't logged in when the native shell fired
+      // the registration event. Calling here (session now established) ensures
+      // the token reaches Supabase before we navigate away.
+      import("@/lib/pushNotifications").then(({ syncCachedPushToken }) => {
+        void syncCachedPushToken();
+      }).catch(() => { /* non-fatal */ });
+
       router.refresh();
       router.replace("/dashboard");
     } else {
