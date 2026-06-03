@@ -505,17 +505,102 @@ test.describe("LandscapeGlucoseOverlay — screen-orientation API calls", () => 
   // any page scripts run. Must be plain JS (no TypeScript, no imports).
   // It pre-populates window.Capacitor so that when @capacitor/core
   // initialises, it treats the environment as native iOS.
+  //
+  // ── How Capacitor determines the platform (verified against @capacitor/core source) ──
+  //
+  //   getPlatform() checks, in order:
+  //     1. window.CapacitorCustomPlatform?.name  (highest priority, any string)
+  //     2. window.webkit?.messageHandlers?.bridge (iOS WKWebView — set by native host)
+  //     3. window.androidBridge                  (Android WebView — set by native host)
+  //     4. "web"                                 (fallback in plain browsers)
+  //
+  //   isNativePlatform() simply returns getPlatform() !== "web".
+  //
+  //   IMPORTANT: window.Capacitor.PluginHeaders does NOT affect isNativePlatform().
+  //   PluginHeaders only controls HOW plugin methods are dispatched inside
+  //   registerPlugin() — i.e. whether unlock()/lock() route through nativePromise
+  //   (native path) or the JS web implementation. Without a native-platform signal,
+  //   loadScreenOrientation()'s isNativePlatformForOrientation() guard returns false
+  //   and the module never imports, so the spy never fires.
+  //
+  // ── WKWebView vs Chromium difference ──
+  //
+  //   On a real iOS device or Simulator:
+  //     webkit.messageHandlers.bridge is injected by the native WKWebView host.
+  //     getPlatform() returns "ios" automatically — no extra stub needed.
+  //     nativePromise is the real Capacitor bridge; the spy below would replace it.
+  //
+  //   In headless Chromium (this test):
+  //     Neither webkit.messageHandlers.bridge nor androidBridge exists.
+  //     We must set window.CapacitorCustomPlatform = { name: "ios" } BEFORE
+  //     the Capacitor IIFE runs so getPlatform() returns "ios" and
+  //     isNativePlatform() returns true. addInitScript guarantees this ordering.
+  //
+  // ── Spy survival across Capacitor init ──
+  //
+  //   createCapacitor() does `r = t.Capacitor || {}` and then mutates r in-place,
+  //   adding getPlatform, isNativePlatform, registerPlugin, etc. It does NOT write
+  //   a new nativePromise, so our spy on cap.nativePromise survives init and
+  //   intercepts every nativePromise(pluginName, method, options) call that
+  //   registerPlugin() makes when PluginHeaders lists the matching method.
   function nativeCapacitorScript() {
     // Call log shared across the test assertion boundary.
     (window as unknown as Record<string, unknown>).__screenOrientationCalls = [];
 
     const calls = (window as unknown as { __screenOrientationCalls: Array<{ method: string; options: unknown }> }).__screenOrientationCalls;
 
+    // ── Why three pre-init stubs are needed (all must be set before page scripts) ──
+    //
+    // The component's loadScreenOrientation() guard is:
+    //
+    //   function isNativePlatformForOrientation(): boolean {
+    //     return !!window.Capacitor?.isNativePlatform?.();
+    //   }
+    //
+    // This creates a chicken-and-egg problem in headless Chromium:
+    //
+    //   • window.Capacitor.isNativePlatform is only added by the @capacitor/core IIFE.
+    //   • That IIFE only runs when @capacitor/screen-orientation is dynamically imported.
+    //   • That import only fires if isNativePlatformForOrientation() returns true.
+    //   • isNativePlatformForOrientation() returns false if isNativePlatform is missing.
+    //
+    // The deadlock means the module never loads, the spy never fires.
+    //
+    // Break the cycle by providing all three stubs up-front in addInitScript:
+    //
+    //   0. CapacitorCustomPlatform — ensures that AFTER Capacitor's IIFE overwrites
+    //      cap.isNativePlatform with its own function, that function still returns true.
+    //      In Chromium there is no webkit.messageHandlers.bridge, so without this stub
+    //      getPlatform() would return "web" post-IIFE and isNativePlatform() would flip
+    //      back to false. On a real WKWebView the native host injects
+    //      webkit.messageHandlers.bridge, so CapacitorCustomPlatform is not needed there.
+    //
+    //   1. cap.isNativePlatform = () => true — breaks the deadlock by letting the
+    //      guard pass before Capacitor's own IIFE has run. This triggers the dynamic
+    //      import, which loads @capacitor/core, which then overwrites isNativePlatform
+    //      with its own version (which still returns true thanks to stub 0).
+    //
+    //   2. PluginHeaders — tells registerPlugin() to route unlock()/lock() through
+    //      nativePromise instead of the JS web implementation.
+    //
+    //   3. nativePromise spy — the actual spy. createCapacitor() mutates the existing
+    //      cap object in-place and does NOT write a new nativePromise, so our spy
+    //      survives after Capacitor's IIFE runs.
+
+    // 0. CapacitorCustomPlatform — keeps isNativePlatform() true post-IIFE in Chromium.
+    (window as unknown as Record<string, unknown>).CapacitorCustomPlatform = { name: "ios" };
+
     const cap = (window as unknown as { Capacitor?: Record<string, unknown> }).Capacitor ?? {};
 
-    // 1. PluginHeaders — makes Capacitor's isNativePlatform() return true.
-    //    The methods array tells createPluginMethod() to use nativePromise
-    //    for unlock() and lock() instead of the JS web implementation.
+    // 1. isNativePlatform stub — breaks the chicken-and-egg deadlock. Without this,
+    //    the guard in loadScreenOrientation() returns false before Capacitor's IIFE
+    //    has had a chance to run and the dynamic import never fires.
+    (cap as Record<string, unknown>).isNativePlatform = () => true;
+
+    // 2. PluginHeaders — tells registerPlugin() to dispatch unlock() and lock()
+    //    through nativePromise (the native bridge path) instead of the JS web
+    //    implementation. Does NOT affect isNativePlatform() — that is determined
+    //    by getPlatform() (see comment above).
     (cap as Record<string, unknown>).PluginHeaders = [
       {
         name: "ScreenOrientation",
@@ -526,8 +611,9 @@ test.describe("LandscapeGlucoseOverlay — screen-orientation API calls", () => 
       },
     ];
 
-    // 2. nativePromise spy — intercepts all promise-based plugin calls.
-    //    createCapacitor() does NOT overwrite this, so our spy survives init.
+    // 3. nativePromise spy — intercepts all promise-based plugin calls.
+    //    createCapacitor() mutates the existing cap object in-place and does not
+    //    overwrite nativePromise, so our spy survives Capacitor's init.
     (cap as Record<string, unknown>).nativePromise = (
       pluginName: string,
       method: string,
