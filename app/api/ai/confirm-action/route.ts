@@ -162,6 +162,8 @@ async function executeConfirmedAction(
       return await execLogMealEntry(sb, userId, params);
     case "log_bolus_entry":
       return await execLogBolusEntry(sb, userId, params);
+    case "log_basal_entry":
+      return await execLogBasalEntry(sb, userId, params);
     case "log_fingerstick":
       return await execLogFingerstick(sb, userId, params);
     case "add_appointment":
@@ -221,6 +223,14 @@ async function execLogMealEntry(
   return { insertedId: data?.id as string | undefined };
 }
 
+function resolveLoggedAt(raw: unknown): string {
+  if (typeof raw === "string" && raw.trim()) {
+    const ms = new Date(raw.trim()).getTime();
+    if (Number.isFinite(ms)) return new Date(ms).toISOString();
+  }
+  return new Date().toISOString();
+}
+
 async function execLogBolusEntry(
   sb: SupabaseClient,
   userId: string,
@@ -233,6 +243,7 @@ async function execLogBolusEntry(
       : "Bolus";
   const notes =
     typeof p.notes === "string" && p.notes.trim() ? p.notes.trim() : null;
+  const createdAt = resolveLoggedAt(p.logged_at);
 
   if (units === null || !Number.isFinite(units) || units <= 0 || units > 100) {
     throw new Error("units muss zwischen 0 und 100 IE liegen");
@@ -244,6 +255,43 @@ async function execLogBolusEntry(
     insulin_name: name,
     units,
     notes,
+    created_at: createdAt,
+  };
+
+  const { data, error } = await sb
+    .from("insulin_logs")
+    .insert(row)
+    .select("id")
+    .single();
+  if (error) throw new Error(error.message);
+  return { insertedId: data?.id as string | undefined };
+}
+
+async function execLogBasalEntry(
+  sb: SupabaseClient,
+  userId: string,
+  p: Record<string, unknown>,
+): Promise<{ insertedId?: string }> {
+  const units = typeof p.units === "number" ? p.units : null;
+  const name =
+    typeof p.insulin_name === "string" && p.insulin_name.trim()
+      ? p.insulin_name.trim()
+      : "Basal";
+  const notes =
+    typeof p.notes === "string" && p.notes.trim() ? p.notes.trim() : null;
+  const createdAt = resolveLoggedAt(p.logged_at);
+
+  if (units === null || !Number.isFinite(units) || units <= 0 || units > 100) {
+    throw new Error("units muss zwischen 0 und 100 IE liegen");
+  }
+
+  const row: Record<string, unknown> = {
+    user_id: userId,
+    insulin_type: "basal",
+    insulin_name: name,
+    units,
+    notes,
+    created_at: createdAt,
   };
 
   const { data, error } = await sb

@@ -197,7 +197,7 @@ export const GLEV_TOOLS = [
     function: {
       name: "log_bolus_entry",
       description:
-        "Schlägt das Speichern einer Bolus-Insulin-Dosis vor (insulin_logs). WICHTIG: schreibt NICHT direkt — Bestätigung erfolgt per UI-Button. Nur aufrufen, wenn der Nutzer explizit eine bereits gespritzte Dosis dokumentieren will ('Log 5 IE Bolus', 'Trag bitte 4 Einheiten Novorapid ein'). Niemals selbst eine Dosis vorschlagen oder berechnen — die IE-Zahl muss vom Nutzer kommen.",
+        "Schlägt das Speichern einer schnell-wirkenden (Bolus-)Insulin-Dosis vor — z. B. NovoRapid, Fiasp, Humalog, Apidra (insulin_logs). WICHTIG: schreibt NICHT direkt — Bestätigung erfolgt per UI-Button. Nur aufrufen, wenn der Nutzer explizit eine bereits gespritzte Dosis dokumentieren will ('Log 5 IE Bolus', 'Trag bitte 4 Einheiten Novorapid ein'). Niemals selbst eine Dosis vorschlagen oder berechnen — die IE-Zahl muss vom Nutzer kommen. Für lang-wirkende Insuline (Tresiba, Lantus, Toujeo, Levemir, Degludec) stattdessen log_basal_entry verwenden.",
       parameters: {
         type: "object",
         properties: {
@@ -213,6 +213,43 @@ export const GLEV_TOOLS = [
           notes: {
             type: "string",
             description: "Optional: kurze Notiz.",
+          },
+          logged_at: {
+            type: "string",
+            description:
+              "Optional: Zeitpunkt der Injektion als ISO-8601-String (z. B. '2026-06-03T22:30:00'). Wenn der Nutzer eine Uhrzeit nennt, hier eintragen; sonst weglassen — das System verwendet dann den aktuellen Zeitpunkt.",
+          },
+        },
+        required: ["units"],
+      },
+    },
+  },
+  {
+    type: "function" as const,
+    function: {
+      name: "log_basal_entry",
+      description:
+        "Schlägt das Speichern einer lang-wirkenden (Basal-)Insulin-Dosis vor — z. B. Tresiba, Lantus, Toujeo, Levemir, Degludec (insulin_logs). WICHTIG: schreibt NICHT direkt — Bestätigung erfolgt per UI-Button. Nur aufrufen, wenn der Nutzer explizit eine bereits gespritzte Dosis dokumentieren will ('Log 20 IE Tresiba', '12 Einheiten Lantus gespritzt'). Niemals selbst eine Dosis vorschlagen oder berechnen — die IE-Zahl muss vom Nutzer kommen. Für schnell-wirkende Insuline (NovoRapid, Fiasp, Humalog, Apidra) stattdessen log_bolus_entry verwenden.",
+      parameters: {
+        type: "object",
+        properties: {
+          units: {
+            type: "number",
+            description: "Anzahl IE (0-100). Pflichtfeld.",
+          },
+          insulin_name: {
+            type: "string",
+            description:
+              "Optional: Marken-/Insulin-Name (z. B. 'Tresiba', 'Lantus'). Default 'Basal'.",
+          },
+          notes: {
+            type: "string",
+            description: "Optional: kurze Notiz.",
+          },
+          logged_at: {
+            type: "string",
+            description:
+              "Optional: Zeitpunkt der Injektion als ISO-8601-String (z. B. '2026-06-03T22:30:00'). Wenn der Nutzer eine Uhrzeit nennt, hier eintragen; sonst weglassen — das System verwendet dann den aktuellen Zeitpunkt.",
           },
         },
         required: ["units"],
@@ -426,6 +463,7 @@ export type GlevToolName =
   | "save_user_observation"
   | "log_meal_entry"
   | "log_bolus_entry"
+  | "log_basal_entry"
   | "log_fingerstick"
   | "add_appointment"
   | "add_timeline_check"
@@ -579,7 +617,9 @@ export async function executeGlevTool(
       case "log_meal_entry":
         return await toolLogMealEntry(sb, userId, args);
       case "log_bolus_entry":
-        return await toolLogBolusEntry(sb, userId, args);
+        return await toolLogBolusEntry(sb, userId, args, userTimezone);
+      case "log_basal_entry":
+        return await toolLogBasalEntry(sb, userId, args, userTimezone);
       case "log_fingerstick":
         return await toolLogFingerstick(sb, userId, args);
       case "add_appointment":
@@ -1168,6 +1208,7 @@ async function toolLogBolusEntry(
   sb: SupabaseClient,
   userId: string,
   args: Record<string, unknown>,
+  userTimezone: string | null,
 ): Promise<unknown> {
   const units = Number(args.units);
   if (!Number.isFinite(units) || units <= 0 || units > 100) {
@@ -1182,14 +1223,100 @@ async function toolLogBolusEntry(
       ? args.notes.trim().slice(0, 200)
       : null;
 
+  const loggedAt = resolveLoggedAt(args.logged_at);
+  const timeLabel = formatLoggedAt(new Date(loggedAt).getTime(), userTimezone);
+
   const params = {
     units,
     insulin_name: insulinName,
     notes,
+    logged_at: loggedAt,
   };
-  const summary = `Bolus: ${units} IE ${insulinName}${notes ? ` (${notes})` : ""}`;
+  const summary = `Bolus: ${units} IE ${insulinName}${notes ? ` (${notes})` : ""} — ${timeLabel}`;
 
   return await createPendingAction(sb, userId, "log_bolus_entry", params, summary);
+}
+
+async function toolLogBasalEntry(
+  sb: SupabaseClient,
+  userId: string,
+  args: Record<string, unknown>,
+  userTimezone: string | null,
+): Promise<unknown> {
+  const units = Number(args.units);
+  if (!Number.isFinite(units) || units <= 0 || units > 100) {
+    return { error: "units ungültig (0-100 IE erwartet)" };
+  }
+  const insulinName =
+    typeof args.insulin_name === "string" && args.insulin_name.trim()
+      ? args.insulin_name.trim().slice(0, 60)
+      : "Basal";
+  const notes =
+    typeof args.notes === "string" && args.notes.trim()
+      ? args.notes.trim().slice(0, 200)
+      : null;
+
+  const loggedAt = resolveLoggedAt(args.logged_at);
+  const timeLabel = formatLoggedAt(new Date(loggedAt).getTime(), userTimezone);
+
+  const params = {
+    units,
+    insulin_name: insulinName,
+    notes,
+    logged_at: loggedAt,
+  };
+  const summary = `Basal: ${units} IE ${insulinName}${notes ? ` (${notes})` : ""} — ${timeLabel}`;
+
+  return await createPendingAction(sb, userId, "log_basal_entry", params, summary);
+}
+
+/**
+ * Resolves the `logged_at` arg from a tool call.
+ * Accepts an ISO-8601 string; falls back to the current moment if absent or invalid.
+ */
+function resolveLoggedAt(raw: unknown): string {
+  if (typeof raw === "string" && raw.trim()) {
+    const ms = new Date(raw.trim()).getTime();
+    if (Number.isFinite(ms)) return new Date(ms).toISOString();
+  }
+  return new Date().toISOString();
+}
+
+/**
+ * Formats a timestamp for the chip summary.
+ * Returns "heute HH:MM Uhr" when the timestamp falls on today in the
+ * user's timezone, or "DD.MM. HH:MM Uhr" for any other day.
+ */
+function formatLoggedAt(atMs: number, userTimezone: string | null): string {
+  const tz =
+    userTimezone && isValidTimezone(userTimezone) ? userTimezone : "Europe/Berlin";
+  const d = new Date(atMs);
+  const hhmm = d.toLocaleTimeString("de-DE", {
+    timeZone: tz,
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+  const todayStr = new Date().toLocaleDateString("de-DE", {
+    timeZone: tz,
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  });
+  const entryStr = d.toLocaleDateString("de-DE", {
+    timeZone: tz,
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  });
+  if (todayStr === entryStr) {
+    return `heute ${hhmm} Uhr`;
+  }
+  const datePart = d.toLocaleDateString("de-DE", {
+    timeZone: tz,
+    day: "2-digit",
+    month: "2-digit",
+  });
+  return `${datePart} ${hhmm} Uhr`;
 }
 
 async function toolLogFingerstick(
