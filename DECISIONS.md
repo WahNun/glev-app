@@ -2,27 +2,32 @@
 
 ## Decisions
 
-### D-001 · Password-reset redirectTo: two routes, two different URLs (2026-06-04)
+### D-001 · Password-reset redirectTo must be /auth/confirm for BOTH routes (CORRECTED 2026-06-04)
 
-This project uses **Supabase Implicit Flow** (no PKCE toggle is available in the Email provider settings). Supabase appends the session as a hash fragment when redirecting: `#access_token=…&type=recovery`. Hash fragments are browser-only — the server never sees them.
+> **⚠️ Rewritten 2026-06-04 with end-to-end evidence.** Earlier versions of D-001
+> claimed the admin route needed `/auth/callback` (a "PKCE code exchange"). That is
+> **wrong** — `admin.generateLink({type:"recovery"})` always uses the implicit/hash
+> flow; there is no `?code`. Routing recovery through `/auth/callback` is the bug,
+> not the fix. Both routes must use `/auth/confirm`.
 
-**Admin-panel route (`app/glev-ops/users/actions.ts`):**
-```
-${appUrl}/auth/callback?next=/auth/confirm
-```
-The admin flow uses `admin.generateLink()` in a context where Supabase can issue a PKCE code. `/auth/callback` is a server-side Route Handler that exchanges the code via `exchangeCodeForSession()` and redirects cleanly to `/auth/confirm?session=ready&type=recovery`.
+This project uses **Supabase Implicit Flow** (no PKCE toggle in the Email provider settings). `admin.generateLink({ type: "recovery" })` — used by BOTH the admin panel and the self-service route — produces a **hash-based** token. Supabase's `/verify` endpoint validates the OTP server-side and redirects to `redirectTo` with the session as a URL **hash fragment**. Hash fragments are browser-only — a server route never sees them.
 
-**Self-service route (`app/api/auth/password-reset/route.ts`):**
+**Empirical proof (2026-06-04):** a throwaway user + `admin.generateLink({type:"recovery"})` + following the action_link, inspecting the redirect `Location`:
+- `redirectTo = …/auth/confirm` → `…/auth/confirm#access_token=…&type=recovery` ✅
+- `redirectTo = …/auth/callback?next=/auth/confirm` → `…/auth/callback#access_token=…` — a **server** route that cannot read the `#hash`, finds no `?code`, and bounces the user to an error/root URL (the "lands on `glev.app#`" symptom).
+
+**The required redirect URL — BOTH routes:**
 ```
 ${appUrl}/auth/confirm
 ```
-The self-service flow uses Implicit Flow — Supabase appends `#access_token=…&type=recovery` to `/auth/confirm`. `/auth/confirm` is a **client component** with an `onAuthStateChange(PASSWORD_RECOVERY)` listener that handles this hash-based token. Routing through `/auth/callback` (a server route) would silently drop the hash fragment and break the flow.
+- `app/glev-ops/users/actions.ts` (admin recovery + invite)
+- `app/api/auth/password-reset/route.ts` (self-service)
 
-**Why these must stay different:**
-- Admin → `/auth/callback` (server code exchange, no hash involved)
-- Self-service → `/auth/confirm` directly (client component handles `PASSWORD_RECOVERY` event)
+**Why /auth/confirm works:** it is a **client** page (`app/auth/confirm/page.tsx`) that manually parses the `#access_token` hash and calls `setSession()` (see the "Implicit/hash recovery flow" block). `detectSessionInUrl` is disabled on that page (`lib/supabase.ts`), so this manual hash handler is the **load-bearing piece** — and it was the missing piece during all four reversals (Tasks #1152 → #1171 → #1179 → #1187). Both candidate URLs were broken without it, so each reversal looked like the other URL was "the fix".
 
-**Nicht wieder öffnen:** Do not unify these two URLs without first confirming whether PKCE is active. The distinction is load-bearing.
+**Nicht wieder öffnen:** Do not route recovery/invite through `/auth/callback`. If reset breaks again, first re-run the E2E redirect check (generate a recovery link, follow it, inspect the `Location` header) before touching anything.
+
+**See also:** `app/auth/confirm/page.tsx` (hash handler), `lib/supabase.ts` (detectSessionInUrl), `tests/unit/passwordResetRedirectTo.test.ts`.
 
 **See also:** `tests/unit/passwordResetRedirectTo.test.ts` and `tests/unit/passwordResetRoute.test.ts`.
 
