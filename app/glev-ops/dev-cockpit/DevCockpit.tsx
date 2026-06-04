@@ -1292,35 +1292,7 @@ export default function DevCockpit({ initialTasks }: { initialTasks: DevTask[] }
                   </div>
                 )}
 
-                {/* Code History (Phase 6) — separate from Build History, display only */}
-                {codeDrafts.length > 0 && (
-                  <div style={{ marginTop: 16 }}>
-                    <div style={planSectionTitle}>Code History</div>
-                    <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                      {codeDrafts.map((c) => (
-                        <div
-                          key={c.id}
-                          style={{
-                            display: "flex",
-                            alignItems: "center",
-                            gap: 8,
-                            padding: "6px 10px",
-                            background: "#f9fafb",
-                            border: "1px solid #e5e7eb",
-                            borderRadius: 6,
-                            fontSize: 12,
-                          }}
-                        >
-                          <span style={{ fontWeight: 700, color: "#111" }}>Code Draft #{c.version}</span>
-                          {evalBadge(STATUS_STYLE[c.status] ?? {}, STATUS_LABEL[c.status] ?? c.status)}
-                          <span style={{ color: "#9ca3af", marginLeft: "auto" }}>
-                            {fmtDateTime(c.created_at)} · {shortId(c.id)}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
+                {/* Code History moved to Code Draft card section — see below */}
 
                 {/* Follow-up answer + Analyze / Re-Analyze (Phase 3) */}
                 <div style={{ marginTop: 14 }}>
@@ -1603,6 +1575,78 @@ export default function DevCockpit({ initialTasks }: { initialTasks: DevTask[] }
 
               <p style={{ margin: "12px 0 0", fontSize: 11, color: "#9ca3af" }}>
                 🔒 Nur Vorschlag — keine Datei wurde geschrieben, kein Commit, kein Merge, kein Deploy.
+              </p>
+            </section>
+          )}
+
+          {/* Code History (Phase 6) — all drafts for this task, newest first.
+              Positioned here so it's always visible next to the Code Draft card,
+              not buried in the scrollable chat panel. */}
+          {selectedTask && codeDrafts.length > 0 && (
+            <section style={cardStyle}>
+              <h2 style={{ ...cardTitleStyle, marginBottom: 10 }}>
+                Code History
+                <span style={{ fontWeight: 400, color: "#9ca3af", fontSize: 13, marginLeft: 8 }}>
+                  {codeDrafts.length} {codeDrafts.length === 1 ? "Draft" : "Drafts"}
+                </span>
+              </h2>
+              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                {codeDrafts.map((c) => {
+                  const isCurrent = c.version === codeDraft?.version;
+                  const fileCount =
+                    (Array.isArray(c.files_to_create) ? c.files_to_create.length : 0) +
+                    (Array.isArray(c.files_to_modify) ? c.files_to_modify.length : 0);
+                  return (
+                    <div
+                      key={c.id}
+                      style={{
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: 4,
+                        padding: "8px 12px",
+                        background: isCurrent ? "#eff6ff" : "#f9fafb",
+                        border: `1px solid ${isCurrent ? "#bfdbfe" : "#e5e7eb"}`,
+                        borderRadius: 8,
+                        fontSize: 12,
+                      }}
+                    >
+                      {/* Row 1: version + badges */}
+                      <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                        <span style={{ fontWeight: 700, color: isCurrent ? "#1d4ed8" : "#111", minWidth: 100 }}>
+                          Code Draft #{c.version}
+                          {isCurrent && (
+                            <span style={{ marginLeft: 6, fontWeight: 600, fontSize: 10, background: "#1d4ed8", color: "#fff", borderRadius: 4, padding: "1px 5px" }}>
+                              AKTUELL
+                            </span>
+                          )}
+                        </span>
+                        {evalBadge(STATUS_STYLE[c.status] ?? {}, STATUS_LABEL[c.status] ?? c.status)}
+                        {c.estimated_change_size && (
+                          <span style={{ fontSize: 10, color: "#6b7280", background: "#f3f4f6", border: "1px solid #e5e7eb", borderRadius: 4, padding: "1px 5px" }}>
+                            {c.estimated_change_size}
+                          </span>
+                        )}
+                        {fileCount > 0 && (
+                          <span style={{ fontSize: 10, color: "#6b7280" }}>
+                            {fileCount} {fileCount === 1 ? "file" : "files"}
+                          </span>
+                        )}
+                        <span style={{ color: "#9ca3af", marginLeft: "auto", whiteSpace: "nowrap" }}>
+                          {fmtDateTime(c.created_at)}
+                        </span>
+                      </div>
+                      {/* Row 2: summary snippet */}
+                      {c.summary && (
+                        <div style={{ color: "#374151", fontSize: 12, lineHeight: 1.4, overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" as const }}>
+                          {c.summary}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+              <p style={{ margin: "8px 0 0", fontSize: 11, color: "#9ca3af" }}>
+                🔒 Alle Drafts sind reine Vorschläge — keine Datei wurde geschrieben.
               </p>
             </section>
           )}
