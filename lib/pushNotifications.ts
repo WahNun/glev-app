@@ -141,6 +141,35 @@ function detectPlatform(): "ios" | "android" {
   return p === "ios" ? "ios" : "android";
 }
 
+/** Minimal subset of the Supabase Auth interface needed for token-sync. */
+type SupabaseAuthLike = {
+  onAuthStateChange(
+    callback: (event: string) => void,
+  ): { data: { subscription: { unsubscribe: () => void } } };
+};
+
+/**
+ * Registers a Supabase `onAuthStateChange` listener that calls
+ * `syncCachedPushToken()` whenever a `SIGNED_IN` event fires.
+ *
+ * This covers both:
+ *   • First-ever login (manual password entry)
+ *   • Every subsequent app open (session restored from AsyncStorage)
+ *
+ * Returns an unsubscribe function for cleanup on component unmount.
+ *
+ * Extracted from `PushNotificationsProvider` so it can be unit-tested
+ * without mounting a React component.
+ */
+export function applyAuthStateListener(auth: SupabaseAuthLike): () => void {
+  const { data: { subscription } } = auth.onAuthStateChange((event) => {
+    if (event === "SIGNED_IN") {
+      void syncCachedPushToken();
+    }
+  });
+  return () => subscription.unsubscribe();
+}
+
 /**
  * Idempotent. Safe to call multiple times — the native plugin's
  * `register()` is itself idempotent, but we also guard with

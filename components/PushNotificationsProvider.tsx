@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
-import { initPushNotifications, syncCachedPushToken } from "@/lib/pushNotifications";
+import { initPushNotifications, applyAuthStateListener } from "@/lib/pushNotifications";
 import { supabase } from "@/lib/supabase";
 
 /**
@@ -17,9 +17,9 @@ import { supabase } from "@/lib/supabase";
  *   AsyncStorage *asynchronously* — it may not be ready when the
  *   registration event fires inside initPushNotifications(). The
  *   resulting PATCH /api/profile/push-token call returns 401 and the
- *   token is silently lost. Subscribing to onAuthStateChange('SIGNED_IN')
- *   guarantees syncCachedPushToken() runs the moment the session is
- *   available, covering both:
+ *   token is silently lost. `applyAuthStateListener` subscribes to
+ *   onAuthStateChange('SIGNED_IN') so syncCachedPushToken() runs the
+ *   moment the session is available, covering both:
  *     • First-ever login (manual password entry)
  *     • Every subsequent app open (session restored from storage)
  *
@@ -31,15 +31,8 @@ export default function PushNotificationsProvider() {
 
     if (!supabase) return;
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
-      if (event === "SIGNED_IN") {
-        void syncCachedPushToken();
-      }
-    });
-
-    return () => {
-      subscription.unsubscribe();
-    };
+    const unsubscribe = applyAuthStateListener(supabase.auth);
+    return unsubscribe;
   }, []);
 
   return null;
