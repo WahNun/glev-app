@@ -76,6 +76,8 @@ function PendingActionWidget({
   onCancel,
   onOpenEngine,
   isMealChipActive,
+  mealChipIndex,
+  mealChipTotal,
 }: {
   pa: PendingAction;
   onConfirm: () => void;
@@ -84,6 +86,10 @@ function PendingActionWidget({
   /** For log_meal_entry chips only: whether this chip is the first
    *  unresolved meal chip in the turn and therefore interactive. */
   isMealChipActive?: boolean;
+  /** 1-based position of this chip among unresolved meal chips in the turn. */
+  mealChipIndex?: number;
+  /** Total number of unresolved meal chips in the turn. */
+  mealChipTotal?: number;
 }) {
   const isMeal = pa.kind === "log_meal_entry";
 
@@ -160,9 +166,15 @@ function PendingActionWidget({
 
   // ── Meal chip layout ─────────────────────────────────────────────
   // ✕ icon top-right + full-width "Engine öffnen →" button.
-  // When inactive (a later meal in the same turn), dims to 0.4 opacity.
+  // When inactive (a later meal in the same turn), dims to 0.4 opacity
+  // and shows a "Mahlzeit N von M" badge so the user knows it's queued.
   if (isMeal) {
     const inactive = !isMealChipActive;
+    const showQueueBadge =
+      inactive &&
+      mealChipIndex != null &&
+      mealChipTotal != null &&
+      mealChipTotal > 1;
     return (
       <div
         style={{
@@ -202,6 +214,27 @@ function PendingActionWidget({
         <div style={{ color: "var(--text-body)", fontSize: 12, paddingRight: 24 }}>
           {pa.summary}
         </div>
+
+        {/* Queue position badge — only shown on inactive chips when multiple meals */}
+        {showQueueBadge && (
+          <div
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 4,
+              alignSelf: "flex-start",
+              padding: "2px 7px",
+              borderRadius: 10,
+              background: "var(--border-soft)",
+              border: "1px solid var(--border)",
+              color: "var(--text-muted)",
+              fontSize: 11,
+              fontWeight: 500,
+            }}
+          >
+            Mahlzeit {mealChipIndex} von {mealChipTotal}
+          </div>
+        )}
 
         {/* Full-width "Engine öffnen →" button */}
         <button
@@ -883,13 +916,27 @@ export default function GlevAIChatSheet({
 
               {/* Pending-action widgets — one chip per WRITE-tool call in this turn.
                   For log_meal_entry chips: only the first *unresolved* (pending/confirming)
-                  meal chip is active; all later unresolved ones are dimmed. */}
+                  meal chip is active; all later unresolved ones are dimmed and show
+                  a "Mahlzeit N von M" badge so the user knows more are queued. */}
               {(() => {
+                const actions = m.pendingActions ?? [];
+                const totalUnresolvedMeals = actions.filter(
+                  (a) =>
+                    a.kind === "log_meal_entry" &&
+                    (a.state === "pending" || a.state === "confirming"),
+                ).length;
                 let seenUnresolvedMeal = false;
-                return m.pendingActions?.map((pa) => {
+                let mealChipPosition = 0;
+                return actions.map((pa) => {
                   let isMealChipActive: boolean | undefined;
+                  let mealChipIndex: number | undefined;
                   if (pa.kind === "log_meal_entry") {
-                    const isUnresolved = pa.state === "pending" || pa.state === "confirming";
+                    const isUnresolved =
+                      pa.state === "pending" || pa.state === "confirming";
+                    if (isUnresolved) {
+                      mealChipPosition += 1;
+                      mealChipIndex = mealChipPosition;
+                    }
                     if (isUnresolved && !seenUnresolvedMeal) {
                       isMealChipActive = true;
                       seenUnresolvedMeal = true;
@@ -907,6 +954,10 @@ export default function GlevAIChatSheet({
                       onCancel={() => onCancelAction?.(m.id, pa.token)}
                       onOpenEngine={() => onOpenEngineForMeal?.(m.id, pa.token)}
                       isMealChipActive={isMealChipActive}
+                      mealChipIndex={mealChipIndex}
+                      mealChipTotal={
+                        totalUnresolvedMeals > 1 ? totalUnresolvedMeals : undefined
+                      }
                     />
                   );
                 });
