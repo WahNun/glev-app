@@ -1,0 +1,82 @@
+name: Alarm cron (hypo / elevated / hyper)
+
+# Invokes the three Supabase Edge Function alarm checks every 5 minutes.
+#
+# Background: supabase functions deploy --use-api does NOT register the
+# `schedule` field from config.toml with Supabase's built-in scheduler,
+# so the cron is driven here via GitHub Actions instead.
+#
+# The three functions have verify_jwt=false so no auth header is needed.
+# They are pure read-and-notify workers with no write endpoints exposed —
+# the worst-case of a spurious public invocation is one extra alarm check.
+#
+# GitHub Actions cron fires every 5-10 min in practice (best-effort), which
+# matches the Supabase config.toml `schedule = "*/5 * * * *"` intent.
+#
+# No secrets required: functions are public cron endpoints (verify_jwt=false).
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: alarm-cron
+  cancel-in-progress: false
+
+jobs:
+  alarm:
+    name: Run alarm checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    env:
+      SUPABASE_FUNCTIONS_URL: https://zalpwyhlijbjyspjzbvn.supabase.co/functions/v1
+
+    steps:
+      - name: hypo-check
+        run: |
+          set -u
+          status=$(curl -sS -X POST \
+            -H "Content-Type: application/json" \
+            -o /tmp/hypo.json \
+            -w "%{http_code}" \
+            --max-time 30 \
+            "${SUPABASE_FUNCTIONS_URL}/hypo-check" || echo "000")
+          echo "hypo-check HTTP ${status}"
+          cat /tmp/hypo.json || true
+          if [ "${status}" != "200" ]; then
+            echo "::warning::hypo-check returned HTTP ${status}"
+          fi
+
+      - name: elevated-check
+        run: |
+          set -u
+          status=$(curl -sS -X POST \
+            -H "Content-Type: application/json" \
+            -o /tmp/elevated.json \
+            -w "%{http_code}" \
+            --max-time 30 \
+            "${SUPABASE_FUNCTIONS_URL}/elevated-check" || echo "000")
+          echo "elevated-check HTTP ${status}"
+          cat /tmp/elevated.json || true
+          if [ "${status}" != "200" ]; then
+            echo "::warning::elevated-check returned HTTP ${status}"
+          fi
+
+      - name: hyper-check
+        run: |
+          set -u
+          status=$(curl -sS -X POST \
+            -H "Content-Type: application/json" \
+            -o /tmp/hyper.json \
+            -w "%{http_code}" \
+            --max-time 30 \
+            "${SUPABASE_FUNCTIONS_URL}/hyper-check" || echo "000")
+          echo "hyper-check HTTP ${status}"
+          cat /tmp/hyper.json || true
+          if [ "${status}" != "200" ]; then
+            echo "::warning::hyper-check returned HTTP ${status}"
+          fi
