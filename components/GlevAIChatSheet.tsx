@@ -6,6 +6,7 @@ import { useVoiceIntents } from "@/hooks/useVoiceIntents";
 import { useTTS } from "@/hooks/useTTS";
 import IntentConfirmChip, { intentLabel } from "@/components/IntentConfirmChip";
 import GlevLogo from "@/components/GlevLogo";
+import { getActionMeta } from "@/lib/ai/pendingActions";
 
 const ACCENT = "#8b5cf6";
 const SHEET_BG = "var(--surface)";
@@ -23,6 +24,13 @@ interface Props {
    *  Resolves the pending_action, writes macros to sessionStorage,
    *  dispatches glev:meal-prefill, and navigates to /engine. */
   onOpenEngineForMeal?: (messageId: string, token: string) => void;
+  /** Called by the "Schnell speichern" button on a non-meal chip.
+   *  Confirms the pending_action server-side without navigating. */
+  onQuickSaveAction?: (messageId: string, token: string) => void;
+  /** Called by the "Detail öffnen →" button on a non-meal chip.
+   *  Writes the payload to sessionStorage, dispatches a typed DOM event,
+   *  and navigates to the matching engine tab. */
+  onDetailOpen?: (messageId: string, token: string, kind: string, payload?: unknown) => void;
   onClearChat?: () => void;
   /** Called whenever the chat sheet's STT listening state changes so the
    *  parent (Layout.tsx) can reflect it on the FAB. */
@@ -75,6 +83,8 @@ function PendingActionWidget({
   onConfirm,
   onCancel,
   onOpenEngine,
+  onQuickSave,
+  onDetailOpen,
   isMealChipActive,
   mealChipIndex,
   mealChipTotal,
@@ -83,6 +93,10 @@ function PendingActionWidget({
   onConfirm: () => void;
   onCancel: () => void;
   onOpenEngine?: () => void;
+  /** For non-meal chips: saves directly without navigating. */
+  onQuickSave?: () => void;
+  /** For non-meal chips: writes sessionStorage + dispatches DOM event + navigates. */
+  onDetailOpen?: () => void;
   /** For log_meal_entry chips only: whether this chip is the first
    *  unresolved meal chip in the turn and therefore interactive. */
   isMealChipActive?: boolean;
@@ -264,46 +278,101 @@ function PendingActionWidget({
   }
 
   // ── Non-meal chip layout (Bolus, Exercise, Symptom, …) ───────────
+  // ✕ icon top-right + type label + summary + [Schnell speichern] [Detail →]
+  const { icon, label } = getActionMeta(pa.kind);
+  const hasDetail = !!onDetailOpen;
+
   return (
-    <div style={baseCard}>
-      {summary}
+    <div style={{ ...baseCard, position: "relative" }}>
+      {/* ✕ dismiss button — top right corner */}
+      <button
+        type="button"
+        aria-label="Verwerfen"
+        onClick={onCancel}
+        disabled={busy}
+        style={{
+          position: "absolute",
+          top: 8,
+          right: 8,
+          background: "none",
+          border: "none",
+          cursor: busy ? "default" : "pointer",
+          padding: 4,
+          color: "var(--text-muted)",
+          fontSize: 14,
+          lineHeight: 1,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          opacity: busy ? 0.5 : 1,
+        }}
+      >
+        ✕
+      </button>
+
+      {/* Type label row */}
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 5,
+          paddingRight: 20,
+          fontSize: 11,
+          fontWeight: 700,
+          color: "var(--text-muted)",
+          letterSpacing: "0.04em",
+          textTransform: "uppercase",
+        }}
+      >
+        <span>{icon}</span>
+        <span>{label}</span>
+      </div>
+
+      {/* Summary text */}
+      <div style={{ color: "var(--text-body)", fontSize: 12, paddingRight: 24 }}>
+        {pa.summary}
+      </div>
+
+      {/* Action buttons */}
       <div style={{ display: "flex", gap: 8 }}>
         <button
           type="button"
-          onClick={onCancel}
-          disabled={busy}
-          style={{
-            flex: 1,
-            padding: "9px 10px",
-            borderRadius: 8,
-            border: "1px solid var(--border-strong)",
-            background: "var(--surface-soft)",
-            color: "var(--text-body)",
-            fontSize: 13,
-            cursor: busy ? "default" : "pointer",
-            opacity: busy ? 0.5 : 1,
-          }}
-        >
-          Abbrechen
-        </button>
-        <button
-          type="button"
-          onClick={onConfirm}
+          onClick={onQuickSave ?? onConfirm}
           disabled={busy}
           style={{
             flex: 1,
             padding: "9px 10px",
             borderRadius: 8,
             border: "none",
-            background: busy ? "rgba(79,110,247,0.4)" : ACCENT,
+            background: busy ? "rgba(139,92,246,0.35)" : ACCENT,
             color: "var(--on-accent)",
             fontWeight: 600,
             fontSize: 13,
             cursor: busy ? "default" : "pointer",
           }}
         >
-          {busy ? "Speichert …" : "Bestätigen"}
+          {busy ? "Speichert …" : "Schnell speichern"}
         </button>
+        {hasDetail && (
+          <button
+            type="button"
+            onClick={onDetailOpen}
+            disabled={busy}
+            style={{
+              padding: "9px 10px",
+              borderRadius: 8,
+              border: "1px solid var(--border-strong)",
+              background: "var(--surface-soft)",
+              color: "var(--text-body)",
+              fontSize: 13,
+              cursor: busy ? "default" : "pointer",
+              opacity: busy ? 0.5 : 1,
+              whiteSpace: "nowrap",
+            }}
+          >
+            Detail →
+          </button>
+        )}
       </div>
     </div>
   );
@@ -328,6 +397,8 @@ export default function GlevAIChatSheet({
   onConfirmAction,
   onCancelAction,
   onOpenEngineForMeal,
+  onQuickSaveAction,
+  onDetailOpen,
   onClearChat,
   onListeningChange,
   pendingMealNavQueue,
@@ -967,6 +1038,16 @@ export default function GlevAIChatSheet({
                       onConfirm={() => onConfirmAction?.(m.id, pa.token)}
                       onCancel={() => onCancelAction?.(m.id, pa.token)}
                       onOpenEngine={() => onOpenEngineForMeal?.(m.id, pa.token)}
+                      onQuickSave={
+                        onQuickSaveAction
+                          ? () => onQuickSaveAction(m.id, pa.token)
+                          : undefined
+                      }
+                      onDetailOpen={
+                        onDetailOpen
+                          ? () => onDetailOpen(m.id, pa.token, pa.kind)
+                          : undefined
+                      }
                       isMealChipActive={isMealChipActive}
                       mealChipIndex={mealChipIndex}
                       mealChipTotal={

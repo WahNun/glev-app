@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { scheduleCheckReminder } from "@/lib/mealCheckReminders";
+import { getActionNavConfig } from "@/lib/ai/pendingActions";
 
 /**
  * useGlevAI — owns everything the Glev AI button + consent modal +
@@ -623,6 +624,56 @@ export function useGlevAI(opts?: {
     );
   }, []);
 
+  /**
+   * Quick-save a non-meal pending action without navigating away from
+   * the chat sheet. Posts the token to /api/ai/confirm-action (same
+   * path as confirmAction) and marks the chip as "Gespeichert ✓".
+   *
+   * For non-meal chips this is the preferred "stay in chat" path.
+   * Meal chips still require the "Engine öffnen →" flow.
+   */
+  const quickSaveAction = useCallback(
+    async (messageId: string, token: string) => {
+      await confirmAction(messageId, token);
+    },
+    [confirmAction],
+  );
+
+  /**
+   * Navigate to the engine tab that corresponds to a non-meal log type.
+   * Writes the chip's payload to sessionStorage under the action-specific
+   * key and dispatches a typed DOM event so the target screen can
+   * pre-populate its form fields. Then calls onNavigate to change routes.
+   *
+   * The pending_action chip is NOT confirmed server-side here — the user
+   * will save via the native log form on the Engine screen.
+   * The chip is cancelled locally so it doesn't linger in the chat.
+   */
+  const navigateToLogScreen = useCallback(
+    (messageId: string, token: string, kind: string, payload?: unknown) => {
+      const config = getActionNavConfig(kind);
+      if (!config) return;
+
+      // Write payload to sessionStorage so the target screen can read it.
+      if (payload != null && typeof window !== "undefined") {
+        try {
+          window.sessionStorage.setItem(config.storageKey, JSON.stringify(payload));
+        } catch { /* ignore quota/privacy errors */ }
+        window.dispatchEvent(new CustomEvent(config.event, { detail: payload }));
+      }
+
+      // Mark the chip as cancelled locally — the user will save via the form.
+      setMessages((prev) =>
+        patchAction(prev, messageId, token, { state: "cancelled" }),
+      );
+
+      optsRef.current?.onNavigate?.(`/engine?tab=${config.tab}`);
+    },
+    // patchAction is a local function — no dep needed.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [],
+  );
+
   return {
     consentGranted,
     consentLoaded,
@@ -639,6 +690,8 @@ export function useGlevAI(opts?: {
     sendMessage,
     confirmAction,
     cancelAction,
+    quickSaveAction,
+    navigateToLogScreen,
     /** Ordered queue of meals waiting for the user to tap through to
      *  the Engine screen. Populated after stream ends; first item is
      *  popped by fireMealNav() each time the user taps the chip.

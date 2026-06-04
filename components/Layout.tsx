@@ -1373,6 +1373,8 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
               onConfirmAction={glevAi.confirmAction}
               onCancelAction={glevAi.cancelAction}
               onOpenEngineForMeal={glevAi.openEngineForMeal}
+              onQuickSaveAction={glevAi.quickSaveAction}
+              onDetailOpen={glevAi.navigateToLogScreen}
               onClearChat={glevAi.clearMessages}
               onListeningChange={setAiThinking}
               voiceIntentEnabled={voiceIntentEnabled}
@@ -1389,6 +1391,8 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
               onConfirmAction={glevAi.confirmAction}
               onCancelAction={glevAi.cancelAction}
               onOpenEngineForMeal={glevAi.openEngineForMeal}
+              onQuickSaveAction={glevAi.quickSaveAction}
+              onDetailOpen={glevAi.navigateToLogScreen}
               onClearChat={glevAi.clearMessages}
               onListeningChange={setAiThinking}
               voiceIntentEnabled={voiceIntentEnabled}
