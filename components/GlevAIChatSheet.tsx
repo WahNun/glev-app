@@ -230,10 +230,11 @@ function MealChipExpanded({
     if (!mealPrepId || !supabase) return;
     // Polling fallback: check every 500ms for max 5s.
     // Realtime subscribe on the same row as primary.
-    const channel = supabase
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const channel = (supabase as any)
       .channel(`meal-refinement-${mealPrepId}`)
       .on(
-        "postgres_changes" as Parameters<ReturnType<typeof supabase.channel>["on"]>[0],
+        "postgres_changes",
         {
           event:  "UPDATE",
           schema: "public",
