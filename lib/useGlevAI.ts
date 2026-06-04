@@ -566,7 +566,10 @@ export function useGlevAI(opts?: {
       // For log_meal_entry: show the "Engine öffnen →" chip so the user can
       // navigate to the entry they just confirmed and review/adjust if needed.
       if (body?.kind === "log_meal_entry") {
-        setPendingMealNav("/engine");
+        setPendingMealNavQueue((prev) => [
+          ...prev,
+          { mealPrep: { input_text: "", carbs: 0, protein: null, fat: null, fiber: null }, label: "Eintrag ansehen" },
+        ]);
       }
       // For add_timeline_check: arm a local OS reminder. Best-effort —
       // a failed schedule must never block the confirmation success state.
