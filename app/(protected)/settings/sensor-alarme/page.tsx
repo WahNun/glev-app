@@ -167,6 +167,20 @@ export default function SensorAlarmePage() {
     );
   }
 
+  const thresholdConflict = elevatedThreshold >= highThreshold;
+
+  function ConflictWarning() {
+    if (!thresholdConflict) return null;
+    return (
+      <div style={{ display: "flex", alignItems: "flex-start", gap: 8, background: "rgba(245,158,11,0.12)", border: "1px solid rgba(245,158,11,0.4)", borderRadius: 10, padding: "10px 12px", marginBottom: 14 }}>
+        <svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke={ORANGE} strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, marginTop: 1 }}><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+        <span style={{ fontSize: 13, color: ORANGE, lineHeight: 1.45 }}>
+          {t("alarm_conflict_warning", { elevated: elevatedThreshold, high: highThreshold })}
+        </span>
+      </div>
+    );
+  }
+
   const sheetContent: Record<SheetKey, { title: string; body: ReactNode; footer: ReactNode }> = {
     lowAlarm: {
       title: t("sheet_low_alarm_title"),
@@ -186,30 +200,36 @@ export default function SensorAlarmePage() {
     elevatedAlarm: {
       title: t("sheet_elevated_alarm_title"),
       body: (
-        <AlarmSheetBody
-          enabled={elevatedEnabled} onToggle={() => setElevatedEnabled((v) => !v)}
-          threshold={elevatedThreshold} onThreshold={setElevatedThreshold}
-          min={100} max={180} ticks={[100, 120, 140, 160, 180]}
-          accent={ORANGE}
-          hint={t("elevated_alarm_hint")}
-          thresholdLabel={t("elevated_alarm_threshold_label")}
-          enabledLabel={t("elevated_alarm_enabled_label")}
-        />
+        <>
+          <ConflictWarning />
+          <AlarmSheetBody
+            enabled={elevatedEnabled} onToggle={() => setElevatedEnabled((v) => !v)}
+            threshold={elevatedThreshold} onThreshold={setElevatedThreshold}
+            min={100} max={180} ticks={[100, 120, 140, 160, 180]}
+            accent={ORANGE}
+            hint={t("elevated_alarm_hint")}
+            thresholdLabel={t("elevated_alarm_threshold_label")}
+            enabledLabel={t("elevated_alarm_enabled_label")}
+          />
+        </>
       ),
       footer: <SaveFooter onSave={saveElevatedAlarm} />,
     },
     highAlarm: {
       title: t("sheet_high_alarm_title"),
       body: (
-        <AlarmSheetBody
-          enabled={highEnabled} onToggle={() => setHighEnabled((v) => !v)}
-          threshold={highThreshold} onThreshold={setHighThreshold}
-          min={140} max={250} ticks={[140, 170, 200, 230, 250]}
-          accent={RED}
-          hint={t("high_alarm_hint")}
-          thresholdLabel={t("high_alarm_threshold_label")}
-          enabledLabel={t("high_alarm_enabled_label")}
-        />
+        <>
+          <ConflictWarning />
+          <AlarmSheetBody
+            enabled={highEnabled} onToggle={() => setHighEnabled((v) => !v)}
+            threshold={highThreshold} onThreshold={setHighThreshold}
+            min={140} max={250} ticks={[140, 170, 200, 230, 250]}
+            accent={RED}
+            hint={t("high_alarm_hint")}
+            thresholdLabel={t("high_alarm_threshold_label")}
+            enabledLabel={t("high_alarm_enabled_label")}
+          />
+        </>
       ),
       footer: <SaveFooter onSave={saveHighAlarm} />,
     },

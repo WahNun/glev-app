@@ -1338,6 +1338,7 @@
     "high_alarm_hint": "Glev löst einen Alarm aus, sobald dein CGM-Wert diesen Grenzwert überschreitet. Der Alarm wiederholt sich frühestens alle 15 Minuten.",
     "subtitle_high_alarm_on": "An · über {threshold} mg/dL",
     "subtitle_high_alarm_off": "Aus",
+    "alarm_conflict_warning": "Erhöht-Schwelle ({elevated} mg/dL) liegt nicht unterhalb der Hyper-Schwelle ({high} mg/dL) – die Alarme überschneiden sich.",
     "row_libre2": "FreeStyle Libre 2 / 3",
     "row_nightscout": "Nightscout",
     "row_historical_reload": "Historische Daten neu auswerten",
