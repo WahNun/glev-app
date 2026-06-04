@@ -147,6 +147,10 @@ const THRESHOLD_SLIDER_ARIA = /(Alarm threshold \(mg\/dL\)|Auslöseschwelle \(mg
 
 const SAVE_BUTTON = /^(Save|Speichern|Saving…|Speichere…|✓ Saved!|✓ Gespeichert!)$/;
 
+// Success toast text (role=status):
+//   en: "Alarm setting saved"   de: "Alarm-Einstellung gespeichert"
+const SUCCESS_TOAST = /(Alarm setting saved|Alarm-Einstellung gespeichert)/i;
+
 async function loginAsTestUser(page: Page, workerIndex: number) {
   const { email, password } = loadTestUserByIndex(workerIndex);
   await page.goto("/login");
@@ -469,5 +473,82 @@ test.describe("Sensor & Alarme → alarm rows and sheets", () => {
 
     // No conflict warning banner should be present.
     await expect(page.getByText(CONFLICT_WARNING)).toBeHidden();
+  });
+
+  // ── Confirmation UX tests ──────────────────────────────────────────────
+
+  test("subtitle updates immediately after save (no reload required)", async ({ page }) => {
+    await loginAsTestUser(page, test.info().workerIndex);
+
+    // Seed: low alarm enabled with 70 mg/dL so we can verify the subtitle changes.
+    await seedAlarmSettings(testUser.userId, {
+      low_alarm_enabled: true,
+      low_alarm_threshold_mgdl: 70,
+    });
+
+    await page.goto("/settings/sensor-alarme");
+
+    // Save a new threshold (65 mg/dL).
+    await openSheetAndSetThreshold(page, LOW_ROW_ARIA, 65);
+
+    // The sheet has now closed. Without any reload, the subtitle on the alarm
+    // row must already reflect the new value.
+    // en: "On · below 65 mg/dL"  /  de: "An · unter 65 mg/dL"
+    await expect(
+      page.getByText(/On · below 65 mg\/dL|An · unter 65 mg\/dL/),
+    ).toBeVisible({ timeout: 5_000 });
+  });
+
+  test("success toast appears after saving Hypo alarm threshold", async ({ page }) => {
+    await loginAsTestUser(page, test.info().workerIndex);
+
+    await seedAlarmSettings(testUser.userId, {
+      low_alarm_enabled: true,
+      low_alarm_threshold_mgdl: 70,
+    });
+
+    await page.goto("/settings/sensor-alarme");
+
+    await openSheetAndSetThreshold(page, LOW_ROW_ARIA, 68);
+
+    // A success toast (role=status) must become visible after the sheet closes.
+    // en: "Alarm setting saved"  /  de: "Alarm-Einstellung gespeichert"
+    await expect(
+      page.getByRole("status").filter({ hasText: SUCCESS_TOAST }),
+    ).toBeVisible({ timeout: 5_000 });
+  });
+
+  test("success toast appears after saving Elevated alarm threshold", async ({ page }) => {
+    await loginAsTestUser(page, test.info().workerIndex);
+
+    await seedAlarmSettings(testUser.userId, {
+      elevated_alarm_enabled: true,
+      elevated_alarm_threshold_mgdl: 140,
+    });
+
+    await page.goto("/settings/sensor-alarme");
+
+    await openSheetAndSetThreshold(page, ELEVATED_ROW_ARIA, 155);
+
+    await expect(
+      page.getByRole("status").filter({ hasText: SUCCESS_TOAST }),
+    ).toBeVisible({ timeout: 5_000 });
+  });
+
+  test("success toast appears after saving High alarm threshold", async ({ page }) => {
+    await loginAsTestUser(page, test.info().workerIndex);
+
+    await seedAlarmSettings(testUser.userId, {
+      high_alarm_enabled: true,
+      high_alarm_threshold_mgdl: 200,
+    });
+
+    await page.goto("/settings/sensor-alarme");
+
+    await openSheetAndSetThreshold(page, HIGH_ROW_ARIA, 190);
+
+    await expect(
+      page.getByRole("status").filter({ hasText: SUCCESS_TOAST }),
+    ).toBeVisible({ timeout: 5_000 });
   });
 });

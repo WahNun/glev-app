@@ -30,6 +30,8 @@ export default function SensorAlarmePage() {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [saveError, setSaveError] = useState("");
+  const [successToast, setSuccessToast] = useState<string | null>(null);
+  const [errorToast, setErrorToast] = useState<string | null>(null);
 
   const [lowEnabled, setLowEnabled] = useState(true);
   const [lowThreshold, setLowThreshold] = useState(70);
@@ -82,17 +84,31 @@ export default function SensorAlarmePage() {
     setOpenSheet(null);
   }, [draftLow, draftElevated, draftHigh]);
 
+  function showSuccessToast() {
+    setSuccessToast(t("alarm_saved_toast"));
+    setTimeout(() => setSuccessToast(null), 2400);
+  }
+
+  function showErrorToast(msg: string) {
+    setErrorToast(msg);
+    setTimeout(() => setErrorToast(null), 4000);
+  }
+
   async function saveLowAlarm(): Promise<boolean> {
     setSaving(true); setSaveError("");
     try {
       const clamped: LowAlarmSettingsDb = { enabled: lowEnabled, thresholdMgdl: Math.min(90, Math.max(40, Math.round(lowThreshold))) };
       await saveLowAlarmSettingsToDb(clamped);
       persistLowAlarmSettingsLocally(clamped);
+      setLowThreshold(clamped.thresholdMgdl);
       setDraftLow(null);
       setSaved(true); setTimeout(() => setSaved(false), 1800);
+      setTimeout(showSuccessToast, 120);
       return true;
     } catch (e) {
-      setSaveError(e instanceof Error ? e.message : t("save_failed"));
+      const msg = e instanceof Error ? e.message : t("save_failed");
+      setSaveError(msg);
+      showErrorToast(msg);
       return false;
     } finally { setSaving(false); }
   }
@@ -103,11 +119,15 @@ export default function SensorAlarmePage() {
       const clamped: ElevatedAlarmSettingsDb = { enabled: elevatedEnabled, thresholdMgdl: Math.min(180, Math.max(100, Math.round(elevatedThreshold))) };
       await saveElevatedAlarmSettingsToDb(clamped);
       persistElevatedAlarmSettingsLocally({ enabled: clamped.enabled, thresholdMgdl: clamped.thresholdMgdl });
+      setElevatedThreshold(clamped.thresholdMgdl);
       setDraftElevated(null);
       setSaved(true); setTimeout(() => setSaved(false), 1800);
+      setTimeout(showSuccessToast, 120);
       return true;
     } catch (e) {
-      setSaveError(e instanceof Error ? e.message : t("save_failed"));
+      const msg = e instanceof Error ? e.message : t("save_failed");
+      setSaveError(msg);
+      showErrorToast(msg);
       return false;
     } finally { setSaving(false); }
   }
@@ -118,11 +138,15 @@ export default function SensorAlarmePage() {
       const clamped: HighAlarmSettingsDb = { enabled: highEnabled, thresholdMgdl: Math.min(250, Math.max(140, Math.round(highThreshold))) };
       await saveHighAlarmSettingsToDb(clamped);
       persistHyperAlarmSettingsLocally({ enabled: clamped.enabled, thresholdMgdl: clamped.thresholdMgdl });
+      setHighThreshold(clamped.thresholdMgdl);
       setDraftHigh(null);
       setSaved(true); setTimeout(() => setSaved(false), 1800);
+      setTimeout(showSuccessToast, 120);
       return true;
     } catch (e) {
-      setSaveError(e instanceof Error ? e.message : t("save_failed"));
+      const msg = e instanceof Error ? e.message : t("save_failed");
+      setSaveError(msg);
+      showErrorToast(msg);
       return false;
     } finally { setSaving(false); }
   }
@@ -253,6 +277,18 @@ export default function SensorAlarmePage() {
         </Link>
         <h1 style={{ fontSize: 22, fontWeight: 800, letterSpacing: "-0.03em", margin: 0 }}>Sensor & Alarme</h1>
       </div>
+
+      {successToast && (
+        <div role="status" aria-live="polite" style={{ marginBottom: 14, padding: "10px 14px", borderRadius: 10, background: "rgba(34,211,160,0.12)", border: "1px solid rgba(34,211,160,0.35)", color: "#22D3A0", fontSize: 13, display: "flex", alignItems: "center", gap: 8 }}>
+          <svg width={15} height={15} viewBox="0 0 24 24" fill="none" stroke="#22D3A0" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
+          {successToast}
+        </div>
+      )}
+      {errorToast && (
+        <div role="alert" style={{ marginBottom: 14, padding: "10px 14px", borderRadius: 10, background: "rgba(255,45,120,0.10)", border: "1px solid rgba(255,45,120,0.35)", color: PINK, fontSize: 13 }}>
+          {errorToast}
+        </div>
+      )}
 
       <SettingsSection>
         <SettingsRow

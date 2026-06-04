@@ -1339,6 +1339,7 @@
     "subtitle_high_alarm_on": "On · above {threshold} mg/dL",
     "subtitle_high_alarm_off": "Off",
     "alarm_conflict_warning": "Elevated threshold ({elevated} mg/dL) is not below the high-glucose threshold ({high} mg/dL) — the alarms overlap.",
+    "alarm_saved_toast": "Alarm setting saved",
     "row_libre2": "FreeStyle Libre 2 / 3",
     "row_nightscout": "Nightscout",
     "row_historical_reload": "Re-evaluate historical data",
