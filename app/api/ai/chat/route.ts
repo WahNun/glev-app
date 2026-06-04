@@ -507,6 +507,27 @@ export async function POST(req: NextRequest) {
             // itself or chain more writes in the same round.
             if (isPendingActionEnvelope(result)) {
               pendingEmittedThisRound = true;
+              // For log_meal_entry: emit meal_prep BEFORE pending_action so the
+              // client can queue the macro data and associate the token when
+              // pending_action arrives (useGlevAI assigns token to the last
+              // queued meal item — ordering matters).
+              if (
+                result.pending_action.kind === "log_meal_entry" &&
+                result.pending_action.payload
+              ) {
+                const p = result.pending_action.payload as Record<string, unknown>;
+                send(
+                  JSON.stringify({
+                    meal_prep: {
+                      input_text: typeof p.input_text === "string" ? p.input_text : "",
+                      carbs: typeof p.carbs_grams === "number" ? p.carbs_grams : 0,
+                      protein: typeof p.protein_grams === "number" ? p.protein_grams : null,
+                      fat: typeof p.fat_grams === "number" ? p.fat_grams : null,
+                      fiber: typeof p.fiber_grams === "number" ? p.fiber_grams : null,
+                    },
+                  }),
+                );
+              }
               send(JSON.stringify({ pending_action: result.pending_action }));
               messages.push({
                 role: "tool",
