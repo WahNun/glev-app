@@ -3545,6 +3545,25 @@ export default function EnginePage() {
                   />
                 )}
               </div>
+
+              {/* Transparenz-Footer — Quellen-Hinweis + Link zur Erklärseite */}
+              <div
+                style={{
+                  marginTop: 4, padding: "10px 12px",
+                  borderRadius: 10, border: `1px solid ${BORDER}`,
+                  background: "var(--surface-soft)",
+                  fontSize: 11, lineHeight: 1.5,
+                  color: "var(--text-ghost)",
+                }}
+                data-testid="macros-transparency-footer"
+              >
+                Nährwerte aus Open Food Facts, USDA FoodData Central und deinen
+                bisherigen Logs. Items mit ✨ wurden per KI geschätzt. Glev ist
+                eine Dokumentations-App und ersetzt keine ärztliche Beratung.{" "}
+                <a href="/settings/data-sources" style={{ color: "var(--text-dim)", textDecoration: "underline", textUnderlineOffset: 2 }}>
+                  Datenquellen & KI-Genauigkeit verstehen →
+                </a>
+              </div>
           </div>
           )}
 
