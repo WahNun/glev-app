@@ -12,6 +12,10 @@
 //   and then redirects to /auth/confirm?session=ready&type=recovery.
 //   The /auth/callback route is already in the Supabase allowlist.
 //
+// Full architectural explanation:
+//   app/glev-ops/users/actions.ts  — the detailed WHY comment above generateLink()
+//   DECISIONS.md § D-001           — architectural decision record (do not revert)
+//
 // Relevant source:
 //   app/glev-ops/users/actions.ts — sendPasswordResetAction (~lines 1305-1336):
 //

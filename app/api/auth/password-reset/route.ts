@@ -51,6 +51,13 @@ export async function handlePasswordResetPost(
   { sb, enqueue }: PasswordResetDeps,
 ): Promise<NextResponse> {
   try {
+    // NOTE: redirectTo uses /auth/confirm directly (not /auth/callback?next=…).
+    // admin.generateLink() normally produces a hash-based token that requires
+    // the /auth/callback hop to be resolved server-side (see the detailed
+    // explanation in app/glev-ops/users/actions.ts and DECISIONS.md § D-001).
+    // The self-service endpoint here was added later and uses /auth/confirm
+    // directly. If reset emails from this route stop working (user lands on /#),
+    // change this to: `${appUrl}/auth/callback?next=/auth/confirm`
     const { data: linkData, error: linkErr } = await sb.auth.admin.generateLink({
       type: "recovery",
       email,

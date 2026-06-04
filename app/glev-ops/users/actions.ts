@@ -1318,14 +1318,46 @@ export async function sendPasswordResetAction(
   const locale: EmailLocale = profile?.language === "en" ? "en" : "de";
   const displayName = profile?.display_name ?? null;
 
-  // Recovery-Link bei Supabase erzeugen. generateLink liefert den
-  // action_link zurück — Supabase verschickt dabei KEINE eigene Mail
-  // (das Senden übernehmen wir mit unserem bilingualen Template).
-  // redirectTo zeigt auf /auth/callback?next=/auth/confirm (spiegelt den
-  // Login-Page-Flow). Direkter Redirect auf /auth/confirm würde den Token
-  // als URL-Hash (#access_token=…) anhängen, den das SDK wegprocessed →
-  // User landet auf /#. Der /auth/callback-Handler exchanged den Code
-  // serverseitig und leitet dann zu /auth/confirm?session=ready&type=recovery.
+  // ─── Recovery-Link erzeugen ───────────────────────────────────────────────
+  //
+  // ⚠️  DO NOT CHANGE the redirectTo URL below. It has been toggled back and
+  //     forth four times (Tasks #1152 → #1171 → #1179 → #1187) and each
+  //     reversal broke real users' password-reset emails. Read this before
+  //     touching it:
+  //
+  //  WHY /auth/callback?next=/auth/confirm (and NOT /auth/confirm directly)
+  //  ────────────────────────────────────────────────────────────────────────
+  //  admin.generateLink({ type: "recovery" }) produces a hash-based token.
+  //  When the user clicks the link, Supabase's auth server processes it and
+  //  redirects to the redirectTo URL — appending the session as a URL *hash*
+  //  fragment (#access_token=…&type=recovery).
+  //
+  //  A hash fragment is handled entirely client-side. The Supabase JS SDK
+  //  intercepts it, consumes it, and then strips it from the URL — leaving
+  //  the user on "/#" (bare root with no path). The /auth/confirm page never
+  //  receives the token and cannot display the new-password form.
+  //
+  //  Routing through /auth/callback avoids this:
+  //    1. Supabase redirects → /auth/callback?next=/auth/confirm#access_token=…
+  //    2. Our server-side route handler (app/auth/callback/route.ts) calls
+  //       supabase.auth.exchangeCodeForSession(), which resolves the hash token
+  //       server-side and sets the session cookie.
+  //    3. The handler then redirects to /auth/confirm?session=ready&type=recovery
+  //       — a clean URL the page can read without any hash processing.
+  //
+  //  CONTRAST with resetPasswordForEmail() (PKCE flow):
+  //  That method sends a PKCE code as a query-string parameter (?code=…), not
+  //  a hash. Query params survive server-side routing, so /auth/confirm can
+  //  handle them directly without the callback hop. But this file uses
+  //  admin.generateLink(), not resetPasswordForEmail(), so the hop is required.
+  //
+  //  See also: DECISIONS.md § D-001
+  //            tests/unit/passwordResetRedirectTo.test.ts (schema-contract test)
+  // ─────────────────────────────────────────────────────────────────────────
+  //
+  // generateLink liefert den action_link zurück — Supabase verschickt dabei
+  // KEINE eigene Mail (das Senden übernehmen wir mit unserem bilingualen
+  // Template via Resend + Outbox-Pipeline).
   const { data: linkData, error: linkErr } = await sb.auth.admin.generateLink({
     type: "recovery",
     email,
