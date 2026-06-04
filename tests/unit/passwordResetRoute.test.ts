@@ -29,6 +29,7 @@ import {
   handlePasswordResetPost,
   type PasswordResetDeps,
 } from "@/app/api/auth/password-reset/route";
+import type { PasswordResetPayload } from "@/lib/emails/outbox";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -98,9 +99,10 @@ function makeDeps(opts: {
     },
   } as unknown as SupabaseClient;
 
-  const enqueue = async (call: EnqueueCall) => {
+  const enqueue = async (call: EnqueueCall): Promise<{ id: string; deduplicated: boolean }> => {
     enqueueCalls.push(call);
     opts.enqueueSpy?.(call);
+    return { id: "test-id", deduplicated: false };
   };
 
   return { deps: { sb, enqueue }, enqueueCalls, generateLinkArgs };
@@ -141,12 +143,13 @@ test("happy path: enqueueEmail called with template 'password-reset' and correct
   expect(enqueueCalls).toHaveLength(1);
 
   const call = enqueueCalls[0];
+  const payload = call.payload as PasswordResetPayload;
   expect(call.recipient).toBe(TEST_EMAIL);
   expect(call.template).toBe("password-reset");
-  expect(call.payload.resetUrl).toBe(TEST_ACTION_LINK);
-  expect(call.payload.appUrl).toBe(TEST_APP_URL);
-  expect(call.payload.locale).toBe("de");
-  expect(call.payload.name).toBe("Anna");
+  expect(payload.resetUrl).toBe(TEST_ACTION_LINK);
+  expect(payload.appUrl).toBe(TEST_APP_URL);
+  expect(payload.locale).toBe("de");
+  expect(payload.name).toBe("Anna");
 });
 
 test("enumeration prevention: returns { ok: true } when generateLink fails", async () => {
@@ -192,7 +195,7 @@ test("locale de: profiles.language absent → enqueue receives locale 'de'", asy
 
 test("locale de: profiles.language='de' → enqueue receives locale 'de'", async () => {
   const { deps, enqueueCalls } = makeDeps({
-    profileRow: { language: "de", display_name: null },
+    profileRow: { language: "de", display_name: undefined },
   });
 
   await handlePasswordResetPost(TEST_EMAIL, TEST_APP_URL, deps);
@@ -215,7 +218,7 @@ test("locale en: profiles.language='en' → enqueue receives locale 'en'", async
 
 test("locale de: profiles.language='fr' (unsupported) → enqueue receives locale 'de' fallback", async () => {
   const { deps, enqueueCalls } = makeDeps({
-    profileRow: { language: "fr", display_name: null },
+    profileRow: { language: "fr", display_name: undefined },
   });
 
   await handlePasswordResetPost(TEST_EMAIL, TEST_APP_URL, deps);

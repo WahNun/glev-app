@@ -27,15 +27,8 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 export type PasswordResetDeps = {
   /** Supabase admin client (service-role key). */
   sb: SupabaseClient;
-  /**
-   * Enqueues the branded reset email.
-   * Typed as the narrowest shape the handler actually calls so fakes stay small.
-   */
-  enqueue: (args: {
-    recipient: string;
-    template: string;
-    payload: Record<string, unknown>;
-  }) => Promise<void>;
+  /** Enqueues the branded reset email — same signature as enqueueEmail. */
+  enqueue: typeof enqueueEmail;
 };
 
 // ---------------------------------------------------------------------------
