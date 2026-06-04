@@ -916,27 +916,75 @@ export function ExerciseForm() {
   const [status, setStatus] = useState<Status>({ kind: "idle" });
   const [savedTick, setSavedTick] = useState<number>(0);
 
-  // Voice-intent pre-fill: glev:open-exercise-log dispatched by useVoiceIntents
-  // when the classifier recognises an exercise utterance (e.g. "30 Minuten
-  // Radfahren"). Fills in duration, type and intensity — user still confirms
-  // with "Speichern" (compliance gate D-003).
+  // AI chat + voice-intent pre-fill: glev:open-exercise-log is dispatched by:
+  // (1) useVoiceIntents when the classifier recognises an exercise utterance.
+  // (2) navigateToLogScreen (useGlevAI) when the user taps "Detail →" on an
+  //     exercise chip — in that case the full ExerciseEntryPayload is written
+  //     to sessionStorage["glev_pending_exercise"] before navigating, so the
+  //     data survives a full page navigation as well as an in-page dispatch.
   useEffect(() => {
-    const handler = (e: Event) => {
-      const detail = (e as CustomEvent<{
-        duration_minutes?: number;
-        exercise_type?: string;
-        intensity?: "low" | "medium" | "high";
-      }>).detail;
+    type ExercisePrefill = {
+      exercise_type?: string;
+      duration_minutes?: number;
+      intensity?: "low" | "medium" | "high";
+      notes?: string | null;
+      logged_at?: string | null;
+    };
+
+    function applyPrefill(detail: ExercisePrefill) {
       if (typeof detail?.duration_minutes === "number" && detail.duration_minutes > 0) {
         setDuration(String(Math.min(600, Math.round(detail.duration_minutes))));
       }
-      const validTypes: ExerciseType[] = ["cardio", "strength", "yoga", "cycling", "swimming", "run", "hiit", "football", "tennis", "volleyball", "basketball", "breathwork", "hot_shower", "cold_shower"];
-      if (typeof detail?.exercise_type === "string" && validTypes.includes(detail.exercise_type as ExerciseType)) {
+      const validTypes: ExerciseType[] = [
+        "cardio", "strength", "yoga", "cycling", "swimming", "run", "hiit",
+        "football", "tennis", "volleyball", "basketball", "breathwork",
+        "hot_shower", "cold_shower",
+      ];
+      if (
+        typeof detail?.exercise_type === "string" &&
+        validTypes.includes(detail.exercise_type as ExerciseType)
+      ) {
         setType(detail.exercise_type as ExerciseType);
       }
-      if (detail?.intensity === "low" || detail?.intensity === "medium" || detail?.intensity === "high") {
+      if (
+        detail?.intensity === "low" ||
+        detail?.intensity === "medium" ||
+        detail?.intensity === "high"
+      ) {
         setIntensity(detail.intensity);
       }
+      if (typeof detail?.notes === "string" && detail.notes.trim()) {
+        setNotes(detail.notes.trim());
+      }
+      // logged_at: if provided, switch to the custom datetime picker and
+      // set the value to the specified instant (capped at now and 1 year ago).
+      if (typeof detail?.logged_at === "string" && detail.logged_at.trim()) {
+        const ms = new Date(detail.logged_at.trim()).getTime();
+        if (Number.isFinite(ms)) {
+          const nowMs = Date.now();
+          const capped = Math.min(ms, nowMs);
+          setCustomStartAt(toLocalDtString(new Date(capped)));
+          setStartedMinAgo(STARTED_CUSTOM);
+        }
+      }
+    }
+
+    // On mount: read any pending prefill from sessionStorage. navigateToLogScreen
+    // writes this key before calling router.push — so even if the page did a
+    // full reload the data is available when this effect runs.
+    try {
+      if (typeof window !== "undefined") {
+        const raw = window.sessionStorage.getItem("glev_pending_exercise");
+        if (raw) {
+          applyPrefill(JSON.parse(raw) as ExercisePrefill);
+          window.sessionStorage.removeItem("glev_pending_exercise");
+        }
+      }
+    } catch { /* ignore quota / parse errors */ }
+
+    // Also listen for real-time dispatches (same-page navigation, voice intents).
+    const handler = (e: Event) => {
+      applyPrefill((e as CustomEvent<ExercisePrefill>).detail ?? {});
     };
     window.addEventListener("glev:open-exercise-log", handler);
     return () => window.removeEventListener("glev:open-exercise-log", handler);
