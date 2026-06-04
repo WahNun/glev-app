@@ -1321,14 +1321,14 @@ export async function sendPasswordResetAction(
   // Recovery-Link bei Supabase erzeugen. generateLink liefert den
   // action_link zurück — Supabase verschickt dabei KEINE eigene Mail
   // (das Senden übernehmen wir mit unserem bilingualen Template).
-  // IMPORTANT: https://glev.app/auth/confirm must be in the Supabase
-  // Authentication → URL Configuration → Redirect URLs allowlist.
-  // The /auth/confirm page handles token_hash directly, so no /auth/callback
-  // hop is needed here.
+  // redirectTo zeigt auf /auth/callback?next=/auth/confirm, weil
+  // /auth/callback bereits in der Supabase-Allowlist steht. Der
+  // Callback-Handler leitet dann sauber zu /auth/confirm?session=ready&type=recovery
+  // weiter (app/auth/callback/route.ts Zeile 80–82).
   const { data: linkData, error: linkErr } = await sb.auth.admin.generateLink({
     type: "recovery",
     email,
-    options: { redirectTo: `${appUrl}/auth/confirm` },
+    options: { redirectTo: `${appUrl}/auth/callback?next=/auth/confirm` },
   });
   if (linkErr || !linkData?.properties?.action_link) {
     return {
