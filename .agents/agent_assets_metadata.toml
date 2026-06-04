@@ -204,3 +204,9 @@ id = "PKtvE5LMVVRDPkbxzDJLo"
 uri = "file://.local/lru-cache-report.txt"
 type = "text"
 title = "LRU-Cache Report"
+
+[[outputs]]
+id = "QtxI6mDUJsqdees3KoNab"
+uri = "file://docs/macro-pipeline-report.md"
+type = "text"
+title = "Makro-Pipeline: Legacy vs. AI-Chat vs. Future"
