@@ -15,6 +15,7 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useLocale } from "next-intl";
 import { supabase } from "@/lib/supabase";
 import { trackEvent } from "@/lib/fb-capi-client";
 import {
@@ -29,7 +30,9 @@ import {
 
 type Step = "signup" | "profile" | "success";
 
-const SENSOR_OPTIONS = [
+// Sensor labels that are brand names need no translation; only the
+// two generic entries ("other" / "none") have locale variants.
+const SENSOR_OPTIONS_DE = [
   { value: "dexcom_g7",    label: "Dexcom G7" },
   { value: "dexcom_g6",    label: "Dexcom G6" },
   { value: "dexcom_one",   label: "Dexcom ONE / ONE+" },
@@ -42,8 +45,25 @@ const SENSOR_OPTIONS = [
   { value: "none",         label: "Kein Sensor" },
 ];
 
+const SENSOR_OPTIONS_EN = [
+  { value: "dexcom_g7",    label: "Dexcom G7" },
+  { value: "dexcom_g6",    label: "Dexcom G6" },
+  { value: "dexcom_one",   label: "Dexcom ONE / ONE+" },
+  { value: "libre3",       label: "FreeStyle Libre 3" },
+  { value: "libre2",       label: "FreeStyle Libre 2" },
+  { value: "libre1",       label: "FreeStyle Libre 1" },
+  { value: "medtronic",    label: "Medtronic Guardian" },
+  { value: "eversense",    label: "Eversense E3" },
+  { value: "other",        label: "Other sensor" },
+  { value: "none",         label: "No sensor" },
+];
+
 export default function SignupPage() {
   const router = useRouter();
+  const locale = useLocale();
+  const en = locale === "en";
+
+  const SENSOR_OPTIONS = en ? SENSOR_OPTIONS_EN : SENSOR_OPTIONS_DE;
 
   // Step 1 — account
   const [email, setEmail] = useState("");
@@ -101,7 +121,7 @@ export default function SignupPage() {
       });
 
       if (signUpError) throw signUpError;
-      if (!data.user) throw new Error("Signup fehlgeschlagen – bitte erneut versuchen.");
+      if (!data.user) throw new Error(en ? "Sign-up failed — please try again." : "Signup fehlgeschlagen – bitte erneut versuchen.");
 
       setUserId(data.user.id);
 
@@ -168,7 +188,7 @@ export default function SignupPage() {
       setStep("profile");
       setLoading(false);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Unbekannter Fehler");
+      setError(err instanceof Error ? err.message : (en ? "Unknown error" : "Unbekannter Fehler"));
       setLoading(false);
     }
   }
@@ -177,7 +197,7 @@ export default function SignupPage() {
   async function handleProfileSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!phone.trim()) {
-      setProfileError("Bitte gib deine Telefonnummer ein.");
+      setProfileError(en ? "Please enter your phone number." : "Bitte gib deine Telefonnummer ein.");
       return;
     }
     setProfileLoading(true);
@@ -253,17 +273,37 @@ export default function SignupPage() {
         <div style={cardStyle}>
           <div style={{ fontSize: 48, marginBottom: 16 }}>✉️</div>
           <h1 style={{ fontSize: 22, fontWeight: 700, color: "#fff", margin: "0 0 12px" }}>
-            Bestätige deine E-Mail
+            {en ? "Confirm your email" : "Bestätige deine E-Mail"}
           </h1>
           <p style={{ fontSize: 15, color: TEXT_DIM, lineHeight: 1.6, margin: 0 }}>
-            Wir haben eine Bestätigungsmail an{" "}
-            <strong style={{ color: "#fff" }}>{email}</strong> gesendet.
-            Klick auf den Link um dein Konto zu aktivieren.
+            {en ? (
+              <>
+                We sent a confirmation email to{" "}
+                <strong style={{ color: "#fff" }}>{email}</strong>.
+                Click the link to activate your account.
+              </>
+            ) : (
+              <>
+                Wir haben eine Bestätigungsmail an{" "}
+                <strong style={{ color: "#fff" }}>{email}</strong> gesendet.
+                Klick auf den Link um dein Konto zu aktivieren.
+              </>
+            )}
           </p>
           <p style={{ fontSize: 13, color: TEXT_DIM, lineHeight: 1.5, margin: "12px 0 0" }}>
-            Nichts da? Check deinen{" "}
-            <strong style={{ color: "#fff" }}>Spam- oder Junk-Ordner</strong>{" "}
-            und such nach <strong style={{ color: "#fff" }}>info@glev.app</strong>.
+            {en ? (
+              <>
+                Nothing there? Check your{" "}
+                <strong style={{ color: "#fff" }}>spam or junk folder</strong>{" "}
+                and look for <strong style={{ color: "#fff" }}>info@glev.app</strong>.
+              </>
+            ) : (
+              <>
+                Nichts da? Check deinen{" "}
+                <strong style={{ color: "#fff" }}>Spam- oder Junk-Ordner</strong>{" "}
+                und such nach <strong style={{ color: "#fff" }}>info@glev.app</strong>.
+              </>
+            )}
           </p>
         </div>
       </main>
@@ -298,13 +338,13 @@ export default function SignupPage() {
 
           <div style={{ marginBottom: 24 }}>
             <p style={{ fontSize: 12, fontWeight: 600, color: ACCENT, textTransform: "uppercase", letterSpacing: "0.08em", margin: "0 0 6px" }}>
-              Schritt 2 von 2
+              {en ? "Step 2 of 2" : "Schritt 2 von 2"}
             </p>
             <h1 style={{ fontSize: 20, fontWeight: 700, color: "#fff", margin: "0 0 4px", letterSpacing: "-0.02em" }}>
-              Noch ein paar Angaben
+              {en ? "A few more details" : "Noch ein paar Angaben"}
             </h1>
             <p style={{ fontSize: 14, color: TEXT_DIM, margin: 0 }}>
-              Damit wir Glev besser auf dich abstimmen können.
+              {en ? "This helps us tailor Glev to you." : "Damit wir Glev besser auf dich abstimmen können."}
             </p>
           </div>
 
@@ -313,7 +353,7 @@ export default function SignupPage() {
             <div>
               <input
                 type="tel"
-                placeholder="Telefonnummer"
+                placeholder={en ? "Phone number" : "Telefonnummer"}
                 value={phone}
                 required
                 onChange={(e) => { setPhone(e.target.value); setProfileError(null); }}
@@ -328,7 +368,7 @@ export default function SignupPage() {
             {/* Date of birth */}
             <div>
               <label style={{ fontSize: 12, color: TEXT_DIM, fontWeight: 500, display: "block", marginBottom: 6 }}>
-                Geburtsdatum
+                {en ? "Date of birth" : "Geburtsdatum"}
               </label>
               <input
                 type="date"
@@ -342,7 +382,7 @@ export default function SignupPage() {
             {/* CGM yes/no */}
             <div>
               <label style={{ fontSize: 12, color: TEXT_DIM, fontWeight: 500, display: "block", marginBottom: 8 }}>
-                Nutzt du einen CGM-Sensor?
+                {en ? "Do you use a CGM sensor?" : "Nutzt du einen CGM-Sensor?"}
               </label>
               <div style={{ display: "flex", gap: 8 }}>
                 {(["ja", "nein"] as const).map((val) => (
@@ -368,7 +408,7 @@ export default function SignupPage() {
                       transition: "all 120ms ease",
                     }}
                   >
-                    {val === "ja" ? "Ja" : "Nein"}
+                    {val === "ja" ? (en ? "Yes" : "Ja") : (en ? "No" : "Nein")}
                   </button>
                 ))}
               </div>
@@ -378,7 +418,7 @@ export default function SignupPage() {
             {usesCgm === "ja" && (
               <div>
                 <label style={{ fontSize: 12, color: TEXT_DIM, fontWeight: 500, display: "block", marginBottom: 6 }}>
-                  Welchen Sensor nutzt du?
+                  {en ? "Which sensor do you use?" : "Welchen Sensor nutzt du?"}
                 </label>
                 <select
                   value={sensorType}
@@ -390,7 +430,7 @@ export default function SignupPage() {
                     cursor: "pointer",
                   }}
                 >
-                  <option value="" disabled>Sensor auswählen…</option>
+                  <option value="" disabled>{en ? "Select sensor…" : "Sensor auswählen…"}</option>
                   {SENSOR_OPTIONS.filter((o) => o.value !== "none").map((o) => (
                     <option key={o.value} value={o.value} style={{ background: "#1a1f2e" }}>
                       {o.label}
@@ -419,7 +459,7 @@ export default function SignupPage() {
                 transition: "background 120ms ease",
               }}
             >
-              {profileLoading ? "Wird gespeichert…" : "Weiter →"}
+              {profileLoading ? (en ? "Saving…" : "Wird gespeichert…") : (en ? "Continue →" : "Weiter →")}
             </button>
 
             {/* Skip link */}
@@ -437,7 +477,7 @@ export default function SignupPage() {
                 padding: "4px 0",
               }}
             >
-              Überspringen
+              {en ? "Skip for now" : "Überspringen"}
             </button>
           </form>
         </div>
@@ -485,7 +525,7 @@ export default function SignupPage() {
               marginBottom: 12,
             }}
           >
-            7 Tage kostenlos
+            {en ? "7 days free" : "7 Tage kostenlos"}
           </div>
           <h1
             style={{
@@ -496,10 +536,10 @@ export default function SignupPage() {
               letterSpacing: "-0.02em",
             }}
           >
-            Konto erstellen
+            {en ? "Create your account" : "Konto erstellen"}
           </h1>
           <p style={{ fontSize: 14, color: TEXT_DIM, margin: 0 }}>
-            Keine Kreditkarte erforderlich.
+            {en ? "No credit card required." : "Keine Kreditkarte erforderlich."}
           </p>
         </div>
 
@@ -507,7 +547,7 @@ export default function SignupPage() {
         <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 14 }}>
           <input
             type="text"
-            placeholder="Vorname"
+            placeholder={en ? "First name" : "Vorname"}
             value={name}
             onChange={(e) => setName(e.target.value)}
             required
@@ -515,7 +555,7 @@ export default function SignupPage() {
           />
           <input
             type="email"
-            placeholder="E-Mail-Adresse"
+            placeholder={en ? "Email address" : "E-Mail-Adresse"}
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             required
@@ -524,7 +564,7 @@ export default function SignupPage() {
           />
           <input
             type="password"
-            placeholder="Passwort (min. 8 Zeichen)"
+            placeholder={en ? "Password (min. 8 characters)" : "Passwort (min. 8 Zeichen)"}
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             required
@@ -569,28 +609,44 @@ export default function SignupPage() {
               transition: "background 120ms ease",
             }}
           >
-            {loading ? "Wird erstellt…" : "7 Tage kostenlos starten"}
+            {loading ? (en ? "Creating account…" : "Wird erstellt…") : (en ? "Start 7-day free trial" : "7 Tage kostenlos starten")}
           </button>
         </form>
 
         {/* Footer links */}
         <div style={{ marginTop: 20, textAlign: "center" }}>
           <p style={{ fontSize: 13, color: TEXT_DIM, margin: "0 0 8px" }}>
-            Bereits ein Konto?{" "}
+            {en ? "Already have an account?" : "Bereits ein Konto?"}{" "}
             <Link href="/login" style={{ color: ACCENT, textDecoration: "none" }}>
-              Anmelden
+              {en ? "Sign in" : "Anmelden"}
             </Link>
           </p>
           <p style={{ fontSize: 12, color: TEXT_FAINT ?? "rgba(255,255,255,0.3)", margin: 0, lineHeight: 1.5 }}>
-            Mit der Registrierung akzeptierst du unsere{" "}
-            <Link href="/legal/agb" style={{ color: "rgba(255,255,255,0.4)", textDecoration: "underline" }}>
-              AGB
-            </Link>{" "}
-            und{" "}
-            <Link href="/datenschutz" style={{ color: "rgba(255,255,255,0.4)", textDecoration: "underline" }}>
-              Datenschutzerklärung
-            </Link>
-            .
+            {en ? (
+              <>
+                By signing up you agree to our{" "}
+                <Link href="/legal/agb" style={{ color: "rgba(255,255,255,0.4)", textDecoration: "underline" }}>
+                  Terms
+                </Link>{" "}
+                and{" "}
+                <Link href="/datenschutz" style={{ color: "rgba(255,255,255,0.4)", textDecoration: "underline" }}>
+                  Privacy Policy
+                </Link>
+                .
+              </>
+            ) : (
+              <>
+                Mit der Registrierung akzeptierst du unsere{" "}
+                <Link href="/legal/agb" style={{ color: "rgba(255,255,255,0.4)", textDecoration: "underline" }}>
+                  AGB
+                </Link>{" "}
+                und{" "}
+                <Link href="/datenschutz" style={{ color: "rgba(255,255,255,0.4)", textDecoration: "underline" }}>
+                  Datenschutzerklärung
+                </Link>
+                .
+              </>
+            )}
           </p>
         </div>
       </div>

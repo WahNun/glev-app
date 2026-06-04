@@ -15,9 +15,46 @@
  */
 
 import { useEffect, useState } from "react";
+import { useLocale } from "next-intl";
 import { supabase } from "@/lib/supabase";
 
 const ACCENT = "#4F6EF7";
+
+type ModalCopy = {
+  ariaLabel: string;
+  title: string;
+  body: string;
+  badge: string;
+  proLabel: (busy: boolean) => string;
+  proSub: string;
+  smartLabel: (busy: boolean) => string;
+  smartSub: string;
+  signOut: string;
+};
+
+const DE: ModalCopy = {
+  ariaLabel: "Testphase abgelaufen",
+  title: "Deine Testphase ist abgelaufen",
+  body: "Deine Daten bleiben vollständig erhalten.\nWähle ein Abo um weiterzumachen.",
+  badge: "Empfohlen",
+  proLabel: (busy) => busy ? "Weiterleitung …" : "Pro — Wie im Trial weiter →",
+  proSub: "Voller Funktionsumfang · alle Features entsperrt",
+  smartLabel: (busy) => busy ? "Weiterleitung …" : "Smart — Einsteigen →",
+  smartSub: "Kernfeatures · ideal zum Einstieg",
+  signOut: "Abmelden",
+};
+
+const EN: ModalCopy = {
+  ariaLabel: "Trial expired",
+  title: "Your trial has ended",
+  body: "Your data is fully preserved.\nChoose a plan to keep going.",
+  badge: "Most popular",
+  proLabel: (busy) => busy ? "Redirecting …" : "Pro — Continue as in your trial →",
+  proSub: "Full feature set · everything unlocked",
+  smartLabel: (busy) => busy ? "Redirecting …" : "Smart — Get started →",
+  smartSub: "Core features · great for getting started",
+  signOut: "Sign out",
+};
 
 async function startCheckout(tier: "smart" | "pro"): Promise<void> {
   const endpoint = tier === "smart" ? "/api/checkout/beta" : "/api/checkout/pro";
@@ -52,6 +89,9 @@ async function startCheckout(tier: "smart" | "pro"): Promise<void> {
 }
 
 export default function TrialExpiredModal({ forceOpen = false }: { forceOpen?: boolean }) {
+  const locale = useLocale();
+  const C = locale === "en" ? EN : DE;
+
   const [expired, setExpired] = useState(forceOpen);
   const [loading, setLoading] = useState(!forceOpen);
   const [busySmart, setBusySmart] = useState(false);
@@ -99,7 +139,7 @@ export default function TrialExpiredModal({ forceOpen = false }: { forceOpen?: b
     <div
       role="dialog"
       aria-modal="true"
-      aria-label="Testphase abgelaufen"
+      aria-label={C.ariaLabel}
       style={{
         position: "fixed",
         inset: 0,
@@ -155,7 +195,7 @@ export default function TrialExpiredModal({ forceOpen = false }: { forceOpen?: b
             letterSpacing: "-0.02em",
           }}
         >
-          Deine Testphase ist abgelaufen
+          {C.title}
         </h2>
 
         <p
@@ -166,8 +206,7 @@ export default function TrialExpiredModal({ forceOpen = false }: { forceOpen?: b
             lineHeight: 1.6,
           }}
         >
-          Deine Daten bleiben vollständig erhalten.
-          Wähle ein Abo um weiterzumachen.
+          {C.body}
         </p>
 
         {/* Plan cards */}
@@ -223,7 +262,7 @@ export default function TrialExpiredModal({ forceOpen = false }: { forceOpen?: b
                 whiteSpace: "nowrap",
               }}
             >
-              Empfohlen
+              {C.badge}
             </span>
             <div
               style={{
@@ -232,10 +271,10 @@ export default function TrialExpiredModal({ forceOpen = false }: { forceOpen?: b
                 marginBottom: 2,
               }}
             >
-              {busyPro ? "Weiterleitung …" : "Pro — Wie im Trial weiter →"}
+              {C.proLabel(busyPro)}
             </div>
             <div style={{ fontSize: 12, opacity: 0.85 }}>
-              Voller Funktionsumfang · alle Features entsperrt
+              {C.proSub}
             </div>
           </button>
 
@@ -270,10 +309,10 @@ export default function TrialExpiredModal({ forceOpen = false }: { forceOpen?: b
                 color: "var(--text)",
               }}
             >
-              {busySmart ? "Weiterleitung …" : "Smart — Einsteigen →"}
+              {C.smartLabel(busySmart)}
             </div>
             <div style={{ fontSize: 12, color: "var(--text-muted)" }}>
-              Kernfeatures · ideal zum Einstieg
+              {C.smartSub}
             </div>
           </button>
         </div>
@@ -295,7 +334,7 @@ export default function TrialExpiredModal({ forceOpen = false }: { forceOpen?: b
             fontFamily: "inherit",
           }}
         >
-          Abmelden
+          {C.signOut}
         </button>
       </div>
     </div>

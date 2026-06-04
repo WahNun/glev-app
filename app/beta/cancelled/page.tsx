@@ -1,5 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
+import { getLocale } from "next-intl/server";
 
 const ACCENT = "#4F6EF7";
 const TEXT_DIM = "rgba(255,255,255,0.75)";
@@ -8,7 +9,24 @@ export const metadata = {
   title: "Glev Beta — Checkout abgebrochen",
 };
 
-export default function BetaCancelledPage() {
+const DE = {
+  h1: "Kein Problem — dein Platz ist noch frei.",
+  body: "Du hast den Checkout abgebrochen. Wenn du Fragen hast bevor du dich entscheidest, schreib einfach kurz — wir antworten persönlich.",
+  cta: "Zurück zur Beta-Seite",
+  secondary: "Frage stellen",
+};
+
+const EN = {
+  h1: "No worries — your spot is still open.",
+  body: "You cancelled the checkout. If you have questions before deciding, just drop us a line — we reply personally.",
+  cta: "Back to the beta page",
+  secondary: "Ask a question",
+};
+
+export default async function BetaCancelledPage() {
+  const locale = await getLocale();
+  const C = locale === "en" ? EN : DE;
+
   return (
     <main
       style={{
@@ -24,12 +42,11 @@ export default function BetaCancelledPage() {
         <Image src="/icon.svg" alt="" width={64} height={64} style={{ borderRadius: 14 }} />
 
         <h1 style={{ fontSize: 32, lineHeight: 1.1, letterSpacing: "-0.03em", fontWeight: 700, margin: 0 }}>
-          Kein Problem — dein Platz ist noch frei.
+          {C.h1}
         </h1>
 
         <p style={{ fontSize: 16, lineHeight: 1.55, color: TEXT_DIM, margin: 0 }}>
-          Du hast den Checkout abgebrochen. Wenn du Fragen hast bevor du dich entscheidest, schreib einfach kurz —
-          wir antworten persönlich.
+          {C.body}
         </p>
 
         <div style={{ display: "flex", gap: 12, flexWrap: "wrap", justifyContent: "center" }}>
@@ -48,7 +65,7 @@ export default function BetaCancelledPage() {
               alignItems: "center",
             }}
           >
-            Zurück zur Beta-Seite
+            {C.cta}
           </Link>
           <Link
             href="/contact?source=beta-cancelled"
@@ -65,7 +82,7 @@ export default function BetaCancelledPage() {
               alignItems: "center",
             }}
           >
-            Frage stellen
+            {C.secondary}
           </Link>
         </div>
       </div>

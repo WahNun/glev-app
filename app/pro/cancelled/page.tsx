@@ -1,12 +1,33 @@
 import Link from "next/link";
 import Lockup from "@/components/landing/Lockup";
 import { ACCENT, TEXT_DIM } from "@/components/landing/tokens";
+import { getLocale } from "next-intl/server";
 
 export const metadata = {
   title: "Glev Pro — Checkout abgebrochen",
 };
 
-export default function ProCancelledPage() {
+const COPY = {
+  de: {
+    h1: "Kein Problem — wir buchen nichts ab.",
+    body: "Du hast den Checkout abgebrochen, es wurde nichts hinterlegt. Wenn du Fragen hast bevor du dich entscheidest, schreib einfach kurz — wir antworten persönlich.",
+    back: "Zurück zur Mitgliedschafts-Seite",
+    ask: "Frage stellen",
+    beta: "Lieber niedriger Einstieg? → /beta",
+  },
+  en: {
+    h1: "No worries — nothing was charged.",
+    body: "You cancelled the checkout and nothing was saved. If you have questions before deciding, just drop us a line — we reply personally. Come back whenever you're ready.",
+    back: "Back to membership page",
+    ask: "Ask a question",
+    beta: "Prefer a lower starting point? → /beta",
+  },
+} as const;
+
+export default async function ProCancelledPage() {
+  const locale = await getLocale();
+  const C = locale === "en" ? COPY.en : COPY.de;
+
   return (
     <main
       style={{
@@ -32,12 +53,11 @@ export default function ProCancelledPage() {
         <Lockup width={180} />
 
         <h1 style={{ fontSize: 32, lineHeight: 1.1, letterSpacing: "-0.03em", fontWeight: 700, margin: 0 }}>
-          Kein Problem — wir buchen nichts ab.
+          {C.h1}
         </h1>
 
         <p style={{ fontSize: 16, lineHeight: 1.55, color: TEXT_DIM, margin: 0 }}>
-          Du hast den Checkout abgebrochen, es wurde nichts hinterlegt. Wenn du Fragen hast bevor du dich entscheidest,
-          schreib einfach kurz — wir antworten persönlich.
+          {C.body}
         </p>
 
         <div style={{ display: "flex", gap: 12, flexWrap: "wrap", justifyContent: "center" }}>
@@ -56,7 +76,7 @@ export default function ProCancelledPage() {
               alignItems: "center",
             }}
           >
-            Zurück zur Mitgliedschafts-Seite
+            {C.back}
           </Link>
           <Link
             href="/contact?source=pro-cancelled"
@@ -73,7 +93,7 @@ export default function ProCancelledPage() {
               alignItems: "center",
             }}
           >
-            Frage stellen
+            {C.ask}
           </Link>
         </div>
 
@@ -86,7 +106,7 @@ export default function ProCancelledPage() {
             textUnderlineOffset: 2,
           }}
         >
-          Lieber niedriger Einstieg? → /beta
+          {C.beta}
         </Link>
       </div>
     </main>

@@ -4,6 +4,7 @@ import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
+import { useLocale } from "next-intl";
 import { supabase } from "@/lib/supabase";
 
 const ACCENT  = "#4F6EF7";
@@ -33,44 +34,152 @@ type State =
   | { kind: "saving" }
   | { kind: "saved" };
 
+type Strings = {
+  loadingMoment: string;
+  passwordFormTitle: string;
+  passwordFormSub: string;
+  labelNewPassword: string;
+  labelRepeat: string;
+  btnSaving: string;
+  btnSave: string;
+  savedTitle: string;
+  savedRedirect: string;
+  invalidTitle: string;
+  linkUsedTitle: string;
+  backToLogin: string;
+  toLogin: string;
+  errAuthService: string;
+  errMinLength: string;
+  errMismatch: string;
+  errNoLink: string;
+  errNoLinkInitial: string;
+  errExpiredUsed: string;
+  errLinkAlreadyUsed: string;
+  copyForType: {
+    invite:   { title: string; sub: string; cta: string };
+    recovery: { title: string; sub: string; cta: string };
+    email:    { title: string; sub: string; cta: string };
+    magiclink:{ title: string; sub: string; cta: string };
+    default:  { title: string; sub: string; cta: string };
+  };
+};
+
+const DE: Strings = {
+  loadingMoment: "Einen Moment …",
+  passwordFormTitle: "Neues Passwort setzen",
+  passwordFormSub: "Wähle ein Passwort mit mindestens 6 Zeichen.",
+  labelNewPassword: "NEUES PASSWORT",
+  labelRepeat: "WIEDERHOLEN",
+  btnSaving: "Speichere …",
+  btnSave: "Passwort speichern",
+  savedTitle: "Passwort aktualisiert ✓",
+  savedRedirect: "Du wirst zum Login weitergeleitet …",
+  invalidTitle: "Link ungültig oder abgelaufen",
+  linkUsedTitle: "Link bereits verwendet",
+  backToLogin: "Zurück zum Login",
+  toLogin: "Zum Login →",
+  errAuthService: "Auth-Service nicht konfiguriert.",
+  errMinLength: "Passwort muss mindestens 6 Zeichen lang sein.",
+  errMismatch: "Die beiden Passwörter stimmen nicht überein.",
+  errNoLink: "Kein gültiger Bestätigungs-Link — bitte fordere einen neuen Reset-Link an.",
+  errNoLinkInitial: "Kein gültiger Bestätigungs-Link — bitte fordere einen neuen Link an.",
+  errExpiredUsed: "Dieser Reset-Link ist abgelaufen oder wurde bereits verwendet. Bitte fordere einen neuen an.",
+  errLinkAlreadyUsed: "Dieser Link wurde bereits verwendet. Falls du per SMS und Email je einen Link erhalten hast, wurde das Konto bereits über den ersten Klick aktiviert. Bitte logge dich direkt ein.",
+  copyForType: {
+    invite: {
+      title: "Account einrichten",
+      sub: "Du wurdest zu Glev eingeladen. Klicke unten, um deinen Account zu aktivieren und dein Passwort zu setzen.",
+      cta: "Account einrichten",
+    },
+    recovery: {
+      title: "Passwort zurücksetzen",
+      sub: "Klicke unten, um fortzufahren und ein neues Passwort zu vergeben.",
+      cta: "Passwort zurücksetzen",
+    },
+    email: {
+      title: "Email bestätigen",
+      sub: "Klicke unten, um deine Email-Adresse zu bestätigen.",
+      cta: "Email bestätigen",
+    },
+    magiclink: {
+      title: "Anmelden",
+      sub: "Klicke unten, um dich anzumelden.",
+      cta: "Jetzt anmelden",
+    },
+    default: {
+      title: "Bestätigung",
+      sub: "Klicke unten, um fortzufahren.",
+      cta: "Fortfahren",
+    },
+  },
+};
+
+const EN: Strings = {
+  loadingMoment: "One moment …",
+  passwordFormTitle: "Set a new password",
+  passwordFormSub: "Choose a password with at least 6 characters.",
+  labelNewPassword: "NEW PASSWORD",
+  labelRepeat: "CONFIRM PASSWORD",
+  btnSaving: "Saving …",
+  btnSave: "Save password",
+  savedTitle: "Password updated ✓",
+  savedRedirect: "You'll be redirected to login …",
+  invalidTitle: "Link invalid or expired",
+  linkUsedTitle: "Link already used",
+  backToLogin: "Back to login",
+  toLogin: "Go to login →",
+  errAuthService: "Auth service not configured.",
+  errMinLength: "Password must be at least 6 characters.",
+  errMismatch: "The two passwords don't match.",
+  errNoLink: "No valid confirmation link — please request a new reset link.",
+  errNoLinkInitial: "No valid confirmation link — please request a new link.",
+  errExpiredUsed: "This reset link has expired or has already been used. Please request a new one.",
+  errLinkAlreadyUsed: "This link has already been used. If you received both an SMS and an email link, your account was activated on the first click. Please log in directly.",
+  copyForType: {
+    invite: {
+      title: "Set up your account",
+      sub: "You've been invited to Glev. Click below to activate your account and set your password.",
+      cta: "Set up account",
+    },
+    recovery: {
+      title: "Reset your password",
+      sub: "Click below to continue and set a new password.",
+      cta: "Reset password",
+    },
+    email: {
+      title: "Confirm your email",
+      sub: "Click below to confirm your email address.",
+      cta: "Confirm email",
+    },
+    magiclink: {
+      title: "Sign in",
+      sub: "Click below to sign in.",
+      cta: "Sign in now",
+    },
+    default: {
+      title: "Confirm",
+      sub: "Click below to continue.",
+      cta: "Continue",
+    },
+  },
+};
+
 /**
  * Per Magic-Link-Type the right user-facing copy & CTA. Used on the
  * pre-verify "Account einrichten"-Schritt, der den Mail-Scanner-Bug
  * (Outlook/Mimecast verbrennen den OTP vorab) aushebelt.
  */
-function copyForType(type: string): { title: string; sub: string; cta: string } {
+function copyForType(
+  type: string,
+  C: Strings,
+): { title: string; sub: string; cta: string } {
   switch (type) {
-    case "invite":
-      return {
-        title: "Account einrichten",
-        sub: "Du wurdest zu Glev eingeladen. Klicke unten, um deinen Account zu aktivieren und dein Passwort zu setzen.",
-        cta: "Account einrichten",
-      };
-    case "recovery":
-      return {
-        title: "Passwort zurücksetzen",
-        sub: "Klicke unten, um fortzufahren und ein neues Passwort zu vergeben.",
-        cta: "Passwort zurücksetzen",
-      };
+    case "invite":    return C.copyForType.invite;
+    case "recovery":  return C.copyForType.recovery;
     case "signup":
-    case "email":
-      return {
-        title: "Email bestätigen",
-        sub: "Klicke unten, um deine Email-Adresse zu bestätigen.",
-        cta: "Email bestätigen",
-      };
-    case "magiclink":
-      return {
-        title: "Anmelden",
-        sub: "Klicke unten, um dich anzumelden.",
-        cta: "Jetzt anmelden",
-      };
-    default:
-      return {
-        title: "Bestätigung",
-        sub: "Klicke unten, um fortzufahren.",
-        cta: "Fortfahren",
-      };
+    case "email":     return C.copyForType.email;
+    case "magiclink": return C.copyForType.magiclink;
+    default:          return C.copyForType.default;
   }
 }
 
@@ -150,6 +259,8 @@ export default function ConfirmPage() {
  * reads like an error during the ~1s setSession() round-trip.
  */
 function LoadingMark() {
+  const locale = useLocale();
+  const C = locale === "en" ? EN : DE;
   return (
     <div style={{ textAlign: "center", padding: "26px 0" }}>
       <Image
@@ -162,7 +273,7 @@ function LoadingMark() {
         style={{ display: "block", margin: "0 auto 18px" }}
       />
       <div style={{ fontSize: 13, color: "rgba(255,255,255,0.5)", letterSpacing: "0.02em" }}>
-        Einen Moment …
+        {C.loadingMoment}
       </div>
     </div>
   );
@@ -171,6 +282,8 @@ function LoadingMark() {
 function ConfirmInner() {
   const router = useRouter();
   const params = useSearchParams();
+  const locale = useLocale();
+  const C = locale === "en" ? EN : DE;
 
   // Start im "needs_confirm"-State, NICHT direkt verifizieren.
   // Hintergrund: Mail-Scanner (Outlook Safe Links, Mimecast, Apple Privacy
@@ -206,7 +319,7 @@ function ConfirmInner() {
         ? { kind: "needs_confirm" }
         : hasRecoveryHash
           ? { kind: "verifying" }
-          : { kind: "invalid", reason: "Kein gültiger Bestätigungs-Link — bitte fordere einen neuen Link an." },
+          : { kind: "invalid", reason: C.errNoLinkInitial },
   );
   const [password, setPassword] = useState("");
   const [confirm, setConfirm]   = useState("");
@@ -214,7 +327,7 @@ function ConfirmInner() {
 
   useEffect(() => {
     if (!supabase) {
-      setState({ kind: "invalid", reason: "Auth-Service nicht konfiguriert." });
+      setState({ kind: "invalid", reason: C.errAuthService });
       return;
     }
 
@@ -247,8 +360,7 @@ function ConfirmInner() {
       if (errCode) {
         setState({
           kind: "invalid",
-          reason:
-            "Dieser Reset-Link ist abgelaufen oder wurde bereits verwendet. Bitte fordere einen neuen an.",
+          reason: C.errExpiredUsed,
           linkUsed: true,
         });
       } else if (accessToken && refreshToken) {
@@ -281,7 +393,7 @@ function ConfirmInner() {
 
   async function handleConfirmClick() {
     if (!supabase) {
-      setState({ kind: "invalid", reason: "Auth-Service nicht konfiguriert." });
+      setState({ kind: "invalid", reason: C.errAuthService });
       return;
     }
     setState({ kind: "verifying" });
@@ -299,7 +411,7 @@ function ConfirmInner() {
         if (vo) throw vo;
         sessionToken = data.session?.access_token ?? null;
       } else {
-        throw new Error("Kein gültiger Bestätigungs-Link — bitte fordere einen neuen Reset-Link an.");
+        throw new Error(C.errNoLink);
       }
 
       // Trial bei Meta-Lead-Invites aktivieren — Token direkt aus der
@@ -311,7 +423,7 @@ function ConfirmInner() {
       if (isLinkAlreadyUsed(err)) {
         setState({
           kind: "invalid",
-          reason: "Dieser Link wurde bereits verwendet. Falls du per SMS und Email je einen Link erhalten hast, wurde das Konto bereits über den ersten Klick aktiviert. Bitte logge dich direkt ein.",
+          reason: C.errLinkAlreadyUsed,
           linkUsed: true,
         });
       } else {
@@ -326,15 +438,15 @@ function ConfirmInner() {
     setError(null);
 
     if (!supabase) {
-      setError("Auth-Service nicht konfiguriert.");
+      setError(C.errAuthService);
       return;
     }
     if (password.length < 6) {
-      setError("Passwort muss mindestens 6 Zeichen lang sein.");
+      setError(C.errMinLength);
       return;
     }
     if (password !== confirm) {
-      setError("Die beiden Passwörter stimmen nicht überein.");
+      setError(C.errMismatch);
       return;
     }
 
@@ -361,7 +473,7 @@ function ConfirmInner() {
   return (
     <Shell>
       {state.kind === "needs_confirm" && (() => {
-        const c = copyForType(type);
+        const c = copyForType(type, C);
         return (
           <div style={{ textAlign: "center" }}>
             <div style={{ fontSize: 11, color: "rgba(255,255,255,0.35)", letterSpacing: "0.12em", marginBottom: 10 }}>
@@ -400,7 +512,7 @@ function ConfirmInner() {
       {state.kind === "invalid" && (
         <div style={{ textAlign: "center" }}>
           <div style={{ fontSize: 16, fontWeight: 600, color: state.linkUsed ? "rgba(255,255,255,0.85)" : PINK, marginBottom: 10 }}>
-            {state.linkUsed ? "Link bereits verwendet" : "Link ungültig oder abgelaufen"}
+            {state.linkUsed ? C.linkUsedTitle : C.invalidTitle}
           </div>
           <div style={{ fontSize: 13, color: "rgba(255,255,255,0.55)", lineHeight: 1.5, marginBottom: 22 }}>
             {state.reason}
@@ -420,7 +532,7 @@ function ConfirmInner() {
               textDecoration: "none",
             }}
           >
-            {state.linkUsed ? "Zum Login →" : "Zurück zum Login"}
+            {state.linkUsed ? C.toLogin : C.backToLogin}
           </Link>
         </div>
       )}
@@ -428,14 +540,14 @@ function ConfirmInner() {
       {(state.kind === "ready" || state.kind === "saving") && (
         <form onSubmit={handleSetPassword} style={{ display: "flex", flexDirection: "column", gap: 14 }}>
           <div style={{ fontSize: 16, fontWeight: 600, color: "white", marginBottom: 4 }}>
-            Neues Passwort setzen
+            {C.passwordFormTitle}
           </div>
           <div style={{ fontSize: 13, color: "rgba(255,255,255,0.5)", lineHeight: 1.5, marginBottom: 8 }}>
-            Wähle ein Passwort mit mindestens 6 Zeichen.
+            {C.passwordFormSub}
           </div>
 
           <div>
-            <div style={{ fontSize: 10, color: "rgba(255,255,255,0.4)", marginBottom: 6, letterSpacing: "0.08em" }}>NEUES PASSWORT</div>
+            <div style={{ fontSize: 10, color: "rgba(255,255,255,0.4)", marginBottom: 6, letterSpacing: "0.08em" }}>{C.labelNewPassword}</div>
             <input
               type="password"
               value={password}
@@ -451,7 +563,7 @@ function ConfirmInner() {
           </div>
 
           <div>
-            <div style={{ fontSize: 10, color: "rgba(255,255,255,0.4)", marginBottom: 6, letterSpacing: "0.08em" }}>WIEDERHOLEN</div>
+            <div style={{ fontSize: 10, color: "rgba(255,255,255,0.4)", marginBottom: 6, letterSpacing: "0.08em" }}>{C.labelRepeat}</div>
             <input
               type="password"
               value={confirm}
@@ -489,7 +601,7 @@ function ConfirmInner() {
             cursor: state.kind === "saving" ? "default" : "pointer",
             transition: "all 0.15s", marginTop: 4,
           }}>
-            {state.kind === "saving" ? "Speichere …" : "Passwort speichern"}
+            {state.kind === "saving" ? C.btnSaving : C.btnSave}
           </button>
         </form>
       )}
@@ -497,10 +609,10 @@ function ConfirmInner() {
       {state.kind === "saved" && (
         <div style={{ textAlign: "center" }}>
           <div style={{ fontSize: 16, fontWeight: 600, color: GREEN, marginBottom: 8 }}>
-            Passwort aktualisiert ✓
+            {C.savedTitle}
           </div>
           <div style={{ fontSize: 13, color: "rgba(255,255,255,0.55)" }}>
-            Du wirst zum Login weitergeleitet …
+            {C.savedRedirect}
           </div>
         </div>
       )}

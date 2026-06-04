@@ -14,6 +14,7 @@
  */
 
 import { useEffect, useState } from "react";
+import { useLocale } from "next-intl";
 
 const STORAGE_KEY = "glev_cookie_consent";
 const ACCENT = "#4F6EF7";
@@ -105,7 +106,64 @@ function CategoryRow({ title, description, checked, onChange, disabled }: {
   );
 }
 
+type BannerCopy = {
+  body: string;
+  privacyLink: string;
+  rejectAll: string;
+  settings: string;
+  acceptAll: string;
+  detailsTitle: string;
+  closeLabel: string;
+  necessaryTitle: string;
+  necessaryDesc: string;
+  analyticsTitle: string;
+  analyticsDesc: string;
+  marketingTitle: string;
+  marketingDesc: string;
+  rejectAllDetail: string;
+  saveChoice: string;
+};
+
+const DE: BannerCopy = {
+  body: "Wir nutzen Cookies für Analyse und Werbemessung.",
+  privacyLink: "Datenschutzerklärung",
+  rejectAll: "Alle ablehnen",
+  settings: "Einstellungen",
+  acceptAll: "Alle akzeptieren",
+  detailsTitle: "Cookie-Einstellungen",
+  closeLabel: "Schließen",
+  necessaryTitle: "Notwendig",
+  necessaryDesc: "Session-Management, Authentifizierung, Sprachpräferenz. Immer aktiv.",
+  analyticsTitle: "Analyse",
+  analyticsDesc: "Anonymisierte Auswertung wie Glev genutzt wird — hilft uns, die App zu verbessern.",
+  marketingTitle: "Marketing",
+  marketingDesc: "Meta-Pixel und Facebook CAPI zur Messung der Werbewirkung.",
+  rejectAllDetail: "Alle ablehnen",
+  saveChoice: "Auswahl speichern",
+};
+
+const EN: BannerCopy = {
+  body: "We use cookies for analytics and advertising measurement.",
+  privacyLink: "Privacy policy",
+  rejectAll: "Reject all",
+  settings: "Manage settings",
+  acceptAll: "Accept all",
+  detailsTitle: "Cookie settings",
+  closeLabel: "Close",
+  necessaryTitle: "Necessary",
+  necessaryDesc: "Session management, authentication, language preference. Always active.",
+  analyticsTitle: "Analytics",
+  analyticsDesc: "Anonymised usage data that helps us improve the app.",
+  marketingTitle: "Marketing",
+  marketingDesc: "Meta Pixel and Facebook CAPI for advertising measurement.",
+  rejectAllDetail: "Reject all",
+  saveChoice: "Save my choices",
+};
+
 export default function CookieBanner({ forceVisible = false }: { forceVisible?: boolean }) {
+  const locale = useLocale();
+  const C = locale === "en" ? EN : DE;
+
   const [visible, setVisible] = useState(forceVisible);
   const [showDetails, setShowDetails] = useState(false);
   const [analytics, setAnalytics] = useState(false);
@@ -128,7 +186,7 @@ export default function CookieBanner({ forceVisible = false }: { forceVisible?: 
   return (
     <div
       role="dialog"
-      aria-label="Cookie-Einstellungen"
+      aria-label={C.detailsTitle}
       style={{
         position: "fixed", bottom: 0, left: 0, right: 0, zIndex: 9999,
         background: "var(--surface, #12151f)",
@@ -141,18 +199,18 @@ export default function CookieBanner({ forceVisible = false }: { forceVisible?: 
         /* ── Erste Ebene ── */
         <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", maxWidth: 900, margin: "0 auto" }}>
           <p style={{ flex: 1, minWidth: 200, margin: 0, fontSize: 13, color: "var(--text-faint, rgba(255,255,255,0.45))", lineHeight: 1.5 }}>
-            Wir nutzen Cookies für Analyse und Werbemessung.{" "}
-            <a href="/datenschutz" style={{ color: ACCENT, textDecoration: "underline", textUnderlineOffset: 2 }}>Datenschutzerklärung</a>
+            {C.body}{" "}
+            <a href="/datenschutz" style={{ color: ACCENT, textDecoration: "underline", textUnderlineOffset: 2 }}>{C.privacyLink}</a>
           </p>
           <div style={{ display: "flex", gap: 8, flexShrink: 0, flexWrap: "wrap" }}>
             <button onClick={rejectAll} style={{ ...BTN_BASE, background: "transparent", color: "var(--text-faint, rgba(255,255,255,0.45))", border: "1px solid var(--border, rgba(255,255,255,0.12))" }}>
-              Alle ablehnen
+              {C.rejectAll}
             </button>
             <button onClick={() => setShowDetails(true)} style={{ ...BTN_BASE, background: "transparent", color: "var(--text-dim, rgba(255,255,255,0.65))", border: "1px solid var(--border, rgba(255,255,255,0.18))" }}>
-              Einstellungen
+              {C.settings}
             </button>
             <button onClick={acceptAll} style={{ ...BTN_BASE, background: ACCENT, color: "#fff", boxShadow: "0 4px 12px rgba(79,110,247,0.35)" }}>
-              Alle akzeptieren
+              {C.acceptAll}
             </button>
           </div>
         </div>
@@ -160,34 +218,34 @@ export default function CookieBanner({ forceVisible = false }: { forceVisible?: 
         /* ── Zweite Ebene (Detail-Panel) ── */
         <div style={{ maxWidth: 560, margin: "0 auto" }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
-            <span style={{ fontSize: 14, fontWeight: 700, color: "var(--text, #fff)" }}>Cookie-Einstellungen</span>
-            <button onClick={() => setShowDetails(false)} style={{ ...BTN_BASE, padding: "4px 8px", background: "transparent", color: "var(--text-faint, rgba(255,255,255,0.4))", fontSize: 12 }}>
+            <span style={{ fontSize: 14, fontWeight: 700, color: "var(--text, #fff)" }}>{C.detailsTitle}</span>
+            <button onClick={() => setShowDetails(false)} aria-label={C.closeLabel} style={{ ...BTN_BASE, padding: "4px 8px", background: "transparent", color: "var(--text-faint, rgba(255,255,255,0.4))", fontSize: 12 }}>
               ✕
             </button>
           </div>
 
           <CategoryRow
-            title="Notwendig"
-            description="Session-Management, Authentifizierung, Sprachpräferenz. Immer aktiv."
+            title={C.necessaryTitle}
+            description={C.necessaryDesc}
             checked={true} onChange={() => {}} disabled
           />
           <CategoryRow
-            title="Analyse"
-            description="Anonymisierte Auswertung wie Glev genutzt wird — hilft uns, die App zu verbessern."
+            title={C.analyticsTitle}
+            description={C.analyticsDesc}
             checked={analytics} onChange={setAnalytics}
           />
           <CategoryRow
-            title="Marketing"
-            description="Meta-Pixel und Facebook CAPI zur Messung der Werbewirkung."
+            title={C.marketingTitle}
+            description={C.marketingDesc}
             checked={marketing} onChange={setMarketing}
           />
 
           <div style={{ display: "flex", gap: 8, marginTop: 16, justifyContent: "flex-end" }}>
             <button onClick={rejectAll} style={{ ...BTN_BASE, background: "transparent", color: "var(--text-faint, rgba(255,255,255,0.45))", border: "1px solid var(--border, rgba(255,255,255,0.12))" }}>
-              Alle ablehnen
+              {C.rejectAllDetail}
             </button>
             <button onClick={saveChoice} style={{ ...BTN_BASE, background: ACCENT, color: "#fff", boxShadow: "0 4px 12px rgba(79,110,247,0.3)" }}>
-              Auswahl speichern
+              {C.saveChoice}
             </button>
           </div>
         </div>
