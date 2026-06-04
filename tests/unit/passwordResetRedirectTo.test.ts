@@ -1,15 +1,14 @@
 // tests/unit/passwordResetRedirectTo.test.ts
 //
 // Regression guard: sendPasswordResetAction must always pass a
-// /auth/callback?next=/auth/confirm URL to generateLink — never a bare "#"
-// or empty string.
+// /auth/confirm URL to generateLink — never a bare "#" or empty string.
 //
 // Background:
 //   A previous bug caused the password-reset link to land on "#" because
 //   the redirectTo URL was not in the Supabase allowlist: Supabase silently
 //   ignored it and fell back to the site URL with the token in the hash.
-//   The fix routes through /auth/callback (which IS in the allowlist), which
-//   then forwards to /auth/confirm?session=ready&type=recovery.
+//   The fix was to add https://glev.app/auth/confirm to the Supabase
+//   URI Allow List so Supabase accepts the direct redirect.
 //
 // Relevant source:
 //   app/glev-ops/users/actions.ts — sendPasswordResetAction (~lines 1305-1334):
@@ -20,7 +19,7 @@
 //     const { data: linkData } = await sb.auth.admin.generateLink({
 //       type: "recovery",
 //       email,
-//       options: { redirectTo: `${appUrl}/auth/callback?next=/auth/confirm` },
+//       options: { redirectTo: `${appUrl}/auth/confirm` },
 //     });
 //
 // Why pure-logic test (not calling the action directly):
@@ -42,14 +41,14 @@ import { test, expect } from "@playwright/test";
  *
  *   const _rawAppUrl = process.env.NEXT_PUBLIC_APP_URL?.trim();
  *   const appUrl = (_rawAppUrl || "https://glev.app").replace(/\/$/, "");
- *   redirectTo: `${appUrl}/auth/callback?next=/auth/confirm`
+ *   redirectTo: `${appUrl}/auth/confirm`
  *
  * Keeping this as a standalone pure function makes the invariants easy
  * to enumerate and the test easy to read.
  */
 function buildPasswordResetRedirectTo(rawAppUrl: string | undefined): string {
   const appUrl = (rawAppUrl?.trim() || "https://glev.app").replace(/\/$/, "");
-  return `${appUrl}/auth/callback?next=/auth/confirm`;
+  return `${appUrl}/auth/confirm`;
 }
 
 // ── Core invariant ──────────────────────────────────────────────────────────
@@ -57,7 +56,7 @@ function buildPasswordResetRedirectTo(rawAppUrl: string | undefined): string {
 test("passwordReset redirectTo: never produces bare '#'", () => {
   // The original bug: Supabase ignored an un-allowlisted redirectTo URL and
   // fell back to the site URL with the token in the hash ("#"). Every input
-  // that could cause "#" must produce a valid /auth/callback URL instead.
+  // that could cause "#" must produce a valid /auth/confirm URL instead.
   const badInputs: Array<string | undefined> = [
     undefined,
     "",
@@ -78,15 +77,15 @@ test("passwordReset redirectTo: never produces bare '#'", () => {
 
 test("passwordReset redirectTo: NEXT_PUBLIC_APP_URL set to production domain", () => {
   expect(buildPasswordResetRedirectTo("https://glev.app")).toBe(
-    "https://glev.app/auth/callback?next=/auth/confirm",
+    "https://glev.app/auth/confirm",
   );
 });
 
 test("passwordReset redirectTo: NEXT_PUBLIC_APP_URL undefined → https://glev.app fallback", () => {
   // Vercel omits the env var if it was never set. The hardcoded fallback
-  // must fire and the result must be a fully-qualified /auth/callback URL.
+  // must fire and the result must be a fully-qualified /auth/confirm URL.
   expect(buildPasswordResetRedirectTo(undefined)).toBe(
-    "https://glev.app/auth/callback?next=/auth/confirm",
+    "https://glev.app/auth/confirm",
   );
 });
 
@@ -94,24 +93,24 @@ test("passwordReset redirectTo: NEXT_PUBLIC_APP_URL empty string → https://gle
   // An explicitly empty env var is falsy and must also hit the fallback
   // branch — not produce an empty string or a relative path.
   expect(buildPasswordResetRedirectTo("")).toBe(
-    "https://glev.app/auth/callback?next=/auth/confirm",
+    "https://glev.app/auth/confirm",
   );
 });
 
 test("passwordReset redirectTo: trailing slash stripped — no double-slash in path", () => {
-  // "https://glev.app/" + "/auth/callback?..." would produce
-  // "https://glev.app//auth/callback?..." without the replace(). Verify the
+  // "https://glev.app/" + "/auth/confirm" would produce
+  // "https://glev.app//auth/confirm" without the replace(). Verify the
   // strip works and the result is a clean canonical URL.
   const result = buildPasswordResetRedirectTo("https://glev.app/");
-  expect(result).toBe("https://glev.app/auth/callback?next=/auth/confirm");
+  expect(result).toBe("https://glev.app/auth/confirm");
   expect(result).not.toContain("//auth");
 });
 
 test("passwordReset redirectTo: whitespace-only NEXT_PUBLIC_APP_URL → fallback", () => {
   // .trim() turns whitespace-only strings into "", which is falsy, so the
-  // fallback fires. This prevents a redirectTo of "   /auth/callback?...".
+  // fallback fires. This prevents a redirectTo of "   /auth/confirm".
   expect(buildPasswordResetRedirectTo("   ")).toBe(
-    "https://glev.app/auth/callback?next=/auth/confirm",
+    "https://glev.app/auth/confirm",
   );
 });
 
@@ -119,7 +118,7 @@ test("passwordReset redirectTo: staging domain is forwarded verbatim", () => {
   // Dev and staging overrides set via NEXT_PUBLIC_APP_URL must be preserved
   // so testers get a working reset link even outside of production.
   expect(buildPasswordResetRedirectTo("https://staging.glev.app")).toBe(
-    "https://staging.glev.app/auth/callback?next=/auth/confirm",
+    "https://staging.glev.app/auth/confirm",
   );
 });
 
