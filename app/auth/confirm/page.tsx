@@ -282,8 +282,7 @@ function LoadingMark() {
 function ConfirmInner() {
   const router = useRouter();
   const params = useSearchParams();
-  const locale = useLocale();
-  const C = locale === "en" ? EN : DE;
+  const nextIntlLocale = useLocale();
 
   // Start im "needs_confirm"-State, NICHT direkt verifizieren.
   // Hintergrund: Mail-Scanner (Outlook Safe Links, Mimecast, Apple Privacy
@@ -301,6 +300,11 @@ function ConfirmInner() {
   // The session is live in cookies; we skip straight to the password form.
   const sessionReady = params.get("session") === "ready";
   const hasParams   = Boolean(code || tokenHash || sessionReady);
+  // ?lang= from the provisioning redirectTo — overrides next-intl cookie/header locale
+  // so users arriving from a German SMS link always see German even when roaming abroad.
+  const langParam   = params.get("lang");
+  const locale = (langParam === "de" || langParam === "en") ? langParam : nextIntlLocale;
+  const C = locale === "en" ? EN : DE;
 
   // Implicit/hash recovery flow: Supabase redirects to
   // /auth/confirm#access_token=…&type=recovery (or #error_code=otp_expired on a
@@ -317,9 +321,11 @@ function ConfirmInner() {
       ? { kind: "ready" }
       : hasParams
         ? { kind: "needs_confirm" }
-        : hasRecoveryHash
-          ? { kind: "verifying" }
-          : { kind: "invalid", reason: C.errNoLinkInitial },
+        // When no query params: we don't know yet whether the hash contains a
+        // recovery token (hash is only readable client-side). Always start as
+        // "verifying" so the user never sees a false "Link not valid" flash
+        // during SSR or hydration. The useEffect below sets the real state.
+        : { kind: "verifying" },
   );
   const [password, setPassword] = useState("");
   const [confirm, setConfirm]   = useState("");
@@ -385,6 +391,10 @@ function ConfirmInner() {
           .catch((e) =>
             setState({ kind: "invalid", reason: e instanceof Error ? e.message : String(e) }),
           );
+      } else {
+        // No hash params found either — genuinely no valid link.
+        // Transition from "verifying" (initial state) to "invalid" now that we know.
+        setState({ kind: "invalid", reason: C.errNoLinkInitial });
       }
 
       return () => subscription.unsubscribe();

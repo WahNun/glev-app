@@ -55,7 +55,16 @@ async function sendTwilioSms(
 
   const shortUrl = await shortenUrl(inviteUrl, "sms", ownerEmail ?? undefined);
   const unsubToken = userId ? generateUnsubscribeToken(userId) : "";
-  const body = renderSms(smsTemplate, { link: shortUrl, token: unsubToken, user_id: userId ?? "" });
+  const stopUrl = userId
+    ? `${APP_URL}/sms-stop?t=${encodeURIComponent(unsubToken)}&u=${encodeURIComponent(userId)}`
+    : "";
+  const shortStopUrl = userId ? await shortenUrl(stopUrl, "sms_stop", ownerEmail ?? undefined) : "";
+  const body = renderSms(smsTemplate, {
+    link: shortUrl,
+    token: unsubToken,
+    user_id: userId ?? "",
+    stop_link: shortStopUrl,
+  });
   const formData = new URLSearchParams({ From: from, To: phone, Body: body });
 
   fetch(`https://api.twilio.com/2010-04-01/Accounts/${sid}/Messages.json`, {
@@ -109,7 +118,7 @@ export async function provisionMetaLead(
       email,
       options: {
         data: name ? { full_name: name } : undefined,
-        redirectTo: `${APP_URL}/auth/callback?next=/auth/confirm`,
+        redirectTo: `${APP_URL}/auth/callback?next=/auth/confirm&lang=${effectiveLocale}`,
       },
     });
 
@@ -135,7 +144,7 @@ export async function provisionMetaLead(
       const { data: rec } = await sb.auth.admin.generateLink({
         type: "recovery",
         email,
-        options: { redirectTo: `${APP_URL}/auth/callback?next=/auth/confirm` },
+        options: { redirectTo: `${APP_URL}/auth/callback?next=/auth/confirm&lang=${effectiveLocale}` },
       });
       inviteUrl = rec?.properties?.action_link ?? null;
       if (!inviteUrl) {

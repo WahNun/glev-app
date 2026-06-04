@@ -146,7 +146,10 @@ export async function POST(req: NextRequest) {
 
     const shortUrl = await shortenUrl(inviteUrl, "sms_bulk", email);
     const token = generateUnsubscribeToken(userId);
-    const body = renderSms(tpl.sms_text ?? "", { link: shortUrl, token, user_id: userId });
+    const APP_URL_BASE = (process.env.NEXT_PUBLIC_APP_URL ?? "https://glev.app").replace(/\/$/, "");
+    const stopUrl = `${APP_URL_BASE}/sms-stop?t=${encodeURIComponent(token)}&u=${encodeURIComponent(userId)}`;
+    const shortStopUrl = await shortenUrl(stopUrl, "sms_stop", email);
+    const body = renderSms(tpl.sms_text ?? "", { link: shortUrl, token, user_id: userId, stop_link: shortStopUrl });
 
     const smsResult = await sendSms(phone, body);
     results.push({

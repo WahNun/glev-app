@@ -16,7 +16,7 @@ export const DEFAULTS: Record<string, MessageTemplate> = {
     key: "meta_lead_invite_sms",
     label: "Meta Lead — Einladung (SMS)",
     sms_text:
-      "Willkommen bei Glev! Aktiviere deinen kostenlosen 7-Tage-Test: {{link}}\n\nAlternativ kannst du dich auch per E-Mail anmelden – bitte prüfe ggf. auch deinen Spam-Ordner auf eine E-Mail von info@glev.app.\nAbmelden: https://glev.app/sms-stop?t={{token}}&u={{user_id}}",
+      "Willkommen bei Glev! Aktiviere deinen kostenlosen 7-Tage-Test: {{link}}\n\nAlternativ kannst du dich auch per E-Mail anmelden – bitte prüfe ggf. auch deinen Spam-Ordner auf eine E-Mail von info@glev.app.\nAbmelden: {{stop_link}}",
     email_subject: null,
     email_intro: null,
     updated_at: null,
@@ -25,7 +25,7 @@ export const DEFAULTS: Record<string, MessageTemplate> = {
     key: "meta_lead_bulk_sms",
     label: "Meta Lead — Bulk-SMS",
     sms_text:
-      "Willkommen bei Glev! Aktiviere deinen kostenlosen 7-Tage-Test: {{link}}\n\nAlternativ kannst du dich auch per E-Mail anmelden – bitte prüfe ggf. auch deinen Spam-Ordner auf eine E-Mail von info@glev.app.\nAbmelden: https://glev.app/sms-stop?t={{token}}&u={{user_id}}",
+      "Willkommen bei Glev! Aktiviere deinen kostenlosen 7-Tage-Test: {{link}}\n\nAlternativ kannst du dich auch per E-Mail anmelden – bitte prüfe ggf. auch deinen Spam-Ordner auf eine E-Mail von info@glev.app.\nAbmelden: {{stop_link}}",
     email_subject: null,
     email_intro: null,
     updated_at: null,
@@ -34,7 +34,7 @@ export const DEFAULTS: Record<string, MessageTemplate> = {
     key: "meta_lead_reminder_sms",
     label: "Meta Lead — Reminder (SMS)",
     sms_text:
-      "Lucas hier, Glev-Gründer. Du hattest dich für den 7-Tage-Test gespeichert — hier dein Link: {{link}}\n\nAbmelden: glev.app/sms-stop?t={{token}}&u={{user_id}} · Fragen: lucas@glev.app",
+      "Lucas hier, Glev-Gründer. Du hattest dich für den 7-Tage-Test gespeichert — hier dein Link: {{link}}\n\nAbmelden: {{stop_link}} · Fragen: lucas@glev.app",
     email_subject: null,
     email_intro: null,
     updated_at: null,
@@ -121,16 +121,17 @@ export async function getTemplate(key: string): Promise<MessageTemplate> {
   return def;
 }
 
-/** Renders SMS text replacing {{name}}, {{link}}, {{token}}, and {{user_id}} placeholders. */
+/** Renders SMS text replacing {{name}}, {{link}}, {{token}}, {{user_id}}, and {{stop_link}} placeholders. */
 export function renderSms(
   template: string,
-  vars: { name?: string | null; link: string; token?: string; user_id?: string },
+  vars: { name?: string | null; link: string; token?: string; user_id?: string; stop_link?: string },
 ): string {
   return template
     .replace(/\{\{name\}\}/g, vars.name?.trim() ?? "")
     .replace(/\{\{link\}\}/g, vars.link)
     .replace(/\{\{token\}\}/g, vars.token ?? "")
     .replace(/\{\{user_id\}\}/g, vars.user_id ?? "")
+    .replace(/\{\{stop_link\}\}/g, vars.stop_link ?? "")
     .trim();
 }
 

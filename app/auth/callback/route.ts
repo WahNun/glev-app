@@ -15,10 +15,14 @@ import { cookies } from "next/headers";
  *   - Site URL:        https://glev.app
  *   - Redirect URLs:   https://glev.app/auth/callback
  */
+const LOCALE_COOKIE_MAX_AGE = 60 * 60 * 24 * 365;
+
 export async function GET(req: NextRequest) {
   const { searchParams, origin } = new URL(req.url);
   const code = searchParams.get("code");
   const next = searchParams.get("next") ?? "/dashboard";
+  const lang = searchParams.get("lang");
+  const validLang = lang === "de" || lang === "en" ? lang : null;
 
   if (code) {
     const cookieStore = await cookies();
@@ -78,9 +82,28 @@ export async function GET(req: NextRequest) {
       // session=ready&type=recovery so the page can skip straight to the
       // password form.
       if (next === "/auth/confirm") {
-        return NextResponse.redirect(`${origin}/auth/confirm?session=ready&type=recovery`);
+        const confirmUrl = `${origin}/auth/confirm?session=ready&type=recovery${validLang ? `&lang=${validLang}` : ""}`;
+        const res = NextResponse.redirect(confirmUrl);
+        if (validLang) {
+          res.cookies.set("NEXT_LOCALE", validLang, {
+            path: "/",
+            maxAge: LOCALE_COOKIE_MAX_AGE,
+            sameSite: "lax",
+            secure: req.nextUrl.protocol === "https:",
+          });
+        }
+        return res;
       }
-      return NextResponse.redirect(`${origin}${next}`);
+      const res = NextResponse.redirect(`${origin}${next}`);
+      if (validLang) {
+        res.cookies.set("NEXT_LOCALE", validLang, {
+          path: "/",
+          maxAge: LOCALE_COOKIE_MAX_AGE,
+          sameSite: "lax",
+          secure: req.nextUrl.protocol === "https:",
+        });
+      }
+      return res;
     }
     // eslint-disable-next-line no-console
     console.error("[auth/callback] exchangeCodeForSession failed:", error.message);

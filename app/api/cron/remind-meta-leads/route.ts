@@ -164,7 +164,7 @@ export async function POST(req: NextRequest) {
     const { data: linkData, error: linkErr } = await sb.auth.admin.generateLink({
       type: authUser ? "recovery" : "invite",
       email,
-      options: { redirectTo: `${APP_URL}/auth/confirm` },
+      options: { redirectTo: `${APP_URL}/auth/callback?next=/auth/confirm&lang=de` },
     });
     const inviteUrl = linkData?.properties?.action_link ?? null;
     if (linkErr || !inviteUrl) {
@@ -195,11 +195,14 @@ export async function POST(req: NextRequest) {
       } else {
         const smsShort = await shortenUrl(inviteUrl, "sms_reminder", email);
         const unsubToken = generateUnsubscribeToken(resolvedUserId);
+        const stopUrl = `${APP_URL}/sms-stop?t=${encodeURIComponent(unsubToken)}&u=${encodeURIComponent(resolvedUserId)}`;
+        const shortStopUrl = await shortenUrl(stopUrl, "sms_stop", email);
         const smsBody = renderSms(smsTpl.sms_text ?? "", {
           name: firstName,
           link: smsShort,
           token: unsubToken,
           user_id: resolvedUserId,
+          stop_link: shortStopUrl,
         });
         const smsRes = await sendSms(phone, smsBody);
         smsSent = smsRes.ok ? "sent" : "error";
