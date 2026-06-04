@@ -57,7 +57,8 @@ export type FingerstickPayload = {
 
 export type InfluenceEntryPayload = {
   influence_type: string;
-  intensity?: "low" | "medium" | "high" | null;
+  details?: string | null;
+  amount?: string | null;
   notes?: string | null;
   logged_at?: string | null;
 };
@@ -153,7 +154,7 @@ const NAV_CONFIG: Record<NonMealActionKind, ActionNavConfig> = {
     storageKey: "glev_pending_fingerstick",
   },
   log_influence_entry: {
-    tab: "log",
+    tab: "influences",
     event: "glev:open-influence-log",
     storageKey: "glev_pending_influence",
   },

@@ -14,8 +14,11 @@ import { supabase } from "./supabase";
  */
 export const INFLUENCE_TYPES = [
   "alcohol",
-  "cannabis",
+  "stress",
+  "illness",
   "medication",
+  "sleep_deprivation",
+  "cannabis",
   "other",
 ] as const;
 

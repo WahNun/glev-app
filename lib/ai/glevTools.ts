@@ -523,15 +523,15 @@ export const GLEV_TOOLS = [
     function: {
       name: "log_influence_entry",
       description:
-        "Schlägt das Speichern eines Einflussfaktor-Eintrags vor (influence_logs) — für Dinge, die den Blutzucker beeinflussen können, aber nicht in die anderen Kategorien passen: Alkohol, Cannabis, Medikamente (Nicht-Insulin), sonstiges. WICHTIG: schreibt NICHT direkt — Bestätigung per UI-Button. Rein dokumentarisch — die Engine ändert Dosierungen NICHT aufgrund dieser Einträge.",
+        "Schlägt das Speichern eines Einflussfaktor-Eintrags vor (influence_logs) — für Dinge, die den Blutzucker beeinflussen können: Alkohol, Stress (Prüfung, Arbeit, emotionale Belastung), Erkrankung (Erkältung, Grippe, Infektion), Medikamente (Nicht-Insulin), Schlafmangel, Cannabis, sonstiges. WICHTIG: schreibt NICHT direkt — Bestätigung per UI-Button. Rein dokumentarisch — die Engine ändert Dosierungen NICHT aufgrund dieser Einträge. Aufrufen wenn der Nutzer explizit über Alkohol-, Stress-, Krankheits-, Medikamenten- oder Schlaf-Situationen berichtet.",
       parameters: {
         type: "object",
         properties: {
           influence_type: {
             type: "string",
-            enum: ["alcohol", "cannabis", "medication", "other"],
+            enum: ["alcohol", "stress", "illness", "medication", "sleep_deprivation", "cannabis", "other"],
             description:
-              "Typ: alcohol, cannabis, medication (z. B. Kortison, Antibiotika), other (sonstiges).",
+              "Typ: alcohol (Alkohol), stress (Stress, z. B. Prüfung, Arbeitsdruck), illness (Erkrankung, z. B. Erkältung, Grippe), medication (Medikamente, z. B. Kortison, Antibiotika), sleep_deprivation (Schlafmangel), cannabis, other (sonstiges).",
           },
           details: {
             type: "string",
@@ -1746,9 +1746,13 @@ async function toolLogInfluenceEntry(
   userTimezone: string | null,
 ): Promise<unknown> {
   const influenceType = typeof args.influence_type === "string" ? args.influence_type.trim() : "";
-  if (!["alcohol", "cannabis", "medication", "other"].includes(influenceType)) {
+  const VALID_INFLUENCE_TYPES = [
+    "alcohol", "stress", "illness", "medication",
+    "sleep_deprivation", "cannabis", "other",
+  ];
+  if (!VALID_INFLUENCE_TYPES.includes(influenceType)) {
     return {
-      error: "influence_type muss 'alcohol', 'cannabis', 'medication' oder 'other' sein",
+      error: `influence_type muss einer von: ${VALID_INFLUENCE_TYPES.join(", ")} sein`,
     };
   }
 
@@ -1759,13 +1763,18 @@ async function toolLogInfluenceEntry(
   const timeLabel = formatInUserTimezone(new Date(loggedAt).getTime(), userTimezone);
 
   const typeLabel: Record<string, string> = {
-    alcohol: "Alkohol", cannabis: "Cannabis",
-    medication: "Medikament", other: "Sonstiges",
+    alcohol: "Alkohol",
+    stress: "Stress",
+    illness: "Erkrankung",
+    medication: "Medikamente",
+    sleep_deprivation: "Schlafmangel",
+    cannabis: "Cannabis",
+    other: "Sonstiges",
   };
   const label = typeLabel[influenceType] ?? influenceType;
-  const detailBit = details ? ` (${details})` : "";
-  const amountBit = amount ? ` — ${amount}` : "";
-  const summary = `Einfluss: ${label}${detailBit}${amountBit} um ${timeLabel.timeOnly}`;
+  const amountPart = amount ? ` · ${amount}` : "";
+  const timePart = timeLabel.timeOnly;
+  const summary = `${label}${amountPart} · ${timePart}`;
 
   return await createPendingAction(sb, userId, "log_influence_entry", {
     influence_type: influenceType,

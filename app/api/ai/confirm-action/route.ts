@@ -427,7 +427,11 @@ async function execLogInfluenceEntry(
   p: Record<string, unknown>,
 ): Promise<{ insertedId?: string }> {
   const influenceType = typeof p.influence_type === "string" ? p.influence_type : "";
-  if (!["alcohol", "cannabis", "medication", "other"].includes(influenceType)) {
+  const VALID_INFLUENCE_TYPES = [
+    "alcohol", "stress", "illness", "medication",
+    "sleep_deprivation", "cannabis", "other",
+  ];
+  if (!VALID_INFLUENCE_TYPES.includes(influenceType)) {
     throw new Error("influence_type ungültig");
   }
   const details =

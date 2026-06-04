@@ -1,11 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
 import {
   insertInfluenceLog,
   INFLUENCE_TYPES,
   type InfluenceType,
+  isInfluenceType,
 } from "@/lib/influences";
 import { hapticSelection, hapticSuccess, hapticError } from "@/lib/haptics";
 import CollapsibleField from "@/components/log/CollapsibleField";
@@ -118,6 +119,63 @@ export function InfluenceForm() {
   const [notes, setNotes] = useState("");
   const [status, setStatus] = useState<Status>({ kind: "idle" });
   const [savedTick, setSavedTick] = useState<number>(0);
+
+  // Pre-populate from AI chat: read glev_pending_influence from sessionStorage
+  // on mount and listen for glev:open-influence-log dispatched by navigateToLogScreen.
+  function applyPendingInfluence(raw: string) {
+    try {
+      const p = JSON.parse(raw) as {
+        influence_type?: unknown;
+        details?: unknown;
+        amount?: unknown;
+        notes?: unknown;
+        logged_at?: unknown;
+      };
+      if (isInfluenceType(p.influence_type)) setInfluenceType(p.influence_type);
+      if (typeof p.details === "string" && p.details) setDetails(p.details);
+      if (typeof p.amount === "string" && p.amount) setAmount(p.amount);
+      if (typeof p.notes === "string" && p.notes) setNotes(p.notes);
+      if (typeof p.logged_at === "string" && p.logged_at) {
+        const ms = new Date(p.logged_at).getTime();
+        const nowMs = Date.now();
+        if (Number.isFinite(ms) && Math.abs(nowMs - ms) <= 2 * 60 * 1000) {
+          // Within 2 minutes of now → treat as "Jetzt"
+          setQuickAgo(0);
+          setOccurredAt(nowLocalDt());
+        } else if (Number.isFinite(ms)) {
+          const off = new Date().getTimezoneOffset() * 60_000;
+          setOccurredAt(new Date(ms - off).toISOString().slice(0, 16));
+          setQuickAgo(QUICK_CUSTOM);
+        }
+      }
+    } catch { /* ignore malformed payload */ }
+  }
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    // Consume once on mount (Detail-Button flow: page opened fresh or via router.push).
+    const stored = window.sessionStorage.getItem("glev_pending_influence");
+    if (stored) {
+      applyPendingInfluence(stored);
+      try { window.sessionStorage.removeItem("glev_pending_influence"); } catch {}
+    }
+    // Also listen for live event (form already mounted, AI navigates to same tab).
+    function onEvent(e: Event) {
+      const detail = (e as CustomEvent<unknown>).detail;
+      if (detail != null) {
+        applyPendingInfluence(JSON.stringify(detail));
+      } else {
+        const s = window.sessionStorage.getItem("glev_pending_influence");
+        if (s) {
+          applyPendingInfluence(s);
+          try { window.sessionStorage.removeItem("glev_pending_influence"); } catch {}
+        }
+      }
+    }
+    window.addEventListener("glev:open-influence-log", onEvent);
+    return () => window.removeEventListener("glev:open-influence-log", onEvent);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const usingCustom = quickAgo === QUICK_CUSTOM;
 
