@@ -9,7 +9,8 @@
  *   1. Query user_settings for users with low_alarm_enabled = true
  *   2. Cross-reference with profiles to get their push_token / push_platform
  *      (only users who have both alarm enabled AND a push token receive a push)
- *   3. For each user: fetch the latest CGM reading from the last 10 minutes
+ *   3. For each user: fetch the latest CGM reading via live source dispatcher
+ *      (LLU live API → Nightscout cache/live → Apple Health DB → cgm_samples fallback)
  *   4. Compare against low_alarm_threshold_mgdl (default 70 mg/dL)
  *   5. Check hypo_push_cooldown — skip if last push was < 15 minutes ago
  *   6. Send FCM HTTP v1 push (Android) or APNs push (iOS)
@@ -23,21 +24,20 @@
  * Environment secrets required (set in Supabase Dashboard → Edge Functions → Secrets):
  *   SUPABASE_URL              — auto-provided by Supabase runtime
  *   SUPABASE_SERVICE_ROLE_KEY — auto-provided by Supabase runtime
+ *   ENCRYPTION_KEY            — 64-hex-char key (same as Vercel ENCRYPTION_KEY)
+ *                               Required to decrypt LLU passwords and Nightscout tokens
+ *                               for live CGM fetching. Without it, only Apple Health
+ *                               and cgm_samples fallback work.
  *
  *   Android (FCM HTTP v1 — legacy server key is DEAD since June 2024):
  *   FIREBASE_PROJECT_ID       — Firebase project ID (e.g. "glev-app-12345")
- *                               Find it: Firebase Console → Project Settings → General
  *   FIREBASE_SERVICE_ACCOUNT_JSON — Full service account JSON (one-line string)
- *                               Generate: Firebase Console → Project Settings →
- *                               Service Accounts → Generate new private key
  *
  *   iOS (APNs):
  *   APNS_KEY_P8               — APNs .p8 private key content (full PEM string)
  *   APNS_KEY_ID               — 10-character APNs key ID
  *   APNS_TEAM_ID              — 10-character Apple Team ID
- *   APNS_BUNDLE_ID            — iOS app bundle ID
- *                               Default: "com.glev.app" (matches Xcode PRODUCT_BUNDLE_IDENTIFIER)
- *                               ⚠ Do NOT use "app.glev" or "app.glev.app" — those are wrong.
+ *   APNS_BUNDLE_ID            — iOS app bundle ID (default: "com.glev.app")
  *
  * Compliance note (D-003): push body contains only the raw glucose value and
  * a generic prompt to check — no dosage instructions, no clinical advice.
@@ -45,11 +45,13 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { create, getNumericDate } from "https://deno.land/x/djwt@v3.0.2/mod.ts";
+import { fetchLiveReading } from "../_shared/cgm-live.ts";
 
 const COOLDOWN_MINUTES = 15;
 const COOLDOWN_MS = COOLDOWN_MINUTES * 60 * 1000;
 const DEFAULT_THRESHOLD = 70;
 const CGM_LOOKBACK_MINUTES = 10;
+const CGM_LOOKBACK_MS = CGM_LOOKBACK_MINUTES * 60 * 1000;
 
 /* ── Types ─────────────────────────────────────────────────────────────── */
 
@@ -111,20 +113,10 @@ async function getApnsJwt(
   return token;
 }
 
-/* ── FCM HTTP v1 helpers (replaces the shut-down legacy API) ───────────── */
+/* ── FCM HTTP v1 helpers ───────────────────────────────────────────────── */
 
-/**
- * GCP OAuth2 access-token cache.
- * Service account JWTs are valid for 1 hour; we cache and reuse them
- * within a single Edge Function invocation lifetime.
- */
 let fcmAccessTokenCache: { token: string; expiresAt: number } | null = null;
 
-/**
- * Derive a short-lived GCP OAuth2 access token from a service account JSON.
- * Uses the crypto.subtle RS256 path (RSASSA-PKCS1-v1_5 / SHA-256) because
- * GCP only accepts RS256 JWTs for service-account token exchange.
- */
 async function getGcpAccessToken(serviceAccountJson: string): Promise<string> {
   const now = Date.now();
   if (fcmAccessTokenCache && fcmAccessTokenCache.expiresAt > now + 60_000) {
@@ -136,7 +128,6 @@ async function getGcpAccessToken(serviceAccountJson: string): Promise<string> {
     private_key: string;
   };
 
-  // Build the RS256 JWT manually (djwt uses ES256; GCP needs RS256).
   const header = { alg: "RS256", typ: "JWT" };
   const iat = Math.floor(now / 1000);
   const payload = {
@@ -181,7 +172,6 @@ async function getGcpAccessToken(serviceAccountJson: string): Promise<string> {
 
   const jwtToken = `${signingInput}.${b64sig}`;
 
-  // Exchange the JWT for an access token
   const tokenRes = await fetch("https://oauth2.googleapis.com/token", {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -203,15 +193,6 @@ async function getGcpAccessToken(serviceAccountJson: string): Promise<string> {
   return access_token;
 }
 
-/**
- * Send an Android push notification via the Firebase HTTP v1 API.
- * The legacy `fcm.googleapis.com/fcm/send` endpoint was shut down by
- * Google in June 2024 — this replaces it.
- *
- * Required secrets:
- *   FIREBASE_PROJECT_ID          — Firebase project ID string
- *   FIREBASE_SERVICE_ACCOUNT_JSON — Full service account JSON key (one line)
- */
 async function sendFcmPushV1(
   serviceAccountJson: string,
   projectId: string,
@@ -264,8 +245,6 @@ async function sendApnsPush(
 ): Promise<void> {
   const jwt = await getApnsJwt(keyP8, keyId, teamId);
 
-  // api.push.apple.com handles both production (App Store / TestFlight)
-  // and sandbox (Xcode direct installs). Use the production endpoint.
   const url = `https://api.push.apple.com/3/device/${token}`;
   const payload = JSON.stringify({
     aps: {
@@ -300,17 +279,14 @@ async function sendApnsPush(
 Deno.serve(async (_req: Request) => {
   const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
   const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+  const encryptionKey = Deno.env.get("ENCRYPTION_KEY") ?? "";
 
-  // Android (FCM HTTP v1) — legacy FIREBASE_SERVER_KEY is no longer accepted.
   const firebaseProjectId = Deno.env.get("FIREBASE_PROJECT_ID") ?? "";
   const firebaseServiceAccountJson = Deno.env.get("FIREBASE_SERVICE_ACCOUNT_JSON") ?? "";
 
-  // iOS (APNs)
   const apnsKeyP8 = Deno.env.get("APNS_KEY_P8") ?? "";
   const apnsKeyId = Deno.env.get("APNS_KEY_ID") ?? "";
   const apnsTeamId = Deno.env.get("APNS_TEAM_ID") ?? "";
-  // PRODUCT_BUNDLE_IDENTIFIER from Xcode is "com.glev.app".
-  // Do NOT use "app.glev" (Capacitor appId) or "app.glev.app" (old wrong default).
   const apnsBundleId = Deno.env.get("APNS_BUNDLE_ID") ?? "com.glev.app";
 
   const sb = createClient(supabaseUrl, serviceRoleKey, {
@@ -333,7 +309,7 @@ Deno.serve(async (_req: Request) => {
   }
 
   const now = new Date();
-  const cutoff = new Date(now.getTime() - CGM_LOOKBACK_MINUTES * 60 * 1000);
+  const cutoff = new Date(now.getTime() - CGM_LOOKBACK_MS);
   const cooldownCutoff = new Date(now.getTime() - COOLDOWN_MS);
 
   /* 1. Fetch user_ids where alarm is enabled */
@@ -402,59 +378,85 @@ Deno.serve(async (_req: Request) => {
   const errors: string[] = [];
 
   for (const user of users) {
+    const tag = `[hypo-check][${user.user_id}]`;
     try {
       const threshold = user.low_alarm_threshold_mgdl ?? DEFAULT_THRESHOLD;
 
       /* 5. Check cooldown */
       const lastSent = cooldownMap.get(user.user_id);
       if (lastSent && lastSent > cooldownCutoff) {
+        const minAgo = Math.round((now.getTime() - lastSent.getTime()) / 60000);
+        console.log(`${tag} skipped — cooldown active (last sent ${minAgo}min ago)`);
         continue;
       }
 
-      /* 6. Get latest CGM value (last 10 minutes) */
-      const { data: cgmRows, error: cgmError } = await sb
-        .from("cgm_samples")
-        .select("value_mgdl, timestamp")
-        .eq("user_id", user.user_id)
-        .gte("timestamp", cutoff.toISOString())
-        .order("timestamp", { ascending: false })
-        .limit(1);
+      /* 6. Get latest CGM value — live source first, DB fallback second */
+      let latestValue: number | null = null;
+      let cgmSource = "unknown";
 
-      if (cgmError) {
-        console.error(`[hypo-check] cgm_samples error for ${user.user_id}:`, cgmError.message);
+      // 6a. Try live source dispatcher (LLU / Nightscout / Apple Health)
+      try {
+        const live = await fetchLiveReading(sb, user.user_id, encryptionKey, CGM_LOOKBACK_MS, tag);
+        if (live) {
+          latestValue = live.value;
+          cgmSource = live.logReason;
+          console.log(`${tag} live CGM: source=${live.logReason} value=${live.value}`);
+        }
+      } catch (liveErr) {
+        console.log(`${tag} live fetch error: ${liveErr instanceof Error ? liveErr.message : String(liveErr)}`);
       }
 
-      const { data: ahRows, error: ahError } = await sb
-        .from("apple_health_readings")
-        .select("value_mg_dl, timestamp")
-        .eq("user_id", user.user_id)
-        .gte("timestamp", cutoff.toISOString())
-        .order("timestamp", { ascending: false })
-        .limit(1);
+      // 6b. DB fallback — cgm_samples (Junction/Vital) and apple_health_readings
+      if (latestValue === null) {
+        const { data: cgmRows, error: cgmError } = await sb
+          .from("cgm_samples")
+          .select("value_mgdl, timestamp")
+          .eq("user_id", user.user_id)
+          .gte("timestamp", cutoff.toISOString())
+          .order("timestamp", { ascending: false })
+          .limit(1);
+        if (cgmError) {
+          console.error(`${tag} cgm_samples error:`, cgmError.message);
+        }
 
-      if (ahError) {
-        console.error(`[hypo-check] apple_health_readings error for ${user.user_id}:`, ahError.message);
+        const { data: ahRows, error: ahError } = await sb
+          .from("apple_health_readings")
+          .select("value_mg_dl, timestamp")
+          .eq("user_id", user.user_id)
+          .gte("timestamp", cutoff.toISOString())
+          .order("timestamp", { ascending: false })
+          .limit(1);
+        if (ahError) {
+          console.error(`${tag} apple_health_readings error:`, ahError.message);
+        }
+
+        type Reading = { value: number; at: Date; src: string };
+        const candidates: Reading[] = [];
+        if (cgmRows && cgmRows.length > 0) {
+          candidates.push({ value: cgmRows[0].value_mgdl, at: new Date(cgmRows[0].timestamp), src: "cgm_samples" });
+        }
+        if (ahRows && ahRows.length > 0) {
+          candidates.push({ value: ahRows[0].value_mg_dl, at: new Date(ahRows[0].timestamp), src: "apple_health_readings" });
+        }
+
+        if (candidates.length > 0) {
+          candidates.sort((a, b) => b.at.getTime() - a.at.getTime());
+          latestValue = candidates[0].value;
+          cgmSource = candidates[0].src + "-fallback";
+          console.log(`${tag} DB fallback CGM: source=${cgmSource} value=${latestValue}`);
+        }
       }
 
-      type Reading = { value: number; at: Date };
-      const candidates: Reading[] = [];
-      if (cgmRows && cgmRows.length > 0) {
-        candidates.push({ value: cgmRows[0].value_mgdl, at: new Date(cgmRows[0].timestamp) });
-      }
-      if (ahRows && ahRows.length > 0) {
-        candidates.push({ value: ahRows[0].value_mg_dl, at: new Date(ahRows[0].timestamp) });
-      }
-
-      if (candidates.length === 0) {
-        console.log(`[hypo-check] no recent CGM data for ${user.user_id}, skipping`);
+      if (latestValue === null) {
+        console.log(`${tag} no recent CGM data (threshold=${threshold}) — skipping`);
         continue;
       }
-
-      candidates.sort((a, b) => b.at.getTime() - a.at.getTime());
-      const latestValue = candidates[0].value;
 
       /* 7. Check against threshold */
-      if (latestValue >= threshold) continue;
+      if (latestValue >= threshold) {
+        console.log(`${tag} value=${latestValue} >= threshold=${threshold} (source=${cgmSource}) — no alarm`);
+        continue;
+      }
 
       /* 8. Send push */
       const valueStr = String(Math.round(latestValue));
@@ -464,8 +466,7 @@ Deno.serve(async (_req: Request) => {
       if (user.push_platform === "android") {
         if (!firebaseProjectId || !firebaseServiceAccountJson) {
           errors.push(
-            `${user.user_id}: FIREBASE_PROJECT_ID or FIREBASE_SERVICE_ACCOUNT_JSON not set ` +
-            `(legacy FIREBASE_SERVER_KEY was shut down June 2024 — migrate to FCM HTTP v1)`,
+            `${user.user_id}: FIREBASE_PROJECT_ID or FIREBASE_SERVICE_ACCOUNT_JSON not set`,
           );
           continue;
         }
@@ -487,13 +488,12 @@ Deno.serve(async (_req: Request) => {
 
       sent++;
       console.log(
-        `[hypo-check] sent push to ${user.user_id} (${user.push_platform}), ` +
-        `value=${latestValue}, threshold=${threshold}, bundle=${user.push_platform === "ios" ? apnsBundleId : firebaseProjectId}`,
+        `${tag} 🔴 ALARM SENT (${user.push_platform}) — value=${latestValue} < threshold=${threshold} source=${cgmSource}`,
       );
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       errors.push(`${user.user_id}: ${msg}`);
-      console.error(`[hypo-check] error for user ${user.user_id}:`, msg);
+      console.error(`${tag} error:`, msg);
     }
   }
 

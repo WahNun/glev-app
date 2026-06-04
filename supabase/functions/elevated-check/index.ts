@@ -7,7 +7,8 @@
  * Flow per user:
  *   1. Query user_settings for users with elevated_alarm_enabled = true
  *   2. Cross-reference with profiles to get push_token / push_platform
- *   3. For each user: fetch the latest CGM reading from the last 10 minutes
+ *   3. For each user: fetch the latest CGM reading via live source dispatcher
+ *      (LLU live API → Nightscout cache/live → Apple Health DB → cgm_samples fallback)
  *   4. Compare against elevated_alarm_threshold_mgdl (default 140 mg/dL)
  *   5. Check elevated_push_cooldown — skip if last push was < 15 minutes ago
  *   6. Read push title/body from message_templates (key: push_elevated), with {{value}} replacement
@@ -16,17 +17,20 @@
  *
  * Required Supabase Edge Function Secrets (same as hypo-check):
  *   SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY (auto-provided)
+ *   ENCRYPTION_KEY (64-hex-char, same as Vercel — needed for LLU/Nightscout live fetch)
  *   FIREBASE_PROJECT_ID, FIREBASE_SERVICE_ACCOUNT_JSON (Android)
  *   APNS_KEY_P8, APNS_KEY_ID, APNS_TEAM_ID, APNS_BUNDLE_ID (iOS)
  */
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { create, getNumericDate } from "https://deno.land/x/djwt@v3.0.2/mod.ts";
+import { fetchLiveReading } from "../_shared/cgm-live.ts";
 
 const COOLDOWN_MINUTES = 15;
 const COOLDOWN_MS = COOLDOWN_MINUTES * 60 * 1000;
 const DEFAULT_THRESHOLD = 140;
 const CGM_LOOKBACK_MINUTES = 10;
+const CGM_LOOKBACK_MS = CGM_LOOKBACK_MINUTES * 60 * 1000;
 
 const DEFAULT_PUSH_TITLE = "🟡 Erhöhter BZ · {{value}} mg/dL";
 const DEFAULT_PUSH_BODY = "Dein BZ liegt bei {{value}} mg/dL — behalte ihn im Auge.";
@@ -161,6 +165,7 @@ async function sendApnsPush(
 Deno.serve(async (_req: Request) => {
   const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
   const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+  const encryptionKey = Deno.env.get("ENCRYPTION_KEY") ?? "";
   const firebaseProjectId = Deno.env.get("FIREBASE_PROJECT_ID") ?? "";
   const firebaseServiceAccountJson = Deno.env.get("FIREBASE_SERVICE_ACCOUNT_JSON") ?? "";
   const apnsKeyP8 = Deno.env.get("APNS_KEY_P8") ?? "";
@@ -170,7 +175,7 @@ Deno.serve(async (_req: Request) => {
 
   const sb = createClient(supabaseUrl, serviceRoleKey, { auth: { persistSession: false } });
   const now = new Date();
-  const cutoff = new Date(now.getTime() - CGM_LOOKBACK_MINUTES * 60 * 1000);
+  const cutoff = new Date(now.getTime() - CGM_LOOKBACK_MS);
   const cooldownCutoff = new Date(now.getTime() - COOLDOWN_MS);
 
   // Load push template from DB (fallback to hardcoded defaults)
@@ -236,40 +241,79 @@ Deno.serve(async (_req: Request) => {
   const errors: string[] = [];
 
   for (const user of users) {
+    const tag = `[elevated-check][${user.user_id}]`;
     try {
       const threshold = user.elevated_alarm_threshold_mgdl ?? DEFAULT_THRESHOLD;
 
       const lastSent = cooldownMap.get(user.user_id);
-      if (lastSent && lastSent > cooldownCutoff) continue;
+      if (lastSent && lastSent > cooldownCutoff) {
+        const minAgo = Math.round((now.getTime() - lastSent.getTime()) / 60000);
+        console.log(`${tag} skipped — cooldown active (last sent ${minAgo}min ago)`);
+        continue;
+      }
 
-      const { data: cgmRows, error: cgmError } = await sb
-        .from("cgm_samples")
-        .select("value_mgdl, timestamp")
-        .eq("user_id", user.user_id)
-        .gte("timestamp", cutoff.toISOString())
-        .order("timestamp", { ascending: false })
-        .limit(1);
-      if (cgmError) console.error(`[elevated-check] cgm_samples error for ${user.user_id}:`, cgmError.message);
+      /* Get latest CGM value — live source first, DB fallback second */
+      let latestValue: number | null = null;
+      let cgmSource = "unknown";
 
-      const { data: ahRows, error: ahError } = await sb
-        .from("apple_health_readings")
-        .select("value_mg_dl, timestamp")
-        .eq("user_id", user.user_id)
-        .gte("timestamp", cutoff.toISOString())
-        .order("timestamp", { ascending: false })
-        .limit(1);
-      if (ahError) console.error(`[elevated-check] apple_health_readings error for ${user.user_id}:`, ahError.message);
+      // Live source dispatcher (LLU / Nightscout / Apple Health)
+      try {
+        const live = await fetchLiveReading(sb, user.user_id, encryptionKey, CGM_LOOKBACK_MS, tag);
+        if (live) {
+          latestValue = live.value;
+          cgmSource = live.logReason;
+          console.log(`${tag} live CGM: source=${live.logReason} value=${live.value}`);
+        }
+      } catch (liveErr) {
+        console.log(`${tag} live fetch error: ${liveErr instanceof Error ? liveErr.message : String(liveErr)}`);
+      }
 
-      type Reading = { value: number; at: Date };
-      const candidates: Reading[] = [];
-      if (cgmRows && cgmRows.length > 0) candidates.push({ value: cgmRows[0].value_mgdl, at: new Date(cgmRows[0].timestamp) });
-      if (ahRows && ahRows.length > 0) candidates.push({ value: ahRows[0].value_mg_dl, at: new Date(ahRows[0].timestamp) });
-      if (candidates.length === 0) { console.log(`[elevated-check] no recent CGM data for ${user.user_id}, skipping`); continue; }
+      // DB fallback — cgm_samples (Junction/Vital) and apple_health_readings
+      if (latestValue === null) {
+        const { data: cgmRows, error: cgmError } = await sb
+          .from("cgm_samples")
+          .select("value_mgdl, timestamp")
+          .eq("user_id", user.user_id)
+          .gte("timestamp", cutoff.toISOString())
+          .order("timestamp", { ascending: false })
+          .limit(1);
+        if (cgmError) console.error(`${tag} cgm_samples error:`, cgmError.message);
 
-      candidates.sort((a, b) => b.at.getTime() - a.at.getTime());
-      const latestValue = candidates[0].value;
+        const { data: ahRows, error: ahError } = await sb
+          .from("apple_health_readings")
+          .select("value_mg_dl, timestamp")
+          .eq("user_id", user.user_id)
+          .gte("timestamp", cutoff.toISOString())
+          .order("timestamp", { ascending: false })
+          .limit(1);
+        if (ahError) console.error(`${tag} apple_health_readings error:`, ahError.message);
 
-      if (latestValue <= threshold) continue;
+        type Reading = { value: number; at: Date; src: string };
+        const candidates: Reading[] = [];
+        if (cgmRows && cgmRows.length > 0) {
+          candidates.push({ value: cgmRows[0].value_mgdl, at: new Date(cgmRows[0].timestamp), src: "cgm_samples" });
+        }
+        if (ahRows && ahRows.length > 0) {
+          candidates.push({ value: ahRows[0].value_mg_dl, at: new Date(ahRows[0].timestamp), src: "apple_health_readings" });
+        }
+
+        if (candidates.length > 0) {
+          candidates.sort((a, b) => b.at.getTime() - a.at.getTime());
+          latestValue = candidates[0].value;
+          cgmSource = candidates[0].src + "-fallback";
+          console.log(`${tag} DB fallback CGM: source=${cgmSource} value=${latestValue}`);
+        }
+      }
+
+      if (latestValue === null) {
+        console.log(`${tag} no recent CGM data (threshold=${threshold}) — skipping`);
+        continue;
+      }
+
+      if (latestValue <= threshold) {
+        console.log(`${tag} value=${latestValue} <= threshold=${threshold} (source=${cgmSource}) — no alarm`);
+        continue;
+      }
 
       const valueStr = String(Math.round(latestValue));
       const title = pushTitle.replace(/\{\{value\}\}/g, valueStr);
@@ -291,11 +335,11 @@ Deno.serve(async (_req: Request) => {
 
       await sb.from("elevated_push_cooldown").upsert({ user_id: user.user_id, last_sent_at: now.toISOString() });
       sent++;
-      console.log(`[elevated-check] sent push to ${user.user_id} (${user.push_platform}), value=${latestValue}, threshold=${threshold}`);
+      console.log(`${tag} 🟡 ALARM SENT (${user.push_platform}) — value=${latestValue} > threshold=${threshold} source=${cgmSource}`);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       errors.push(`${user.user_id}: ${msg}`);
-      console.error(`[elevated-check] error for user ${user.user_id}:`, msg);
+      console.error(`${tag} error:`, msg);
     }
   }
 
