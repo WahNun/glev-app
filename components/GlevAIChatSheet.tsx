@@ -205,6 +205,29 @@ export default function GlevAIChatSheet({
   const inputRef = useRef<HTMLInputElement>(null);
   const scrollerRef = useRef<HTMLDivElement>(null);
 
+  // Drag-to-dismiss: swipe the handle down ≥ 80 px to close the sheet.
+  // Using a ref for startY avoids stale-closure issues in the move handler.
+  const dragStartYRef = useRef<number | null>(null);
+  const [dragTranslate, setDragTranslate] = useState(0);
+
+  const handleDragStart = (e: React.TouchEvent) => {
+    dragStartYRef.current = e.touches[0].clientY;
+    setDragTranslate(0);
+  };
+  const handleDragMove = (e: React.TouchEvent) => {
+    if (dragStartYRef.current === null) return;
+    const dy = e.touches[0].clientY - dragStartYRef.current;
+    if (dy > 0) setDragTranslate(dy);
+  };
+  const handleDragEnd = () => {
+    if (dragStartYRef.current === null) return;
+    const threshold = 80;
+    const shouldClose = dragTranslate >= threshold;
+    dragStartYRef.current = null;
+    setDragTranslate(0);
+    if (shouldClose) onClose();
+  };
+
   // Auto-send ref so we can access latest onSend + input without
   // capturing a stale closure inside useVoxtral.
   const onSendRef = useRef(onSend);
@@ -398,10 +421,42 @@ export default function GlevAIChatSheet({
           zIndex: 1101,
           display: "flex",
           flexDirection: "column",
-          animation: "glevAiSlideUp 0.3s cubic-bezier(0.32,0.72,0,1)",
+          animation: dragTranslate > 0 ? "none" : "glevAiSlideUp 0.3s cubic-bezier(0.32,0.72,0,1)",
           overflow: "hidden",
+          transform: dragTranslate > 0 ? `translateY(${dragTranslate}px)` : "translateY(0)",
+          transition: dragTranslate > 0 ? "none" : "transform 0.22s cubic-bezier(0.32,0.72,0,1)",
         }}
       >
+        {/* Drag handle — swipe down ≥ 80 px to close */}
+        <div
+          aria-hidden="true"
+          onTouchStart={handleDragStart}
+          onTouchMove={handleDragMove}
+          onTouchEnd={handleDragEnd}
+          onTouchCancel={handleDragEnd}
+          style={{
+            flexShrink: 0,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            paddingTop: 10,
+            paddingBottom: 4,
+            cursor: "grab",
+            touchAction: "none",
+            userSelect: "none",
+          }}
+        >
+          <div
+            style={{
+              width: 36,
+              height: 4,
+              borderRadius: 2,
+              background: "var(--border)",
+              opacity: 0.8,
+            }}
+          />
+        </div>
+
         {/* Header */}
         <div
           style={{

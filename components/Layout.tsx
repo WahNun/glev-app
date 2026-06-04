@@ -572,6 +572,17 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
     }
   }, [pathname, sourceHdr, wizardStep]);
 
+  // Close the global AI chat sheet when the user navigates to /engine.
+  // Engine has its own embedded EngineChatPanel — the two should not
+  // overlap. We act on pathname changes only (not on sheetOpen) to
+  // avoid an infinite effect loop.
+  useEffect(() => {
+    if (pathname.startsWith("/engine") && glevAi.sheetOpen) {
+      glevAi.closeSheet();
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pathname]);
+
   // Horizontal swipe-to-switch-tabs disabled (user request 2026-05-17).
   // The Dashboard and Insights screens now own horizontal swipe themselves
   // (cluster pager / insight pager), so a page-level swipe handler would
@@ -1073,7 +1084,33 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
         </div>
       </aside>
 
-      <main ref={mainRef} className="glev-main" style={{ flex: 1, padding: "28px 32px", maxWidth: "100%", overflowX: "hidden", zoom: 1.12 }}>
+      <main
+        ref={mainRef}
+        className="glev-main"
+        style={{ flex: 1, padding: "28px 32px", maxWidth: "100%", overflowX: "hidden", zoom: 1.12 }}
+        onTouchStart={(e) => {
+          if (!aiVoiceEnabled || glevAi.sheetOpen) return;
+          const AI_TABS = ["/dashboard", "/entries", "/insights"];
+          if (!AI_TABS.some(t => pathname.startsWith(t))) return;
+          (e.currentTarget as HTMLElement & { _aiSwipeY?: number })._aiSwipeY = e.touches[0].clientY;
+        }}
+        onTouchEnd={(e) => {
+          const el = e.currentTarget as HTMLElement & { _aiSwipeY?: number };
+          const startY = el._aiSwipeY;
+          el._aiSwipeY = undefined;
+          if (startY == null || !aiVoiceEnabled || glevAi.sheetOpen) return;
+          const AI_TABS = ["/dashboard", "/entries", "/insights"];
+          if (!AI_TABS.some(t => pathname.startsWith(t))) return;
+          const dy = startY - e.changedTouches[0].clientY;
+          // Only open when swiping up ≥ 80 px AND the content is
+          // fully scrolled to the bottom (prevents clashing with normal
+          // downward page-scroll gestures).
+          const atBottom = el.scrollTop + el.clientHeight >= el.scrollHeight - 8;
+          if (dy >= 80 && atBottom) {
+            glevAi.openFromButton();
+          }
+        }}
+      >
         <TrialCountdownBanner />
         {children}
       </main>
