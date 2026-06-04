@@ -198,12 +198,13 @@ export const GLEV_TOOLS = [
           items: {
             type: "array",
             description:
-              "PFLICHT: Eine Zeile pro Zutat/Komponente. NIE die gesamte Mahlzeit als ein Item. Beispiele: 'Hähnchen mit Reis und Salat' → [{name:'Hähnchenbrust',grams:180},{name:'Basmatireis',grams:150},{name:'Salat',grams:80}]. 'Croissant' → [{name:'Croissant',grams:70}]. Gramm = Schätzung typischer Portionsgröße.",
+              "PFLICHT: Eine Zeile pro Zutat/Komponente. NIE die gesamte Mahlzeit als ein Item. Beispiele: 'Hähnchen mit Reis und Salat' → [{name:'Hähnchenbrust',grams:180},{name:'Basmatireis',grams:150},{name:'Salat',grams:80}]. 'Croissant' → [{name:'Croissant',grams:70}]. Gramm = Schätzung typischer Portionsgröße. Bei Alkohol: alcohol_g MUSS gesetzt werden (Alkohol in Gramm, NICHT KH) — Bier 0.33l ≈ 13g, Bier 0.5l ≈ 20g, Wein 0.2l ≈ 16g, 4cl Schnaps ≈ 13g. Carbs aus Bier/Wein trotzdem SEPARAT in carbs angeben (0.33l Bier ≈ 10g KH).",
             items: {
               type: "object",
               properties: {
-                name:  { type: "string",  description: "Name der Zutat/Komponente (Deutsch oder Englisch)." },
-                grams: { type: "number",  description: "Menge in Gramm." },
+                name:      { type: "string",  description: "Name der Zutat/Komponente (Deutsch oder Englisch)." },
+                grams:     { type: "number",  description: "Menge in Gramm." },
+                alcohol_g: { type: "number",  description: "Alkoholgehalt in Gramm — NUR bei alkoholischen Getränken setzen (Bier, Wein, Spirituosen, Cocktails). Richtwerte: 0.33l Bier=13g, 0.5l Bier=20g, 0.2l Wein=16g, 4cl Schnaps=13g. Nicht setzen oder 0 bei nicht-alkoholischen Items." },
               },
               required: ["name", "grams"],
             },
@@ -722,6 +723,31 @@ export type PendingActionEnvelope = {
     payload?: Record<string, unknown>;
   };
 };
+
+/**
+ * Dual-emission envelope: returned by toolLogMealEntry when alcohol is
+ * detected in items[].  Contains a meal PendingAction AND a linked
+ * influence PendingAction, both with DB rows already created.
+ * The chat-route emits both as separate SSE frames so the client renders
+ * two independent chips.
+ */
+export type DualPendingActionEnvelope = {
+  dual_pending_actions: [
+    /** Primary: the meal log (log_meal_entry). */
+    PendingActionEnvelope["pending_action"] & { total_alcohol_g: number; linked_influence_token: string },
+    /** Secondary: the alcohol influence log (log_influence_entry). */
+    PendingActionEnvelope["pending_action"],
+  ];
+};
+
+export function isDualPendingActionEnvelope(v: unknown): v is DualPendingActionEnvelope {
+  return (
+    !!v &&
+    typeof v === "object" &&
+    Array.isArray((v as Record<string, unknown>).dual_pending_actions) &&
+    ((v as DualPendingActionEnvelope).dual_pending_actions).length === 2
+  );
+}
 
 /**
  * Marker shape returned by navigate_to. The chat-route emits a
@@ -1585,7 +1611,16 @@ async function toolLogMealEntry(
       : undefined;
   }
 
-  const params: import("@/lib/useGlevAI").MealPendingPayload = {
+  // ── Dual-Emission: Alkohol-Erkennung ──────────────────────────────
+  // Wenn items[] Alkohol-Gramm tragen: zusätzliche influence_log
+  // PendingAction erzeugen und als DualPendingActionEnvelope zurückgeben.
+  // Double-Counting-Schutz: alcohol_g wird NIE zu carbs addiert.
+  const totalAlcoholG = (resolvedItems ?? []).reduce(
+    (sum, it) => sum + (typeof it.alcohol_g === "number" && it.alcohol_g > 0 ? it.alcohol_g : 0),
+    0,
+  );
+
+  const mealParams: import("@/lib/useGlevAI").MealPendingPayload = {
     input_text:     inputText,
     carbs_grams:    resolvedCarbs,
     protein_grams:  resolvedProtein,
@@ -1595,9 +1630,44 @@ async function toolLogMealEntry(
     glucose_before: glucoseBefore,
     meal_prep_id:   mealPrepId,
     ...(resolvedItems ? { items: resolvedItems } : {}),
+    ...(totalAlcoholG > 0 ? { total_alcohol_g: Math.round(totalAlcoholG * 10) / 10 } : {}),
   };
 
-  return await createPendingAction(sb, userId, "log_meal_entry", params, summary);
+  if (totalAlcoholG > 0) {
+    // Create BOTH pending_action rows in the DB atomically.
+    const mealResult = await createPendingAction(sb, userId, "log_meal_entry", mealParams, summary);
+    if ("error" in mealResult) return mealResult;
+
+    const mealToken = mealResult.pending_action.token;
+    const inflNote = `aus Mahlzeit: ${inputText.slice(0, 80)}`;
+    const inflParams: import("@/lib/useGlevAI").InfluencePrepPayload = {
+      influence_type:    "alcohol",
+      alcohol_g:         Math.round(totalAlcoholG * 10) / 10,
+      source_meal_token: mealToken,
+      note:              inflNote,
+      logged_at:         loggedAtIso,
+    };
+    const inflSummary = `Alkohol · ${Math.round(totalAlcoholG)}g · ${timeLabel.timeOnly}`;
+    const inflResult = await createPendingAction(sb, userId, "log_influence_entry", inflParams as unknown as Record<string, unknown>, inflSummary);
+    if ("error" in inflResult) {
+      // Influence creation failed — still return the meal alone (non-fatal).
+      console.error("[dual-emission] influence pending_action failed:", inflResult.error);
+      return mealResult;
+    }
+
+    // Embed cross-references in both payloads (for linkage in confirm-action).
+    const inflToken = inflResult.pending_action.token;
+    (mealParams as Record<string, unknown>).linked_influence_token = inflToken;
+
+    return {
+      dual_pending_actions: [
+        { ...mealResult.pending_action, total_alcohol_g: totalAlcoholG, linked_influence_token: inflToken } as DualPendingActionEnvelope["dual_pending_actions"][0],
+        inflResult.pending_action,
+      ],
+    } satisfies DualPendingActionEnvelope;
+  }
+
+  return await createPendingAction(sb, userId, "log_meal_entry", mealParams, summary);
 }
 
 async function toolLogInsulinEntry(

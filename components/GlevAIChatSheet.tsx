@@ -2,7 +2,8 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useLocale } from "next-intl";
-import type { GlevChatMessage, MealPendingPayload, MealQueueItem, PendingAction } from "@/lib/useGlevAI";
+import type { GlevChatMessage, InfluencePrepPayload, MealPendingPayload, MealQueueItem, PendingAction } from "@/lib/useGlevAI";
+import InfluencePrepChip from "@/components/InfluencePrepChip";
 import type { NutritionSource } from "@/lib/nutrition/types";
 import type { ParsedFood } from "@/lib/meals";
 import { useVoiceIntents } from "@/hooks/useVoiceIntents";
@@ -196,6 +197,7 @@ function MealChipExpanded({
   timeStr,
   itemsForExpand: initialItems,
   mealPrepId,
+  totalAlcoholG = 0,
   showQueueBadge,
   mealChipIndex,
   mealChipTotal,
@@ -212,6 +214,8 @@ function MealChipExpanded({
   itemsForExpand: Array<ParsedFood>;
   /** Phase 3: id for Realtime refinement subscription. */
   mealPrepId?: string;
+  /** Dual-Emission: total alcohol grams across items — shows ⇄ indicator. */
+  totalAlcoholG?: number;
   showQueueBadge: boolean;
   mealChipIndex?: number;
   mealChipTotal?: number;
@@ -336,6 +340,22 @@ function MealChipExpanded({
           }}
         >
           {mealName}
+          {/* ⇄ Alkohol-Linked-Indicator (Dual-Emission) */}
+          {totalAlcoholG > 0 && (
+            <span
+              title={`⇄ verknüpft mit Alkohol-Einflussfaktor · ${Math.round(totalAlcoholG)}g`}
+              style={{
+                fontSize: 10, fontWeight: 700,
+                background: "rgba(245,158,11,0.15)",
+                color: "#d97706",
+                border: "1px solid rgba(245,158,11,0.3)",
+                borderRadius: 5, padding: "1px 5px",
+                whiteSpace: "nowrap", flexShrink: 0,
+              }}
+            >
+              ⇄ {Math.round(totalAlcoholG)}g Alk
+            </span>
+          )}
         </div>
         {/* Aggregate badge from real sources; fades during Realtime refinement. */}
         {(() => {
@@ -611,6 +631,7 @@ function PendingActionWidget({
     const p = pa.payload as MealPendingPayload | undefined;
     const itemsForExpand: Array<ParsedFood> = p?.items ?? [];
     const mealPrepId = p?.meal_prep_id;
+    const totalAlcoholG = p?.total_alcohol_g ?? 0;
 
     return (
       <MealChipExpanded
@@ -622,6 +643,7 @@ function PendingActionWidget({
         timeStr={timeStr}
         itemsForExpand={itemsForExpand}
         mealPrepId={mealPrepId}
+        totalAlcoholG={totalAlcoholG}
         showQueueBadge={showQueueBadge}
         mealChipIndex={mealChipIndex}
         mealChipTotal={mealChipTotal}
@@ -1783,6 +1805,23 @@ export default function GlevAIChatSheet({
                       isMealChipActive = true;
                     }
                   }
+                  // Influence-Prep chip (Dual-Emission: alcohol linked to a meal).
+                  if (pa.kind === "log_influence_entry" && pa.payload &&
+                      typeof (pa.payload as Record<string, unknown>).influence_type === "string" &&
+                      (pa.payload as Record<string, unknown>).influence_type === "alcohol" &&
+                      typeof (pa.payload as Record<string, unknown>).source_meal_token === "string") {
+                    return (
+                      <InfluencePrepChip
+                        key={pa.token}
+                        payload={pa.payload as InfluencePrepPayload}
+                        state={pa.state}
+                        error={pa.error}
+                        onConfirm={() => onConfirmAction?.(m.id, pa.token)}
+                        onCancel={() => onCancelAction?.(m.id, pa.token)}
+                      />
+                    );
+                  }
+
                   return (
                     <PendingActionWidget
                       key={pa.token}

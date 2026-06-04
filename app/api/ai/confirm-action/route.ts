@@ -473,6 +473,43 @@ async function execLogInfluenceEntry(
     typeof p.notes === "string" && p.notes.trim() ? p.notes.trim() : null;
   const occurredAt = resolveLoggedAt(p.logged_at);
 
+  // Dual-Emission linkage: if source_meal_token is present, resolve the
+  // meal's DB id so we can store source_meal_id (FK to meals.id).
+  const sourceMealToken =
+    typeof p.source_meal_token === "string" ? p.source_meal_token : null;
+  let sourceMealId: string | null = null;
+  if (sourceMealToken) {
+    const { data: paRow } = await sb
+      .from("ai_pending_actions")
+      .select("params")
+      .eq("token", sourceMealToken)
+      .eq("user_id", userId)
+      .maybeSingle();
+    // If the meal was already confirmed and its meal row exists, try to
+    // look up the meal by matching input_text + occurred_at window (~5 min).
+    // If not yet confirmed, source_meal_id stays null (influence is standalone).
+    const mealParams = paRow?.params as Record<string, unknown> | null;
+    if (mealParams?.input_text && mealParams?.logged_at) {
+      const windowStart = new Date(new Date(String(mealParams.logged_at)).getTime() - 5 * 60_000).toISOString();
+      const windowEnd   = new Date(new Date(String(mealParams.logged_at)).getTime() + 5 * 60_000).toISOString();
+      const { data: mealRow } = await sb
+        .from("meals")
+        .select("id")
+        .eq("user_id", userId)
+        .eq("input_text", String(mealParams.input_text))
+        .gte("created_at", windowStart)
+        .lte("created_at", windowEnd)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      sourceMealId = (mealRow as { id: string } | null)?.id ?? null;
+    }
+  }
+
+  // alcohol_g: from Dual-Emission payload or parse amount string.
+  const alcoholG =
+    typeof p.alcohol_g === "number" && p.alcohol_g > 0 ? p.alcohol_g : null;
+
   const { data, error } = await sb
     .from("influence_logs")
     .insert({
@@ -482,6 +519,8 @@ async function execLogInfluenceEntry(
       amount,
       notes,
       occurred_at: occurredAt,
+      ...(sourceMealId ? { source_meal_id: sourceMealId } : {}),
+      ...(alcoholG !== null ? { alcohol_g: alcoholG } : {}),
     })
     .select("id")
     .single();

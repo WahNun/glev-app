@@ -11,6 +11,7 @@ import {
   GLEV_TOOLS,
   executeGlevTool,
   isPendingActionEnvelope,
+  isDualPendingActionEnvelope,
   isNavigateEnvelope,
   isSetMacroEnvelope,
   isMealPrepEnvelope,
@@ -505,7 +506,37 @@ export async function POST(req: NextRequest) {
             // dedicated SSE frame, and give Mistral a short "awaiting
             // user confirmation" stub so it doesn't try to confirm
             // itself or chain more writes in the same round.
-            if (isPendingActionEnvelope(result)) {
+            if (isDualPendingActionEnvelope(result)) {
+              // Dual-Emission: meal + alcohol influence.
+              // Emit meal_prep frame first (for sessionStorage pre-fill),
+              // then both pending_actions so the client renders two chips.
+              pendingEmittedThisRound = true;
+              const [mealAction, inflAction] = result.dual_pending_actions;
+              const mp = mealAction.payload as Record<string, unknown> | undefined;
+              if (mp) {
+                send(JSON.stringify({
+                  meal_prep: {
+                    input_text: typeof mp.input_text === "string" ? mp.input_text : "",
+                    carbs:   typeof mp.carbs_grams   === "number" ? mp.carbs_grams   : 0,
+                    protein: typeof mp.protein_grams === "number" ? mp.protein_grams : null,
+                    fat:     typeof mp.fat_grams     === "number" ? mp.fat_grams     : null,
+                    fiber:   typeof mp.fiber_grams   === "number" ? mp.fiber_grams   : null,
+                  },
+                }));
+              }
+              send(JSON.stringify({ pending_action: mealAction }));
+              send(JSON.stringify({ pending_action: inflAction }));
+              messages.push({
+                role: "tool",
+                name: fn?.name ?? "",
+                toolCallId: call.id,
+                content: JSON.stringify({
+                  status: "awaiting_user_confirmation",
+                  kind: "log_meal_entry+log_influence_entry",
+                  note: "Zwei Bestätigungs-Buttons erscheinen automatisch: Mahlzeit + Alkohol-Einflussfaktor. Antworte mit EINEM kurzen Satz ('Soll ich Mahlzeit und Alkohol-Einflussfaktor so speichern?').",
+                }),
+              });
+            } else if (isPendingActionEnvelope(result)) {
               pendingEmittedThisRound = true;
               // For log_meal_entry: emit meal_prep BEFORE pending_action so the
               // client can queue the macro data and associate the token when

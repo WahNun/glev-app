@@ -3786,6 +3786,30 @@ export default function EnginePage() {
                       </div>
                     </div>
 
+                    {/* Alkohol-Info-Box — shown when any item carries alcohol_g > 0.
+                        Pure documentation, no automatic bolus reduction. */}
+                    {(() => {
+                      const totalAlc = parsedItems.reduce(
+                        (sum, it) => {
+                          const alc = (it as { alcohol_g?: unknown }).alcohol_g;
+                          return sum + (typeof alc === "number" && alc > 0 ? alc : 0);
+                        },
+                        0,
+                      );
+                      if (totalAlc <= 0) return null;
+                      return (
+                        <div style={{ padding: "10px 14px", borderRadius: 10, background: "rgba(245,158,11,0.06)", border: "1px solid rgba(245,158,11,0.25)" }}>
+                          <div style={{ fontSize: 12, color: "var(--text-dim)", lineHeight: 1.65 }}>
+                            {locale === "en" ? (
+                              <>⓵ <strong>Alcohol detected ({Math.round(totalAlc)}g)</strong> — consider reducing carb bolus by 10–30% depending on quantity and your personal response. Delayed hypoglycaemia possible: monitor for the next 6–8 h. Your diabetes team can advise on your individual adjustment.</>
+                            ) : (
+                              <>⓵ <strong>Alkohol erkannt ({Math.round(totalAlc)}g)</strong> — empfohlen: KH-Bolus um 10–30% reduzieren (je nach Menge und persönlicher Reaktion). Verzögerte Hypo möglich — nächste 6–8h beobachten. Dein Diabetes-Team berät dich zur individuellen Anpassung.</>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })()}
+
                     {/* AI estimate info banner — shown when the largest carb
                         contributor is AI-estimated (Phase 2 feature flag). */}
                     {(() => {
