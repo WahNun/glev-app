@@ -1219,6 +1219,7 @@ export default function GlevAIChatSheet({
 
   const {
     isListening,
+    isTranscribing,
     startListening,
     stopListening,
     pendingIntent,
@@ -1583,7 +1584,7 @@ export default function GlevAIChatSheet({
           {/* Dynamic status badge */}
           {(() => {
             const isSpeaking = tts.speaking;
-            const isAnalyzing = streaming;
+            const isAnalyzing = streaming || isTranscribing;
             const dotColor = isSpeaking ? "#50C878" : isAnalyzing ? ACCENT : "#50C878";
             const label = isSpeaking ? t.status_speaking : isAnalyzing ? t.status_analyzing : t.status_ready;
             const bgColor = isSpeaking

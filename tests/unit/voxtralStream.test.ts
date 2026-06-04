@@ -272,6 +272,103 @@ test("transcribeWithFallback: SSE error event triggers REST fallback", async () 
   expect(finals[0]).toBe("REST-Ergebnis");
 });
 
+// ── 3. Abort / error-recovery tests ────────────────────────────────────────
+
+test("transcribeWithFallback: aborted before start → exits silently, onError NOT called", async () => {
+  const errors: string[] = [];
+  const finals: string[] = [];
+
+  const ac = new AbortController();
+  ac.abort(); // abort BEFORE the call
+
+  const originalFetch = global.fetch;
+  let fetchCalled = false;
+  global.fetch = ((..._args: Parameters<typeof fetch>) => {
+    fetchCalled = true;
+    return Promise.resolve(new Response(JSON.stringify({ text: "should not arrive" }), { status: 200 }));
+  }) as typeof fetch;
+
+  try {
+    await transcribeWithFallback(
+      new Blob(["audio"], { type: "audio/webm" }),
+      "audio/webm",
+      (t) => finals.push(t),
+      undefined,
+      (e) => errors.push(e),
+      ac.signal,
+    );
+  } finally {
+    global.fetch = originalFetch;
+  }
+
+  expect(errors).toHaveLength(0);
+  expect(finals).toHaveLength(0);
+  expect(fetchCalled).toBe(false);
+});
+
+test("transcribeWithFallback: aborted mid-SSE → exits silently, onError NOT called", async () => {
+  const errors: string[] = [];
+  const finals: string[] = [];
+
+  const ac = new AbortController();
+
+  const originalFetch = global.fetch;
+  global.fetch = ((_input: RequestInfo | URL, init?: RequestInit) => {
+    // Abort as soon as fetch is called (simulates abort arriving mid-request)
+    ac.abort();
+    // Simulate the browser rejecting the fetch due to abort
+    const abortErr = new DOMException("The operation was aborted.", "AbortError");
+    return Promise.reject(abortErr);
+  }) as typeof fetch;
+
+  try {
+    await transcribeWithFallback(
+      new Blob(["audio"], { type: "audio/webm" }),
+      "audio/webm",
+      (t) => finals.push(t),
+      undefined,
+      (e) => errors.push(e),
+      ac.signal,
+    );
+  } finally {
+    global.fetch = originalFetch;
+  }
+
+  expect(errors).toHaveLength(0);
+  expect(finals).toHaveLength(0);
+});
+
+test("transcribeWithFallback: signal is passed to fetch so the browser can abort the network request", async () => {
+  const capturedSignals: (AbortSignal | undefined | null)[] = [];
+  const ac = new AbortController();
+
+  const originalFetch = global.fetch;
+  global.fetch = ((_input: RequestInfo | URL, init?: RequestInit) => {
+    capturedSignals.push(init?.signal);
+    // Return a plain JSON body so REST path succeeds on the second call
+    return Promise.resolve(
+      new Response(JSON.stringify({ text: "ok" }), { status: 200 }),
+    );
+  }) as typeof fetch;
+
+  try {
+    await transcribeWithFallback(
+      new Blob(["audio"], { type: "audio/webm" }),
+      "audio/webm",
+      () => {},
+      undefined,
+      undefined,
+      ac.signal,
+    );
+  } finally {
+    global.fetch = originalFetch;
+  }
+
+  // At least the first fetch call must have received the signal.
+  expect(capturedSignals.length).toBeGreaterThan(0);
+  expect(capturedSignals[0]).toBe(ac.signal);
+});
+
 test("transcribeWithFallback: mp4 audio uses .m4a filename so Mistral decodes it correctly", async () => {
   const capturedForms: string[] = [];
   const originalFetch = global.fetch;

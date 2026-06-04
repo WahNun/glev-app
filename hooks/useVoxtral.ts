@@ -25,6 +25,12 @@ import { useRef, useState, useCallback } from "react";
  *                     → on stream failure: fall back to REST POST
  *
  * SSR-safe: returns a no-op stub when called outside a browser context.
+ *
+ * Error-recovery contract:
+ *   When a transcription attempt fails, an AbortController is used so that
+ *   a stale in-flight request cannot call onError after the user has already
+ *   started a new recording. startListening() always aborts the previous
+ *   transcription before starting fresh, so a retry is always clean.
  */
 
 const STT_STREAM_ROUTE = "/api/transcribe/mistral/stream";
@@ -39,6 +45,12 @@ export interface UseVoxtralOptions {
 
 export interface UseVoxtralReturn {
   isListening: boolean;
+  /**
+   * True while audio is being sent to the transcription API (after the mic
+   * stops and before onTranscript / onError fires). Use this to keep the UI
+   * in a "processing" state so the user knows work is in progress.
+   */
+  isTranscribing: boolean;
   startListening: () => Promise<void>;
   stopListening: () => void;
 }
@@ -46,6 +58,11 @@ export interface UseVoxtralReturn {
 /**
  * Try SSE streaming first; fall back to single REST POST on failure.
  * Exported for unit-test access.
+ *
+ * @param signal - Optional AbortSignal. If aborted, the function exits
+ *   silently without calling onError (abort is intentional — the user
+ *   started a new recording and the stale in-flight request must not
+ *   overwrite the freshly cleared error state).
  */
 export async function transcribeWithFallback(
   blob: Blob,
@@ -53,7 +70,11 @@ export async function transcribeWithFallback(
   onTranscript: (text: string) => void,
   onPartialTranscript?: (text: string) => void,
   onError?: (err: string) => void,
+  signal?: AbortSignal,
 ): Promise<void> {
+  // If already aborted before we start, exit immediately and silently.
+  if (signal?.aborted) return;
+
   // Derive correct extension from actual mimeType so Mistral can decode it.
   // iOS records audio/mp4 — sending it as "recording.webm" causes a 400.
   const ext = mimeType.includes("mp4") ? "m4a" : "webm";
@@ -64,7 +85,7 @@ export async function transcribeWithFallback(
     const form = new FormData();
     form.append("audio", blob, filename);
 
-    const res = await fetch(STT_STREAM_ROUTE, { method: "POST", body: form });
+    const res = await fetch(STT_STREAM_ROUTE, { method: "POST", body: form, signal });
 
     if (!res.ok || !res.body) {
       throw new Error(`SSE route returned HTTP ${res.status}`);
@@ -104,16 +125,22 @@ export async function transcribeWithFallback(
     }
 
     return; // SSE succeeded
-  } catch {
+  } catch (e) {
+    // AbortError = new recording started — exit silently so the stale
+    // in-flight request cannot overwrite the freshly cleared error state.
+    if (e instanceof Error && e.name === "AbortError") return;
     // Fall through to REST fallback below
   }
+
+  // Check again after the SSE attempt (abort may have arrived while awaiting).
+  if (signal?.aborted) return;
 
   // ── Attempt 2: REST POST fallback ───────────────────────────────────────
   try {
     const form = new FormData();
     form.append("audio", blob, filename);
 
-    const res = await fetch(STT_REST_ROUTE, { method: "POST", body: form });
+    const res = await fetch(STT_REST_ROUTE, { method: "POST", body: form, signal });
     if (!res.ok) {
       const body = (await res.json().catch(() => ({}))) as { error?: string };
       throw new Error(body.error ?? `HTTP ${res.status}`);
@@ -121,6 +148,8 @@ export async function transcribeWithFallback(
     const { text } = (await res.json()) as { text: string };
     if (text?.trim()) onTranscript(text.trim());
   } catch (e) {
+    // Silent exit on abort — same reason as above.
+    if (e instanceof Error && e.name === "AbortError") return;
     const raw = e instanceof Error ? e.message : "";
     // Show a clean user-facing message instead of raw API error JSON.
     const msg = raw.toLowerCase().includes("decoded") || raw.includes("400") || raw.includes("3310")
@@ -140,14 +169,30 @@ export async function transcribeWithFallback(
 // or add a separate onIntent callback. See docs/VOICE_ARCHITECTURE.md for details.
 export function useVoxtral({ onTranscript, onPartialTranscript, onError }: UseVoxtralOptions): UseVoxtralReturn {
   const [isListening, setIsListening] = useState(false);
+  const [isTranscribing, setIsTranscribing] = useState(false);
   const recorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const streamRef = useRef<MediaStream | null>(null);
   const mimeTypeRef = useRef<string>("");
+  /**
+   * Holds the AbortController for the currently in-flight transcribeWithFallback
+   * call. Aborted by startListening() before any new recording begins, so a
+   * stale failed request can never call onError after the user retries.
+   */
+  const transcribeAbortRef = useRef<AbortController | null>(null);
 
   const startListening = useCallback(async () => {
     if (typeof window === "undefined") return;
     if (isListening) return;
+
+    // Abort any still-running transcription from a previous attempt.
+    // This prevents the old onError from firing after the user has already
+    // pressed the mic button again (retry scenario).
+    if (transcribeAbortRef.current) {
+      try { transcribeAbortRef.current.abort(); } catch { /* noop */ }
+      transcribeAbortRef.current = null;
+    }
+    setIsTranscribing(false);
 
     try {
       const mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
@@ -184,7 +229,27 @@ export function useVoxtral({ onTranscript, onPartialTranscript, onError }: UseVo
         });
         chunksRef.current = [];
 
-        void transcribeWithFallback(blob, mimeTypeRef.current, onTranscript, onPartialTranscript, onError);
+        // Create a fresh AbortController for this transcription run so it can
+        // be cancelled if the user starts a new recording before it completes.
+        const ac = new AbortController();
+        transcribeAbortRef.current = ac;
+        setIsTranscribing(true);
+
+        void transcribeWithFallback(
+          blob,
+          mimeTypeRef.current,
+          onTranscript,
+          onPartialTranscript,
+          onError,
+          ac.signal,
+        ).finally(() => {
+          // Only clear isTranscribing if this is still the active request
+          // (not already superseded by a new recording).
+          if (transcribeAbortRef.current === ac) {
+            transcribeAbortRef.current = null;
+            setIsTranscribing(false);
+          }
+        });
       };
 
       // Collect in 100 ms slices
@@ -203,5 +268,5 @@ export function useVoxtral({ onTranscript, onPartialTranscript, onError }: UseVo
     setIsListening(false);
   }, []);
 
-  return { isListening, startListening, stopListening };
+  return { isListening, isTranscribing, startListening, stopListening };
 }
