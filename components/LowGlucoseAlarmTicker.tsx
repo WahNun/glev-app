@@ -52,7 +52,7 @@ export default function LowGlucoseAlarmTicker() {
 
       const since = new Date(Date.now() - LOOKBACK_MS).toISOString();
 
-      const [samplesResult, ahResult] = await Promise.all([
+      const [samplesResult, ahResult, nsResult] = await Promise.all([
         supabase
           .from("cgm_samples")
           .select("value_mgdl, timestamp")
@@ -69,17 +69,30 @@ export default function LowGlucoseAlarmTicker() {
           .order("timestamp", { ascending: false })
           .limit(1)
           .maybeSingle(),
+        supabase
+          .from("nightscout_readings")
+          .select("value_mgdl, recorded_at")
+          .eq("user_id", user.id)
+          .gte("recorded_at", since)
+          .order("recorded_at", { ascending: false })
+          .limit(1)
+          .maybeSingle(),
       ]);
 
       let latestValue: number | null = null;
 
       const cgmTs = samplesResult.data ? new Date(samplesResult.data.timestamp).getTime() : -1;
       const ahTs  = ahResult.data      ? new Date(ahResult.data.timestamp).getTime()      : -1;
+      const nsTs  = nsResult.data      ? new Date(nsResult.data.recorded_at).getTime()    : -1;
 
-      if (cgmTs >= ahTs && samplesResult.data) {
+      const bestTs = Math.max(cgmTs, ahTs, nsTs);
+
+      if (bestTs === cgmTs && cgmTs >= 0 && samplesResult.data) {
         latestValue = samplesResult.data.value_mgdl;
-      } else if (ahTs > cgmTs && ahResult.data) {
+      } else if (bestTs === ahTs && ahTs >= 0 && ahResult.data) {
         latestValue = ahResult.data.value_mg_dl;
+      } else if (bestTs === nsTs && nsTs >= 0 && nsResult.data) {
+        latestValue = nsResult.data.value_mgdl;
       }
 
       if (latestValue == null) return;

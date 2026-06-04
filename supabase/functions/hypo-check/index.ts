@@ -401,6 +401,24 @@ Deno.serve(async (_req: Request) => {
           latestValue = live.value;
           cgmSource = live.logReason;
           console.log(`${tag} live CGM: source=${live.logReason} value=${live.value}`);
+
+          // Persist LLU / Nightscout live readings into cgm_samples so the
+          // foreground LowGlucoseAlarmTicker can see them. Apple Health readings
+          // are already in apple_health_readings — no need to duplicate.
+          // Fire-and-forget: a write failure must never block alarm delivery.
+          if (live.source === "llu" || live.source === "nightscout") {
+            sb.from("cgm_samples").upsert(
+              {
+                user_id: user.user_id,
+                timestamp: new Date().toISOString(),
+                value_mgdl: Math.round(live.value),
+                source: live.source,
+              },
+              { onConflict: "user_id,timestamp", ignoreDuplicates: true },
+            ).then(() => {}).catch((e: unknown) => {
+              console.log(`${tag} cgm_samples upsert warn: ${e instanceof Error ? e.message : String(e)}`);
+            });
+          }
         }
       } catch (liveErr) {
         console.log(`${tag} live fetch error: ${liveErr instanceof Error ? liveErr.message : String(liveErr)}`);
