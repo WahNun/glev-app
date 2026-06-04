@@ -33,6 +33,33 @@ ${appUrl}/auth/confirm
 
 ---
 
+### D-002 · CGM-Snapshot für Insulin-Logs: Save-Pfad-Vereinheitlichung statt Detail-View-Fallback (2026-06-04)
+
+**Entscheidung:** `cgm_glucose_at_log` wird beim INSERT in `insulin_logs` gesetzt — im confirm-action-Endpoint (Voice-Pfad), analog zum bereits korrekten UI-Pfad. Der Detail-View liest unverändert direkt aus der Spalte ohne eigenen Live-Lookup.
+
+**Warum Save-Pfad und nicht Detail-View-Fallback:**
+
+Option A (verworfen) — Detail-View macht Live-Lookup bei jedem Render:
+- Bedeutet: `cgm_glucose_at_log` wäre nur ein Cache; der Source of Truth wäre der Live-CGM-Call.
+- Problem: CGM-History hat eine begrenzte Tiefe (LLU: ~8h, Nightscout: ~24h). Einträge älter als die Lookup-Tiefe würden immer `—` zeigen, auch wenn die Messung zum Zeitpunkt des Loggings existiert hätte.
+- Weiteres Problem: Inkonsistenz mit Meal-Logs, die `glucose_before` persistent speichern.
+- Außerdem: jeder Page-Load triggert einen CGM-API-Call — unnötig teuer.
+
+Option B (gewählt) — CGM-Wert bei INSERT snapshotten:
+- Single Source of Truth: was zum Zeitpunkt des Loggings im CGM war, bleibt dauerhaft in der Row.
+- Konsistent mit Meal-Logs (`glucose_before`), mit Bolus-Curve-Jobs (+1h/+2h), und mit wie der Adaptive-ICR-Pairing-Algorithmus arbeitet.
+- Best-effort (null wenn kein CGM verbunden oder kein Wert im Fenster) — kein Crash-Risiko.
+
+**Fenster:** ±10 Minuten um `created_at`. Begründung: CGM-Polling alle 5 Min (LLU/Nightscout-Cron), also ist maximal 1 verpasster Poll möglich. 10 Min deckt das ab ohne bei rückdatierten Einträgen zu weit zu gehen.
+
+**Betroffene Dateien:**
+- `app/api/ai/confirm-action/route.ts` — `fetchBgNearTimestamp()` + beide Executors
+- `scripts/backfill-cgm-glucose-at-insulin-log.sql` — einmaliger Backfill für historische Rows
+
+**Nicht öffnen:** Falls künftig ein neuer Executor in confirm-action `insulin_logs` beschreibt, muss er `fetchBgNearTimestamp` aufrufen. Der UI-Pfad (`lib/insulin.ts → insertInsulinLog`) erwartet den Wert vom Caller — der Caller ist die Engine-Page und liest ihn live. Server-seitige Callers (confirm-action, zukünftige Server Actions) müssen ihn selbst holen.
+
+---
+
 ## Fix Log
 
 | Date | Title | Task | Summary |
