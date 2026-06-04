@@ -10,6 +10,8 @@ import {
   fetchHighAlarmSettingsFromDb, saveHighAlarmSettingsToDb, type HighAlarmSettingsDb,
 } from "@/lib/userSettings";
 import { getLowAlarmSettings, persistLowAlarmSettingsLocally } from "@/lib/lowGlucoseAlarm";
+import { persistElevatedAlarmSettingsLocally } from "@/lib/elevatedAlarm";
+import { persistHyperAlarmSettingsLocally } from "@/lib/hyperAlarm";
 import SnapSlider from "@/components/log/SnapSlider";
 import BottomSheet from "@/components/BottomSheet";
 import { SettingsSection, SettingsRow } from "@/components/SettingsRow";
@@ -100,6 +102,7 @@ export default function SensorAlarmePage() {
     try {
       const clamped: ElevatedAlarmSettingsDb = { enabled: elevatedEnabled, thresholdMgdl: Math.min(180, Math.max(100, Math.round(elevatedThreshold))) };
       await saveElevatedAlarmSettingsToDb(clamped);
+      persistElevatedAlarmSettingsLocally({ enabled: clamped.enabled, thresholdMgdl: clamped.thresholdMgdl });
       setDraftElevated(null);
       setSaved(true); setTimeout(() => setSaved(false), 1800);
       return true;
@@ -114,6 +117,7 @@ export default function SensorAlarmePage() {
     try {
       const clamped: HighAlarmSettingsDb = { enabled: highEnabled, thresholdMgdl: Math.min(250, Math.max(140, Math.round(highThreshold))) };
       await saveHighAlarmSettingsToDb(clamped);
+      persistHyperAlarmSettingsLocally({ enabled: clamped.enabled, thresholdMgdl: clamped.thresholdMgdl });
       setDraftHigh(null);
       setSaved(true); setTimeout(() => setSaved(false), 1800);
       return true;

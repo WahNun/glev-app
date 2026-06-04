@@ -3118,5 +3118,13 @@
     "notification_body": "BG {value} mg/dL — below your threshold of {threshold} mg/dL. Please act now.",
     "snooze_action_title": "Snooze 15 min",
     "snooze_notification_body": "BG check (snooze) — still {value} mg/dL · threshold: {threshold} mg/dL"
+  },
+  "elevated_alarm": {
+    "notification_title": "Elevated glucose",
+    "notification_body": "BG {value} mg/dL — above your elevated threshold of {threshold} mg/dL."
+  },
+  "hyper_alarm": {
+    "notification_title": "High-glucose alert",
+    "notification_body": "BG {value} mg/dL — above your high threshold of {threshold} mg/dL. Please act now."
   }
 }

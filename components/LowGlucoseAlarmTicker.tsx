@@ -11,39 +11,39 @@ import {
   isInSnoozeRecurrence,
   SNOOZE_ACTION_ID,
 } from "@/lib/lowGlucoseAlarm";
+import { getElevatedAlarmSettings, checkAndFireIfElevated, persistElevatedAlarmSettingsLocally } from "@/lib/elevatedAlarm";
+import { getHyperAlarmSettings, checkAndFireIfHyper, persistHyperAlarmSettingsLocally } from "@/lib/hyperAlarm";
+import { fetchElevatedAlarmSettingsFromDb, fetchHighAlarmSettingsFromDb } from "@/lib/userSettings";
 import { useTranslations } from "next-intl";
 
-const TICK_MS = 5 * 60 * 1000;
+const TICK_MS = 60 * 1000;
 const LOOKBACK_MS = 20 * 60 * 1000;
 
 /**
- * Mounts once inside the protected layout. Every 5 minutes (and on
+ * Mounts once inside the protected layout. Every minute (and on
  * initial load / tab-focus), reads the user's most recent CGM sample
- * and fires a local alarm notification if the value is below their
- * configured low-glucose threshold.
+ * and fires a local alarm notification if the value crosses any of the
+ * three configured thresholds:
+ *   • Hypo  — value < low_alarm_threshold_mgdl
+ *   • Erhöht — value > elevated_alarm_threshold_mgdl
+ *   • Hyper  — value > high_alarm_threshold_mgdl
  *
  * Covers both continuous-reading sources:
- *   • cgm_samples          — LLU / Nightscout users (every 5min server cron)
+ *   • cgm_samples          — LLU / Nightscout users (server cron)
  *   • apple_health_readings — Apple Health users (iOS push)
  *
- * The two tables are queried in parallel; we take the most recent
- * reading across both to ensure Apple Health users are covered even
- * though they never appear in cgm_samples.
- *
- * Also registers the HYPO_ALARM notification action category on native
- * (for the Snooze button), listens for the SNOOZE_15 action, and
- * resets the snooze counter whenever the app comes back to the
- * foreground (visibility change or Capacitor appStateChange).
+ * Each alarm type has its own 15-minute cooldown stored in localStorage
+ * so they don't interfere with each other.
  *
  * Renders nothing.
  */
 export default function LowGlucoseAlarmTicker() {
   const ranOnceRef = useRef(false);
   const t = useTranslations("low_alarm");
+  const tHigh = useTranslations("elevated_alarm");
+  const tHyper = useTranslations("hyper_alarm");
 
   const checkLatestCgm = useCallback(async () => {
-    const { enabled, thresholdMgdl } = getLowAlarmSettings();
-    if (!enabled) return;
     if (!supabase) return;
 
     try {
@@ -73,8 +73,8 @@ export default function LowGlucoseAlarmTicker() {
 
       let latestValue: number | null = null;
 
-      const cgmTs  = samplesResult.data ? new Date(samplesResult.data.timestamp).getTime() : -1;
-      const ahTs   = ahResult.data      ? new Date(ahResult.data.timestamp).getTime()      : -1;
+      const cgmTs = samplesResult.data ? new Date(samplesResult.data.timestamp).getTime() : -1;
+      const ahTs  = ahResult.data      ? new Date(ahResult.data.timestamp).getTime()      : -1;
 
       if (cgmTs >= ahTs && samplesResult.data) {
         latestValue = samplesResult.data.value_mgdl;
@@ -84,20 +84,39 @@ export default function LowGlucoseAlarmTicker() {
 
       if (latestValue == null) return;
 
-      // Use the snooze-recurrence body when we're in an active snooze
-      // cycle so the user can tell this is a re-trigger, not a new event.
-      const body = isInSnoozeRecurrence()
-        ? t("snooze_notification_body", { value: latestValue, threshold: thresholdMgdl })
-        : t("notification_body", { value: latestValue, threshold: thresholdMgdl });
+      // --- Hypo alarm ---
+      const lowSettings = getLowAlarmSettings();
+      if (lowSettings.enabled) {
+        const body = isInSnoozeRecurrence()
+          ? t("snooze_notification_body", { value: latestValue, threshold: lowSettings.thresholdMgdl })
+          : t("notification_body", { value: latestValue, threshold: lowSettings.thresholdMgdl });
+        await checkAndFireIfLow(latestValue, lowSettings.thresholdMgdl, {
+          title: t("notification_title"),
+          body,
+        });
+      }
 
-      await checkAndFireIfLow(latestValue, thresholdMgdl, {
-        title: t("notification_title"),
-        body,
-      });
+      // --- Elevated alarm ---
+      const elevatedSettings = getElevatedAlarmSettings();
+      if (elevatedSettings.enabled) {
+        await checkAndFireIfElevated(latestValue, elevatedSettings.thresholdMgdl, {
+          title: tHigh("notification_title"),
+          body: tHigh("notification_body", { value: latestValue, threshold: elevatedSettings.thresholdMgdl }),
+        });
+      }
+
+      // --- Hyper alarm ---
+      const hyperSettings = getHyperAlarmSettings();
+      if (hyperSettings.enabled) {
+        await checkAndFireIfHyper(latestValue, hyperSettings.thresholdMgdl, {
+          title: tHyper("notification_title"),
+          body: tHyper("notification_body", { value: latestValue, threshold: hyperSettings.thresholdMgdl }),
+        });
+      }
     } catch {
       // Never let a CGM read error surface to the user.
     }
-  }, [t]);
+  }, [t, tHigh, tHyper]);
 
   useEffect(() => {
     let cancelled = false;
@@ -106,12 +125,18 @@ export default function LowGlucoseAlarmTicker() {
 
     const snoozeTitle = t("snooze_action_title");
 
-    // Register the HYPO_ALARM action category (SSR-safe, no-ops on web).
     registerAlarmActionTypes(snoozeTitle).catch(() => { /* ignore */ });
 
-    // Listen for the Snooze button tap in the alarm notification, and
-    // reset the snooze counter when the app comes back to the foreground.
-    // Dynamic import keeps this SSR-safe and avoids loading Capacitor on web.
+    // One-time DB sync: populate localStorage with the user's saved
+    // elevated/hyper thresholds so the ticker has correct settings even
+    // before the user visits the sensor-alarme settings page.
+    fetchElevatedAlarmSettingsFromDb()
+      .then((s) => persistElevatedAlarmSettingsLocally({ enabled: s.enabled, thresholdMgdl: s.thresholdMgdl }))
+      .catch(() => { /* ignore — defaults used until next sync */ });
+    fetchHighAlarmSettingsFromDb()
+      .then((s) => persistHyperAlarmSettingsLocally({ enabled: s.enabled, thresholdMgdl: s.thresholdMgdl }))
+      .catch(() => { /* ignore */ });
+
     import("@capacitor/local-notifications")
       .then(({ LocalNotifications }) => {
         if (cancelled) return;
@@ -146,8 +171,6 @@ export default function LowGlucoseAlarmTicker() {
 
     function onVis() {
       if (document.visibilityState === "visible" && !cancelled) {
-        // Treat the browser tab becoming visible as "app opened" —
-        // resets the snooze counter so a new alarm cycle can start.
         resetSnoozeCount();
         checkLatestCgm();
       }
