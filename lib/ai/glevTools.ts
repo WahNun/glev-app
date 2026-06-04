@@ -481,7 +481,7 @@ export const GLEV_TOOLS = [
     function: {
       name: "log_symptom_entry",
       description:
-        "Schlägt das Speichern eines Symptom-Eintrags vor (symptom_logs). WICHTIG: schreibt NICHT direkt — Bestätigung per UI-Button. Nur aufrufen, wenn der Nutzer explizit Symptome schildert ('ich habe Kopfschmerzen', 'mir ist schwindelig', 'ich bin total müde'). Wähle alle passenden symptom_types aus der Liste.",
+        "Schlägt das Speichern eines Symptom-Eintrags vor (symptom_logs). WICHTIG: schreibt NICHT direkt — Bestätigung per UI-Button. Nur aufrufen, wenn der Nutzer explizit Symptome schildert ('ich habe Kopfschmerzen', 'mir ist schwindelig', 'ich bin total müde'). Wähle alle passenden symptom_types aus der Liste. Wenn der Nutzer Zyklus-Logging aktiviert hat und PMS-typische Symptome schildert (Krämpfe, Brustspannen, gedrückte Stimmung, Wassereinlagerungen, Blähungen, Reizbarkeit), wird die PMS-Kategorie automatisch vorausgewählt.",
       parameters: {
         type: "object",
         properties: {
@@ -1794,6 +1794,16 @@ const VALID_SYMPTOM_TYPES_SET = new Set([
   "dizziness", "mouth_dryness", "polyuria", "water_retention",
 ]);
 
+/**
+ * Symptoms that signal a PMS context when cycle logging is enabled.
+ * Mirrors the task spec: cramps, breast_tenderness, low_mood,
+ * water_retention, bloating, irritability.
+ */
+const PMS_TRIGGER_SYMPTOMS = new Set([
+  "cramps", "breast_tenderness", "low_mood",
+  "water_retention", "bloating", "irritability",
+]);
+
 async function toolLogSymptomEntry(
   sb: SupabaseClient,
   userId: string,
@@ -1818,6 +1828,22 @@ async function toolLogSymptomEntry(
   const loggedAt = resolveLoggedAt(args.logged_at);
   const timeLabel = formatInUserTimezone(new Date(loggedAt).getTime(), userTimezone);
 
+  // Detect PMS context: if the user has cycle logging enabled and at least
+  // one of the reported symptoms is PMS-typical, pre-select the PMS category
+  // so the SymptomForm opens on the right tab.
+  let category: "pms" | undefined;
+  const hasPmsTrigger = validTypes.some((t) => PMS_TRIGGER_SYMPTOMS.has(t));
+  if (hasPmsTrigger) {
+    const { data: settings } = await sb
+      .from("user_settings")
+      .select("cycle_logging_enabled")
+      .eq("user_id", userId)
+      .maybeSingle();
+    if ((settings as { cycle_logging_enabled?: boolean } | null)?.cycle_logging_enabled) {
+      category = "pms";
+    }
+  }
+
   const summary =
     `Symptome: ${validTypes.join(", ")} (Schweregrad ${severity}/5) um ${timeLabel.timeOnly}`;
 
@@ -1826,6 +1852,7 @@ async function toolLogSymptomEntry(
     severity,
     notes,
     logged_at: loggedAt,
+    ...(category ? { category } : {}),
   }, summary);
 }
 

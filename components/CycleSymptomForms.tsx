@@ -481,19 +481,28 @@ export function SymptomForm() {
 
   // Shared helper: apply a pending symptom payload (from sessionStorage on
   // mount, or from the glev:open-symptom-log event for in-page pre-fills).
-  // Reads symptom_types, severity (1–5), notes, and logged_at from the payload
-  // and updates local form state. User still has to tap "Speichern"
-  // (compliance gate D-003 — no auto-save).
+  // Reads symptom_types, severity (1–5), notes, logged_at, and category from
+  // the payload and updates local form state. When category="pms" is present
+  // the PMS tab is pre-selected and only PMS-valid chips are activated.
+  // User still has to tap "Speichern" (compliance gate D-003 — no auto-save).
   function applySymptomPayload(p: {
     symptom_types?: unknown;
     severity?: unknown;
     notes?: unknown;
     logged_at?: unknown;
+    category?: unknown;
   }) {
     if (Array.isArray(p?.symptom_types)) {
+      const wantPms = p.category === "pms";
+      // Switch to PMS tab before filtering so the chip list matches.
+      // The guard effect (showCycleCategory) will correct this to "general" if
+      // the user's biological sex resolves to male.
+      if (wantPms) setCategory("pms");
+
+      const allowedTypes: readonly SymptomType[] = wantPms ? PMS_SYMPTOM_TYPES : SYMPTOM_TYPES;
       const incoming = (p.symptom_types as unknown[]).filter(
         (s): s is SymptomType =>
-          typeof s === "string" && SYMPTOM_TYPES.includes(s as SymptomType),
+          typeof s === "string" && allowedTypes.includes(s as SymptomType),
       );
       if (incoming.length > 0) {
         const rawSev = Number(p.severity);
@@ -540,6 +549,7 @@ export function SymptomForm() {
         severity?: unknown;
         notes?: unknown;
         logged_at?: unknown;
+        category?: unknown;
       };
       applySymptomPayload(p);
     } catch { /* ignore parse / quota errors */ }
@@ -549,7 +559,9 @@ export function SymptomForm() {
   // glev:open-symptom-log: dispatched by navigateToLogScreen (Detail →) when
   // the form is already mounted (in-page navigation), and by useVoiceIntents
   // when the classifier recognises a symptom utterance. Reads symptom_types,
-  // severity, notes, and logged_at — user still confirms with "Speichern" (D-003).
+  // severity, notes, logged_at, and category — user still confirms with
+  // "Speichern" (D-003). When category="pms" is set by the server the PMS tab
+  // is pre-selected and only PMS-valid chips are activated.
   useEffect(() => {
     const handler = (e: Event) => {
       const detail = (e as CustomEvent<{
@@ -557,6 +569,7 @@ export function SymptomForm() {
         severity?: unknown;
         notes?: unknown;
         logged_at?: unknown;
+        category?: unknown;
       }>).detail;
       applySymptomPayload(detail ?? {});
     };

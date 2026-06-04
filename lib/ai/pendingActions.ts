@@ -38,6 +38,8 @@ export type SymptomEntryPayload = {
   severity?: number;
   notes?: string | null;
   logged_at?: string | null;
+  /** Pre-selects the PMS tab in SymptomForm when cycle logging is active. */
+  category?: "pms" | "general";
 };
 
 export type InsulinBolusdPayload = {
