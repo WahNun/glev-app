@@ -113,6 +113,14 @@ export interface EvaluateEntryInput {
    * pass a time.
    */
   mealTime?: Date | null;
+  /**
+   * Alcohol grams linked to this meal via influence_logs.source_meal_id.
+   * When > 0, the evaluator extends the hypo monitoring window from the
+   * standard 3h to 8h and tags HYPO_DURING results with "alcohol_extended_window"
+   * in the reasoning. Only passed by callers that have already resolved
+   * the influence linkage (lifecycle.ts, server-side evaluation).
+   */
+  linkedAlcoholG?: number | null;
 }
 
 export interface EvaluateEntryResult {
@@ -401,6 +409,9 @@ export function evaluateEntry(input: EvaluateEntryInput): EvaluateEntryResult {
       input.minBg180 != null ? Math.round(input.minBg180)
       : sparseHypoBg          ? Math.round(bgAfter as number)
       : null;
+    const alcoholContext = (input.linkedAlcoholG ?? 0) > 0
+      ? " [alcohol_extended_window]"
+      : "";
     const messages: AdjustmentMessage[] = [
       { key: "engine_eval_hypo_during", params: { minBg: minBg ?? "<70" } },
       ...speedMessages(input.speed1, input.speed2),
@@ -408,7 +419,7 @@ export function evaluateEntry(input: EvaluateEntryInput): EvaluateEntryResult {
       ...trendMessages(input.preTrend),
     ];
     return { outcome: "HYPO_DURING", messages, confidence: "high", delta, netCarbs,
-      reasoning: `HYPO_DURING — BG dipped below 70 mg/dL post-meal. ${speedReasoning(input.speed1, input.speed2)} ${contextReasoning(input.recentInsulinLogs, input.recentExerciseLogs)}`.trim() };
+      reasoning: `HYPO_DURING — BG dipped below 70 mg/dL post-meal.${alcoholContext} ${speedReasoning(input.speed1, input.speed2)} ${contextReasoning(input.recentInsulinLogs, input.recentExerciseLogs)}`.trim() };
   }
 
   // Unified spike detection (Task #251): combines peakRise + Δ_2h + slope.

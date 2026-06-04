@@ -3786,6 +3786,30 @@ export default function EnginePage() {
                       </div>
                     </div>
 
+                    {/* Alkohol-Info-Box — shown when any item carries alcohol_g > 0.
+                        Pure documentation, no automatic bolus reduction. */}
+                    {(() => {
+                      const totalAlc = parsedItems.reduce(
+                        (sum, it) => {
+                          const alc = (it as { alcohol_g?: unknown }).alcohol_g;
+                          return sum + (typeof alc === "number" && alc > 0 ? alc : 0);
+                        },
+                        0,
+                      );
+                      if (totalAlc <= 0) return null;
+                      return (
+                        <div style={{ padding: "10px 14px", borderRadius: 10, background: "rgba(245,158,11,0.06)", border: "1px solid rgba(245,158,11,0.25)" }}>
+                          <div style={{ fontSize: 12, color: "var(--text-dim)", lineHeight: 1.65 }}>
+                            {locale === "en" ? (
+                              <>⓵ <strong>Alcohol detected ({Math.round(totalAlc)}g).</strong> Alcohol delays the glucose response and can cause hypos overnight. Some T1Ds reduce their bolus moderately, others don&apos;t — how your body reacts is best learned through observation. Talk to your diabetes team about your individual response. Glev extends hypo monitoring to 8 h for you.</>
+                            ) : (
+                              <>⓵ <strong>Alkohol erkannt ({Math.round(totalAlc)}g).</strong> Alkohol verzögert die Glukose-Reaktion und kann nachts zu Hypos führen. Manche T1Der reduzieren ihren Bolus moderat, andere nicht — wie dein Körper reagiert lernst du am besten durch Beobachtung. Sprich mit deinem Diabetologen über deine individuelle Reaktion. Glev verlängert das Hypo-Monitoring-Fenster für dich auf 8h.</>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })()}
+
                     {/* AI estimate info banner — shown when the largest carb
                         contributor is AI-estimated (Phase 2 feature flag). */}
                     {(() => {

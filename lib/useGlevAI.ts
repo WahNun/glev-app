@@ -69,6 +69,20 @@ export type MealPendingPayload = {
   meal_prep_id?:  string;
   /** Per-item breakdown with resolved sources. Present when aggregator ran. */
   items?:         ParsedFood[];
+  /** Total alcohol in grams across all items — triggers Dual-Emission. */
+  total_alcohol_g?: number;
+  /** Token of the linked influence PendingAction (if Dual-Emission fired). */
+  linked_influence_token?: string;
+};
+
+/** Payload for an auto-generated alcohol influence PendingAction. */
+export type InfluencePrepPayload = {
+  influence_type:        "alcohol";
+  alcohol_g:             number;
+  /** Token of the linked meal PendingAction. */
+  source_meal_token:     string;
+  note:                  string;
+  logged_at:             string;
 };
 
 export type GlevChatMessage = {

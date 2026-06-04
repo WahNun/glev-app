@@ -15,6 +15,9 @@ export interface ParsedFood {
   // pipeline and won't have this field, hence optional.
   // Expanded in Phase 2 to include user_history + user_confirmed.
   source?: "open_food_facts" | "usda" | "estimated" | "unknown" | "user_history" | "user_confirmed";
+  // Alcohol content in grams — only set for alcoholic items (beer, wine,
+  // spirits).  Used by Dual-Emission to auto-create a linked influence_log row.
+  alcohol_g?: number | null;
 }
 
 export interface Meal {
