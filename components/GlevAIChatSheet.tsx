@@ -277,6 +277,117 @@ function PendingActionWidget({
     );
   }
 
+  // ── Fingerstick chip layout ───────────────────────────────────────
+  // Prominent value display + warning colour if outside 70–180 mg/dL.
+  // Buttons: [Schnell speichern] [Fingerstick-Details öffnen →]
+  if (pa.kind === "log_fingerstick") {
+    const match = pa.summary.match(/(\d+)\s*mg\/dL/);
+    const valueMgdl = match ? parseInt(match[1], 10) : null;
+    const isLow     = valueMgdl != null && valueMgdl < 70;
+    const isHigh    = valueMgdl != null && valueMgdl > 180;
+    const isOutOfRange = isLow || isHigh;
+    const WARNING = "#F59E0B";
+
+    return (
+      <div
+        style={{
+          ...baseCard,
+          position: "relative",
+          borderColor: isOutOfRange ? `${WARNING}55` : undefined,
+        }}
+      >
+        {/* ✕ dismiss */}
+        <button
+          type="button"
+          aria-label="Verwerfen"
+          onClick={onCancel}
+          disabled={busy}
+          style={{
+            position: "absolute", top: 8, right: 8,
+            background: "none", border: "none",
+            cursor: busy ? "default" : "pointer",
+            padding: 4, color: "var(--text-muted)", fontSize: 14,
+            lineHeight: 1, display: "flex", alignItems: "center",
+            justifyContent: "center", opacity: busy ? 0.5 : 1,
+          }}
+        >
+          ✕
+        </button>
+
+        {/* Type label */}
+        <div
+          style={{
+            display: "flex", alignItems: "center", gap: 5,
+            paddingRight: 20, fontSize: 11, fontWeight: 700,
+            color: "var(--text-muted)", letterSpacing: "0.04em",
+            textTransform: "uppercase",
+          }}
+        >
+          <span>🩸</span>
+          <span>Fingerstick</span>
+        </div>
+
+        {/* Value + time */}
+        <div
+          style={{
+            fontSize: 20, fontWeight: 700,
+            fontFamily: "var(--font-mono)",
+            color: isOutOfRange ? WARNING : "var(--text-strong)",
+            letterSpacing: "-0.02em",
+          }}
+        >
+          {valueMgdl != null ? `${valueMgdl} mg/dL` : pa.summary}
+          <span
+            style={{
+              fontSize: 13, fontWeight: 500,
+              color: "var(--text-muted)", marginLeft: 6,
+              fontFamily: "inherit", letterSpacing: "0",
+            }}
+          >
+            · Jetzt
+          </span>
+        </div>
+
+        {/* Action buttons */}
+        <div style={{ display: "flex", gap: 8 }}>
+          <button
+            type="button"
+            onClick={onQuickSave ?? onConfirm}
+            disabled={busy}
+            style={{
+              flex: 1, padding: "9px 10px", borderRadius: 8,
+              border: "none",
+              background: busy ? "rgba(139,92,246,0.35)" : ACCENT,
+              color: "var(--on-accent)", fontWeight: 600,
+              fontSize: 13, cursor: busy ? "default" : "pointer",
+            }}
+          >
+            {busy ? "Speichert …" : "Schnell speichern"}
+          </button>
+          {!!onDetailOpen && (
+            <button
+              type="button"
+              onClick={onDetailOpen}
+              disabled={busy}
+              style={{
+                padding: "9px 10px", borderRadius: 8,
+                border: "1px solid var(--border-strong)",
+                background: "var(--surface-soft)",
+                color: "var(--text-body)",
+                fontSize: 13,
+                cursor: busy ? "default" : "pointer",
+                opacity: busy ? 0.5 : 1,
+                whiteSpace: "nowrap",
+              }}
+            >
+              Fingerstick-Details öffnen →
+            </button>
+          )}
+        </div>
+      </div>
+    );
+  }
+
   // ── Non-meal chip layout (Bolus, Exercise, Symptom, …) ───────────
   // ✕ icon top-right + type label + summary + [Schnell speichern] [Detail →]
   const { icon, label } = getActionMeta(pa.kind);
@@ -1045,7 +1156,15 @@ export default function GlevAIChatSheet({
                       }
                       onDetailOpen={
                         onDetailOpen
-                          ? () => onDetailOpen(m.id, pa.token, pa.kind)
+                          ? () => {
+                              let payload: unknown;
+                              if (pa.kind === "log_fingerstick") {
+                                const m2 = pa.summary.match(/(\d+)\s*mg\/dL/);
+                                const v = m2 ? parseInt(m2[1], 10) : null;
+                                if (v != null) payload = { value_mg_dl: v };
+                              }
+                              onDetailOpen(m.id, pa.token, pa.kind, payload);
+                            }
                           : undefined
                       }
                       isMealChipActive={isMealChipActive}

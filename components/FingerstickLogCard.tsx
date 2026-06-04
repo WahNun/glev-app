@@ -61,6 +61,34 @@ export default function FingerstickLogCard() {
     fetchLatestFingerstick().then(setLatest).catch(() => {});
   }, []);
 
+  // Pre-populate from AI chat pending action — reads sessionStorage once on
+  // mount and listens for the live dispatch so the card fills in immediately
+  // whether the user navigated here (sessionStorage) or the card was already
+  // open when the event fires (CustomEvent).
+  useEffect(() => {
+    function applyPending(payload: unknown) {
+      if (!payload || typeof payload !== "object") return;
+      const p = payload as { value_mg_dl?: unknown };
+      if (typeof p.value_mg_dl === "number" && Number.isFinite(p.value_mg_dl)) {
+        setValueStr(String(Math.round(p.value_mg_dl)));
+      }
+    }
+
+    if (typeof window !== "undefined") {
+      try {
+        const raw = window.sessionStorage.getItem("glev_pending_fingerstick");
+        if (raw) {
+          applyPending(JSON.parse(raw));
+          window.sessionStorage.removeItem("glev_pending_fingerstick");
+        }
+      } catch { /* ignore quota / parse errors */ }
+    }
+
+    const handler = (e: Event) => applyPending((e as CustomEvent).detail);
+    window.addEventListener("glev:open-fingerstick-log", handler);
+    return () => window.removeEventListener("glev:open-fingerstick-log", handler);
+  }, []);
+
   async function handleSave() {
     setFeedback(null);
 
