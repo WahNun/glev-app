@@ -792,7 +792,7 @@ export default function EnginePage() {
     protein: number;
     fat: number;
     fiber: number;
-    source: "open_food_facts" | "usda" | "estimated" | "unknown";
+    source: "open_food_facts" | "usda" | "estimated" | "unknown" | "user_history" | "user_confirmed";
   }>>([]);
   // Phase B: portion suggestions from user_food_history.
   // Keyed by raw item name (as returned by /api/parse-food).
@@ -3766,6 +3766,31 @@ export default function EnginePage() {
                         <strong style={{ color: "var(--text-dim)" }}>{tEngine("disclaimer_label")}</strong> {tEngine("disclaimer_body")}
                       </div>
                     </div>
+
+                    {/* AI estimate info banner — shown when the largest carb
+                        contributor is AI-estimated (Phase 2 feature flag). */}
+                    {(() => {
+                      if (parsedItems.length === 0) return null;
+                      // Find the item with the highest carb contribution.
+                      const top = parsedItems.reduce(
+                        (best, it) => (it.carbs > best.carbs ? it : best),
+                        parsedItems[0],
+                      );
+                      const topIsEstimated =
+                        top.source === "estimated" || top.source === "unknown";
+                      if (!topIsEstimated) return null;
+                      return (
+                        <div style={{ padding: "10px 14px", borderRadius: 10, background: "rgba(139,92,246,0.06)", border: "1px solid rgba(139,92,246,0.18)" }}>
+                          <div style={{ fontSize: 12, color: "var(--text-dim)", lineHeight: 1.6 }}>
+                            {locale === "en" ? (
+                              <>✨ The main carb contributor (<strong>{top.name}</strong>) was estimated by AI. You can review and adjust the values directly — Glev learns from your corrections.</>
+                            ) : (
+                              <>✨ Die größte KH-Komponente (<strong>{top.name}</strong>) wurde per KI geschätzt. Du kannst die Werte direkt prüfen und korrigieren — Glev lernt aus deinen Anpassungen.</>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })()}
 
                     {/* Macros transparency footer */}
                     <div style={{ padding: "10px 14px", borderRadius: 10, background: "transparent", border: "1px solid var(--border)" }}>

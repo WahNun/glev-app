@@ -2,13 +2,15 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useLocale } from "next-intl";
-import type { GlevChatMessage, MealQueueItem, PendingAction } from "@/lib/useGlevAI";
+import type { GlevChatMessage, MealQueueItem, MealPendingPayload, PendingAction } from "@/lib/useGlevAI";
+import type { NutritionSource } from "@/lib/nutrition/types";
 import { useVoiceIntents } from "@/hooks/useVoiceIntents";
 import { useTTS } from "@/hooks/useTTS";
 import IntentConfirmChip, { intentLabel } from "@/components/IntentConfirmChip";
 import GlevLogo from "@/components/GlevLogo";
 import { getActionMeta } from "@/lib/ai/pendingActions";
 import SourceBadge from "@/components/SourceBadge";
+import { aggregateBadge } from "@/lib/nutrition/badgeFor";
 
 const ACCENT = "#8b5cf6";
 const SHEET_BG = "var(--surface)";
@@ -204,7 +206,7 @@ function MealChipExpanded({
   mealName: string;
   macroStr: string | null;
   timeStr: string | null;
-  itemsForExpand: Array<{ name: string; grams: number }>;
+  itemsForExpand: Array<{ name: string; grams: number; source?: NutritionSource }>;
   showQueueBadge: boolean;
   mealChipIndex?: number;
   mealChipTotal?: number;
@@ -269,8 +271,17 @@ function MealChipExpanded({
         >
           {mealName}
         </div>
-        {/* Phase 1: all AI-estimated → always ✨ */}
-        <SourceBadge source="estimated" />
+        {/* Aggregate badge: derived from per-item sources when available (Phase 2),
+            falls back to 'estimated' for Phase 1 chips with no items[]. */}
+        {(() => {
+          const badge = aggregateBadge(
+            itemsForExpand.map((it) => ({ source: it.source ?? "estimated" })),
+          );
+          const src =
+            badge === "verified"  ? "open_food_facts" :
+            badge === "mixed"     ? "user_history"    : "estimated";
+          return <SourceBadge source={src} />;
+        })()}
       </div>
 
       {/* Macros + time line */}
@@ -313,7 +324,7 @@ function MealChipExpanded({
                     {item.grams}g
                   </span>
                 </span>
-                <SourceBadge source="estimated" />
+                <SourceBadge source={item.source ?? "estimated"} />
               </div>
             ))
           ) : (
@@ -524,13 +535,11 @@ function PendingActionWidget({
     const macroStr   = mealMatch ? mealMatch[2] : null;
     const timeStr    = mealMatch ? mealMatch[3] : null;
 
-    // Phase 1: all items are AI-estimated. The payload carries individual
-    // items only after Phase 2 wires up per-item DB sources.
-    const p = pa.payload as {
-      input_text?: string;
-      items?: Array<{ name: string; grams: number }>;
-    } | undefined;
-    const itemsForExpand: Array<{ name: string; grams: number }> =
+    // Phase 2: payload.items[] carries per-item DB-resolved sources when
+    // MACRO_AGGREGATOR_V2=true. Phase 1 chips still render the meal-name
+    // placeholder when items is absent (backward-compat).
+    const p = pa.payload as MealPendingPayload | undefined;
+    const itemsForExpand: Array<{ name: string; grams: number; source?: NutritionSource }> =
       p?.items ?? [];
 
     return (

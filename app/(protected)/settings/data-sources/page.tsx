@@ -1,7 +1,10 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useLocale } from "next-intl";
+import { supabase } from "@/lib/supabase";
+import type { ParsedFood } from "@/lib/meals";
 
 const ACCENT = "#4F6EF7";
 const BG     = "var(--bg)";
@@ -206,10 +209,77 @@ export default function DataSourcesPage() {
           </div>
         </Section>
 
+        {/* Section 5 — Source statistics (last 30 days) */}
+        <SourceStats locale={locale === "en" ? "en" : "de"} />
+
         {/* Disclaimer */}
         <p style={{ marginTop: 32, fontSize: 11, color: MUTED, lineHeight: 1.5 }}>{C.disclaimer}</p>
       </div>
     </main>
+  );
+}
+
+// ── Source statistics component ───────────────────────────────────────────
+
+type StatBucket = { label: string; count: number; pct: number; color: string };
+
+function SourceStats({ locale }: { locale: "de" | "en" }) {
+  const [buckets, setBuckets] = useState<StatBucket[] | null>(null);
+
+  useEffect(() => {
+    if (!supabase) return;
+    void (async () => {
+      try {
+        const since = new Date(Date.now() - 30 * 24 * 3600_000).toISOString();
+        const { data } = await supabase
+          .from("meals")
+          .select("parsed_json")
+          .gte("created_at", since)
+          .limit(500);
+        if (!data) return;
+
+        const counts = { db: 0, logs: 0, ai: 0 };
+        for (const row of data as Array<{ parsed_json: ParsedFood[] | null }>) {
+          for (const item of row.parsed_json ?? []) {
+            if (item.source === "open_food_facts" || item.source === "usda") counts.db++;
+            else if (item.source === "user_history" || item.source === "user_confirmed") counts.logs++;
+            else counts.ai++;
+          }
+        }
+        const total = counts.db + counts.logs + counts.ai;
+        if (total === 0) return;
+        const pct = (n: number) => Math.round((n / total) * 100);
+        setBuckets([
+          { label: locale === "en" ? "DB-verified (OFF/USDA)" : "DB-bestätigt (OFF/USDA)", count: counts.db,  pct: pct(counts.db),  color: "#22D3A0" },
+          { label: locale === "en" ? "Your logs"              : "Deine Logs",              count: counts.logs, pct: pct(counts.logs), color: "#4F6EF7" },
+          { label: locale === "en" ? "AI estimate"            : "KI-Schätzung",            count: counts.ai,   pct: pct(counts.ai),   color: "#a78bfa" },
+        ]);
+      } catch {
+        // silent — stats are optional
+      }
+    })();
+  }, [locale]);
+
+  if (!buckets) return null;
+
+  const title = locale === "en" ? "Your data sources (last 30 days)" : "Deine Datenquellen (letzte 30 Tage)";
+
+  return (
+    <Section title={title}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+        {buckets.map((b) => (
+          <div key={b.label}>
+            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: DIM, marginBottom: 4 }}>
+              <span>{b.label}</span>
+              <span style={{ fontWeight: 600, color: b.color }}>{b.pct}%</span>
+            </div>
+            <div style={{ height: 6, borderRadius: 3, background: "var(--border)", overflow: "hidden" }}>
+              <div style={{ height: "100%", width: `${b.pct}%`, background: b.color, borderRadius: 3, transition: "width 0.6s ease" }} />
+            </div>
+          </div>
+        ))}
+      </div>
+    </Section>
   );
 }
 
