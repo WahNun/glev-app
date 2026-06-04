@@ -481,38 +481,46 @@ export function SymptomForm() {
 
   // Shared helper: apply a pending symptom payload (from sessionStorage on
   // mount, or from the glev:open-symptom-log event for in-page pre-fills).
-  // Reads symptom_types, severity (1–5), and logged_at from the payload
+  // Reads symptom_types, severity (1–5), notes, and logged_at from the payload
   // and updates local form state. User still has to tap "Speichern"
   // (compliance gate D-003 — no auto-save).
   function applySymptomPayload(p: {
     symptom_types?: unknown;
     severity?: unknown;
+    notes?: unknown;
     logged_at?: unknown;
   }) {
-    if (!Array.isArray(p?.symptom_types)) return;
-    const incoming = (p.symptom_types as unknown[]).filter(
-      (s): s is SymptomType =>
-        typeof s === "string" && SYMPTOM_TYPES.includes(s as SymptomType),
-    );
-    if (incoming.length === 0) return;
+    if (Array.isArray(p?.symptom_types)) {
+      const incoming = (p.symptom_types as unknown[]).filter(
+        (s): s is SymptomType =>
+          typeof s === "string" && SYMPTOM_TYPES.includes(s as SymptomType),
+      );
+      if (incoming.length > 0) {
+        const rawSev = Number(p.severity);
+        const sev: SeverityValue =
+          Number.isFinite(rawSev) && rawSev >= 1 && rawSev <= 5
+            ? (Math.round(rawSev) as SeverityValue)
+            : 3;
 
-    const rawSev = Number(p.severity);
-    const sev: SeverityValue =
-      Number.isFinite(rawSev) && rawSev >= 1 && rawSev <= 5
-        ? (Math.round(rawSev) as SeverityValue)
-        : 3;
+        setSelected(new Set(incoming));
+        setSeverities(
+          Object.fromEntries(incoming.map((s) => [s, sev])) as SeveritiesMap,
+        );
+      }
+    }
 
-    setSelected(new Set(incoming));
-    setSeverities(
-      Object.fromEntries(incoming.map((s) => [s, sev])) as SeveritiesMap,
-    );
+    if (typeof p.notes === "string" && p.notes.trim()) {
+      setNotes(p.notes.trim());
+    }
 
     if (typeof p.logged_at === "string" && p.logged_at) {
       try {
         const d = new Date(p.logged_at);
         if (!isNaN(d.getTime())) {
-          const off = d.getTimezoneOffset() * 60_000;
-          setOccurredAt(new Date(d.getTime() - off).toISOString().slice(0, 16));
+          const capped = Math.min(d.getTime(), Date.now());
+          const dc = new Date(capped);
+          const off = dc.getTimezoneOffset() * 60_000;
+          setOccurredAt(new Date(capped - off).toISOString().slice(0, 16));
         }
       } catch { /* ignore invalid dates */ }
     }
@@ -530,6 +538,7 @@ export function SymptomForm() {
       const p = JSON.parse(raw) as {
         symptom_types?: unknown;
         severity?: unknown;
+        notes?: unknown;
         logged_at?: unknown;
       };
       applySymptomPayload(p);
@@ -540,12 +549,13 @@ export function SymptomForm() {
   // glev:open-symptom-log: dispatched by navigateToLogScreen (Detail →) when
   // the form is already mounted (in-page navigation), and by useVoiceIntents
   // when the classifier recognises a symptom utterance. Reads symptom_types,
-  // severity, and logged_at — user still confirms with "Speichern" (D-003).
+  // severity, notes, and logged_at — user still confirms with "Speichern" (D-003).
   useEffect(() => {
     const handler = (e: Event) => {
       const detail = (e as CustomEvent<{
         symptom_types?: unknown;
         severity?: unknown;
+        notes?: unknown;
         logged_at?: unknown;
       }>).detail;
       applySymptomPayload(detail ?? {});
