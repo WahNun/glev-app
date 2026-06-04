@@ -179,8 +179,14 @@ export default function LoginPage() {
         void syncCachedPushToken();
       }).catch(() => { /* non-fatal */ });
 
-      router.refresh();
-      router.replace("/dashboard");
+      // Hard redirect to /dashboard instead of a client-side router.replace.
+      // This forces a full browser navigation so the auth cookies written by
+      // Supabase are reliably sent with the next request. The middleware then
+      // sees the valid session and serves /dashboard. Using window.location
+      // also makes Playwright's waitForURL() fire correctly in e2e tests
+      // (client-side router navigation is not always tracked by the browser's
+      // navigation API that Playwright hooks into).
+      window.location.replace("/dashboard");
     } else {
       setError(t.no_session);
       setLoading(false);

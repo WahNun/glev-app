@@ -55,21 +55,7 @@
 //   a previous run or not.
 
 import { expect, test, type Page } from "@playwright/test";
-import { loadTestUserByIndex } from "../support/testUser";
-
-interface TestUser { email: string; password: string; userId: string; }
-
-
-async function loginAsTestUser(page: Page, workerIndex: number) {
-  const { email, password } = loadTestUserByIndex(workerIndex);
-  await page.goto("/login");
-  await page.locator('input[type="email"]').fill(email);
-  await page.locator('input[type="password"]').fill(password);
-  await Promise.all([
-    page.waitForURL(/\/dashboard/, { timeout: 60_000 }),
-    page.locator('button[type="submit"]').first().click(),
-  ]);
-}
+import { ensureLoggedIn } from "../support/login";
 
 /**
  * Injects a fake getUserMedia + FakeMediaRecorder into the page before any
@@ -268,7 +254,7 @@ test.describe("Hold-to-talk mic button in GlevAIChatSheet", () => {
     });
 
     /* ── 1. Login ─────────────────────────────────────────────────────── */
-    await loginAsTestUser(page, test.info().workerIndex);
+    await ensureLoggedIn(page, test.info().workerIndex);
 
     /* ── 2. Open the Glev AI chat sheet ──────────────────────────────── */
     const chatDialog = await openChatSheet(page);
@@ -323,7 +309,7 @@ test.describe("Hold-to-talk mic button in GlevAIChatSheet", () => {
     });
 
     /* ── 1. Login ─────────────────────────────────────────────────────── */
-    await loginAsTestUser(page, test.info().workerIndex);
+    await ensureLoggedIn(page, test.info().workerIndex);
 
     /* ── 2. Open the Glev AI chat sheet ──────────────────────────────── */
     const chatDialog = await openChatSheet(page);

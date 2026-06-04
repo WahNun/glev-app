@@ -35,6 +35,7 @@
 import { expect, test, type Page } from "@playwright/test";
 import { createClient } from "@supabase/supabase-js";
 import { loadTestUserByIndex } from "../support/testUser";
+import { ensureLoggedIn } from "../support/login";
 
 interface TestUser { email: string; password: string; userId: string; }
 
@@ -151,17 +152,6 @@ const SAVE_BUTTON = /^(Save|Speichern|Saving…|Speichere…|✓ Saved!|✓ Gesp
 //   en: "Alarm setting saved"   de: "Alarm-Einstellung gespeichert"
 const SUCCESS_TOAST = /(Alarm setting saved|Alarm-Einstellung gespeichert)/i;
 
-async function loginAsTestUser(page: Page, workerIndex: number) {
-  const { email, password } = loadTestUserByIndex(workerIndex);
-  await page.goto("/login");
-  await page.locator('input[type="email"]').fill(email);
-  await page.locator('input[type="password"]').fill(password);
-  await Promise.all([
-    page.waitForURL(/\/dashboard/, { timeout: 60_000 }),
-    page.locator('button[type="submit"]').first().click(),
-  ]);
-}
-
 /**
  * Open an alarm sheet via its row button, optionally toggle the alarm on
  * if it is currently off, set the threshold via the SnapSlider tap-to-edit
@@ -224,7 +214,7 @@ test.describe("Sensor & Alarme → alarm rows and sheets", () => {
   });
 
   test("all three alarm rows are visible on /settings/sensor-alarme", async ({ page }) => {
-    await loginAsTestUser(page, test.info().workerIndex);
+    await ensureLoggedIn(page, test.info().workerIndex);
     await page.goto("/settings/sensor-alarme");
 
     await expect(page.getByRole("button", { name: LOW_ROW_ARIA })).toBeVisible({ timeout: 15_000 });
@@ -233,7 +223,7 @@ test.describe("Sensor & Alarme → alarm rows and sheets", () => {
   });
 
   test("Hypo sheet: slider visible when enabled, saving threshold persists to DB and updates subtitle", async ({ page }) => {
-    await loginAsTestUser(page, test.info().workerIndex);
+    await ensureLoggedIn(page, test.info().workerIndex);
 
     // Seed: low alarm enabled so the slider is visible without toggling.
     await seedAlarmSettings(testUser.userId, {
@@ -263,7 +253,7 @@ test.describe("Sensor & Alarme → alarm rows and sheets", () => {
   });
 
   test("Elevated sheet: toggling on reveals slider, saving threshold persists and updates subtitle", async ({ page }) => {
-    await loginAsTestUser(page, test.info().workerIndex);
+    await ensureLoggedIn(page, test.info().workerIndex);
 
     // Seed: elevated alarm off (DB default). ensureEnabled will toggle it on.
     await seedAlarmSettings(testUser.userId, {
@@ -292,7 +282,7 @@ test.describe("Sensor & Alarme → alarm rows and sheets", () => {
   });
 
   test("High sheet: toggling on reveals slider, saving threshold persists and updates subtitle", async ({ page }) => {
-    await loginAsTestUser(page, test.info().workerIndex);
+    await ensureLoggedIn(page, test.info().workerIndex);
 
     // Seed: high alarm off (DB default). ensureEnabled will toggle it on.
     await seedAlarmSettings(testUser.userId, {
@@ -321,7 +311,7 @@ test.describe("Sensor & Alarme → alarm rows and sheets", () => {
   });
 
   test("toggling Hypo alarm off saves enabled=false and subtitle shows Off", async ({ page }) => {
-    await loginAsTestUser(page, test.info().workerIndex);
+    await ensureLoggedIn(page, test.info().workerIndex);
 
     // Seed: low alarm on so we can toggle it off.
     await seedAlarmSettings(testUser.userId, {
@@ -370,7 +360,7 @@ test.describe("Sensor & Alarme → alarm rows and sheets", () => {
   });
 
   test("Hypo threshold above max 90 is clamped to 90 before saving", async ({ page }) => {
-    await loginAsTestUser(page, test.info().workerIndex);
+    await ensureLoggedIn(page, test.info().workerIndex);
 
     // Seed: low alarm enabled.
     await seedAlarmSettings(testUser.userId, {
@@ -398,7 +388,7 @@ test.describe("Sensor & Alarme → alarm rows and sheets", () => {
   });
 
   test("Elevated threshold below min 100 is clamped to 100 before saving", async ({ page }) => {
-    await loginAsTestUser(page, test.info().workerIndex);
+    await ensureLoggedIn(page, test.info().workerIndex);
 
     // Seed: elevated alarm enabled.
     await seedAlarmSettings(testUser.userId, {
@@ -426,7 +416,7 @@ test.describe("Sensor & Alarme → alarm rows and sheets", () => {
   });
 
   test("Elevated sheet: conflict warning appears when elevated threshold ≥ high threshold", async ({ page }) => {
-    await loginAsTestUser(page, test.info().workerIndex);
+    await ensureLoggedIn(page, test.info().workerIndex);
 
     // Seed: elevated=180, high=170 → 180 ≥ 170 → conflict must be shown.
     await seedAlarmSettings(testUser.userId, {
@@ -451,7 +441,7 @@ test.describe("Sensor & Alarme → alarm rows and sheets", () => {
   });
 
   test("Elevated sheet: conflict warning absent when elevated threshold < high threshold", async ({ page }) => {
-    await loginAsTestUser(page, test.info().workerIndex);
+    await ensureLoggedIn(page, test.info().workerIndex);
 
     // Seed: elevated=150, high=200 → 150 < 200 → no conflict.
     await seedAlarmSettings(testUser.userId, {
@@ -478,7 +468,7 @@ test.describe("Sensor & Alarme → alarm rows and sheets", () => {
   // ── Confirmation UX tests ──────────────────────────────────────────────
 
   test("subtitle updates immediately after save (no reload required)", async ({ page }) => {
-    await loginAsTestUser(page, test.info().workerIndex);
+    await ensureLoggedIn(page, test.info().workerIndex);
 
     // Seed: low alarm enabled with 70 mg/dL so we can verify the subtitle changes.
     await seedAlarmSettings(testUser.userId, {
@@ -500,7 +490,7 @@ test.describe("Sensor & Alarme → alarm rows and sheets", () => {
   });
 
   test("success toast appears after saving Hypo alarm threshold", async ({ page }) => {
-    await loginAsTestUser(page, test.info().workerIndex);
+    await ensureLoggedIn(page, test.info().workerIndex);
 
     await seedAlarmSettings(testUser.userId, {
       low_alarm_enabled: true,
@@ -519,7 +509,7 @@ test.describe("Sensor & Alarme → alarm rows and sheets", () => {
   });
 
   test("success toast appears after saving Elevated alarm threshold", async ({ page }) => {
-    await loginAsTestUser(page, test.info().workerIndex);
+    await ensureLoggedIn(page, test.info().workerIndex);
 
     await seedAlarmSettings(testUser.userId, {
       elevated_alarm_enabled: true,
@@ -536,7 +526,7 @@ test.describe("Sensor & Alarme → alarm rows and sheets", () => {
   });
 
   test("success toast appears after saving High alarm threshold", async ({ page }) => {
-    await loginAsTestUser(page, test.info().workerIndex);
+    await ensureLoggedIn(page, test.info().workerIndex);
 
     await seedAlarmSettings(testUser.userId, {
       high_alarm_enabled: true,

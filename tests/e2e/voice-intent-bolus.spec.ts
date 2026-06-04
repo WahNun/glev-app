@@ -29,43 +29,7 @@
 //   the event and update state?
 
 import { expect, test, type Page } from "@playwright/test";
-import { loadTestUserByIndex } from "../support/testUser";
-
-// ── Auth helper ───────────────────────────────────────────────────────────
-
-/**
- * Ensure the page is authenticated, reusing an existing session if one
- * is already active. Re-authenticating within the same Playwright worker
- * (same browser context) triggers Supabase rate-limiting, so we check
- * whether we're already logged in before hitting the login form.
- */
-async function ensureLoggedIn(page: Page, workerIndex: number): Promise<void> {
-  // Navigate to a protected page. If a valid session cookie is present the
-  // middleware lets us through; otherwise it redirects to /login.
-  await page.goto("/dashboard", {
-    waitUntil: "domcontentloaded",
-    timeout: 20_000,
-  });
-
-  if (
-    page.url().includes("/login") ||
-    page.url().includes("/onboarding") ||
-    page.url() === "about:blank"
-  ) {
-    // No active session — perform a full login.
-    if (!page.url().includes("/login")) {
-      await page.goto("/login");
-    }
-    const { email, password } = loadTestUserByIndex(workerIndex);
-    await page.locator('input[type="email"]').fill(email);
-    await page.locator('input[type="password"]').fill(password);
-    await Promise.all([
-      page.waitForURL(/\/dashboard/, { timeout: 60_000 }),
-      page.locator('button[type="submit"]').first().click(),
-    ]);
-  }
-  // At this point the session is guaranteed to be active and we're on /dashboard.
-}
+import { ensureLoggedIn } from "../support/login";
 
 async function loginAndGoToBolusTab(page: Page, workerIndex: number) {
   await ensureLoggedIn(page, workerIndex);
