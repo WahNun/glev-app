@@ -9,7 +9,6 @@ import { useLocale, useTranslations } from "next-intl";
 import { fetchMeals, fetchMealsForEngine, unifiedOutcome, type Meal } from "@/lib/meals";
 import { TYPE_COLORS, chipLabelsFrom } from "@/lib/mealTypes";
 import { computeAdaptiveICR } from "@/lib/engine/adaptiveICR";
-import { ADAPTIVE_ICR_PAIRING_V2 } from "@/lib/engine/adaptiveFlags";
 import { fetchIcrSchedule, findActiveSlot, saveIcrSchedule, EMPTY_ICR_SCHEDULE, type IcrSchedule } from "@/lib/icrSchedule";
 import { fetchInsulinSettings, persistEngineIcr, DEFAULT_INSULIN_SETTINGS, fetchTargetRange, getTargetRange, DEFAULT_TARGET_RANGE } from "@/lib/userSettings";
 import { pairBolusesToMeals } from "@/lib/engine/pairing";
@@ -375,13 +374,11 @@ export default function InsightsPage() {
     // display-only for now (they live in `windows[]` on the result).
     const a = computeAdaptiveICR(
       engineMeals,
-      ADAPTIVE_ICR_PAIRING_V2 ? engineBoluses : undefined,
+      engineBoluses,
       icrSchedule,
     );
     persistEngineIcr(a.global, a.sampleSize);
-    if (ADAPTIVE_ICR_PAIRING_V2) {
-      logICRPairingStats(a).catch(() => {});
-    }
+    logICRPairingStats(a).catch(() => {})
   }, [loading, engineMeals, engineBoluses, icrSchedule]);
   useEffect(() => {
     fetchUserProfile().then((p) => setSex(p.sex)).catch(() => {});
@@ -1278,7 +1275,7 @@ export default function InsightsPage() {
   // year-old rows. Long-term tiles below continue to read from `meals`.
   const adaptiveICR  = computeAdaptiveICR(
     engineMeals,
-    ADAPTIVE_ICR_PAIRING_V2 ? engineBoluses : undefined,
+    engineBoluses,
     icrSchedule,
   );
   const enginePattern = detectPattern(engineMeals);

@@ -15,7 +15,6 @@ import { fetchRecentExerciseLogs, type ExerciseLog } from "@/lib/exercise";
 import { fetchRecentActivityClient, summariseActivityContext, type ActivityContext } from "@/lib/dailyActivity";
 import { HIGH_ACTIVITY_RATIO, HIGH_ACTIVITY_MIN_ABS, HIGH_ACTIVITY_MIN_SAMPLE } from "@/lib/engine/evaluation";
 import { computeAdaptiveICR } from "@/lib/engine/adaptiveICR";
-import { ADAPTIVE_ICR_PAIRING_V2 } from "@/lib/engine/adaptiveFlags";
 import { logICRPairingStats } from "@/app/actions/logICRPairingStats";
 import { shouldShowBothChips } from "@/lib/engine/doseChipGating";
 
@@ -1687,16 +1686,13 @@ export default function EnginePage() {
   }, [insulinType]);
 
   useEffect(() => {
-    // Fetch meals and — when ADAPTIVE_ICR_PAIRING_V2 is active — the
-    // 90-day bolus logs in parallel so `computeAdaptiveICR` can pair
-    // separately-logged boluses to meals (lib/engine/pairing.ts).
-    // When the flag is off, skip the extra network request and preserve
-    // the legacy `meal.insulin_units`-only path with no regression.
+    // Fetch meals and the 90-day bolus logs in parallel so
+    // `computeAdaptiveICR` can pair separately-logged boluses to meals
+    // (lib/engine/pairing.ts). The buffer ensures pre-boluses at the
+    // edge of the 90-day window are not missed.
     Promise.all([
       fetchMealsForEngine(),
-      ADAPTIVE_ICR_PAIRING_V2
-        ? fetchRecentInsulinLogs(90 + ICR_BOLUS_FETCH_BUFFER_DAYS).catch(() => [] as InsulinLog[])
-        : Promise.resolve(undefined as InsulinLog[] | undefined),
+      fetchRecentInsulinLogs(90 + ICR_BOLUS_FETCH_BUFFER_DAYS).catch(() => [] as InsulinLog[]),
     ])
       .then(([fetched, bolusesForPairing]) => {
         setMeals(fetched);
@@ -1726,9 +1722,7 @@ export default function EnginePage() {
         // entry to `adjustment_history` when the user opted into
         // auto-apply AND sample size ≥10.
         persistEngineIcr(adaptive.global, adaptive.sampleSize).catch(() => {});
-        if (ADAPTIVE_ICR_PAIRING_V2) {
-          logICRPairingStats(adaptive).catch(() => {});
-        }
+        logICRPairingStats(adaptive).catch(() => {});
         if (adaptive.global !== null && adaptive.sampleSize >= 3) {
           // Round to 1 decimal — matches Insights display precision and
           // keeps `runGlevEngine`'s `carbs / icr` math stable.

@@ -8,8 +8,8 @@ import type { AdaptiveICR } from "@/lib/engine/adaptiveICR";
  * This is the server-side counterpart of the client-side computeAdaptiveICR
  * call. Because engine/page.tsx and insights/page.tsx are Client Components,
  * their console.log only appears in the browser. Callers invoke this action
- * when ADAPTIVE_ICR_PAIRING_V2=true so the pairing metrics show up in
- * Vercel Function Logs where the engineering team actually monitors them.
+ * so the pairing metrics show up in Vercel Function Logs where the
+ * engineering team actually monitors them.
  *
  * The action is intentionally fire-and-forget (not awaited on the client)
  * and never throws — a logging failure must never block the UI.

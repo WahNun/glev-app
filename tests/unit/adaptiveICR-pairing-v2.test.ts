@@ -1,10 +1,8 @@
-// Unit tests for the ADAPTIVE_ICR_PAIRING_V2 bolus-pairing path.
+// Unit tests for the bolus-pairing path in `computeAdaptiveICR`.
 //
 // These tests drive `computeAdaptiveICR` directly with a `boluses`
 // array — reproducing the behaviour that the callers (engine/page.tsx,
-// insights/page.tsx) activate when ADAPTIVE_ICR_PAIRING_V2=true. The
-// flag controls whether callers PASS the boluses array; the function
-// itself is always capable of handling it.
+// insights/page.tsx) use. The function always handles the boluses array.
 //
 // Covered scenarios:
 //   a. Meal with only `insulin_units`, no boluses arg → legacy path.
@@ -65,7 +63,7 @@ const MIN = 60_000; // 1 minute in ms
 
 // ── Scenario a: only insulin_units, no boluses arg ───────────────────
 
-test("V2 a: meal with only insulin_units, no boluses arg → uses meal.insulin_units", () => {
+test("pairing a: meal with only insulin_units, no boluses arg → uses meal.insulin_units", () => {
   // Without passing a boluses array the function falls back to the
   // legacy meal.insulin_units field. 60g / 4u = 15 g/u.
   const m = meal("a1", 60, 4);
@@ -77,9 +75,9 @@ test("V2 a: meal with only insulin_units, no boluses arg → uses meal.insulin_u
 
 // ── Scenario b: insulin_units + bolus +20 min → bolus wins ──────────
 
-test("V2 b: time-window bolus at +20 min overrides meal.insulin_units", () => {
+test("pairing b: time-window bolus at +20 min overrides meal.insulin_units", () => {
   // Meal has 3u in insulin_units but the user actually injected 5u as a
-  // separate bolus log 20 min after the meal. With V2 boluses passed,
+  // separate bolus log 20 min after the meal. With boluses passed,
   // the engine should see 60g / 5u = 12 g/u, NOT 60 / 3 = 20.
   const m   = meal("b1", 60, 3);                       // insulin_units=3 (sentinel)
   const b   = bolus("b-b1", 5, +20 * MIN);             // +20 min → within ±30 min
@@ -93,7 +91,7 @@ test("V2 b: time-window bolus at +20 min overrides meal.insulin_units", () => {
 
 // ── Scenario c: bolus 25 min BEFORE, insulin_units=0 → bolus paired ─
 
-test("V2 c: bolus 25 min before meal is within window and pairs correctly", () => {
+test("pairing c: bolus 25 min before meal is within window and pairs correctly", () => {
   // Pre-bolus: user injected 6u 25 min before eating. meal.insulin_units=0.
   // 80g / 6u = 13.33… g/u.
   const m = meal("c1", 80, 0);
@@ -107,7 +105,7 @@ test("V2 c: bolus 25 min before meal is within window and pairs correctly", () =
 
 // ── Scenario d: bolus 35 min before → outside window, meal excluded ─
 
-test("V2 d: bolus 35 min before meal is outside ±30 min window → meal excluded from sample", () => {
+test("pairing d: bolus 35 min before meal is outside ±30 min window → meal excluded from sample", () => {
   // The bolus is 35 min earlier — beyond the ±30 min heuristic boundary.
   // meal.insulin_units=0, no pair → meal must NOT contribute to the
   // sample count or the global ICR.
@@ -121,7 +119,7 @@ test("V2 d: bolus 35 min before meal is outside ±30 min window → meal exclude
 
 // ── Scenario e: mix of paired and unpaired meals ──────────────────────
 
-test("V2 e: mix of paired and insulin_units-only meals → correct weighted average", () => {
+test("pairing e: mix of paired and insulin_units-only meals → correct weighted average", () => {
   // Meal 1: explicitly-tagged bolus 7u → 70g/7u = 10 g/u, GOOD (weight 1.0)
   // Meal 2: time-window bolus +10min 4u → 60g/4u = 15 g/u, GOOD (weight 1.0)
   // Meal 3: no bolus, insulin_units=5u → 75g/5u = 15 g/u, GOOD (weight 1.0)
@@ -154,7 +152,7 @@ test("V2 e: mix of paired and insulin_units-only meals → correct weighted aver
 // different pairing paths. Verifies the final weighted-average global
 // ICR against a known expected value computed from the input.
 
-test("V2 integration: 10 meals × 7 boluses → known global ICR", () => {
+test("pairing integration: 10 meals × 7 boluses → known global ICR", () => {
   // All meals are GOOD (delta=10) → weight 1.0 each.
   // ICR for each contributing meal = carbs / effective_insulin.
   //
