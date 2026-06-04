@@ -964,7 +964,10 @@ export async function createUserAction(formData: FormData): Promise<void> {
   } else if (authMode === "invite") {
     const appUrl = (process.env.NEXT_PUBLIC_APP_URL ?? "").replace(/\/$/, "");
     const { data, error } = await sb.auth.admin.inviteUserByEmail(email, {
-      redirectTo: appUrl ? `${appUrl}/auth/callback?next=/auth/confirm` : undefined,
+      // Implicit/hash flow → land on /auth/confirm (client page with the hash
+      // handler). /auth/callback is a server route that never sees the #hash.
+      // See the recovery block below + DECISIONS.md § D-001.
+      redirectTo: appUrl ? `${appUrl}/auth/confirm` : undefined,
       data: fullName ? { full_name: fullName } : undefined,
     });
     if (error || !data?.user?.id) {
@@ -1320,39 +1323,34 @@ export async function sendPasswordResetAction(
 
   // ─── Recovery-Link erzeugen ───────────────────────────────────────────────
   //
-  // ⚠️  DO NOT CHANGE the redirectTo URL below. It has been toggled back and
-  //     forth four times (Tasks #1152 → #1171 → #1179 → #1187) and each
-  //     reversal broke real users' password-reset emails. Read this before
-  //     touching it:
+  //  redirectTo MUST be `${appUrl}/auth/confirm` (NOT /auth/callback). This was
+  //  corrected on 2026-06-04 after an end-to-end test against production Supabase
+  //  proved the previous /auth/callback?next=/auth/confirm value was wrong. See
+  //  DECISIONS.md § D-001 (rewritten) for the full evidence.
   //
-  //  WHY /auth/callback?next=/auth/confirm (and NOT /auth/confirm directly)
+  //  WHY /auth/confirm (and NEVER /auth/callback)
   //  ────────────────────────────────────────────────────────────────────────
-  //  admin.generateLink({ type: "recovery" }) produces a hash-based token.
-  //  When the user clicks the link, Supabase's auth server processes it and
-  //  redirects to the redirectTo URL — appending the session as a URL *hash*
-  //  fragment (#access_token=…&type=recovery).
+  //  admin.generateLink({ type: "recovery" }) uses the implicit/hash flow.
+  //  When the user clicks the link, Supabase's /verify endpoint validates the
+  //  OTP server-side and redirects to redirectTo with the session as a URL
+  //  *hash* fragment: redirectTo#access_token=…&refresh_token=…&type=recovery.
+  //  (Verified empirically — the redirect Location is a #hash, not ?code.)
   //
-  //  A hash fragment is handled entirely client-side. The Supabase JS SDK
-  //  intercepts it, consumes it, and then strips it from the URL — leaving
-  //  the user on "/#" (bare root with no path). The /auth/confirm page never
-  //  receives the token and cannot display the new-password form.
+  //  A hash fragment is browser-only — a SERVER route like /auth/callback NEVER
+  //  receives it. /auth/callback reads `?code` and calls exchangeCodeForSession,
+  //  but the implicit flow has no `?code` → it fails and bounces the user to an
+  //  error/root URL (the "lands on glev.app#" symptom). /auth/callback can never
+  //  handle implicit recovery.
   //
-  //  Routing through /auth/callback avoids this:
-  //    1. Supabase redirects → /auth/callback?next=/auth/confirm#access_token=…
-  //    2. Our server-side route handler (app/auth/callback/route.ts) calls
-  //       supabase.auth.exchangeCodeForSession(), which resolves the hash token
-  //       server-side and sets the session cookie.
-  //    3. The handler then redirects to /auth/confirm?session=ready&type=recovery
-  //       — a clean URL the page can read without any hash processing.
-  //
-  //  CONTRAST with resetPasswordForEmail() (PKCE flow):
-  //  That method sends a PKCE code as a query-string parameter (?code=…), not
-  //  a hash. Query params survive server-side routing, so /auth/confirm can
-  //  handle them directly without the callback hop. But this file uses
-  //  admin.generateLink(), not resetPasswordForEmail(), so the hop is required.
+  //  /auth/confirm is a CLIENT page (app/auth/confirm/page.tsx) that manually
+  //  parses the #access_token hash and calls setSession() — see the "Implicit/
+  //  hash recovery flow" block there. detectSessionInUrl is disabled on that
+  //  page (lib/supabase.ts), so the manual handler is what makes it work; this
+  //  is exactly the piece that was missing during the four earlier reversals
+  //  (Tasks #1152 → #1171 → #1179 → #1187), which is why every flip-flop failed.
   //
   //  See also: DECISIONS.md § D-001
-  //            tests/unit/passwordResetRedirectTo.test.ts (schema-contract test)
+  //            tests/unit/passwordResetRedirectTo.test.ts
   // ─────────────────────────────────────────────────────────────────────────
   //
   // generateLink liefert den action_link zurück — Supabase verschickt dabei
@@ -1361,7 +1359,7 @@ export async function sendPasswordResetAction(
   const { data: linkData, error: linkErr } = await sb.auth.admin.generateLink({
     type: "recovery",
     email,
-    options: { redirectTo: `${appUrl}/auth/callback?next=/auth/confirm` },
+    options: { redirectTo: `${appUrl}/auth/confirm` },
   });
   if (linkErr || !linkData?.properties?.action_link) {
     return {

@@ -12,10 +12,10 @@
 //   is a client component with an onAuthStateChange(PASSWORD_RECOVERY)
 //   listener that handles implicit-flow tokens correctly.
 //
-//   The admin-panel route (app/glev-ops/users/actions.ts) uses
-//   /auth/callback?next=/auth/confirm for a different reason (server-side
-//   code exchange) — see DECISIONS.md § D-001 for the full architectural
-//   distinction.
+//   The admin-panel route (app/glev-ops/users/actions.ts) uses the SAME
+//   /auth/confirm target (corrected 2026-06-04 — admin.generateLink recovery
+//   is also implicit/hash, so /auth/callback never worked). See DECISIONS.md
+//   § D-001 (rewritten with end-to-end evidence).
 //
 // Full architectural explanation:
 //   app/api/auth/password-reset/route.ts — the detailed WHY comment above generateLink()
