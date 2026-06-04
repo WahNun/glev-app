@@ -53,16 +53,34 @@ export default function MakrosPage() {
   }
 
   const handleSave = useCallback(async () => {
+    const flushSpec = [
+      { key: "carbs"   as const, def: 250, max: 2000 },
+      { key: "protein" as const, def: 120, max: 2000 },
+      { key: "fat"     as const, def: 80,  max: 2000 },
+      { key: "fiber"   as const, def: 30,  max: 200  },
+    ];
+
+    const flushed: MacroTargets = { ...macroTargets };
+    const flushedDisplay: StringTargets = { ...displayValues };
+    for (const spec of flushSpec) {
+      const n = parseInt(displayValues[spec.key], 10);
+      const clamped = Number.isFinite(n) ? Math.max(0, Math.min(spec.max, n)) : spec.def;
+      flushed[spec.key] = clamped;
+      flushedDisplay[spec.key] = String(clamped);
+    }
+
+    setDisplayValues(flushedDisplay);
+    setMacroTargets(flushed);
     setSaving(true); setSaveError("");
     try {
-      await saveMacroTargets(macroTargets);
+      await saveMacroTargets(flushed);
       setSaved(true); setTimeout(() => setSaved(false), 1800);
     } catch (e) {
       setSaveError(e instanceof Error ? e.message : t("save_failed"));
     } finally {
       setSaving(false);
     }
-  }, [macroTargets, t]);
+  }, [macroTargets, displayValues, t]);
 
   const targets: Array<{ key: keyof MacroTargets; label: string; def: number; max: number }> = [
     { key: "carbs",   label: t("macro_carbs_label"),   def: 250, max: 2000 },
