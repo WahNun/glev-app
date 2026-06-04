@@ -361,6 +361,13 @@ export default function GlevAIChatSheet({
     );
   }, [tts.speaking]);
 
+  // Auto-dismiss STT error after 6 s so it never stays stuck indefinitely.
+  useEffect(() => {
+    if (!sttError) return;
+    const timer = window.setTimeout(() => setSttError(null), 6000);
+    return () => window.clearTimeout(timer);
+  }, [sttError]);
+
   // Bewusst KEIN Auto-Focus beim Öffnen: das Software-Keyboard würde
   // sonst auf iOS/Android sofort die halbe Sheet-Höhe verschlucken und
   // den Disclaimer/Input-Footer überdecken. Tastatur kommt erst wenn
@@ -378,6 +385,7 @@ export default function GlevAIChatSheet({
   const submit = () => {
     const text = input.trim();
     if (!text || streaming) return;
+    setSttError(null);
     setInput("");
     onSend(text);
   };
@@ -530,7 +538,7 @@ export default function GlevAIChatSheet({
           {onClearChat && (
             <button
               type="button"
-              onClick={onClearChat}
+              onClick={() => { setSttError(null); setSttPartial(null); onClearChat(); }}
               aria-label="Chat zurücksetzen"
               title="Chat zurücksetzen"
               disabled={messages.length === 0 && !streaming}
@@ -857,6 +865,8 @@ export default function GlevAIChatSheet({
             aria-pressed={isListening}
             onPointerDown={(e) => {
               e.preventDefault();
+              setSttError(null);
+              setSttPartial(null);
               void startListening();
             }}
             onPointerUp={() => stopListening()}
