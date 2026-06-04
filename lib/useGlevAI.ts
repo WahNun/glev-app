@@ -550,6 +550,11 @@ export function useGlevAI(opts?: {
         return;
       }
       setMessages((prev) => patchAction(prev, messageId, token, { state: "confirmed" }));
+      // For log_meal_entry: show the "Engine öffnen →" chip so the user can
+      // navigate to the entry they just confirmed and review/adjust if needed.
+      if (body?.kind === "log_meal_entry") {
+        setPendingMealNav("/engine");
+      }
       // For add_timeline_check: arm a local OS reminder. Best-effort —
       // a failed schedule must never block the confirmation success state.
       const sr = body?.scheduleReminder;

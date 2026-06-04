@@ -187,6 +187,11 @@ export const GLEV_TOOLS = [
             enum: ["FAST_CARBS", "HIGH_PROTEIN", "HIGH_FAT", "BALANCED"],
             description: "Optional: Mahlzeit-Kategorie. Default BALANCED.",
           },
+          logged_at: {
+            type: "string",
+            description:
+              "Optional: Zeitpunkt der Mahlzeit als ISO-8601-String (z. B. '2026-06-04T10:30:00'). Wenn der Nutzer eine Uhrzeit nennt oder die Mahlzeit in der Vergangenheit liegt, hier eintragen; sonst weglassen — das System verwendet dann den aktuellen Zeitpunkt.",
+          },
         },
         required: ["input_text", "carbs_grams"],
       },
@@ -1369,58 +1374,49 @@ async function toolLogMealEntry(
       ? Number(args.fiber_grams)
       : null;
 
-  // Historic entry (logged_at > 5 min in the past): create a pending_action
-  // with a direct DB insert so multiple past meals can be logged in one turn
-  // without opening the Engine screen. Also fetch the nearest CGM reading to
-  // pre-fill glucose_before.
+  // Resolve logged_at: use provided ISO string or default to now.
   const loggedAtRaw = typeof args.logged_at === "string" ? args.logged_at.trim() : "";
-  const loggedAtMs = loggedAtRaw ? new Date(loggedAtRaw).getTime() : NaN;
-  const isHistoric = Number.isFinite(loggedAtMs) && Date.now() - loggedAtMs > 5 * 60_000;
+  const loggedAtMs = loggedAtRaw ? new Date(loggedAtRaw).getTime() : Date.now();
+  const loggedAtIso = Number.isFinite(loggedAtMs)
+    ? new Date(loggedAtMs).toISOString()
+    : new Date().toISOString();
 
-  if (isHistoric) {
-    let glucoseBefore: number | null = null;
-    try {
-      const hist = await getHistory(userId);
-      if (hist?.history?.length) {
-        const candidates = hist.history
-          .filter((r) => r.timestamp && r.value != null)
-          .map((r) => ({
-            value: r.value as number,
-            dist: Math.abs(new Date(r.timestamp!).getTime() - loggedAtMs),
-          }))
-          .filter((r) => r.dist <= 60 * 60_000);
-        candidates.sort((a, b) => a.dist - b.dist);
-        if (candidates[0]) glucoseBefore = candidates[0].value;
-      }
-    } catch {
-      /* best-effort — no CGM should not block meal logging */
+  // Try to find nearest CGM reading ±60 min for glucose_before (best-effort).
+  let glucoseBefore: number | null = null;
+  try {
+    const hist = await getHistory(userId);
+    if (hist?.history?.length) {
+      const candidates = hist.history
+        .filter((r) => r.timestamp && r.value != null)
+        .map((r) => ({
+          value: r.value as number,
+          dist: Math.abs(new Date(r.timestamp!).getTime() - loggedAtMs),
+        }))
+        .filter((r) => r.dist <= 60 * 60_000);
+      candidates.sort((a, b) => a.dist - b.dist);
+      if (candidates[0]) glucoseBefore = candidates[0].value;
     }
-
-    const timeLabel = formatInUserTimezone(loggedAtMs, userTimezone);
-    const macroBits = [`${carbs}g KH`];
-    if (protein != null) macroBits.push(`${protein}g P`);
-    if (fat != null) macroBits.push(`${fat}g F`);
-    const summary = `Mahlzeit: ${inputText} (${macroBits.join(", ")}) um ${timeLabel.dateTime}`;
-
-    const params = {
-      input_text: inputText,
-      carbs_grams: carbs,
-      protein_grams: protein,
-      fat_grams: fat,
-      fiber_grams: fiber,
-      logged_at: new Date(loggedAtMs).toISOString(),
-      glucose_before: glucoseBefore,
-    };
-
-    return await createPendingAction(sb, userId, "log_meal_entry", params, summary);
+  } catch {
+    /* best-effort — no CGM should not block meal logging */
   }
 
-  // Current entry: pre-fill the Engine screen so the user can review macros
-  // and confirm via tap or voice "Speichern". This keeps the save gesture
-  // in the user's hand while removing the friction of manual macro entry.
-  return {
-    meal_prep: { input_text: inputText, carbs, protein, fat, fiber },
-  } satisfies MealPrepEnvelope;
+  const timeLabel = formatInUserTimezone(loggedAtMs, userTimezone);
+  const macroBits = [`${carbs}g KH`];
+  if (protein != null) macroBits.push(`${protein}g P`);
+  if (fat != null) macroBits.push(`${fat}g F`);
+  const summary = `Mahlzeit: ${inputText} (${macroBits.join(", ")}) um ${timeLabel.dateTime}`;
+
+  const params = {
+    input_text: inputText,
+    carbs_grams: carbs,
+    protein_grams: protein,
+    fat_grams: fat,
+    fiber_grams: fiber,
+    logged_at: loggedAtIso,
+    glucose_before: glucoseBefore,
+  };
+
+  return await createPendingAction(sb, userId, "log_meal_entry", params, summary);
 }
 
 async function toolLogBolusEntry(
