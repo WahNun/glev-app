@@ -96,3 +96,6 @@ fastlane/README.html
 attached_assets/
 current_conflict.txt
 grep_conflicts.sh
+
+# Supabase CLI local state
+supabase/.temp/
