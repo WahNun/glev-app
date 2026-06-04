@@ -350,6 +350,14 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
       try { storedMode = window.localStorage.getItem("glev_fab_mode"); } catch { /* ignore */ }
     }
 
+    // Engine tab guard: the global AI chat sheet must never open while the
+    // user is on /engine. Engine has its own EngineChatPanel and the two
+    // must not overlap. Fall straight through to the default voice route.
+    if (pathname.startsWith("/engine")) {
+      router.push(`/engine?voice=1&vt=${Date.now()}`);
+      return;
+    }
+
     // "tap" chat-position overrides fabMode: always open the AI chat on short-tap.
     // This is independent of the stored fabMode so the user doesn't need to
     // set two separate prefs for the same goal.
@@ -1304,20 +1312,28 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
             onDismiss={glevAi.dismissConsent}
             onActivate={glevAi.grantConsent}
           />
-          <GlevAIChatSheet
-            open={glevAi.sheetOpen}
-            onClose={glevAi.closeSheet}
-            messages={glevAi.messages}
-            streaming={glevAi.streaming}
-            onSend={glevAi.sendMessage}
-            onConfirmAction={glevAi.confirmAction}
-            onCancelAction={glevAi.cancelAction}
-            onClearChat={glevAi.clearMessages}
-            onListeningChange={setAiThinking}
-            voiceIntentEnabled={voiceIntentEnabled}
-            pendingMealNav={glevAi.pendingMealNav}
-            onMealNavTap={glevAi.fireMealNav}
-          />
+          {/* Defensive render guard: never mount the global AI chat sheet
+              while on /engine. Engine has its own embedded EngineChatPanel
+              and the two must not overlap. The sheet's state is already
+              closed by the pathname useEffect when navigating TO /engine;
+              this guard prevents any openFromButton() leaking through on
+              /engine while the pathname hasn't changed (e.g. FAB tap). */}
+          {!pathname.startsWith("/engine") && (
+            <GlevAIChatSheet
+              open={glevAi.sheetOpen}
+              onClose={glevAi.closeSheet}
+              messages={glevAi.messages}
+              streaming={glevAi.streaming}
+              onSend={glevAi.sendMessage}
+              onConfirmAction={glevAi.confirmAction}
+              onCancelAction={glevAi.cancelAction}
+              onClearChat={glevAi.clearMessages}
+              onListeningChange={setAiThinking}
+              voiceIntentEnabled={voiceIntentEnabled}
+              pendingMealNav={glevAi.pendingMealNav}
+              onMealNavTap={glevAi.fireMealNav}
+            />
+          )}
         </>
       )}
 
