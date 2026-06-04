@@ -70,6 +70,9 @@ export type MealQueueItem = {
   };
   /** Display label derived from input_text (max 40 chars). */
   label: string;
+  /** pending_action token that corresponds to this meal, used to link
+   *  the in-chat chip directly to the meal data without a second lookup. */
+  token?: string;
 };
 
 export type ContextSnapshot = {
@@ -456,6 +459,14 @@ export function useGlevAI(opts?: {
                   summary: pa.summary,
                   state: "pending",
                 };
+                // For log_meal_entry: associate the token with the last
+                // queued meal_prep item so "Engine öffnen" chips can look
+                // up the right macro data without an extra server roundtrip.
+                if (pa.kind === "log_meal_entry" && pendingMealQueueRef.current.length > 0) {
+                  const items = [...pendingMealQueueRef.current];
+                  items[items.length - 1] = { ...items[items.length - 1], token: pa.token };
+                  pendingMealQueueRef.current = items;
+                }
                 setMessages((prev) =>
                   prev.map((m) =>
                     m.id === assistantId
@@ -563,14 +574,11 @@ export function useGlevAI(opts?: {
         return;
       }
       setMessages((prev) => patchAction(prev, messageId, token, { state: "confirmed" }));
-      // For log_meal_entry: show the "Engine öffnen →" chip so the user can
-      // navigate to the entry they just confirmed and review/adjust if needed.
-      if (body?.kind === "log_meal_entry") {
-        setPendingMealNavQueue((prev) => [
-          ...prev,
-          { mealPrep: { input_text: "", carbs: 0, protein: null, fat: null, fiber: null }, label: "Eintrag ansehen" },
-        ]);
-      }
+      // Note: log_meal_entry navigation is handled entirely by openEngineForMeal()
+      // which is called instead of confirmAction() for meal chips. confirmAction()
+      // may also be called from openEngineForMeal() after the navigation, but by then
+      // the token-linked queue item has already been removed — no phantom item here.
+
       // For add_timeline_check: arm a local OS reminder. Best-effort —
       // a failed schedule must never block the confirmation success state.
       const sr = body?.scheduleReminder;
@@ -601,9 +609,18 @@ export function useGlevAI(opts?: {
    * Cancel a pending WRITE-action locally. Leaves the row to expire on
    * its own (TTL 5 min) — no server roundtrip needed because the
    * confirm endpoint won't be called.
+   *
+   * For log_meal_entry chips: also removes the token-linked item from
+   * both the flushed state queue and the still-streaming ref queue so
+   * the bottom nav chip can't offer a discarded meal.
    */
   const cancelAction = useCallback((messageId: string, token: string) => {
     setMessages((prev) => patchAction(prev, messageId, token, { state: "cancelled" }));
+    // Idempotent cleanup: filter is a no-op when token is not present.
+    setPendingMealNavQueue((prev) => prev.filter((item) => item.token !== token));
+    pendingMealQueueRef.current = pendingMealQueueRef.current.filter(
+      (item) => item.token !== token,
+    );
   }, []);
 
   return {
@@ -642,6 +659,44 @@ export function useGlevAI(opts?: {
         window.dispatchEvent(new CustomEvent("glev:meal-prefill"));
       }
       optsRef.current?.onNavigate?.("/engine");
+    },
+    /** Called by the "Engine öffnen →" button inside a log_meal_entry chip.
+     *  Resolves the pending_action server-side, writes the matching meal's
+     *  macros to sessionStorage, dispatches glev:meal-prefill, navigates
+     *  to /engine, and removes the item from both queues.
+     *
+     *  Looks up the meal data in BOTH the flushed-state queue
+     *  (`pendingMealNavQueue`) and the still-streaming ref queue
+     *  (`pendingMealQueueRef.current`) so early taps during streaming
+     *  still find the data and navigate correctly. */
+    openEngineForMeal: async (messageId: string, token: string) => {
+      // Search the flushed state queue first, then fall back to the ref queue
+      // (items live in the ref while the stream is still running, and are
+      // only moved to state after streaming ends).
+      const match =
+        pendingMealNavQueue.find((item) => item.token === token) ??
+        pendingMealQueueRef.current.find((item) => item.token === token);
+
+      if (match) {
+        // Remove from whichever queue the item was in.
+        setPendingMealNavQueue((prev) => prev.filter((item) => item.token !== token));
+        pendingMealQueueRef.current = pendingMealQueueRef.current.filter(
+          (item) => item.token !== token,
+        );
+        if (typeof window !== "undefined") {
+          try {
+            sessionStorage.setItem("glev_pending_meal", JSON.stringify(match.mealPrep));
+          } catch { /* ignore quota / privacy errors */ }
+          window.dispatchEvent(new CustomEvent("glev:meal-prefill"));
+        }
+        optsRef.current?.onNavigate?.("/engine");
+      }
+      // Resolve the pending_action server-side (the chip state is updated by confirmAction).
+      // Only confirm when we found the meal data; fail closed if the lookup failed
+      // (no phantom server confirm without the expected navigation).
+      if (match) {
+        await confirmAction(messageId, token);
+      }
     },
   };
 }

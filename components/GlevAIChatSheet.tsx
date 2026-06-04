@@ -19,6 +19,10 @@ interface Props {
   onSend: (text: string) => void;
   onConfirmAction?: (messageId: string, token: string) => void;
   onCancelAction?: (messageId: string, token: string) => void;
+  /** Called by the "Engine öffnen →" button on a log_meal_entry chip.
+   *  Resolves the pending_action, writes macros to sessionStorage,
+   *  dispatches glev:meal-prefill, and navigates to /engine. */
+  onOpenEngineForMeal?: (messageId: string, token: string) => void;
   onClearChat?: () => void;
   /** Called whenever the chat sheet's STT listening state changes so the
    *  parent (Layout.tsx) can reflect it on the FAB. */
@@ -54,21 +58,35 @@ const DISCLAIMER =
  * left-aligned). The five visual states match `PendingActionState` in
  * `lib/useGlevAI.ts`:
  *
- *   pending     → summary + Bestätigen + Abbrechen
- *   confirming  → buttons disabled, "Speichert …"
- *   confirmed   → green check + "Gespeichert"
+ *   pending     → summary + action buttons
+ *   confirming  → buttons disabled, "Öffnet …" / "Speichert …"
+ *   confirmed   → green check + "Gespeichert" / "Engine geöffnet"
  *   cancelled   → muted "Abgebrochen"
  *   error       → red error string + Erneut-versuchen
+ *
+ * For `log_meal_entry` chips the layout is different from all others:
+ *   • A small ✕ ghost button top-right cancels/discards the meal.
+ *   • A full-width "Engine öffnen →" button navigates to the Engine.
+ *   • When `isMealChipActive` is false the entire widget is dimmed
+ *     and non-interactive — the user must resolve earlier chips first.
  */
 function PendingActionWidget({
   pa,
   onConfirm,
   onCancel,
+  onOpenEngine,
+  isMealChipActive,
 }: {
   pa: PendingAction;
   onConfirm: () => void;
   onCancel: () => void;
+  onOpenEngine?: () => void;
+  /** For log_meal_entry chips only: whether this chip is the first
+   *  unresolved meal chip in the turn and therefore interactive. */
+  isMealChipActive?: boolean;
 }) {
+  const isMeal = pa.kind === "log_meal_entry";
+
   const baseCard: React.CSSProperties = {
     maxWidth: "82%",
     padding: "10px 12px",
@@ -94,7 +112,7 @@ function PendingActionWidget({
       <div style={{ ...baseCard, borderColor: "rgba(80,200,120,0.4)" }}>
         {summary}
         <div style={{ color: "#7ee0a0", fontWeight: 600, fontSize: 13 }}>
-          ✓ Gespeichert
+          {isMeal ? "✓ Engine geöffnet" : "✓ Gespeichert"}
         </div>
       </div>
     );
@@ -119,7 +137,7 @@ function PendingActionWidget({
         <div style={{ display: "flex", gap: 8 }}>
           <button
             type="button"
-            onClick={onConfirm}
+            onClick={isMeal ? onOpenEngine : onConfirm}
             style={{
               flex: 1,
               padding: "8px 10px",
@@ -139,6 +157,80 @@ function PendingActionWidget({
   }
 
   const busy = pa.state === "confirming";
+
+  // ── Meal chip layout ─────────────────────────────────────────────
+  // ✕ icon top-right + full-width "Engine öffnen →" button.
+  // When inactive (a later meal in the same turn), dims to 0.4 opacity.
+  if (isMeal) {
+    const inactive = !isMealChipActive;
+    return (
+      <div
+        style={{
+          ...baseCard,
+          opacity: inactive ? 0.4 : 1,
+          pointerEvents: inactive ? "none" : "auto",
+          position: "relative",
+        }}
+      >
+        {/* ✕ dismiss button — top right corner */}
+        <button
+          type="button"
+          aria-label="Mahlzeit verwerfen"
+          onClick={onCancel}
+          disabled={busy || inactive}
+          style={{
+            position: "absolute",
+            top: 8,
+            right: 8,
+            background: "none",
+            border: "none",
+            cursor: busy ? "default" : "pointer",
+            padding: 4,
+            color: "var(--text-muted)",
+            fontSize: 14,
+            lineHeight: 1,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            opacity: busy ? 0.5 : 1,
+          }}
+        >
+          ✕
+        </button>
+
+        {/* Summary text — leave room for the ✕ button */}
+        <div style={{ color: "var(--text-body)", fontSize: 12, paddingRight: 24 }}>
+          {pa.summary}
+        </div>
+
+        {/* Full-width "Engine öffnen →" button */}
+        <button
+          type="button"
+          onClick={onOpenEngine}
+          disabled={busy || inactive}
+          style={{
+            width: "100%",
+            padding: "10px 12px",
+            borderRadius: 8,
+            border: "none",
+            background: busy ? "rgba(139,92,246,0.35)" : ACCENT,
+            color: "var(--on-accent)",
+            fontWeight: 600,
+            fontSize: 13,
+            cursor: busy ? "default" : "pointer",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: 6,
+          }}
+        >
+          {busy ? "Öffnet …" : "Engine öffnen →"}
+        </button>
+      </div>
+    );
+  }
+
+  // ── Non-meal chip layout (Bolus, Exercise, Symptom, …) ───────────
   return (
     <div style={baseCard}>
       {summary}
@@ -202,6 +294,7 @@ export default function GlevAIChatSheet({
   onSend,
   onConfirmAction,
   onCancelAction,
+  onOpenEngineForMeal,
   onClearChat,
   onListeningChange,
   pendingMealNavQueue,
@@ -788,15 +881,36 @@ export default function GlevAIChatSheet({
                 );
               })()}
 
-              {/* Pending-action widgets — one chip per WRITE-tool call in this turn */}
-              {m.pendingActions?.map((pa) => (
-                <PendingActionWidget
-                  key={pa.token}
-                  pa={pa}
-                  onConfirm={() => onConfirmAction?.(m.id, pa.token)}
-                  onCancel={() => onCancelAction?.(m.id, pa.token)}
-                />
-              ))}
+              {/* Pending-action widgets — one chip per WRITE-tool call in this turn.
+                  For log_meal_entry chips: only the first *unresolved* (pending/confirming)
+                  meal chip is active; all later unresolved ones are dimmed. */}
+              {(() => {
+                let seenUnresolvedMeal = false;
+                return m.pendingActions?.map((pa) => {
+                  let isMealChipActive: boolean | undefined;
+                  if (pa.kind === "log_meal_entry") {
+                    const isUnresolved = pa.state === "pending" || pa.state === "confirming";
+                    if (isUnresolved && !seenUnresolvedMeal) {
+                      isMealChipActive = true;
+                      seenUnresolvedMeal = true;
+                    } else if (isUnresolved) {
+                      isMealChipActive = false;
+                    } else {
+                      isMealChipActive = true;
+                    }
+                  }
+                  return (
+                    <PendingActionWidget
+                      key={pa.token}
+                      pa={pa}
+                      onConfirm={() => onConfirmAction?.(m.id, pa.token)}
+                      onCancel={() => onCancelAction?.(m.id, pa.token)}
+                      onOpenEngine={() => onOpenEngineForMeal?.(m.id, pa.token)}
+                      isMealChipActive={isMealChipActive}
+                    />
+                  );
+                });
+              })()}
             </div>
           ))}
         </div>

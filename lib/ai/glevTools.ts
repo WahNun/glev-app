@@ -1404,6 +1404,7 @@ async function toolLogMealEntry(
   const macroBits = [`${carbs}g KH`];
   if (protein != null) macroBits.push(`${protein}g P`);
   if (fat != null) macroBits.push(`${fat}g F`);
+  if (fiber != null) macroBits.push(`${fiber}g Bal`);
   const summary = `Mahlzeit: ${inputText} (${macroBits.join(", ")}) um ${timeLabel.dateTime}`;
 
   const params = {
