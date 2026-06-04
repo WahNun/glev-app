@@ -275,7 +275,7 @@ function MealChipExpanded({
     }, 500);
 
     return () => {
-      void supabase.removeChannel(channel);
+      void supabase?.removeChannel(channel);
       clearInterval(poll);
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
