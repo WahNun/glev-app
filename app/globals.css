@@ -307,6 +307,22 @@ textarea,
   .glev-wiggle { animation: none; }
 }
 
+/* Auth "verifying" loading indicator — the Glev icon mark breathes
+   (scale + opacity) while /auth/confirm processes the recovery hash and
+   calls setSession(). Replaces the old plain-text spinner so the ~1s wait
+   reads as a branded loading state instead of a blank/error-looking screen. */
+@keyframes glev-pulse {
+  0%, 100% { opacity: 0.4;  transform: scale(0.9); }
+  50%      { opacity: 1;    transform: scale(1); }
+}
+.glev-pulse {
+  animation: glev-pulse 1.3s ease-in-out infinite;
+  transform-origin: center;
+}
+@media (prefers-reduced-motion: reduce) {
+  .glev-pulse { animation: none; opacity: 0.85; }
+}
+
 /* Blog-Link im Header nur auf Desktop zeigen — auf Mobile läuft er
    in den Footer, damit die Nav nicht überfüllt wirkt. */
 @media (max-width: 639px) {

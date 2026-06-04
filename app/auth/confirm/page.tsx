@@ -137,9 +137,34 @@ async function activateTrial(token?: string | null): Promise<void> {
  */
 export default function ConfirmPage() {
   return (
-    <Suspense fallback={<Shell><CenterDim>Lädt …</CenterDim></Shell>}>
+    <Suspense fallback={<Shell><LoadingMark /></Shell>}>
       <ConfirmInner />
     </Suspense>
+  );
+}
+
+/**
+ * Branded loading indicator — the Glev icon mark breathes (CSS .glev-pulse)
+ * while we resolve the link. Used both for the Suspense fallback and the
+ * "verifying" state so the user never sees a blank/plain-text flash that
+ * reads like an error during the ~1s setSession() round-trip.
+ */
+function LoadingMark() {
+  return (
+    <div style={{ textAlign: "center", padding: "26px 0" }}>
+      <Image
+        src="/icon.svg"
+        alt="Glev"
+        width={56}
+        height={56}
+        priority
+        className="glev-pulse"
+        style={{ display: "block", margin: "0 auto 18px" }}
+      />
+      <div style={{ fontSize: 13, color: "rgba(255,255,255,0.5)", letterSpacing: "0.02em" }}>
+        Einen Moment …
+      </div>
+    </div>
   );
 }
 
@@ -370,14 +395,7 @@ function ConfirmInner() {
         );
       })()}
 
-      {state.kind === "verifying" && (
-        <CenterDim>
-          <div style={{ fontSize: 11, color: "rgba(255,255,255,0.35)", letterSpacing: "0.1em", marginBottom: 8 }}>
-            BESTÄTIGE LINK
-          </div>
-          <div>Einen Moment …</div>
-        </CenterDim>
-      )}
+      {state.kind === "verifying" && <LoadingMark />}
 
       {state.kind === "invalid" && (
         <div style={{ textAlign: "center" }}>
@@ -509,13 +527,5 @@ function Shell({ children }: { children: React.ReactNode }) {
         </div>
       </div>
     </main>
-  );
-}
-
-function CenterDim({ children }: { children: React.ReactNode }) {
-  return (
-    <div style={{ textAlign: "center", padding: "30px 0", color: "rgba(255,255,255,0.55)", fontSize: 14 }}>
-      {children}
-    </div>
   );
 }
