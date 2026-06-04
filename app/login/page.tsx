@@ -21,7 +21,6 @@ const T = {
     reset_sent: "Gesendet ✓",
     reset_notice: "Falls ein Account mit dieser Email existiert, ist gleich eine Reset-Mail unterwegs. Schau in dein Postfach (auch Spam).",
     reset_invalid: "Bitte gib eine gültige Email-Adresse ein.",
-    reset_no_url: "App-URL nicht konfiguriert. Bitte Support kontaktieren.",
     no_auth: "Auth-Service nicht konfiguriert.",
     no_session: "Anmeldung erfolgreich, aber keine Session zurückgegeben. Bitte erneut versuchen.",
     no_account: "Noch kein Konto?",
@@ -43,7 +42,6 @@ const T = {
     reset_sent: "Sent ✓",
     reset_notice: "If an account with that email exists, a reset email is on its way. Check your inbox (and spam).",
     reset_invalid: "Please enter a valid email address.",
-    reset_no_url: "App URL not configured. Please contact support.",
     no_auth: "Auth service is not configured. Please contact support.",
     no_session: "Sign-in succeeded but no session was returned. Please try again.",
     no_account: "No account yet?",
@@ -109,38 +107,24 @@ export default function LoginPage() {
     setResetError(null);
     setResetNotice(null);
 
-    if (!supabase) {
-      setResetError(t.no_auth);
-      return;
-    }
-
     const target = resetEmail.trim().toLowerCase();
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(target)) {
       setResetError(t.reset_invalid);
       return;
     }
 
-    // redirectTo MUSS in Supabase Dashboard → Auth → URL Configuration
-    // → "Redirect URLs" whitelisted sein, sonst lehnt Supabase ab.
-    // Wir benutzen NEXT_PUBLIC_APP_URL damit Dev (Replit-URL) und Prod
-    // (glev.app) automatisch korrekt routen.
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "") ?? "";
-    if (!appUrl) {
-      setResetError(t.reset_no_url);
-      return;
-    }
-
     setResetLoading(true);
-    const { error: resetErr } = await supabase.auth.resetPasswordForEmail(target, {
-      redirectTo: `${appUrl}/auth/callback?next=/auth/confirm`,
-    });
-
-    setResetLoading(false);
-
-    if (resetErr) {
-      setResetError(resetErr.message);
-      return;
+    try {
+      await fetch("/api/auth/password-reset", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: target }),
+      });
+    } catch {
+      // Network errors are silently swallowed — the success notice is shown
+      // regardless to prevent user enumeration.
     }
+    setResetLoading(false);
 
     // Aus Sicherheitsgründen IMMER die gleiche Bestätigung — nie verraten
     // ob die Email-Adresse in unserer DB existiert (User-Enumeration).
