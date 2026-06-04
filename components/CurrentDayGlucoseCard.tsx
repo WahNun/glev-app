@@ -1,5 +1,6 @@
 "use client";
 import { fetchCgmHistory, invalidateCgmCache } from "@/lib/cgm/clientCache";
+import { pickCgmCurrentBase, injectCurrentPoint } from "@/lib/cgm/cgmDotHelpers";
 import { useTranslations } from "next-intl";
 
 import { useEffect, useMemo, useRef, useState, useCallback } from "react";
@@ -174,11 +175,9 @@ export default function CurrentDayGlucoseCard({ showMealNodes = false }: { showM
       const officialCurrent = data.current && data.current.value != null && data.current.timestamp
         ? { v: data.current.value, t: parseLluTs(data.current.timestamp) }
         : null;
-      const newestHistory = cgm.length ? { v: cgm[cgm.length - 1].v, t: cgm[cgm.length - 1].t } : null;
-      const cgmCurrentBase =
-        officialCurrent && newestHistory
-          ? (newestHistory.t > officialCurrent.t ? newestHistory : officialCurrent)
-          : (officialCurrent ?? newestHistory);
+      // pickCgmCurrentBase / injectCurrentPoint live in lib/cgm/cgmDotHelpers
+      // and are covered by tests/unit/cgmDotHelpers.test.ts.
+      const cgmCurrentBase = pickCgmCurrentBase(officialCurrent, cgm);
       // Thread the adapter-provided trend string (5-category: risingQuickly /
       // rising / stable / falling / fallingQuickly) through so HeroFront can
       // display a more precise arrow than the 3-state computeDelta15m result.
@@ -189,11 +188,7 @@ export default function CurrentDayGlucoseCard({ showMealNodes = false }: { showM
       // If cgmCurrentBase is strictly newer than the last history point, inject
       // it as the final CGM array entry so the chart dot always matches the
       // large displayed value. Skip if timestamp is identical (already present).
-      const lastHistoryT = cgm.length ? cgm[cgm.length - 1].t : -Infinity;
-      const cgmWithCurrent =
-        cgmCurrentBase && cgmCurrentBase.t > lastHistoryT
-          ? [...cgm, { t: cgmCurrentBase.t, v: cgmCurrentBase.v }]
-          : cgm;
+      const cgmWithCurrent = injectCurrentPoint(cgm, cgmCurrentBase);
 
       if (!signal?.cancelled) setS({ kind: "ok", cgm: cgmWithCurrent, fingersticks, cgmCurrent });
     } catch (e) {
