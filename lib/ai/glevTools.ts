@@ -1529,19 +1529,20 @@ async function toolLogMealEntry(
 
       if (optimisticEnabled) {
         // Fire-and-forget: write refinement row; Realtime notifies the client.
-        sb.from("meal_prep_refinements")
-          .upsert({ id: targetId, user_id: userId, items_refined: resolved, status: "completed", completed_at: new Date().toISOString() }, { onConflict: "id" })
-          .then(() => {})
-          .catch((e: unknown) => console.error("[meal_prep] refinement write failed:", e));
+        // Wrap in Promise.resolve() because Supabase returns PromiseLike (no .catch).
+        void Promise.resolve(
+          sb.from("meal_prep_refinements")
+            .upsert({ id: targetId, user_id: userId, items_refined: resolved, status: "completed", completed_at: new Date().toISOString() }, { onConflict: "id" })
+        ).catch((e: unknown) => console.error("[meal_prep] refinement write failed:", e));
       }
       return resolved;
     } catch (aggErr) {
       console.error(`[meal_prep] id=${targetId} aggregator error (fallback to Mistral macros):`, aggErr);
       if (optimisticEnabled) {
-        sb.from("meal_prep_refinements")
-          .upsert({ id: targetId, user_id: userId, status: "failed", completed_at: new Date().toISOString() }, { onConflict: "id" })
-          .then(() => {})
-          .catch(() => {});
+        void Promise.resolve(
+          sb.from("meal_prep_refinements")
+            .upsert({ id: targetId, user_id: userId, status: "failed", completed_at: new Date().toISOString() }, { onConflict: "id" })
+        ).catch(() => {});
       }
       return undefined;
     }
@@ -1569,10 +1570,10 @@ async function toolLogMealEntry(
   } else if (optimisticEnabled && aggregatorEnabled) {
     // Optimistic path (Phase 3): return immediately, run aggregator detached.
     // Pre-insert a 'pending' row so the client can subscribe before results arrive.
-    void sb.from("meal_prep_refinements")
-      .insert({ id: mealPrepId, user_id: userId, status: "pending" })
-      .then(() => {})
-      .catch(() => {});
+    void Promise.resolve(
+      sb.from("meal_prep_refinements")
+        .insert({ id: mealPrepId, user_id: userId, status: "pending" })
+    ).catch(() => {});
     // Detach — never await this.
     void runAggregator(mealPrepId);
     // Use Mistral estimates as-is; items get source='estimated' placeholder.
