@@ -5,3 +5,4 @@
 - [Supabase Prod Queries](supabase-prod-queries.md) — Credentials sind in Replit Secrets, Abfragen via bash mit $SUPABASE_URL + $SUPABASE_SERVICE_ROLE_KEY
 - [iOS Build Workflow](ios-build-workflow.md) — Lucas baut immer mit Xcode, nie mit Fastlane; lokaler Mac-Pfad: /Users/lucas/Documents/glev-app
 - [Sound Assets Policy](sound-assets-policy.md) — nur 3 Alarm-WAVs erwünscht: hypo/hyper/elevated — KEINE pre_check/post_check WAVs
+- [Implicit Flow PASSWORD_RECOVERY](implicit-flow-recovery.md) — Supabase Implicit Flow sends #access_token=… as hash; /auth/confirm needs onAuthStateChange(PASSWORD_RECOVERY) listener, NOT routing through /auth/callback
