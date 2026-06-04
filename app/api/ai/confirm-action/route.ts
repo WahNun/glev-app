@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { authedClient } from "@/app/api/insulin/_helpers";
+import type { ParsedFood } from "@/lib/meals";
+import { classifyMeal } from "@/lib/meals";
 
 /**
  * POST /api/ai/confirm-action
@@ -209,10 +211,34 @@ async function execLogMealEntry(
     throw new Error("input_text und carbs_grams sind Pflichtfelder");
   }
 
-  // parsed_json bewusst leer: AI hat keinen verlässlichen OpenFoodFacts/
-  // GPT-Parse-Lauf gemacht — wir loggen nur das Roh-Statement plus die
-  // vom Modell genannten Makros. Das ist konsistent mit dem manuellen
-  // "schnell loggen"-Eintrag aus dem Engine-Tab.
+  // parsed_json: populate from payload.items[] when the aggregator (Phase 2+)
+  // resolved per-item sources. Falls back to empty array for Phase 1 / flag-off
+  // payloads — consistent with the legacy "quick-log" path.
+  const rawItems = Array.isArray(p.items) ? p.items : [];
+  const parsedJson: ParsedFood[] = rawItems
+    .filter(
+      (it): it is Record<string, unknown> =>
+        !!it && typeof it === "object" &&
+        typeof (it as Record<string, unknown>).name === "string" &&
+        typeof (it as Record<string, unknown>).grams === "number",
+    )
+    .map((it) => ({
+      name:    String(it.name),
+      grams:   Number(it.grams),
+      carbs:   typeof it.carbs   === "number" ? it.carbs   : 0,
+      protein: typeof it.protein === "number" ? it.protein : 0,
+      fat:     typeof it.fat     === "number" ? it.fat     : 0,
+      fiber:   typeof it.fiber   === "number" ? it.fiber   : 0,
+      ...(typeof it.source === "string" ? { source: it.source as ParsedFood["source"] } : {}),
+    }));
+
+  // Derive meal_type from actual macros when available (more accurate than
+  // Mistral's classification, which runs before item-level refinement).
+  const fiber = typeof p.fiber_grams === "number" ? p.fiber_grams : 0;
+  const derivedMealType = carbs !== null && protein !== null && fat !== null
+    ? classifyMeal(carbs, protein, fat, fiber)
+    : "BALANCED";
+
   const glucoseBefore =
     typeof p.glucose_before === "number" && Number.isFinite(p.glucose_before)
       ? p.glucose_before
@@ -222,14 +248,14 @@ async function execLogMealEntry(
   const row: Record<string, unknown> = {
     user_id: userId,
     input_text: inputText,
-    parsed_json: [],
+    parsed_json: parsedJson,
     glucose_before: glucoseBefore,
     glucose_after: null,
     carbs_grams: carbs,
     protein_grams: protein,
     fat_grams: fat,
     insulin_units: null,
-    meal_type: mealType,
+    meal_type: derivedMealType,
     evaluation: null,
     created_at: createdAt,
   };
