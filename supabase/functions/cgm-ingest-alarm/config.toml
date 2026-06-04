@@ -1,0 +1,21 @@
+[functions.cgm-ingest-alarm]
+# HTTP-triggered only — no schedule.
+# Called by Postgres triggers on apple_health_readings + nightscout_readings INSERT
+# via pg_net (see migration 20260604_cgm_ingest_alarm_trigger.sql).
+#
+# One-time setup required in Supabase SQL Editor BEFORE deploying this function:
+#
+#   ALTER DATABASE postgres
+#     SET app.supabase_edge_base_url TO 'https://<project-ref>.supabase.co/functions/v1';
+#
+# The trigger reads app.settings.service_role_key (auto-injected by Supabase)
+# for the Authorization header. No extra secret needed for the webhook call itself.
+#
+# Required secrets (same as hypo-check / elevated-check / hyper-check):
+#   APNS_KEY_P8, APNS_KEY_ID, APNS_TEAM_ID, APNS_BUNDLE_ID  — iOS push
+#   FIREBASE_PROJECT_ID, FIREBASE_SERVICE_ACCOUNT_JSON        — Android push
+#
+# SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are injected automatically.
+#
+# Deploy command:
+#   supabase functions deploy cgm-ingest-alarm
