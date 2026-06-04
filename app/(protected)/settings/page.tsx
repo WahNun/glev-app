@@ -200,7 +200,10 @@ export default function SettingsPage() {
           "Mein Körper", "/settings/mein-koerper")}
         {row(ACCENT,
           <svg {...ip}><path d="M18 6L6 18" /><path d="M14 4l6 6" /><path d="M4 14l6 6" /></svg>,
-          "Meine Therapie", "/settings/insulin")}
+          "Insulin", "/settings/insulin")}
+        {row(GREEN,
+          <svg {...ip}><path d="M12 2C8 8 6 12 6 15a6 6 0 0 0 12 0c0-3-2-7-6-13z" /></svg>,
+          "Glukose", "/settings/glukose")}
         {row(ACCENT,
           <svg {...ip}><path d="M4 12h3l2-6 4 12 2-6h5" /></svg>,
           "Sensor & Alarme", "/settings/sensor-alarme")}

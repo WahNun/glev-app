@@ -5,13 +5,9 @@ import { useState, useCallback, useEffect, useRef, type ReactNode } from "react"
 import { useTranslations } from "next-intl";
 import {
   fetchTargetRange, saveTargetRange,
-  fetchLowAlarmSettingsFromDb, saveLowAlarmSettingsToDb,
-  type LowAlarmSettingsDb,
 } from "@/lib/userSettings";
-import { getLowAlarmSettings, persistLowAlarmSettingsLocally } from "@/lib/lowGlucoseAlarm";
 import { useCarbUnit } from "@/hooks/useCarbUnit";
 import type { CarbUnit } from "@/lib/carbUnits";
-import SnapSlider from "@/components/log/SnapSlider";
 import BottomSheet from "@/components/BottomSheet";
 import { SettingsSection, SettingsRow } from "@/components/SettingsRow";
 
@@ -19,7 +15,7 @@ const ACCENT = "#4F6EF7", GREEN = "#22D3A0", PINK = "#FF2D78", BORDER = "var(--b
 const inp: React.CSSProperties = { background: "var(--input-bg)", border: `1px solid ${BORDER}`, borderRadius: 10, padding: "10px 14px", color: "var(--text)", fontSize: 14, outline: "none", width: "100%" };
 const iconProps = { width: 16, height: 16, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: 2, strokeLinecap: "round" as const, strokeLinejoin: "round" as const };
 
-type SheetKey = "targetRange" | "lowAlarm" | "units";
+type SheetKey = "targetRange" | "units";
 
 interface RangeState { targetMin: number; targetMax: number; }
 
@@ -30,25 +26,12 @@ export default function GlukoseSettingsPage() {
 
   const [openSheet, setOpenSheet] = useState<SheetKey | null>(null);
   const [range, setRange] = useState<RangeState>({ targetMin: 70, targetMax: 180 });
-  const [lowAlarmEnabled, setLowAlarmEnabled] = useState(true);
-  const [lowAlarmThreshold, setLowAlarmThreshold] = useState(70);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [saveError, setSaveError] = useState("");
   const [draftRange, setDraftRange] = useState<RangeState | null>(null);
-  const [draftLowAlarm, setDraftLowAlarm] = useState<{ enabled: boolean; threshold: number } | null>(null);
 
   useEffect(() => {
-    const local = getLowAlarmSettings();
-    setLowAlarmEnabled(local.enabled);
-    setLowAlarmThreshold(local.thresholdMgdl);
-    fetchLowAlarmSettingsFromDb().then((s) => {
-      if (!touchedRef.current) {
-        setLowAlarmEnabled(s.enabled);
-        setLowAlarmThreshold(s.thresholdMgdl);
-        persistLowAlarmSettingsLocally(s);
-      }
-    }).catch(() => {});
     fetchTargetRange().then((r) => {
       if (!touchedRef.current) setRange({ targetMin: r.low, targetMax: r.high });
     }).catch(() => {});
@@ -58,18 +41,15 @@ export default function GlukoseSettingsPage() {
     touchedRef.current = true;
     setSaveError("");
     setDraftRange({ ...range });
-    setDraftLowAlarm({ enabled: lowAlarmEnabled, threshold: lowAlarmThreshold });
     setOpenSheet(id);
-  }, [range, lowAlarmEnabled, lowAlarmThreshold]);
+  }, [range]);
 
   const closeSheet = useCallback(() => {
     if (draftRange) setRange(draftRange);
-    if (draftLowAlarm) { setLowAlarmEnabled(draftLowAlarm.enabled); setLowAlarmThreshold(draftLowAlarm.threshold); }
     setDraftRange(null);
-    setDraftLowAlarm(null);
     setSaveError("");
     setOpenSheet(null);
-  }, [draftRange, draftLowAlarm]);
+  }, [draftRange]);
 
   async function saveTargetRangeAction(): Promise<boolean> {
     setSaving(true); setSaveError("");
@@ -79,21 +59,6 @@ export default function GlukoseSettingsPage() {
       await saveTargetRange({ low, high });
       setRange({ targetMin: low, targetMax: high });
       setDraftRange(null);
-      setSaved(true); setTimeout(() => setSaved(false), 1800);
-      return true;
-    } catch (e) {
-      setSaveError(e instanceof Error ? e.message : t("save_failed"));
-      return false;
-    } finally { setSaving(false); }
-  }
-
-  async function saveLowAlarmAction(): Promise<boolean> {
-    setSaving(true); setSaveError("");
-    try {
-      const clamped: LowAlarmSettingsDb = { enabled: lowAlarmEnabled, thresholdMgdl: Math.min(90, Math.max(40, Math.round(lowAlarmThreshold))) };
-      await saveLowAlarmSettingsToDb(clamped);
-      persistLowAlarmSettingsLocally(clamped);
-      setDraftLowAlarm(null);
       setSaved(true); setTimeout(() => setSaved(false), 1800);
       return true;
     } catch (e) {
@@ -138,32 +103,6 @@ export default function GlukoseSettingsPage() {
       ),
       footer: <SaveFooter onSave={saveTargetRangeAction} />,
     },
-    lowAlarm: {
-      title: t("sheet_low_alarm_title"),
-      body: (
-        <div>
-          <p style={{ fontSize: 13, color: "var(--text-dim)", lineHeight: 1.5, margin: "0 0 16px" }}>{t("low_alarm_hint")}</p>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20, padding: "10px 0" }}>
-            <span style={{ fontSize: 14, color: "var(--text-strong)", fontWeight: 500 }}>{t("low_alarm_enabled_label")}</span>
-            <button type="button" role="switch" aria-checked={lowAlarmEnabled} onClick={() => setLowAlarmEnabled((v) => !v)} style={{ width: 44, height: 26, borderRadius: 13, border: "none", cursor: "pointer", background: lowAlarmEnabled ? ACCENT : "var(--surface-raised)", position: "relative", transition: "background 0.2s", flexShrink: 0 }}>
-              <span style={{ position: "absolute", top: 3, width: 20, height: 20, borderRadius: "50%", background: "white", left: lowAlarmEnabled ? 21 : 3, transition: "left 0.2s", boxShadow: "0 1px 3px rgba(0,0,0,0.2)" }} />
-            </button>
-          </div>
-          {lowAlarmEnabled && (
-            <>
-              <p style={{ fontSize: 13, color: "var(--text-dim)", marginBottom: 8 }}>{t("low_alarm_threshold_label")}</p>
-              <SnapSlider value={lowAlarmThreshold} onChange={(v) => setLowAlarmThreshold(v)} min={40} max={90} step={1} unit="mg/dL" accent={ACCENT} ariaLabel={t("low_alarm_threshold_label")} />
-              <div style={{ display: "flex", justifyContent: "space-between", marginTop: 6, paddingLeft: 2, paddingRight: 2 }}>
-                {[40, 50, 60, 70, 80, 90].map((tick) => (
-                  <span key={tick} style={{ fontSize: 10, color: lowAlarmThreshold === tick ? ACCENT : "var(--text-ghost)", fontWeight: lowAlarmThreshold === tick ? 700 : 400 }}>{tick}</span>
-                ))}
-              </div>
-            </>
-          )}
-        </div>
-      ),
-      footer: <SaveFooter onSave={saveLowAlarmAction} />,
-    },
     units: {
       title: t("sheet_units_title"),
       body: (
@@ -207,14 +146,6 @@ export default function GlukoseSettingsPage() {
           subtitle={targetRangeSub}
           ariaLabel={t("row_open_aria", { label: t("row_target_range") })}
           onClick={() => openSheetWith("targetRange")}
-        />
-        <SettingsRow
-          iconColor={GREEN}
-          icon={<svg {...iconProps}><path d="M18 8h1a4 4 0 0 1 0 8h-1" /><path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z" /><line x1="6" y1="1" x2="6" y2="4" /><line x1="10" y1="1" x2="10" y2="4" /><line x1="14" y1="1" x2="14" y2="4" /></svg>}
-          label={t("row_low_alarm")}
-          subtitle={lowAlarmEnabled ? t("subtitle_low_alarm_on", { threshold: lowAlarmThreshold }) : t("subtitle_low_alarm_off")}
-          ariaLabel={t("row_open_aria", { label: t("row_low_alarm") })}
-          onClick={() => openSheetWith("lowAlarm")}
         />
         <SettingsRow
           iconColor={GREEN}

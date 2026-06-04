@@ -910,6 +910,20 @@ export interface LowAlarmSettingsDb {
 
 const DEFAULT_LOW_ALARM_DB: LowAlarmSettingsDb = { enabled: true, thresholdMgdl: 70 };
 
+export interface ElevatedAlarmSettingsDb {
+  enabled: boolean;
+  thresholdMgdl: number;
+}
+
+const DEFAULT_ELEVATED_ALARM_DB: ElevatedAlarmSettingsDb = { enabled: false, thresholdMgdl: 140 };
+
+export interface HighAlarmSettingsDb {
+  enabled: boolean;
+  thresholdMgdl: number;
+}
+
+const DEFAULT_HIGH_ALARM_DB: HighAlarmSettingsDb = { enabled: false, thresholdMgdl: 200 };
+
 /**
  * Async DB-backed read of the user's low-glucose alarm settings.
  * Falls back to defaults when the row is absent, the user is signed
@@ -951,6 +965,100 @@ export async function saveLowAlarmSettingsToDb(settings: LowAlarmSettingsDb): Pr
       user_id: user.id,
       low_alarm_enabled: settings.enabled,
       low_alarm_threshold_mgdl: Math.min(90, Math.max(40, Math.round(settings.thresholdMgdl))),
+    }, { onConflict: "user_id" });
+  if (error) throw new Error(error.message);
+}
+
+/* ── Elevated-glucose alarm settings ────────────────────────────── */
+
+/**
+ * Async DB-backed read of the user's elevated-glucose alarm settings.
+ * Falls back to defaults when the row is absent, the user is signed
+ * out, or Supabase is unreachable.
+ */
+export async function fetchElevatedAlarmSettingsFromDb(): Promise<ElevatedAlarmSettingsDb> {
+  if (!supabase) return DEFAULT_ELEVATED_ALARM_DB;
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return DEFAULT_ELEVATED_ALARM_DB;
+  const { data, error } = await supabase
+    .from("user_settings")
+    .select("elevated_alarm_enabled, elevated_alarm_threshold_mgdl")
+    .eq("user_id", user.id)
+    .maybeSingle();
+  if (error || !data) return DEFAULT_ELEVATED_ALARM_DB;
+  return {
+    enabled: typeof data.elevated_alarm_enabled === "boolean" ? data.elevated_alarm_enabled : DEFAULT_ELEVATED_ALARM_DB.enabled,
+    thresholdMgdl:
+      typeof data.elevated_alarm_threshold_mgdl === "number" &&
+      data.elevated_alarm_threshold_mgdl >= 100 &&
+      data.elevated_alarm_threshold_mgdl <= 180
+        ? data.elevated_alarm_threshold_mgdl
+        : DEFAULT_ELEVATED_ALARM_DB.thresholdMgdl,
+  };
+}
+
+/**
+ * Upsert the elevated-glucose alarm settings into user_settings.
+ * Throws on auth or DB error so the Settings UI can surface a
+ * save-failed state.
+ */
+export async function saveElevatedAlarmSettingsToDb(settings: ElevatedAlarmSettingsDb): Promise<void> {
+  if (!supabase) throw new Error("Supabase not configured");
+  const { data: { user }, error: userError } = await supabase.auth.getUser();
+  if (userError || !user) throw new Error("Not signed in");
+  const { error } = await supabase
+    .from("user_settings")
+    .upsert({
+      user_id: user.id,
+      elevated_alarm_enabled: settings.enabled,
+      elevated_alarm_threshold_mgdl: Math.min(180, Math.max(100, Math.round(settings.thresholdMgdl))),
+    }, { onConflict: "user_id" });
+  if (error) throw new Error(error.message);
+}
+
+/* ── High-glucose alarm settings ─────────────────────────────────── */
+
+/**
+ * Async DB-backed read of the user's high-glucose alarm settings.
+ * Falls back to defaults when the row is absent, the user is signed
+ * out, or Supabase is unreachable.
+ */
+export async function fetchHighAlarmSettingsFromDb(): Promise<HighAlarmSettingsDb> {
+  if (!supabase) return DEFAULT_HIGH_ALARM_DB;
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return DEFAULT_HIGH_ALARM_DB;
+  const { data, error } = await supabase
+    .from("user_settings")
+    .select("high_alarm_enabled, high_alarm_threshold_mgdl")
+    .eq("user_id", user.id)
+    .maybeSingle();
+  if (error || !data) return DEFAULT_HIGH_ALARM_DB;
+  return {
+    enabled: typeof data.high_alarm_enabled === "boolean" ? data.high_alarm_enabled : DEFAULT_HIGH_ALARM_DB.enabled,
+    thresholdMgdl:
+      typeof data.high_alarm_threshold_mgdl === "number" &&
+      data.high_alarm_threshold_mgdl >= 140 &&
+      data.high_alarm_threshold_mgdl <= 250
+        ? data.high_alarm_threshold_mgdl
+        : DEFAULT_HIGH_ALARM_DB.thresholdMgdl,
+  };
+}
+
+/**
+ * Upsert the high-glucose alarm settings into user_settings.
+ * Throws on auth or DB error so the Settings UI can surface a
+ * save-failed state.
+ */
+export async function saveHighAlarmSettingsToDb(settings: HighAlarmSettingsDb): Promise<void> {
+  if (!supabase) throw new Error("Supabase not configured");
+  const { data: { user }, error: userError } = await supabase.auth.getUser();
+  if (userError || !user) throw new Error("Not signed in");
+  const { error } = await supabase
+    .from("user_settings")
+    .upsert({
+      user_id: user.id,
+      high_alarm_enabled: settings.enabled,
+      high_alarm_threshold_mgdl: Math.min(250, Math.max(140, Math.round(settings.thresholdMgdl))),
     }, { onConflict: "user_id" });
   if (error) throw new Error(error.message);
 }
