@@ -6,9 +6,14 @@
  * regular €14.90/$14.90 monthly subscription kicks in via the card on
  * file. The copy reflects that "use it now for free, billing starts on X"
  * framing, in either German or English depending on `locale`.
+ *
+ * @param email  Recipient email address. When provided, an unsubscribe
+ *               link is added to the footer. Optional — old outbox rows
+ *               without this field render without the link.
  */
 import type { EmailLocale } from '@/lib/emails/beta-welcome';
 import { escapeHtml } from '@/lib/emails/escape';
+import { buildUnsubscribeUrl } from '@/lib/emails/unsubscribeToken';
 
 export function proWelcomeHtml(
   name?: string | null,
@@ -16,21 +21,24 @@ export function proWelcomeHtml(
   appUrl?: string | null,
   trialEndsAt?: string | null,
   locale: EmailLocale = 'de',
+  email?: string | null,
 ): string {
   const first = escapeHtml(firstNameFrom(name));
   const baseUrl = (appUrl || 'https://glev.app').replace(/\/$/, '');
   const resumeUrl = sessionId
     ? `${baseUrl}/pro/success?session_id=${encodeURIComponent(sessionId)}`
     : `${baseUrl}/pro/success`;
+  const unsubUrl = email ? buildUnsubscribeUrl(baseUrl, email) : null;
 
-  if (locale === 'en') return proWelcomeHtmlEn(first, resumeUrl, trialEndsAt);
-  return proWelcomeHtmlDe(first, resumeUrl, trialEndsAt);
+  if (locale === 'en') return proWelcomeHtmlEn(first, resumeUrl, trialEndsAt, unsubUrl);
+  return proWelcomeHtmlDe(first, resumeUrl, trialEndsAt, unsubUrl);
 }
 
 function proWelcomeHtmlDe(
   first: string | null,
   resumeUrl: string,
   trialEndsAt?: string | null,
+  unsubUrl?: string | null,
 ): string {
   const greeting = first ? `Hallo ${first}` : 'Hallo';
   const postGreetingOpener = first
@@ -40,6 +48,9 @@ function proWelcomeHtmlDe(
     ? `${first}, der Link funktioniert auch, wenn du den ursprünglichen Tab geschlossen hast.`
     : 'Der Link funktioniert auch, wenn du den ursprünglichen Tab geschlossen hast.';
   const trialEndDisplay = formatGermanDate(trialEndsAt) ?? '1. Juli 2026';
+  const unsubHtml = unsubUrl
+    ? `<p style="margin:8px 0 0;font-size:12px;color:#9ca3af;text-align:center;"><a href="${unsubUrl}" style="color:#9ca3af;text-decoration:underline;">Von diesen E-Mails abmelden</a></p>`
+    : '';
 
   return `<!DOCTYPE html>
 <html lang="de">
@@ -122,6 +133,7 @@ function proWelcomeHtmlDe(
               <p style="margin:0;font-size:12px;color:#9ca3af;text-align:center;">
                 Glev · <a href="mailto:hello@glev.app" style="color:#9ca3af;">hello@glev.app</a> · Diese E-Mail wurde an dich geschickt, weil du eine Glev-Pro-Mitgliedschaft abgeschlossen hast.
               </p>
+              ${unsubHtml}
             </td>
           </tr>
 
@@ -137,6 +149,7 @@ function proWelcomeHtmlEn(
   first: string | null,
   resumeUrl: string,
   trialEndsAt?: string | null,
+  unsubUrl?: string | null,
 ): string {
   const greeting = first ? `Hi ${first}` : 'Hi there';
   const postGreetingOpener = first
@@ -146,6 +159,9 @@ function proWelcomeHtmlEn(
     ? `${first}, this link still works even if you closed the original tab.`
     : 'This link still works even if you closed the original tab.';
   const trialEndDisplay = formatEnglishDate(trialEndsAt) ?? 'July 1, 2026';
+  const unsubHtml = unsubUrl
+    ? `<p style="margin:8px 0 0;font-size:12px;color:#9ca3af;text-align:center;"><a href="${unsubUrl}" style="color:#9ca3af;text-decoration:underline;">Unsubscribe</a></p>`
+    : '';
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -226,6 +242,7 @@ function proWelcomeHtmlEn(
               <p style="margin:0;font-size:12px;color:#9ca3af;text-align:center;">
                 Glev · <a href="mailto:hello@glev.app" style="color:#9ca3af;">hello@glev.app</a> · You're receiving this email because you started a Glev Pro membership.
               </p>
+              ${unsubHtml}
             </td>
           </tr>
 

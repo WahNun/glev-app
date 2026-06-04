@@ -19,8 +19,12 @@
  *                  by `session.locale` on the Stripe Checkout session,
  *                  which is set by the checkout endpoint based on the
  *                  buyer's currency selection (USD → en, EUR → de).
+ * @param email     Recipient email address. When provided, an unsubscribe
+ *                  link is added to the footer. Falls back gracefully
+ *                  (no link) when missing — keeps old outbox rows valid.
  */
 import { escapeHtml } from '@/lib/emails/escape';
+import { buildUnsubscribeUrl } from '@/lib/emails/unsubscribeToken';
 
 export type EmailLocale = 'de' | 'en';
 
@@ -29,21 +33,24 @@ export function betaWelcomeHtml(
   sessionId?: string | null,
   appUrl?: string | null,
   locale: EmailLocale = 'de',
+  email?: string | null,
 ): string {
   const first = escapeHtml(firstNameFrom(name));
   const baseUrl = (appUrl || 'https://glev.app').replace(/\/$/, '');
   const resumeUrl = sessionId
     ? `${baseUrl}/welcome?session_id=${encodeURIComponent(sessionId)}`
     : `${baseUrl}/welcome`;
+  const unsubUrl = email ? buildUnsubscribeUrl(baseUrl, email) : null;
 
-  if (locale === 'en') return betaWelcomeHtmlEn(first, resumeUrl, baseUrl);
-  return betaWelcomeHtmlDe(first, resumeUrl, baseUrl);
+  if (locale === 'en') return betaWelcomeHtmlEn(first, resumeUrl, baseUrl, unsubUrl);
+  return betaWelcomeHtmlDe(first, resumeUrl, baseUrl, unsubUrl);
 }
 
 function betaWelcomeHtmlDe(
   first: string | null,
   resumeUrl: string,
   baseUrl: string,
+  unsubUrl: string | null,
 ): string {
   const greeting = first ? `Hallo ${first}` : 'Hallo';
   const congratsLine = first
@@ -52,6 +59,9 @@ function betaWelcomeHtmlDe(
   const ctaCaption = first
     ? `${first}, der Link funktioniert auch, wenn du den ursprünglichen Tab geschlossen hast.`
     : 'Der Link funktioniert auch, wenn du den ursprünglichen Tab geschlossen hast.';
+  const unsubHtml = unsubUrl
+    ? `<p style="margin:8px 0 0;font-size:12px;color:#9ca3af;text-align:center;"><a href="${unsubUrl}" style="color:#9ca3af;text-decoration:underline;">Von diesen E-Mails abmelden</a></p>`
+    : '';
 
   return `<!DOCTYPE html>
 <html lang="de">
@@ -134,6 +144,7 @@ function betaWelcomeHtmlDe(
               <p style="margin:0;font-size:12px;color:#9ca3af;text-align:center;">
                 Glev · <a href="mailto:hello@glev.app" style="color:#9ca3af;">hello@glev.app</a> · Diese E-Mail wurde an dich geschickt, weil du dich bei Glev Smart registriert hast.
               </p>
+              ${unsubHtml}
             </td>
           </tr>
 
@@ -149,6 +160,7 @@ function betaWelcomeHtmlEn(
   first: string | null,
   resumeUrl: string,
   baseUrl: string,
+  unsubUrl: string | null,
 ): string {
   const greeting = first ? `Hi ${first}` : 'Hi there';
   const congratsLine = first
@@ -157,6 +169,9 @@ function betaWelcomeHtmlEn(
   const ctaCaption = first
     ? `${first}, this link still works even if you closed the original tab.`
     : 'This link still works even if you closed the original tab.';
+  const unsubHtml = unsubUrl
+    ? `<p style="margin:8px 0 0;font-size:12px;color:#9ca3af;text-align:center;"><a href="${unsubUrl}" style="color:#9ca3af;text-decoration:underline;">Unsubscribe</a></p>`
+    : '';
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -237,6 +252,7 @@ function betaWelcomeHtmlEn(
               <p style="margin:0;font-size:12px;color:#9ca3af;text-align:center;">
                 Glev · <a href="mailto:hello@glev.app" style="color:#9ca3af;">hello@glev.app</a> · You're receiving this email because you signed up for Glev Smart.
               </p>
+              ${unsubHtml}
             </td>
           </tr>
 

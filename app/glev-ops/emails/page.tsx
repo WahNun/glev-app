@@ -114,7 +114,7 @@ function buildTemplates(
       subject: reminderDb.email_subject ?? metaLeadReminderSubject(name),
       html: metaLeadReminderHtml(name, previewLink, appUrl, {
         intro: reminderDb.email_intro,
-      }),
+      }, email),
     },
     // ── Trial ──────────────────────────────────────────────────────────
     {
@@ -130,6 +130,7 @@ function buildTemplates(
         new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
         appUrl,
         locale,
+        email,
       ),
     },
     (() => {
@@ -201,7 +202,7 @@ function buildTemplates(
         ? "Immediately after Stripe Checkout (€19 setup fee)"
         : "Sofort nach Stripe-Checkout (€19 Setup-Fee)",
       subject: betaWelcomeSubject(name, locale),
-      html: betaWelcomeHtml(name, DEFAULT_SESSION_ID, appUrl, locale),
+      html: betaWelcomeHtml(name, DEFAULT_SESSION_ID, appUrl, locale, email),
     },
     {
       key: "pro-welcome",
@@ -211,7 +212,7 @@ function buildTemplates(
         ? "Immediately after Pro subscription via Stripe Checkout"
         : "Sofort nach Pro-Abo via Stripe-Checkout",
       subject: proWelcomeSubject(name, locale),
-      html: proWelcomeHtml(name, DEFAULT_SESSION_ID, appUrl, null, locale),
+      html: proWelcomeHtml(name, DEFAULT_SESSION_ID, appUrl, null, locale, email),
     },
     {
       key: "plus-welcome",
@@ -221,7 +222,7 @@ function buildTemplates(
         ? "Immediately after Glev+ subscription (€29/mo lifetime-lock)"
         : "Sofort nach Glev+-Abo (€29/Monat Lifetime-Lock)",
       subject: plusWelcomeSubject(name, locale),
-      html: plusWelcomeHtml(name, DEFAULT_SESSION_ID, appUrl, null, locale),
+      html: plusWelcomeHtml(name, DEFAULT_SESSION_ID, appUrl, null, locale, email),
     },
     {
       key: "beta-free-year-welcome-existing",
@@ -231,7 +232,7 @@ function buildTemplates(
         ? "Admin grants 1 free Smart year — recipient already has an account"
         : "Admin schaltet 1 Jahr Smart frei — Empfänger:in hat Account",
       subject: betaFreeYearWelcomeSubject(name, locale, "beta"),
-      html: betaFreeYearWelcomeHtml(name, appUrl, bfyExpiresAt, locale, null, "beta"),
+      html: betaFreeYearWelcomeHtml(name, appUrl, bfyExpiresAt, locale, null, "beta", email),
     },
     {
       key: "beta-free-year-welcome-invite",
@@ -241,7 +242,7 @@ function buildTemplates(
         ? "Admin grants 1 free Smart year — new user, gets login link"
         : "Admin schaltet 1 Jahr Smart frei — neuer User, kriegt Login-Link",
       subject: betaFreeYearWelcomeSubject(name, locale, "beta"),
-      html: betaFreeYearWelcomeHtml(name, appUrl, bfyExpiresAt, locale, bfySignupUrl, "beta"),
+      html: betaFreeYearWelcomeHtml(name, appUrl, bfyExpiresAt, locale, bfySignupUrl, "beta", email),
     },
     {
       key: "pro-free-year-welcome-existing",
@@ -251,7 +252,7 @@ function buildTemplates(
         ? "Admin grants 1 free Pro year — recipient already has an account"
         : "Admin schaltet 1 Jahr Pro frei — Empfänger:in hat Account",
       subject: betaFreeYearWelcomeSubject(name, locale, "pro"),
-      html: betaFreeYearWelcomeHtml(name, appUrl, bfyExpiresAt, locale, null, "pro"),
+      html: betaFreeYearWelcomeHtml(name, appUrl, bfyExpiresAt, locale, null, "pro", email),
     },
     {
       key: "pro-free-year-welcome-invite",
@@ -261,7 +262,7 @@ function buildTemplates(
         ? "Admin grants 1 free Pro year — new user, gets login link"
         : "Admin schaltet 1 Jahr Pro frei — neuer User, kriegt Login-Link",
       subject: betaFreeYearWelcomeSubject(name, locale, "pro"),
-      html: betaFreeYearWelcomeHtml(name, appUrl, bfyExpiresAt, locale, bfySignupUrl, "pro"),
+      html: betaFreeYearWelcomeHtml(name, appUrl, bfyExpiresAt, locale, bfySignupUrl, "pro", email),
     },
     // ── System ─────────────────────────────────────────────────────────
     {

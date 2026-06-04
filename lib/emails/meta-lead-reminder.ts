@@ -1,5 +1,7 @@
 /** Reminder-Email für Meta-Leads die nach 24h noch nicht aktiviert haben. */
 
+import { buildUnsubscribeUrl } from "@/lib/emails/unsubscribeToken";
+
 const ACCENT = "#4F6EF7";
 
 export function metaLeadReminderSubject(
@@ -16,11 +18,17 @@ export function metaLeadReminderHtml(
   inviteUrl: string,
   appUrl: string,
   overrides?: { intro?: string | null },
+  email?: string | null,
 ): string {
   const greeting = firstName ? `Hallo ${firstName}` : "Hallo";
   const introText =
     overrides?.intro?.trim() ||
     "du hattest Interesse an Glev – der App die dir hilft, deine Insulindosierung besser einzuschätzen. Dein kostenloser 7-Tage-Test ist noch nicht aktiviert.";
+  const baseUrl = appUrl.replace(/\/$/, "");
+  const unsubUrl = email ? buildUnsubscribeUrl(baseUrl, email) : null;
+  const unsubHtml = unsubUrl
+    ? `<p style="margin:8px 0 0;font-size:11px;color:rgba(255,255,255,0.2);text-align:center;"><a href="${unsubUrl}" style="color:rgba(255,255,255,0.2);text-decoration:underline;">Von diesen E-Mails abmelden</a></p>`
+    : "";
   return `<!DOCTYPE html>
 <html lang="de">
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
@@ -64,8 +72,9 @@ export function metaLeadReminderHtml(
         <tr><td style="padding-top:24px;text-align:center;">
           <p style="margin:0;font-size:11px;color:rgba(255,255,255,0.2);line-height:1.6;">
             Glev · <a href="mailto:info@glev.app" style="color:rgba(255,255,255,0.2);">info@glev.app</a>
-            · <a href="${appUrl}" style="color:rgba(255,255,255,0.2);">glev.app</a>
+            · <a href="${baseUrl}" style="color:rgba(255,255,255,0.2);">glev.app</a>
           </p>
+          ${unsubHtml}
         </td></tr>
       </table>
     </td></tr>

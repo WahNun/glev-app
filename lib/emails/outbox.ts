@@ -244,7 +244,11 @@ interface RenderedEmail {
   html: string;
 }
 
-function renderTemplate(template: EmailTemplate, payload: EmailPayload): RenderedEmail {
+function renderTemplate(
+  template: EmailTemplate,
+  payload: EmailPayload,
+  recipientEmail?: string | null,
+): RenderedEmail {
   switch (template) {
     case "beta-welcome": {
       const p = payload as BetaWelcomePayload;
@@ -257,6 +261,7 @@ function renderTemplate(template: EmailTemplate, payload: EmailPayload): Rendere
           p.sessionId ?? null,
           p.appUrl ?? null,
           locale,
+          recipientEmail ?? null,
         ),
       };
     }
@@ -272,6 +277,7 @@ function renderTemplate(template: EmailTemplate, payload: EmailPayload): Rendere
           p.appUrl ?? null,
           p.trialEndsAt ?? null,
           locale,
+          recipientEmail ?? null,
         ),
       };
     }
@@ -287,6 +293,7 @@ function renderTemplate(template: EmailTemplate, payload: EmailPayload): Rendere
           p.appUrl ?? null,
           p.trialEndsAt ?? null,
           locale,
+          recipientEmail ?? null,
         ),
       };
     }
@@ -304,6 +311,7 @@ function renderTemplate(template: EmailTemplate, payload: EmailPayload): Rendere
           locale,
           p.signupUrl ?? null,
           plan,
+          recipientEmail ?? null,
         ),
       };
     }
@@ -332,6 +340,7 @@ function renderTemplate(template: EmailTemplate, payload: EmailPayload): Rendere
           p.trialEndsAt ?? null,
           p.appUrl ?? null,
           locale,
+          recipientEmail ?? null,
         ),
       };
     }
@@ -591,6 +600,7 @@ export async function flushOutbox(deps?: FlushDeps): Promise<FlushResult> {
       rendered = renderTemplate(
         claimed.template as EmailTemplate,
         (claimed.payload ?? {}) as EmailPayload,
+        claimed.recipient as string | null,
       );
     } catch (err) {
       // Template renderer threw — usually a programming error (bad

@@ -209,7 +209,7 @@ export async function POST(req: NextRequest) {
           subject: metaLeadReminderSubject(firstName, emailTpl.email_subject),
           html: metaLeadReminderHtml(firstName, emailShort, APP_URL, {
             intro: emailTpl.email_intro,
-          }),
+          }, email),
         })
         .then(() => { emailSent = true; })
         .catch(() => {});

@@ -2,9 +2,14 @@
  * Bilingual welcome email for free-trial signups (no Stripe).
  * Sent via the outbox immediately after /api/auth/free-trial sets
  * trial_end_at. Mirrors the visual style of pro-welcome.ts.
+ *
+ * @param email  Recipient email address. When provided, an unsubscribe
+ *               link is added to the footer. Optional — old outbox rows
+ *               without this field render without the link.
  */
 
 import type { EmailLocale } from "@/lib/emails/beta-welcome";
+import { buildUnsubscribeUrl } from "@/lib/emails/unsubscribeToken";
 
 const APP_URL = (
   process.env.NEXT_PUBLIC_APP_URL || "https://glev.app"
@@ -28,9 +33,13 @@ export function trialWelcomeSubject(
 function trialWelcomeHtmlDe(
   first: string | null,
   trialEndDisplay: string,
+  unsubUrl: string | null,
 ): string {
   const greeting = first ? `Hallo ${first}` : "Hallo";
   const dashboardUrl = `${APP_URL}/dashboard`;
+  const unsubHtml = unsubUrl
+    ? `<p style="margin:8px 0 0;font-size:11px;color:#52525B;text-align:center;"><a href="${unsubUrl}" style="color:#52525B;text-decoration:underline;">Von diesen E-Mails abmelden</a></p>`
+    : "";
   return `<!DOCTYPE html>
 <html lang="de">
 <head>
@@ -103,6 +112,7 @@ function trialWelcomeHtmlDe(
             <p style="margin:8px 0 0;font-size:11px;color:#52525B;text-align:center;">
               Glev · <a href="mailto:info@glev.app" style="color:#52525B;">info@glev.app</a>
             </p>
+            ${unsubHtml}
           </td>
         </tr>
       </table>
@@ -115,9 +125,13 @@ function trialWelcomeHtmlDe(
 function trialWelcomeHtmlEn(
   first: string | null,
   trialEndDisplay: string,
+  unsubUrl: string | null,
 ): string {
   const greeting = first ? `Hi ${first}` : "Hi there";
   const dashboardUrl = `${APP_URL}/dashboard`;
+  const unsubHtml = unsubUrl
+    ? `<p style="margin:8px 0 0;font-size:11px;color:#52525B;text-align:center;"><a href="${unsubUrl}" style="color:#52525B;text-decoration:underline;">Unsubscribe</a></p>`
+    : "";
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -190,6 +204,7 @@ function trialWelcomeHtmlEn(
             <p style="margin:8px 0 0;font-size:11px;color:#52525B;text-align:center;">
               Glev · <a href="mailto:info@glev.app" style="color:#52525B;">info@glev.app</a>
             </p>
+            ${unsubHtml}
           </td>
         </tr>
       </table>
@@ -216,11 +231,14 @@ export function trialWelcomeHtml(
   trialEndsAt: string | null,
   _appUrl: string | null,
   locale: EmailLocale,
+  email?: string | null,
 ): string {
   const first = name?.trim().split(/\s+/)[0] ?? null;
   const trialEndDisplay = trialEndsAt
     ? locale === "en" ? formatDateEn(trialEndsAt) : formatDateDe(trialEndsAt)
     : locale === "en" ? "in 7 days" : "in 7 Tagen";
-  if (locale === "en") return trialWelcomeHtmlEn(first, trialEndDisplay);
-  return trialWelcomeHtmlDe(first, trialEndDisplay);
+  const baseUrl = (_appUrl || APP_URL).replace(/\/$/, "");
+  const unsubUrl = email ? buildUnsubscribeUrl(baseUrl, email) : null;
+  if (locale === "en") return trialWelcomeHtmlEn(first, trialEndDisplay, unsubUrl);
+  return trialWelcomeHtmlDe(first, trialEndDisplay, unsubUrl);
 }

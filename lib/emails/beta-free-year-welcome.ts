@@ -20,8 +20,13 @@
  * @param locale    'de' (default) or 'en'.
  * @param signupUrl Optional Supabase invite/magic link. When set the
  *                  CTA points here instead of /dashboard.
+ * @param plan      Plan label — 'beta' (default), 'pro', or 'plus'.
+ * @param email     Recipient email address. When provided, an unsubscribe
+ *                  link is added to the footer. Optional — old rows
+ *                  without this field render without the link.
  */
 import type { EmailLocale } from "@/lib/emails/beta-welcome";
+import { buildUnsubscribeUrl } from "@/lib/emails/unsubscribeToken";
 
 // Plan-Label (Beta vs. Pro). Standardmäßig Beta, damit alle alten
 // Aufrufer ohne Änderung weiterlaufen. „Pro" wird vom neuen
@@ -41,6 +46,7 @@ export function betaFreeYearWelcomeHtml(
   locale: EmailLocale = "de",
   signupUrl: string | null = null,
   plan: FreeYearPlanLabel = "beta",
+  email?: string | null,
 ): string {
   const first = firstNameFrom(name);
   const baseUrl = (appUrl || "https://glev.app").replace(/\/$/, "");
@@ -49,9 +55,10 @@ export function betaFreeYearWelcomeHtml(
   const ctaUrl = signupUrl || dashboardUrl;
   const isInvite = Boolean(signupUrl);
   const label = planLabel(plan);
+  const unsubUrl = email ? buildUnsubscribeUrl(baseUrl, email) : null;
 
-  if (locale === "en") return htmlEn(first, ctaUrl, baseUrl, endDate, isInvite, label);
-  return htmlDe(first, ctaUrl, baseUrl, endDate, isInvite, label);
+  if (locale === "en") return htmlEn(first, ctaUrl, baseUrl, endDate, isInvite, label, unsubUrl);
+  return htmlDe(first, ctaUrl, baseUrl, endDate, isInvite, label, unsubUrl);
 }
 
 export function betaFreeYearWelcomeSubject(
@@ -78,12 +85,16 @@ function htmlDe(
   endDate: string,
   isInvite: boolean,
   label: string,
+  unsubUrl: string | null,
 ): string {
   const greeting = first ? `Hallo ${first}` : "Hallo";
   const ctaLabel = isInvite ? "Account einrichten →" : "Zum Dashboard →";
   const explainerLine = isInvite
     ? `Klick auf den Button unten — du landest auf einer kurzen Seite, wo du deinen Namen wählst und ein Passwort setzt. Dauert 30 Sekunden.`
     : `Falls du noch keinen Account hast: registriere dich einfach mit dieser E-Mail-Adresse auf <a href="${baseUrl}" style="color:#5b6cff;">glev.app</a> — wir erkennen dich automatisch und schalten den Zugang frei.`;
+  const unsubHtml = unsubUrl
+    ? `<p style="margin:8px 0 0;font-size:12px;color:#94a3b8;text-align:center;"><a href="${unsubUrl}" style="color:#94a3b8;text-decoration:underline;">Von diesen E-Mails abmelden</a></p>`
+    : "";
   return `<!DOCTYPE html>
 <html lang="de">
 <head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1.0"/>
@@ -118,6 +129,7 @@ function htmlDe(
   </td></tr>
   <tr><td style="padding:20px 40px;background:#fafafa;text-align:center;font-size:12px;color:#94a3b8;border-top:1px solid #f1f5f9;">
     Glev · T1D Insulin-Entscheidungssystem · <a href="${baseUrl}" style="color:#94a3b8;">glev.app</a>
+    ${unsubHtml}
   </td></tr>
 </table>
 </td></tr></table>
@@ -131,12 +143,16 @@ function htmlEn(
   endDate: string,
   isInvite: boolean,
   label: string,
+  unsubUrl: string | null,
 ): string {
   const greeting = first ? `Hi ${first}` : "Hi";
   const ctaLabel = isInvite ? "Set up your account →" : "Open dashboard →";
   const explainerLine = isInvite
     ? `Click the button below — you'll land on a short page where you pick your name and a password. Takes 30 seconds.`
     : `No account yet? Sign up with this email address at <a href="${baseUrl}" style="color:#5b6cff;">glev.app</a> — we'll recognize you and unlock access automatically.`;
+  const unsubHtml = unsubUrl
+    ? `<p style="margin:8px 0 0;font-size:12px;color:#94a3b8;text-align:center;"><a href="${unsubUrl}" style="color:#94a3b8;text-decoration:underline;">Unsubscribe</a></p>`
+    : "";
   return `<!DOCTYPE html>
 <html lang="en">
 <head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1.0"/>
@@ -171,6 +187,7 @@ function htmlEn(
   </td></tr>
   <tr><td style="padding:20px 40px;background:#fafafa;text-align:center;font-size:12px;color:#94a3b8;border-top:1px solid #f1f5f9;">
     Glev · T1D insulin decision support · <a href="${baseUrl}" style="color:#94a3b8;">glev.app</a>
+    ${unsubHtml}
   </td></tr>
 </table>
 </td></tr></table>

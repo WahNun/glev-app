@@ -17,21 +17,27 @@
  * @param trialEndsAt ISO timestamp of trial_end_at (NOW() + 7 days)
  * @param appUrl      Public app origin without trailing slash
  * @param locale      'de' (default) or 'en'
+ * @param email       Recipient email address. When provided, an unsubscribe
+ *                    link is added to the footer. Optional — omitting it
+ *                    leaves the footer without the link.
  */
 import type { EmailLocale } from '@/lib/emails/beta-welcome';
+import { buildUnsubscribeUrl } from '@/lib/emails/unsubscribeToken';
 
 export function trialStartedHtml(
   name?: string | null,
   trialEndsAt?: string | null,
   appUrl?: string | null,
   locale: EmailLocale = 'de',
+  email?: string | null,
 ): string {
   const first = firstNameFrom(name);
   const baseUrl = (appUrl || 'https://glev.app').replace(/\/$/, '');
   const dashboardUrl = `${baseUrl}/dashboard`;
+  const unsubUrl = email ? buildUnsubscribeUrl(baseUrl, email) : null;
 
-  if (locale === 'en') return trialStartedHtmlEn(first, dashboardUrl, trialEndsAt);
-  return trialStartedHtmlDe(first, dashboardUrl, trialEndsAt);
+  if (locale === 'en') return trialStartedHtmlEn(first, dashboardUrl, trialEndsAt, unsubUrl);
+  return trialStartedHtmlDe(first, dashboardUrl, trialEndsAt, unsubUrl);
 }
 
 export function trialStartedSubject(
@@ -53,12 +59,16 @@ function trialStartedHtmlDe(
   first: string | null,
   dashboardUrl: string,
   trialEndsAt?: string | null,
+  unsubUrl?: string | null,
 ): string {
   const greeting = first ? `Hallo ${first}` : 'Hallo';
   const trialEndDisplay = formatGermanDate(trialEndsAt) ?? 'in 7 Tagen';
   const closingLine = first
     ? `Viel Spaß beim Ausprobieren, ${first} — und meld dich gerne wenn du Fragen hast.`
     : 'Viel Spaß beim Ausprobieren — meld dich gerne wenn du Fragen hast.';
+  const unsubHtml = unsubUrl
+    ? `<p style="margin:8px 0 0;font-size:12px;color:#9ca3af;text-align:center;"><a href="${unsubUrl}" style="color:#9ca3af;text-decoration:underline;">Von diesen E-Mails abmelden</a></p>`
+    : '';
 
   return `<!DOCTYPE html>
 <html lang="de">
@@ -153,6 +163,7 @@ function trialStartedHtmlDe(
                 Glev · <a href="mailto:hello@glev.app" style="color:#9ca3af;">hello@glev.app</a> ·
                 Diese E-Mail wurde an dich geschickt, weil du dich für einen kostenlosen Glev-Trial registriert hast.
               </p>
+              ${unsubHtml}
             </td>
           </tr>
 
@@ -168,12 +179,16 @@ function trialStartedHtmlEn(
   first: string | null,
   dashboardUrl: string,
   trialEndsAt?: string | null,
+  unsubUrl?: string | null,
 ): string {
   const greeting = first ? `Hi ${first}` : 'Hi there';
   const trialEndDisplay = formatEnglishDate(trialEndsAt) ?? 'in 7 days';
   const closingLine = first
     ? `Enjoy exploring, ${first} — reply anytime if you have questions.`
     : 'Enjoy exploring — reply anytime if you have questions.';
+  const unsubHtml = unsubUrl
+    ? `<p style="margin:8px 0 0;font-size:12px;color:#9ca3af;text-align:center;"><a href="${unsubUrl}" style="color:#9ca3af;text-decoration:underline;">Unsubscribe</a></p>`
+    : '';
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -267,6 +282,7 @@ function trialStartedHtmlEn(
                 Glev · <a href="mailto:hello@glev.app" style="color:#9ca3af;">hello@glev.app</a> ·
                 You received this because you signed up for a free Glev trial.
               </p>
+              ${unsubHtml}
             </td>
           </tr>
 
