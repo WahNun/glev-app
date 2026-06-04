@@ -3,6 +3,7 @@
 import { useState, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
+import { useLocale } from "next-intl";
 import Lockup from "@/components/landing/Lockup";
 import { ACCENT, ACCENT_HOVER, BG, SURFACE, TEXT_DIM, TEXT_FAINT } from "@/components/landing/tokens";
 
@@ -27,7 +28,79 @@ const lbl: React.CSSProperties = {
   marginBottom: 6,
 };
 
-function ContactForm() {
+type Content = {
+  heading: string;
+  sub: string;
+  directEmail: string;
+  labelName: string;
+  optional: string;
+  labelEmail: string;
+  labelSubject: string;
+  labelMessage: string;
+  honeypot: string;
+  errorRequired: string;
+  errorFailed: string;
+  errorNetwork: string;
+  sending: string;
+  send: string;
+  doneHeading: string;
+  doneBody: (email: string) => React.ReactNode;
+  backHome: string;
+  loading: string;
+};
+
+const DE: Content = {
+  heading: "Schreib uns",
+  sub: "Frag uns alles — Beta-Zugang, Pro, technische Probleme oder einfach Feedback. Wir antworten persönlich.",
+  directEmail: "Lieber direkt per Email?",
+  labelName: "Name",
+  optional: "(optional)",
+  labelEmail: "Email",
+  labelSubject: "Betreff",
+  labelMessage: "Nachricht",
+  honeypot: "Website (bitte leer lassen)",
+  errorRequired: "Bitte mindestens Email und Nachricht ausfüllen.",
+  errorFailed: "Versand fehlgeschlagen.",
+  errorNetwork: "Netzwerkfehler. Bitte erneut versuchen oder direkt an hello@glev.app schreiben.",
+  sending: "Wird gesendet…",
+  send: "Nachricht senden",
+  doneHeading: "Nachricht ist raus.",
+  doneBody: (email) => (
+    <>
+      Wir antworten persönlich an <strong style={{ color: "#fff" }}>{email}</strong>, üblicherweise innerhalb
+      von 24 Stunden.
+    </>
+  ),
+  backHome: "Zurück zur Startseite",
+  loading: "Lädt…",
+};
+
+const EN: Content = {
+  heading: "Get in touch",
+  sub: "Ask us anything — beta access, Pro, technical issues, or just feedback. We reply personally.",
+  directEmail: "Prefer email directly?",
+  labelName: "Name",
+  optional: "(optional)",
+  labelEmail: "Email",
+  labelSubject: "Subject",
+  labelMessage: "Message",
+  honeypot: "Website (leave blank)",
+  errorRequired: "Please fill in at least your email and message.",
+  errorFailed: "Sending failed.",
+  errorNetwork: "Network error. Please try again or write directly to hello@glev.app.",
+  sending: "Sending…",
+  send: "Send message",
+  doneHeading: "Message sent.",
+  doneBody: (email) => (
+    <>
+      We&apos;ll reply personally to <strong style={{ color: "#fff" }}>{email}</strong>, usually within 24 hours.
+    </>
+  ),
+  backHome: "Back to home",
+  loading: "Loading…",
+};
+
+function ContactForm({ C }: { C: Content }) {
   const params = useSearchParams();
   const sourceParam = params.get("source") ?? "";
   const subjectParam = params.get("subject") ?? "";
@@ -48,7 +121,7 @@ function ContactForm() {
     setError(null);
 
     if (!email.trim() || !message.trim()) {
-      setError("Bitte mindestens Email und Nachricht ausfüllen.");
+      setError(C.errorRequired);
       return;
     }
 
@@ -68,13 +141,13 @@ function ContactForm() {
       });
       const data = (await res.json().catch(() => ({}))) as { error?: string };
       if (!res.ok) {
-        setError(data.error || "Versand fehlgeschlagen.");
+        setError(data.error || C.errorFailed);
         setSubmitting(false);
         return;
       }
       setDone(true);
     } catch {
-      setError("Netzwerkfehler. Bitte erneut versuchen oder direkt an hello@glev.app schreiben.");
+      setError(C.errorNetwork);
       setSubmitting(false);
     }
   }
@@ -97,10 +170,9 @@ function ContactForm() {
         >
           ✓
         </div>
-        <h2 style={{ fontSize: 22, fontWeight: 600, margin: 0 }}>Nachricht ist raus.</h2>
+        <h2 style={{ fontSize: 22, fontWeight: 600, margin: 0 }}>{C.doneHeading}</h2>
         <p style={{ fontSize: 15, color: TEXT_DIM, margin: 0, lineHeight: 1.55, maxWidth: 380 }}>
-          Wir antworten persönlich an <strong style={{ color: "#fff" }}>{email}</strong>, üblicherweise innerhalb
-          von 24 Stunden.
+          {C.doneBody(email)}
         </p>
         <Link
           href="/"
@@ -112,7 +184,7 @@ function ContactForm() {
             textUnderlineOffset: 2,
           }}
         >
-          Zurück zur Startseite
+          {C.backHome}
         </Link>
       </div>
     );
@@ -121,7 +193,10 @@ function ContactForm() {
   return (
     <form onSubmit={onSubmit} style={{ display: "flex", flexDirection: "column", gap: 14, width: "100%" }}>
       <div>
-        <label htmlFor="contact-name" style={lbl}>Name <span style={{ color: TEXT_FAINT, fontWeight: 400 }}>(optional)</span></label>
+        <label htmlFor="contact-name" style={lbl}>
+          {C.labelName}{" "}
+          <span style={{ color: TEXT_FAINT, fontWeight: 400 }}>{C.optional}</span>
+        </label>
         <input
           id="contact-name"
           type="text"
@@ -134,7 +209,7 @@ function ContactForm() {
       </div>
 
       <div>
-        <label htmlFor="contact-email" style={lbl}>Email</label>
+        <label htmlFor="contact-email" style={lbl}>{C.labelEmail}</label>
         <input
           id="contact-email"
           type="email"
@@ -148,7 +223,10 @@ function ContactForm() {
       </div>
 
       <div>
-        <label htmlFor="contact-subject" style={lbl}>Betreff <span style={{ color: TEXT_FAINT, fontWeight: 400 }}>(optional)</span></label>
+        <label htmlFor="contact-subject" style={lbl}>
+          {C.labelSubject}{" "}
+          <span style={{ color: TEXT_FAINT, fontWeight: 400 }}>{C.optional}</span>
+        </label>
         <input
           id="contact-subject"
           type="text"
@@ -160,7 +238,7 @@ function ContactForm() {
       </div>
 
       <div>
-        <label htmlFor="contact-message" style={lbl}>Nachricht</label>
+        <label htmlFor="contact-message" style={lbl}>{C.labelMessage}</label>
         <textarea
           id="contact-message"
           required
@@ -175,7 +253,7 @@ function ContactForm() {
       {/* Honeypot — versteckt vor echten Usern, Bots füllen es aus */}
       <div style={{ position: "absolute", left: "-9999px", top: "-9999px" }} aria-hidden>
         <label>
-          Website (bitte leer lassen)
+          {C.honeypot}
           <input
             type="text"
             tabIndex={-1}
@@ -225,13 +303,16 @@ function ContactForm() {
           if (!submitting) e.currentTarget.style.background = ACCENT;
         }}
       >
-        {submitting ? "Wird gesendet…" : "Nachricht senden"}
+        {submitting ? C.sending : C.send}
       </button>
     </form>
   );
 }
 
 export default function ContactPage() {
+  const locale = useLocale();
+  const C = locale === "en" ? EN : DE;
+
   return (
     <main
       style={{
@@ -257,13 +338,13 @@ export default function ContactPage() {
 
         <div style={{ textAlign: "center", display: "flex", flexDirection: "column", gap: 12 }}>
           <h1 style={{ fontSize: 30, lineHeight: 1.15, letterSpacing: "-0.03em", fontWeight: 700, margin: 0 }}>
-            Schreib uns
+            {C.heading}
           </h1>
           <p style={{ fontSize: 15, lineHeight: 1.55, color: TEXT_DIM, margin: 0 }}>
-            Frag uns alles — Beta-Zugang, Pro, technische Probleme oder einfach Feedback. Wir antworten persönlich.
+            {C.sub}
           </p>
           <p style={{ fontSize: 14, lineHeight: 1.55, color: TEXT_FAINT, margin: 0 }}>
-            Lieber direkt per Email?{" "}
+            {C.directEmail}{" "}
             <a
               href="mailto:hello@glev.app"
               style={{ color: TEXT_DIM, textDecoration: "underline", textUnderlineOffset: 2 }}
@@ -283,8 +364,8 @@ export default function ContactPage() {
             boxSizing: "border-box",
           }}
         >
-          <Suspense fallback={<div style={{ color: TEXT_DIM, fontSize: 14 }}>Lädt…</div>}>
-            <ContactForm />
+          <Suspense fallback={<div style={{ color: TEXT_DIM, fontSize: 14 }}>{C.loading}</div>}>
+            <ContactForm C={C} />
           </Suspense>
         </div>
 
@@ -297,7 +378,7 @@ export default function ContactPage() {
             textUnderlineOffset: 2,
           }}
         >
-          ← Zurück zur Startseite
+          ← {C.backHome}
         </Link>
       </div>
     </main>

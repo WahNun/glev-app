@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useLocale } from "next-intl";
 import { insertFingerstick, type FingerstickReading } from "@/lib/fingerstick";
 import { hapticSuccess, hapticWarning, hapticError } from "@/lib/haptics";
 
@@ -10,6 +11,42 @@ import { hapticSuccess, hapticWarning, hapticError } from "@/lib/haptics";
 // even when their eyes are off the screen.
 const BG_LOW  = 70;
 const BG_HIGH = 180;
+
+type Copy = {
+  subheading: string;
+  label: string;
+  placeholder: string;
+  hint: string;
+  errRange: string;
+  errSave: string;
+  cancel: string;
+  save: string;
+  saving: string;
+};
+
+const DE: Copy = {
+  subheading: "Manueller Glucose-Wert",
+  label: "mg/dL",
+  placeholder: "z.B. 124",
+  hint: "Wird mit aktueller Zeit gespeichert. Überschreibt CGM-Wert für 5 Minuten.",
+  errRange: "Bitte 20–600 mg/dL eingeben.",
+  errSave: "Speichern fehlgeschlagen.",
+  cancel: "Abbrechen",
+  save: "Speichern",
+  saving: "Speichern…",
+};
+
+const EN: Copy = {
+  subheading: "Manual glucose value",
+  label: "mg/dL",
+  placeholder: "e.g. 124",
+  hint: "Saved with the current time. Overrides CGM value for 5 minutes.",
+  errRange: "Please enter a value between 20 and 600 mg/dL.",
+  errSave: "Save failed.",
+  cancel: "Cancel",
+  save: "Save",
+  saving: "Saving…",
+};
 
 const ACCENT  = "#4F6EF7";
 const PINK    = "#FF2D78";
@@ -38,6 +75,9 @@ export default function FingerstickQuickInput({
   onClose: () => void;
   onSaved: (r: FingerstickReading) => void;
 }) {
+  const locale = useLocale();
+  const C = locale === "en" ? EN : DE;
+
   const [value, setValue]   = useState("");
   const [saving, setSaving] = useState(false);
   const [err, setErr]       = useState<string | null>(null);
@@ -68,7 +108,7 @@ export default function FingerstickQuickInput({
     const n = parseFloat(value);
     if (!Number.isFinite(n) || n < 20 || n > 600) {
       hapticError();
-      setErr("Bitte 20–600 mg/dL eingeben.");
+      setErr(C.errRange);
       return;
     }
     setSaving(true);
@@ -83,7 +123,7 @@ export default function FingerstickQuickInput({
       onClose();
     } catch (e) {
       hapticError();
-      setErr(e instanceof Error ? e.message : "Speichern fehlgeschlagen.");
+      setErr(e instanceof Error ? e.message : C.errSave);
     } finally {
       setSaving(false);
     }
@@ -122,7 +162,7 @@ export default function FingerstickQuickInput({
               Fingerstick
             </div>
             <div style={{ fontSize: 14, fontWeight: 600, color:"var(--text)", marginTop: 2 }}>
-              Manueller Glucose-Wert
+              {C.subheading}
             </div>
           </div>
           <button
@@ -145,7 +185,7 @@ export default function FingerstickQuickInput({
             color: "var(--text-dim)", textTransform: "uppercase",
             display: "block", marginBottom: 6,
           }}>
-            mg/dL
+            {C.label}
           </label>
           <input
             ref={inputRef}
@@ -154,7 +194,7 @@ export default function FingerstickQuickInput({
             min={20}
             max={600}
             step={1}
-            placeholder="z.B. 124"
+            placeholder={C.placeholder}
             value={value}
             onChange={(e) => setValue(e.target.value)}
             onKeyDown={(e) => { if (e.key === "Enter") void handleSave(); }}
@@ -173,7 +213,7 @@ export default function FingerstickQuickInput({
             }}
           />
           <div style={{ fontSize: 12, color: "var(--text-faint)", marginTop: 6, textAlign: "center" }}>
-            Wird mit aktueller Zeit gespeichert. Überschreibt CGM-Wert für 5 Minuten.
+            {C.hint}
           </div>
         </div>
 
@@ -199,7 +239,7 @@ export default function FingerstickQuickInput({
               cursor: saving ? "not-allowed" : "pointer",
             }}
           >
-            Abbrechen
+            {C.cancel}
           </button>
           <button
             onClick={handleSave}
@@ -214,7 +254,7 @@ export default function FingerstickQuickInput({
               boxShadow: !saving && value ? `0 4px 18px ${ACCENT}40` : "none",
             }}
           >
-            {saving ? "Speichern…" : "Speichern"}
+            {saving ? C.saving : C.save}
           </button>
         </div>
       </div>

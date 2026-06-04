@@ -1,9 +1,61 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
+import { useLocale } from "next-intl";
 import { hapticSuccess, hapticError } from "@/lib/haptics";
 
 const ACCENT = "#4F6EF7";
+
+type Strings = {
+  preBolus: string;
+  postBolus: (detail: string) => string;
+  bgCheck: string;
+  ariaLabel: (typeLabel: string) => string;
+  measureNow: string;
+  prompt: string;
+  placeholder: string;
+  validationError: string;
+  saveFailed: string;
+  saved: string;
+  saving: string;
+  retry: string;
+  save: string;
+  cancel: string;
+};
+
+const DE: Strings = {
+  preBolus: "Prä-Bolus-Check",
+  postBolus: (detail) => `Post-Bolus-Check (${detail})`,
+  bgCheck: "BZ-Check",
+  ariaLabel: (typeLabel) => `BZ-Wert eintragen — ${typeLabel}`,
+  measureNow: "BZ jetzt messen",
+  prompt: "Trag deinen aktuellen Blutzuckerwert ein.",
+  placeholder: "z. B. 145",
+  validationError: "Gib einen gültigen Wert zwischen 20 und 600 mg/dL ein.",
+  saveFailed: "Speichern fehlgeschlagen.",
+  saved: "✓ Gespeichert",
+  saving: "Speichert …",
+  retry: "Erneut versuchen",
+  save: "Wert speichern",
+  cancel: "Abbrechen",
+};
+
+const EN: Strings = {
+  preBolus: "Pre-bolus BG check",
+  postBolus: (detail) => `Post-bolus BG check (${detail})`,
+  bgCheck: "BG check",
+  ariaLabel: (typeLabel) => `Log BG value — ${typeLabel}`,
+  measureNow: "Check your BG now",
+  prompt: "Enter your current blood glucose value.",
+  placeholder: "e.g. 145",
+  validationError: "Please enter a valid value between 20 and 600 mg/dL.",
+  saveFailed: "Could not save. Please try again.",
+  saved: "✓ Saved",
+  saving: "Saving …",
+  retry: "Try again",
+  save: "Save value",
+  cancel: "Cancel",
+};
 
 export interface BzCheckPayload {
   mealId: string;
@@ -27,6 +79,9 @@ interface Props {
  * by MealCheckReminderProvider when the OS notification is tapped.
  */
 export default function BzCheckModal({ payload, onClose }: Props) {
+  const locale = useLocale();
+  const T = locale === "en" ? EN : DE;
+
   const [value, setValue] = useState("");
   const [status, setStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -49,7 +104,7 @@ export default function BzCheckModal({ payload, onClose }: Props) {
     if (!payload) return;
     const num = Number(value.replace(",", "."));
     if (!Number.isFinite(num) || num < 20 || num > 600) {
-      setErrorMsg("Gib einen gültigen Wert zwischen 20 und 600 mg/dL ein.");
+      setErrorMsg(T.validationError);
       return;
     }
     setStatus("saving");
@@ -81,7 +136,7 @@ export default function BzCheckModal({ payload, onClose }: Props) {
       window.setTimeout(onClose, 1200);
     } catch (e) {
       setStatus("error");
-      setErrorMsg(e instanceof Error ? e.message : "Speichern fehlgeschlagen.");
+      setErrorMsg(e instanceof Error ? e.message : T.saveFailed);
       hapticError();
     }
   }, [payload, value, onClose]);
@@ -96,10 +151,10 @@ export default function BzCheckModal({ payload, onClose }: Props) {
 
   const typeLabel =
     payload?.checkType === "pre"
-      ? "Prä-Bolus-Check"
+      ? T.preBolus
       : payload?.checkType
-        ? `Post-Bolus-Check (${payload.checkType.replace("_", " ")})`
-        : "BZ-Check";
+        ? T.postBolus(payload.checkType.replace("_", " "))
+        : T.bgCheck;
 
   return (
     <>
@@ -121,7 +176,7 @@ export default function BzCheckModal({ payload, onClose }: Props) {
       <div
         role="dialog"
         aria-modal="true"
-        aria-label={`BZ-Wert eintragen — ${typeLabel}`}
+        aria-label={T.ariaLabel(typeLabel)}
         style={{
           position: "fixed",
           bottom: 0,
@@ -161,7 +216,7 @@ export default function BzCheckModal({ payload, onClose }: Props) {
               lineHeight: 1.3,
             }}
           >
-            {payload?.label ? `„${payload.label}"` : "BZ jetzt messen"}
+            {payload?.label ? `„${payload.label}"` : T.measureNow}
           </h2>
           <p
             style={{
@@ -171,7 +226,7 @@ export default function BzCheckModal({ payload, onClose }: Props) {
               lineHeight: 1.4,
             }}
           >
-            Trag deinen aktuellen Blutzuckerwert ein.
+            {T.prompt}
           </p>
         </div>
 
@@ -195,7 +250,7 @@ export default function BzCheckModal({ payload, onClose }: Props) {
             min={20}
             max={600}
             step={1}
-            placeholder="z. B. 145"
+            placeholder={T.placeholder}
             value={value}
             onChange={(e) => {
               setValue(e.target.value);
@@ -271,12 +326,12 @@ export default function BzCheckModal({ payload, onClose }: Props) {
           }}
         >
           {status === "saved"
-            ? "✓ Gespeichert"
+            ? T.saved
             : status === "saving"
-              ? "Speichert …"
+              ? T.saving
               : status === "error"
-                ? "Erneut versuchen"
-                : "Wert speichern"}
+                ? T.retry
+                : T.save}
         </button>
 
         {/* Cancel */}
@@ -296,7 +351,7 @@ export default function BzCheckModal({ payload, onClose }: Props) {
               cursor: "pointer",
             }}
           >
-            Abbrechen
+            {T.cancel}
           </button>
         )}
       </div>

@@ -1,13 +1,52 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import { useLocale } from "next-intl";
 import type { IntentEnvelope } from "@/lib/ai/intentClassifier";
 
 const ACCENT = "#8b5cf6";
 export const AUTO_DISMISS_MS = 3000;
 
+// ---------------------------------------------------------------------------
+// Locale-keyed UI strings
+// ---------------------------------------------------------------------------
+
+const STRINGS = {
+  de: {
+    fieldLabels: { carbs: "KH", protein: "Protein", fat: "Fett", calories: "kcal" } as Record<string, string>,
+    meal:       "Mahlzeit",
+    exercise:   "Training",
+    symptom:    "Symptom",
+    macro:      "Makro",
+    understood: "Verstanden",
+    chipAriaLabel: (label: string) => `Verstanden: ${label}. Bestätigen oder ändern?`,
+    changeLabel: "Ändern",
+    changeAriaLabel: "Ändern — Zurück zum Chat",
+    confirmAriaLabel: "Bestätigen",
+  },
+  en: {
+    fieldLabels: { carbs: "Carbs", protein: "Protein", fat: "Fat", calories: "kcal" } as Record<string, string>,
+    meal:       "Meal",
+    exercise:   "Exercise",
+    symptom:    "Symptom",
+    macro:      "Macro",
+    understood: "Got it",
+    chipAriaLabel: (label: string) => `Glev assessment: ${label}. Confirm or change?`,
+    changeLabel: "Change",
+    changeAriaLabel: "Change — back to chat",
+    confirmAriaLabel: "Confirm",
+  },
+} as const;
+
+type Locale = keyof typeof STRINGS;
+
+// ---------------------------------------------------------------------------
+// intentLabel — human-readable summary of a classified intent.
+// ---------------------------------------------------------------------------
+
 /** Human-readable summary of a classified intent. */
-export function intentLabel(intent: IntentEnvelope): string {
+export function intentLabel(intent: IntentEnvelope, locale: Locale = "de"): string {
+  const S = STRINGS[locale];
   switch (intent.type) {
     case "log_bolus": {
       const { units, insulin_name } = intent.payload;
@@ -16,30 +55,24 @@ export function intentLabel(intent: IntentEnvelope): string {
     }
     case "log_meal": {
       const text = intent.payload.input_text ?? "";
-      return `Mahlzeit: ${text.length > 32 ? `${text.slice(0, 32)}…` : text}`;
+      return `${S.meal}: ${text.length > 32 ? `${text.slice(0, 32)}…` : text}`;
     }
     case "log_exercise": {
       const parts: string[] = [];
       if (intent.payload.exercise_type) parts.push(intent.payload.exercise_type);
       if (intent.payload.duration_minutes) parts.push(`${intent.payload.duration_minutes} min`);
-      return `Training${parts.length ? `: ${parts.join(" · ")}` : ""}`;
+      return `${S.exercise}${parts.length ? `: ${parts.join(" · ")}` : ""}`;
     }
     case "log_symptom": {
       const syms = intent.payload.symptom_types ?? [];
-      return `Symptom${syms.length ? `: ${syms.join(", ")}` : ""}`;
+      return `${S.symptom}${syms.length ? `: ${syms.join(", ")}` : ""}`;
     }
     case "edit_macro": {
-      const fieldLabels: Record<string, string> = {
-        carbs: "KH",
-        protein: "Protein",
-        fat: "Fett",
-        calories: "kcal",
-      };
-      const label = fieldLabels[intent.payload.field] ?? intent.payload.field;
-      return `Makro: ${label} = ${intent.payload.value}`;
+      const label = S.fieldLabels[intent.payload.field] ?? intent.payload.field;
+      return `${S.macro}: ${label} = ${intent.payload.value}`;
     }
     default:
-      return "Verstanden";
+      return S.understood;
   }
 }
 
@@ -66,6 +99,9 @@ interface Props {
  * incorrect mis-classification never silently blocks the UI.
  */
 export default function IntentConfirmChip({ intent, onConfirm, onDismiss }: Props) {
+  const locale = (useLocale() === "en" ? "en" : "de") as Locale;
+  const S = STRINGS[locale];
+
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -96,6 +132,8 @@ export default function IntentConfirmChip({ intent, onConfirm, onDismiss }: Prop
     onDismiss();
   };
 
+  const label = intentLabel(intent, locale);
+
   return (
     <>
       <style>{`
@@ -111,7 +149,7 @@ export default function IntentConfirmChip({ intent, onConfirm, onDismiss }: Prop
       <div
         role="status"
         aria-live="polite"
-        aria-label={`Verstanden: ${intentLabel(intent)}. Bestätigen oder ändern?`}
+        aria-label={S.chipAriaLabel(label)}
         style={{
           flexShrink: 0,
           margin: "0 12px 6px",
@@ -158,14 +196,14 @@ export default function IntentConfirmChip({ intent, onConfirm, onDismiss }: Prop
               whiteSpace: "nowrap",
             }}
           >
-            {intentLabel(intent)}
+            {label}
           </span>
 
           {/* Change button */}
           <button
             type="button"
             onClick={handleDismiss}
-            aria-label="Ändern — Zurück zum Chat"
+            aria-label={S.changeAriaLabel}
             style={{
               flexShrink: 0,
               display: "flex",
@@ -182,14 +220,14 @@ export default function IntentConfirmChip({ intent, onConfirm, onDismiss }: Prop
               whiteSpace: "nowrap",
             }}
           >
-            ✎ Ändern
+            ✎ {S.changeLabel}
           </button>
 
           {/* Confirm button */}
           <button
             type="button"
             onClick={handleConfirm}
-            aria-label="Bestätigen"
+            aria-label={S.confirmAriaLabel}
             style={{
               flexShrink: 0,
               display: "flex",

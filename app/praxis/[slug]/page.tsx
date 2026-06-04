@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import Link from "next/link";
+import { getLocale } from "next-intl/server";
 import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
 
 export const runtime = "nodejs";
@@ -20,22 +21,66 @@ async function getPractice(slug: string) {
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { slug } = await params;
-  const p = await getPractice(slug);
+  const [p, locale] = await Promise.all([getPractice(slug), getLocale()]);
   if (!p || !p.active) return { title: "Glev" };
+  const isEn = locale === "en";
   return {
-    title: `Glev – Empfohlen von ${p.name}`,
+    title: isEn
+      ? `Glev – Recommended by ${p.name}`
+      : `Glev – Empfohlen von ${p.name}`,
     description:
       p.greeting_text ??
-      `${p.name} empfiehlt Glev zur Unterstützung bei Typ-1-Diabetes.`,
+      (isEn
+        ? `${p.name} recommends Glev to support people with Type 1 Diabetes.`
+        : `${p.name} empfiehlt Glev zur Unterstützung bei Typ-1-Diabetes.`),
   };
 }
 
+type UIStrings = {
+  tagline: string;
+  recommendedBy: string;
+  cta: string;
+  ctaSub: string;
+  footerLearnMore: string;
+  footerPrivacy: string;
+  disclaimer: string;
+  openingQuote: string;
+  closingQuote: string;
+};
+
+const UI_DE: UIStrings = {
+  tagline: "Insulin-Entscheidungsunterstützung",
+  recommendedBy: "Empfohlen von",
+  cta: "Glev starten",
+  ctaSub: "Kostenlos registrieren · Keine Kreditkarte",
+  footerLearnMore: "Mehr über Glev erfahren",
+  footerPrivacy: "Datenschutz",
+  disclaimer:
+    "Glev ist ein Entscheidungsunterstützungswerkzeug und ersetzt keine ärztliche Beratung. Alle Insulin-Einschätzungen sind Gesprächsgrundlagen für dein Diabetes-Team.",
+  openingQuote: "„",
+  closingQuote: "“",
+};
+
+const UI_EN: UIStrings = {
+  tagline: "Insulin Decision Support",
+  recommendedBy: "Recommended by",
+  cta: "Get started with Glev",
+  ctaSub: "Free to sign up · No credit card",
+  footerLearnMore: "Learn more about Glev",
+  footerPrivacy: "Privacy",
+  disclaimer:
+    "Glev is a decision-support tool and does not replace medical advice. All insulin assessments are a basis for discussion with your diabetes care team.",
+  openingQuote: "“",
+  closingQuote: "”",
+};
+
 export default async function PraxisLandingPage({ params }: Props) {
   const { slug } = await params;
-  const practice = await getPractice(slug);
+  const [practice, locale] = await Promise.all([getPractice(slug), getLocale()]);
 
   if (!practice || !practice.active) notFound();
 
+  const UI = locale === "en" ? UI_EN : UI_DE;
   const ctaHref = `/login?ref=${encodeURIComponent(slug)}`;
 
   return (
@@ -44,7 +89,7 @@ export default async function PraxisLandingPage({ params }: Props) {
         {/* Glev wordmark */}
         <div style={wordmarkRowStyle}>
           <span style={wordmarkStyle}>Glev</span>
-          <span style={taglineStyle}>Insulin-Entscheidungsunterstützung</span>
+          <span style={taglineStyle}>{UI.tagline}</span>
         </div>
 
         {/* Divider */}
@@ -53,40 +98,36 @@ export default async function PraxisLandingPage({ params }: Props) {
         {/* Practice badge */}
         <div style={badgeRowStyle}>
           <span style={badgeDotStyle} />
-          <span style={badgeLabelStyle}>Empfohlen von</span>
+          <span style={badgeLabelStyle}>{UI.recommendedBy}</span>
         </div>
         <h1 style={practiceNameStyle}>{practice.name}</h1>
 
-        {/* Greeting text */}
+        {/* Greeting text — dynamic data, not translated */}
         {practice.greeting_text && (
-          <p style={greetingStyle}>„{practice.greeting_text}"</p>
+          <p style={greetingStyle}>
+            {UI.openingQuote}{practice.greeting_text}{UI.closingQuote}
+          </p>
         )}
 
         {/* CTA */}
         <Link href={ctaHref} style={ctaBtnStyle}>
-          Glev starten
+          {UI.cta}
         </Link>
-        <p style={ctaSubStyle}>
-          Kostenlos registrieren · Keine Kreditkarte
-        </p>
+        <p style={ctaSubStyle}>{UI.ctaSub}</p>
 
         {/* Footer */}
         <div style={footerStyle}>
           <Link href="/" style={footerLinkStyle}>
-            Mehr über Glev erfahren
+            {UI.footerLearnMore}
           </Link>
           <span style={{ color: "#3a3f4a" }}>·</span>
           <Link href="/legal/datenschutz" style={footerLinkStyle}>
-            Datenschutz
+            {UI.footerPrivacy}
           </Link>
         </div>
 
         {/* Medical disclaimer */}
-        <p style={disclaimerStyle}>
-          Glev ist ein Entscheidungsunterstützungswerkzeug und ersetzt keine
-          ärztliche Beratung. Alle Insulin-Empfehlungen sind Gesprächsgrundlagen
-          für dein Diabetes-Team.
-        </p>
+        <p style={disclaimerStyle}>{UI.disclaimer}</p>
       </div>
     </main>
   );

@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
+import { useLocale } from "next-intl";
 
 interface Message {
   id: number;
@@ -9,18 +10,72 @@ interface Message {
   text: string;
 }
 
-const CHIPS = [
-  "Wie wirkt diese Mahlzeit?",
-  "Erkläre meinen IOB",
-  "Was sagt mein Verlauf heute?",
-  "Tipps für stabilen BZ",
-];
+type Content = {
+  title: string;
+  engineLink: string;
+  emptyState: string;
+  placeholder: string;
+  disclaimer: string;
+  chips: string[];
+  aiReplies: string[];
+  ariaHistory: string;
+  ariaSettings: string;
+  ariaClose: string;
+  ariaAttachment: string;
+  ariaMic: string;
+  ariaSend: string;
+};
 
-const AI_REPLIES = [
-  "Ich schaue mir das gerade an — dein Verlauf sieht interessant aus. Schreib mir gerne mehr dazu.",
-  "Gute Frage. Basierend auf deinen letzten Einträgen würde ich sagen: Sprich das mit deinem Diabetologen-Team an.",
-  "Das ist eine typische Muster-Frage. Ich bin bald in der Lage, dir datenbasierte Antworten zu geben — bleib dran!",
-];
+const DE: Content = {
+  title: "Frag Glev",
+  engineLink: "Zur Glev Engine →",
+  emptyState: "Frag Glev etwas über deine Einheiten,\nMahlzeiten oder deinen IOB.",
+  placeholder: "Frag Glev …",
+  disclaimer: "Glev AI kann sich irren · keine medizinische Beratung",
+  chips: [
+    "Wie wirkt diese Mahlzeit?",
+    "Erkläre meinen IOB",
+    "Was sagt mein Verlauf heute?",
+    "Tipps für stabilen BZ",
+  ],
+  aiReplies: [
+    "Ich schaue mir das gerade an — dein Verlauf sieht interessant aus. Schreib mir gerne mehr dazu.",
+    "Gute Frage. Basierend auf deinen letzten Einträgen würde ich sagen: Sprich das mit deinem Diabetologen-Team an.",
+    "Das ist eine typische Muster-Frage. Ich bin bald in der Lage, dir datenbasierte Antworten zu geben — bleib dran!",
+  ],
+  ariaHistory: "Verlauf",
+  ariaSettings: "Einstellungen",
+  ariaClose: "Schließen",
+  ariaAttachment: "Anhang",
+  ariaMic: "Spracheingabe",
+  ariaSend: "Senden",
+};
+
+const EN: Content = {
+  title: "Ask Glev",
+  engineLink: "Open Glev Engine →",
+  emptyState: "Ask Glev anything about your units,\nmeals or your IOB.",
+  placeholder: "Ask Glev anything…",
+  // MDR: no "recommendation" for therapy — "assessment" only
+  disclaimer: "Glev AI can be wrong · not a medical assessment",
+  chips: [
+    "How will this meal affect me?",
+    "Explain my IOB",
+    "What does my trend say today?",
+    "Tips for steady glucose",
+  ],
+  aiReplies: [
+    "I'm looking into that — your trend looks interesting. Feel free to tell me more.",
+    "Good question. Based on your recent entries I'd say: bring this up with your diabetes care team.",
+    "That's a common pattern question. I'll soon be able to give you data-driven answers — stay tuned!",
+  ],
+  ariaHistory: "History",
+  ariaSettings: "Settings",
+  ariaClose: "Close",
+  ariaAttachment: "Attachment",
+  ariaMic: "Voice input",
+  ariaSend: "Send",
+};
 
 let _aiReplyIndex = 0;
 
@@ -36,6 +91,9 @@ export default function AiHelperSheet({
   onClose: () => void;
   onListeningChange?: (v: boolean) => void;
 }) {
+  const locale = useLocale();
+  const C = locale === "en" ? EN : DE;
+
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [thinking, setThinking] = useState(false);
@@ -65,11 +123,11 @@ export default function AiHelperSheet({
     setTimeout(() => {
       setThinking(false);
       onListeningChange?.(false);
-      const reply = AI_REPLIES[_aiReplyIndex % AI_REPLIES.length];
+      const reply = C.aiReplies[_aiReplyIndex % C.aiReplies.length];
       _aiReplyIndex++;
       setMessages((prev) => [...prev, { id: nextId(), role: "ai", text: reply }]);
     }, 800);
-  }, [input, thinking, onListeningChange]);
+  }, [input, thinking, onListeningChange, C.aiReplies]);
 
   if (!open) return null;
 
@@ -131,7 +189,7 @@ export default function AiHelperSheet({
               flex: 1,
             }}
           >
-            Frag Glev
+            {C.title}
           </span>
 
           <span
@@ -152,7 +210,7 @@ export default function AiHelperSheet({
 
           {/* History — non-functional */}
           <button
-            aria-label="Verlauf"
+            aria-label={C.ariaHistory}
             style={{
               background: "none",
               border: "none",
@@ -171,7 +229,7 @@ export default function AiHelperSheet({
 
           {/* Settings — non-functional */}
           <button
-            aria-label="Einstellungen"
+            aria-label={C.ariaSettings}
             style={{
               background: "none",
               border: "none",
@@ -191,7 +249,7 @@ export default function AiHelperSheet({
           {/* Close */}
           <button
             onClick={onClose}
-            aria-label="Schließen"
+            aria-label={C.ariaClose}
             style={{
               background: "none",
               border: "none",
@@ -231,7 +289,7 @@ export default function AiHelperSheet({
               gap: 4,
             }}
           >
-            Zur Glev Engine →
+            {C.engineLink}
           </button>
         </div>
 
@@ -259,9 +317,9 @@ export default function AiHelperSheet({
                 padding: "40px 0",
               }}
             >
-              Frag Glev etwas über deine Einheiten,
-              <br />
-              Mahlzeiten oder deinen IOB.
+              {C.emptyState.split("\n").map((line, i) => (
+                <span key={i}>{i > 0 && <br />}{line}</span>
+              ))}
             </div>
           )}
 
@@ -336,7 +394,7 @@ export default function AiHelperSheet({
               scrollbarWidth: "none",
             }}
           >
-            {CHIPS.map((chip) => (
+            {C.chips.map((chip) => (
               <button
                 key={chip}
                 onClick={() => setInput(chip)}
@@ -368,7 +426,7 @@ export default function AiHelperSheet({
           >
             {/* + attachment — non-functional */}
             <button
-              aria-label="Anhang"
+              aria-label={C.ariaAttachment}
               style={{
                 flexShrink: 0,
                 background: "none",
@@ -395,7 +453,7 @@ export default function AiHelperSheet({
                   send();
                 }
               }}
-              placeholder="Ask Glev anything"
+              placeholder={C.placeholder}
               style={{
                 flex: 1,
                 border: "1px solid var(--border)",
@@ -410,7 +468,7 @@ export default function AiHelperSheet({
 
             {/* Mic — non-functional */}
             <button
-              aria-label="Spracheingabe"
+              aria-label={C.ariaMic}
               style={{
                 flexShrink: 0,
                 background: "none",
@@ -433,7 +491,7 @@ export default function AiHelperSheet({
             {input.trim() && (
               <button
                 onClick={send}
-                aria-label="Senden"
+                aria-label={C.ariaSend}
                 style={{
                   flexShrink: 0,
                   width: 36,
@@ -468,7 +526,7 @@ export default function AiHelperSheet({
               textAlign: "center",
             }}
           >
-            Glev AI kann sich irren · keine medizinische Beratung
+            {C.disclaimer}
           </div>
         </div>
       </div>

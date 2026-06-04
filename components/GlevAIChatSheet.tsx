@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useLocale } from "next-intl";
 import type { GlevChatMessage, MealQueueItem, PendingAction } from "@/lib/useGlevAI";
 import { useVoiceIntents } from "@/hooks/useVoiceIntents";
 import { useTTS } from "@/hooks/useTTS";
@@ -11,6 +12,101 @@ import { getActionMeta } from "@/lib/ai/pendingActions";
 const ACCENT = "#8b5cf6";
 const SHEET_BG = "var(--surface)";
 const PAGE_BG = "var(--bg)";
+
+// ── Localised copy ─────────────────────────────────────────────────────────
+const COPY = {
+  de: {
+    disclaimer:            "Glev ist kein Medizinprodukt. Alle Informationen sind Orientierungspunkte.",
+    confirmed_engine:      "✓ Engine geöffnet",
+    confirmed_saved:       "✓ Gespeichert",
+    cancelled:             "Abgebrochen",
+    save_failed:           "Speichern fehlgeschlagen",
+    unknown_error:         "unbekannter Fehler",
+    retry:                 "Nochmal versuchen",
+    discard_meal:          "Mahlzeit verwerfen",
+    discard:               "Verwerfen",
+    meal_n_of_m:           (n: number, m: number) => `Mahlzeit ${n} von ${m}`,
+    opening:               "Öffnet …",
+    open_engine:           "Engine öffnen →",
+    saving:                "Speichert …",
+    quick_save:            "Schnell speichern",
+    fingerstick_label:     "Fingerstick",
+    fingerstick_details:   "Fingerstick-Details öffnen →",
+    now:                   "Jetzt",
+    mins_ago:              (m: number) => `vor ${m} min`,
+    hours_ago:             (h: number) => `vor ${h} h`,
+    cycle_label:           "Zyklus",
+    cycle_details:         "Zyklus-Details →",
+    bolus_details:         "Bolus-Details →",
+    basal_details:         "Basal-Details →",
+    detail:                "Detail →",
+    back:                  "Zurück",
+    reset_chat:            "Chat zurücksetzen",
+    tts_off:               "Sprachausgabe aus",
+    tts_on:                "Sprachausgabe ein",
+    status_speaking:       "Spricht …",
+    status_analyzing:      "Analysiert …",
+    status_ready:          "BEREIT",
+    close:                 "Schließen",
+    empty_state:           "Frag Glev etwas über deine Werte, IOB oder letzte Mahlzeit.",
+    stop_playback:         "Wiedergabe stoppen",
+    read_aloud:            "Vorlesen",
+    meal_fallback:         "Mahlzeit",
+    open_engine_chip:      "Engine öffnen",
+    n_of_total:            (n: number, total: number) => `${n} von ${total}`,
+    mic_stop:              "Aufnahme stoppen",
+    mic_start:             "Spracheingabe starten",
+    placeholder_listening: "Spreche …",
+    placeholder_idle:      "Frag Glev …",
+    send:                  "Senden",
+  },
+  en: {
+    disclaimer:            "Glev is not a medical device. All information is for orientation only.",
+    confirmed_engine:      "✓ Engine opened",
+    confirmed_saved:       "✓ Saved",
+    cancelled:             "Cancelled",
+    save_failed:           "Save failed",
+    unknown_error:         "unknown error",
+    retry:                 "Try again",
+    discard_meal:          "Discard meal",
+    discard:               "Discard",
+    meal_n_of_m:           (n: number, m: number) => `Meal ${n} of ${m}`,
+    opening:               "Opening …",
+    open_engine:           "Open Engine →",
+    saving:                "Saving …",
+    quick_save:            "Save now",
+    fingerstick_label:     "Fingerstick",
+    fingerstick_details:   "Open fingerstick details →",
+    now:                   "Now",
+    mins_ago:              (m: number) => `${m} min ago`,
+    hours_ago:             (h: number) => `${h} h ago`,
+    cycle_label:           "Cycle",
+    cycle_details:         "Cycle details →",
+    bolus_details:         "Bolus details →",
+    basal_details:         "Basal details →",
+    detail:                "Detail →",
+    back:                  "Back",
+    reset_chat:            "Reset chat",
+    tts_off:               "Turn off voice output",
+    tts_on:                "Turn on voice output",
+    status_speaking:       "Speaking …",
+    status_analyzing:      "Analysing …",
+    status_ready:          "READY",
+    close:                 "Close",
+    empty_state:           "Ask Glev anything about your glucose levels, IOB or last meal.",
+    stop_playback:         "Stop playback",
+    read_aloud:            "Read aloud",
+    meal_fallback:         "Meal",
+    open_engine_chip:      "Open Engine",
+    n_of_total:            (n: number, total: number) => `${n} of ${total}`,
+    mic_stop:              "Stop recording",
+    mic_start:             "Start voice input",
+    placeholder_listening: "Listening …",
+    placeholder_idle:      "Ask Glev …",
+    send:                  "Send",
+  },
+} as const;
+// ──────────────────────────────────────────────────────────────────────────
 
 interface Props {
   open: boolean;
@@ -56,8 +152,6 @@ interface Props {
   variant?: "sheet" | "fullscreen";
 }
 
-const DISCLAIMER =
-  "Glev ist kein Medizinprodukt. Alle Informationen sind Orientierungspunkte.";
 
 /**
  * Inline confirm/cancel widget attached to an assistant bubble that
@@ -88,6 +182,7 @@ function PendingActionWidget({
   isMealChipActive,
   mealChipIndex,
   mealChipTotal,
+  t,
 }: {
   pa: PendingAction;
   onConfirm: () => void;
@@ -104,6 +199,7 @@ function PendingActionWidget({
   mealChipIndex?: number;
   /** Total number of unresolved meal chips in the turn. */
   mealChipTotal?: number;
+  t: typeof COPY["de"] | typeof COPY["en"];
 }) {
   const isMeal = pa.kind === "log_meal_entry";
 
@@ -132,7 +228,7 @@ function PendingActionWidget({
       <div style={{ ...baseCard, borderColor: "rgba(80,200,120,0.4)" }}>
         {summary}
         <div style={{ color: "#7ee0a0", fontWeight: 600, fontSize: 13 }}>
-          {isMeal ? "✓ Engine geöffnet" : "✓ Gespeichert"}
+          {isMeal ? t.confirmed_engine : t.confirmed_saved}
         </div>
       </div>
     );
@@ -142,7 +238,7 @@ function PendingActionWidget({
       <div style={{ ...baseCard, opacity: 0.6 }}>
         {summary}
         <div style={{ color: "var(--text-muted)", fontSize: 13 }}>
-          Abgebrochen
+          {t.cancelled}
         </div>
       </div>
     );
@@ -152,7 +248,7 @@ function PendingActionWidget({
       <div style={{ ...baseCard, borderColor: "rgba(255,120,120,0.45)" }}>
         {summary}
         <div style={{ color: "#ff8888", fontSize: 13 }}>
-          Speichern fehlgeschlagen: {pa.error ?? "unbekannter Fehler"}
+          {t.save_failed}: {pa.error ?? t.unknown_error}
         </div>
         <div style={{ display: "flex", gap: 8 }}>
           <button
@@ -169,7 +265,7 @@ function PendingActionWidget({
               cursor: "pointer",
             }}
           >
-            Nochmal versuchen
+            {t.retry}
           </button>
         </div>
       </div>
@@ -202,7 +298,7 @@ function PendingActionWidget({
             shown as a ghost button so the user knows it's a secondary action. */}
         <button
           type="button"
-          aria-label="Mahlzeit verwerfen"
+          aria-label={t.discard_meal}
           onClick={onCancel}
           disabled={busy}
           style={{
@@ -248,7 +344,7 @@ function PendingActionWidget({
               fontWeight: 500,
             }}
           >
-            Mahlzeit {mealChipIndex} von {mealChipTotal}
+            {t.meal_n_of_m(mealChipIndex!, mealChipTotal!)}
           </div>
         )}
 
@@ -273,7 +369,7 @@ function PendingActionWidget({
             gap: 6,
           }}
         >
-          {busy ? "Öffnet …" : "Engine öffnen →"}
+          {busy ? t.opening : t.open_engine}
         </button>
       </div>
     );
@@ -301,7 +397,7 @@ function PendingActionWidget({
         {/* ✕ dismiss button — top right corner */}
         <button
           type="button"
-          aria-label="Verwerfen"
+          aria-label={t.discard}
           onClick={onCancel}
           disabled={busy}
           style={{
@@ -339,7 +435,7 @@ function PendingActionWidget({
           }}
         >
           <span>🩸</span>
-          <span>Fingerstick</span>
+          <span>{t.fingerstick_label}</span>
         </div>
 
         {/* Value + time */}
@@ -363,7 +459,7 @@ function PendingActionWidget({
               letterSpacing: "0",
             }}
           >
-            · Jetzt
+            · {t.now}
           </span>
         </div>
 
@@ -385,7 +481,7 @@ function PendingActionWidget({
               cursor: busy ? "default" : "pointer",
             }}
           >
-            {busy ? "Speichert …" : "Schnell speichern"}
+            {busy ? t.saving : t.quick_save}
           </button>
           {!!onDetailOpen && (
             <button
@@ -404,7 +500,7 @@ function PendingActionWidget({
                 whiteSpace: "nowrap",
               }}
             >
-              Fingerstick-Details öffnen →
+              {t.fingerstick_details}
             </button>
           )}
         </div>
@@ -458,7 +554,7 @@ function PendingActionWidget({
         {/* ✕ dismiss button — top right corner */}
         <button
           type="button"
-          aria-label="Verwerfen"
+          aria-label={t.discard}
           onClick={onCancel}
           disabled={busy}
           style={{
@@ -496,7 +592,7 @@ function PendingActionWidget({
           }}
         >
           <span>🌙</span>
-          <span>Zyklus</span>
+          <span>{t.cycle_label}</span>
         </div>
 
         {/* Mini preview pills: [Blutung/Phase] · [Detail] · [Datum] */}
@@ -537,7 +633,7 @@ function PendingActionWidget({
               cursor: busy ? "default" : "pointer",
             }}
           >
-            {busy ? "Speichert …" : "Schnell speichern"}
+            {busy ? t.saving : t.quick_save}
           </button>
           {!!onDetailOpen && (
             <button
@@ -557,7 +653,7 @@ function PendingActionWidget({
                 whiteSpace: "nowrap",
               }}
             >
-              Zyklus-Details →
+              {t.cycle_details}
             </button>
           )}
         </div>
@@ -579,25 +675,25 @@ function PendingActionWidget({
     const iName = p?.insulin_name ?? (iType === "bolus" ? "Bolus" : "Basal");
     const iUnits = p?.units ?? 0;
     const iTime = (() => {
-      if (!p?.logged_at) return "Jetzt";
+      if (!p?.logged_at) return t.now;
       const ms = new Date(p.logged_at).getTime();
-      if (!Number.isFinite(ms)) return "Jetzt";
+      if (!Number.isFinite(ms)) return t.now;
       const deltaMin = Math.round((Date.now() - ms) / 60_000);
-      if (deltaMin <= 2) return "Jetzt";
-      if (deltaMin < 60) return `vor ${deltaMin} min`;
+      if (deltaMin <= 2) return t.now;
+      if (deltaMin < 60) return t.mins_ago(deltaMin);
       const hr = Math.round(deltaMin / 60);
-      if (hr < 24) return `vor ${hr} h`;
+      if (hr < 24) return t.hours_ago(hr);
       return new Date(ms).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" });
     })();
     const typeBadgeColor = iType === "bolus" ? "#4F6EF7" : "#10b981";
-    const detailLabel = iType === "bolus" ? "Bolus-Details →" : "Basal-Details →";
+    const detailLabel = iType === "bolus" ? t.bolus_details : t.basal_details;
 
     return (
       <div style={{ ...baseCard, position: "relative" }}>
         {/* ✕ dismiss button */}
         <button
           type="button"
-          aria-label="Verwerfen"
+          aria-label={t.discard}
           onClick={onCancel}
           disabled={busy}
           style={{
@@ -649,7 +745,7 @@ function PendingActionWidget({
               cursor: busy ? "default" : "pointer",
             }}
           >
-            {busy ? "Speichert …" : "Schnell speichern"}
+            {busy ? t.saving : t.quick_save}
           </button>
           {onDetailOpen && (
             <button
@@ -684,7 +780,7 @@ function PendingActionWidget({
       {/* ✕ dismiss button — top right corner */}
       <button
         type="button"
-        aria-label="Verwerfen"
+        aria-label={t.discard}
         onClick={onCancel}
         disabled={busy}
         style={{
@@ -748,7 +844,7 @@ function PendingActionWidget({
             cursor: busy ? "default" : "pointer",
           }}
         >
-          {busy ? "Speichert …" : "Schnell speichern"}
+          {busy ? t.saving : t.quick_save}
         </button>
         {hasDetail && (
           <button
@@ -767,7 +863,7 @@ function PendingActionWidget({
               whiteSpace: "nowrap",
             }}
           >
-            Detail →
+            {t.detail}
           </button>
         )}
       </div>
@@ -803,6 +899,8 @@ export default function GlevAIChatSheet({
   voiceIntentEnabled = false,
   variant = "sheet",
 }: Props) {
+  const locale = useLocale();
+  const t = locale === "en" ? COPY.en : COPY.de;
   const isFullscreen = variant === "fullscreen";
   const [input, setInput] = useState("");
   const [sttError, setSttError] = useState<string | null>(null);
@@ -882,7 +980,7 @@ export default function GlevAIChatSheet({
   useEffect(() => {
     if (!pendingIntent) return;
     if (!tts.enabled || !tts.intentAnnounce) return;
-    void tts.speak(intentLabel(pendingIntent));
+    void tts.speak(intentLabel(pendingIntent, locale === "en" ? "en" : "de"));
   // tts.speak and tts.stop are stable callbacks; only run when pendingIntent changes.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pendingIntent]);
@@ -1119,7 +1217,7 @@ export default function GlevAIChatSheet({
             <button
               type="button"
               onClick={onClose}
-              aria-label="Zurück"
+              aria-label={t.back}
               style={{
                 background: "none",
                 border: "none",
@@ -1147,8 +1245,8 @@ export default function GlevAIChatSheet({
             <button
               type="button"
               onClick={() => { setSttError(null); setSttPartial(null); onClearChat(); }}
-              aria-label="Chat zurücksetzen"
-              title="Chat zurücksetzen"
+              aria-label={t.reset_chat}
+              title={t.reset_chat}
               disabled={messages.length === 0 && !streaming}
               style={{
                 background: "none",
@@ -1175,8 +1273,8 @@ export default function GlevAIChatSheet({
           <button
             type="button"
             onClick={tts.toggleAutoRead}
-            aria-label={tts.autoRead ? "Sprachausgabe aus" : "Sprachausgabe ein"}
-            title={tts.autoRead ? "Sprachausgabe aus" : "Sprachausgabe ein"}
+            aria-label={tts.autoRead ? t.tts_off : t.tts_on}
+            title={tts.autoRead ? t.tts_off : t.tts_on}
             style={{
               background: "none",
               border: "none",
@@ -1208,7 +1306,7 @@ export default function GlevAIChatSheet({
             const isSpeaking = tts.speaking;
             const isAnalyzing = streaming;
             const dotColor = isSpeaking ? "#50C878" : isAnalyzing ? ACCENT : "#50C878";
-            const label = isSpeaking ? "Spricht …" : isAnalyzing ? "Analysiert …" : "BEREIT";
+            const label = isSpeaking ? t.status_speaking : isAnalyzing ? t.status_analyzing : t.status_ready;
             const bgColor = isSpeaking
               ? "rgba(80,200,120,0.12)"
               : isAnalyzing
@@ -1256,7 +1354,7 @@ export default function GlevAIChatSheet({
           <button
             type="button"
             onClick={onClose}
-            aria-label="Schließen"
+            aria-label={t.close}
             style={{
               background: "none",
               border: "none",
@@ -1299,7 +1397,7 @@ export default function GlevAIChatSheet({
                 padding: "30px 12px",
               }}
             >
-              Frag Glev etwas über deine Werte, IOB oder letzte Mahlzeit.
+              {t.empty_state}
             </div>
           )}
 
@@ -1358,7 +1456,7 @@ export default function GlevAIChatSheet({
                 return (
                   <button
                     type="button"
-                    aria-label={isThisBubblePlaying ? "Wiedergabe stoppen" : "Vorlesen"}
+                    aria-label={isThisBubblePlaying ? t.stop_playback : t.read_aloud}
                     onClick={() => {
                       if (isThisBubblePlaying) {
                         tts.stop();
@@ -1450,6 +1548,7 @@ export default function GlevAIChatSheet({
                       mealChipTotal={
                         totalUnresolvedMeals > 1 ? totalUnresolvedMeals : undefined
                       }
+                      t={t}
                     />
                   );
                 });
@@ -1491,11 +1590,11 @@ export default function GlevAIChatSheet({
             }}
           >
             <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-              {pendingMealNavQueue[0].label || "Mahlzeit"} — Engine öffnen
+              {pendingMealNavQueue[0].label || t.meal_fallback} — {t.open_engine_chip}
             </span>
             {pendingMealNavQueue.length > 1 && (
               <span style={{ fontSize: 12, opacity: 0.65, flexShrink: 0 }}>
-                1 von {pendingMealNavQueue.length}
+                {t.n_of_total(1, pendingMealNavQueue.length)}
               </span>
             )}
             <span style={{ fontSize: 16, flexShrink: 0 }}>→</span>
@@ -1518,7 +1617,7 @@ export default function GlevAIChatSheet({
           <button
             type="button"
             data-glev-mic="true"
-            aria-label={isListening ? "Aufnahme stoppen" : "Spracheingabe starten"}
+            aria-label={isListening ? t.mic_stop : t.mic_start}
             aria-pressed={isListening}
             onPointerDown={(e) => {
               e.preventDefault();
@@ -1573,7 +1672,7 @@ export default function GlevAIChatSheet({
                 submit();
               }
             }}
-            placeholder={isListening ? "Spreche …" : "Frag Glev …"}
+            placeholder={isListening ? t.placeholder_listening : t.placeholder_idle}
             disabled={streaming}
             style={{
               flex: 1,
@@ -1592,7 +1691,7 @@ export default function GlevAIChatSheet({
             type="button"
             onClick={submit}
             disabled={!input.trim() || streaming}
-            aria-label="Senden"
+            aria-label={t.send}
             style={{
               flexShrink: 0,
               width: 38,
@@ -1659,7 +1758,7 @@ export default function GlevAIChatSheet({
             textAlign: "center",
           }}
         >
-          {DISCLAIMER}
+          {t.disclaimer}
         </div>
       </div>
     </>
