@@ -6,63 +6,13 @@ import { extractFullNameFromSession } from "@/lib/stripeCheckout";
 import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
 import { enqueueEmail } from "@/lib/emails/outbox";
 import { scheduleDripEmails } from "@/lib/emails/drip-scheduler";
+import {
+  mapStripeStatus,
+  mapStripeStatusToPlan,
+} from "@/lib/stripeWebhookHelpers";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-
-// ── Pure helpers (also exported for unit tests) ──────────────────────────────
-
-/**
- * Map a Stripe subscription status to the constrained set we store in
- * `pro_subscriptions.status`. Returns null when the input is unknown —
- * caller should fall back to a sensible default ('trialing' on creation,
- * 'active' on update). Stripe's 'canceled' is normalized to 'cancelled'
- * (British spelling — consistent with the Pro webhook).
- */
-export function mapStripeStatus(s: string | null | undefined): string | null {
-  if (!s) return null;
-  switch (s) {
-    case "trialing":
-    case "active":
-    case "past_due":
-      return s;
-    case "canceled":
-    case "incomplete_expired":
-    case "unpaid":
-      return "cancelled";
-    default:
-      // 'incomplete', 'paused' etc. — treat as past_due so we don't grant
-      // access but also don't claim cancelled.
-      return "past_due";
-  }
-}
-
-/**
- * Map a Stripe subscription status to `profiles.plan`.
- *
- * "trialing" / "active" / "past_due" → "pro" (Plus grants the same gated
- * features as Pro; the `subscription_status = 'plus'` column distinguishes
- * the billing tier without requiring a new plan value).
- * Terminal states → null (downgrade to free).
- * Unknown states → undefined (leave plan untouched).
- */
-export function mapStripeStatusToPlan(
-  s: string | null | undefined,
-): "pro" | null | undefined {
-  if (!s) return undefined;
-  switch (s) {
-    case "trialing":
-    case "active":
-    case "past_due":
-      return "pro";
-    case "canceled":
-    case "unpaid":
-    case "incomplete_expired":
-      return null;
-    default:
-      return undefined;
-  }
-}
 
 // ── Private helpers ──────────────────────────────────────────────────────────
 

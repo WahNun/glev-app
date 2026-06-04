@@ -13,7 +13,7 @@ import { test, expect } from "@playwright/test";
 import {
   mapStripeStatus,
   mapStripeStatusToPlan,
-} from "@/app/api/plus/webhook/route";
+} from "@/lib/stripeWebhookHelpers";
 
 // ── mapStripeStatus ──────────────────────────────────────────────────────────
 
