@@ -1510,7 +1510,7 @@ async function toolLogMealEntry(
     process.env.NEXT_PUBLIC_OPTIMISTIC_REFINEMENT === "true";
 
   const rawItems = Array.isArray(args.items)
-    ? (args.items as Array<{ name?: unknown; grams?: unknown }>).filter(
+    ? (args.items as Array<{ name?: unknown; grams?: unknown; alcohol_g?: unknown }>).filter(
         (i) => typeof i?.name === "string" && typeof i?.grams === "number" && i.grams > 0,
       )
     : [];
@@ -1607,6 +1607,7 @@ async function toolLogMealEntry(
       ? rawItems.map((i) => ({
           name: String(i.name), grams: Number(i.grams),
           carbs: 0, protein: 0, fat: 0, fiber: 0, source: "estimated" as const,
+          ...(typeof i.alcohol_g === "number" ? { alcohol_g: i.alcohol_g } : {}),
         }))
       : undefined;
   }
@@ -1615,7 +1616,10 @@ async function toolLogMealEntry(
   // Wenn items[] Alkohol-Gramm tragen: zusätzliche influence_log
   // PendingAction erzeugen und als DualPendingActionEnvelope zurückgeben.
   // Double-Counting-Schutz: alcohol_g wird NIE zu carbs addiert.
-  const totalAlcoholG = (resolvedItems ?? []).reduce(
+  // Compute from rawItems (which carries Mistral's original alcohol_g values)
+  // rather than resolvedItems, because resolvedItems is undefined when neither
+  // aggregator flag is enabled — reading it would always yield 0.
+  const totalAlcoholG = rawItems.reduce(
     (sum, it) => sum + (typeof it.alcohol_g === "number" && it.alcohol_g > 0 ? it.alcohol_g : 0),
     0,
   );

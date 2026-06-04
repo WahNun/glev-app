@@ -74,8 +74,10 @@ test("glevTools: log_meal_entry items schema includes alcohol_g", () => {
 
 test("system-prompt: contains alcohol_g instruction for items[]", () => {
   const src = readFileSync(join(process.cwd(), "lib/ai/glevChatPrompt.ts"), "utf8");
-  expect(src).toContain("ALKOHOL in items[]");
-  expect(src).toContain("0.5l Bier");
+  expect(src).toContain("ALKOHOL — PFLICHT-REGEL");
+  // Few-shot example: "Bockwurst und Bier" → Bier item has alcohol_g:20
+  expect(src).toContain("eine Bockwurst und Bier");
+  expect(src).toContain("alcohol_g:20");
   expect(src).toContain("log_influence_entry NICHT separat aufrufen");
 });
 
@@ -209,4 +211,39 @@ test("glevTools: alcohol_g is NOT added to carbs (double-counting guard)", () =>
   expect(src).toContain("resolvedCarbs   = Math.round(totals.carbs");
   // alcohol_g sum is separate from carbs sum
   expect(src).toContain("total_alcohol_g");
+});
+
+// ── 12. rawItems alcohol_g detection fix ─────────────────────────────────
+// Regression: totalAlcoholG was computed from resolvedItems which is undefined
+// when neither MACRO_AGGREGATOR_V2 nor OPTIMISTIC_REFINEMENT is set.
+// Fix: totalAlcoholG now reads from rawItems (carries Mistral's alcohol_g).
+
+test("glevTools: totalAlcoholG is computed from rawItems not resolvedItems", () => {
+  const src = readFileSync(join(process.cwd(), "lib/ai/glevTools.ts"), "utf8");
+  // Must read from rawItems
+  expect(src).toContain("const totalAlcoholG = rawItems.reduce(");
+  // Must NOT read from resolvedItems for totalAlcoholG
+  expect(src).not.toContain("const totalAlcoholG = (resolvedItems");
+  // rawItems type must include alcohol_g
+  expect(src).toContain("alcohol_g?: unknown");
+});
+
+test("glevTools: system-prompt has Bockwurst+Bier few-shot with alcohol_g", () => {
+  const src = readFileSync(join(process.cwd(), "lib/ai/glevChatPrompt.ts"), "utf8");
+  // Few-shot example in the system prompt
+  expect(src).toContain("eine Bockwurst und Bier");
+  // Bier item must show alcohol_g:20
+  expect(src).toContain("alcohol_g:20");
+  // The influence log must NOT be called separately (Dual-Emission is automatic)
+  expect(src).toContain("log_influence_entry NICHT separat aufrufen");
+});
+
+// ── 13. Reset clears pendingMealNavQueue ──────────────────────────────────
+
+test("useGlevAI: clearMessages resets pendingMealNavQueue and ref", () => {
+  const src = readFileSync(join(process.cwd(), "lib/useGlevAI.ts"), "utf8");
+  // clearMessages must reset the meal queue state
+  expect(src).toContain("setPendingMealNavQueue([])");
+  // clearMessages must also reset the streaming ref queue
+  expect(src).toContain("pendingMealQueueRef.current = []");
 });
