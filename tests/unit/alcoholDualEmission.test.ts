@@ -134,12 +134,44 @@ test("confirm-action route: handles source_meal_token for linkage", () => {
   expect(src).toContain("alcohol_g");
 });
 
-// ── 8. evaluation.ts: linkedAlcoholG + alcohol_extended_window ───────────
+// ── 8. evaluation.ts + lifecycle.ts: linkedAlcoholG + extended window ────
 
 test("evaluation.ts: accepts linkedAlcoholG input field", () => {
   const src = readFileSync(join(process.cwd(), "lib/engine/evaluation.ts"), "utf8");
   expect(src).toContain("linkedAlcoholG");
   expect(src).toContain("alcohol_extended_window");
+});
+
+test("lifecycle.ts: lifecycleFor accepts linkedAlcoholG parameter", () => {
+  const src = readFileSync(join(process.cwd(), "lib/engine/lifecycle.ts"), "utf8");
+  expect(src).toContain("linkedAlcoholG");
+  // Trigger is on influence, not meal-linkage
+  expect(src).toContain("source_meal_id NULL");
+  expect(src).toContain("standalone alcohol influence");
+});
+
+test("lifecycle.ts: resolveLinkedAlcohol exported with 8h window", () => {
+  const src = readFileSync(join(process.cwd(), "lib/engine/lifecycle.ts"), "utf8");
+  expect(src).toContain("export async function resolveLinkedAlcohol");
+  expect(src).toContain("8 * 3600_000");
+  expect(src).toContain("influence_type\", \"alcohol\"");
+});
+
+test("engine/page.tsx: Bolus-Info-Box uses qualitative wording (no % figure)", () => {
+  const src = readFileSync(join(process.cwd(), "app/(protected)/engine/page.tsx"), "utf8");
+  // Must contain the qualitative wording
+  expect(src).toContain("Alkohol verzögert die Glukose-Reaktion");
+  expect(src).toContain("Glev verlängert das Hypo-Monitoring-Fenster");
+  // Must NOT contain the old quantitative advice
+  expect(src).not.toContain("10–30%");
+  expect(src).not.toContain("10-30%");
+});
+
+test("engine/page.tsx: EN Bolus-Info-Box uses qualitative wording", () => {
+  const src = readFileSync(join(process.cwd(), "app/(protected)/engine/page.tsx"), "utf8");
+  expect(src).toContain("Alcohol delays the glucose response");
+  expect(src).toContain("extends hypo monitoring to 8 h");
+  expect(src).not.toContain("10–30%");
 });
 
 // ── 9. Migration file ─────────────────────────────────────────────────────

@@ -4,6 +4,43 @@ import type { AdjustmentMessage } from "./adjustment";
 import { parseDbDate } from "@/lib/time";
 import type { InsulinSettings } from "@/lib/userSettings";
 import { classifyPreReferenceTrend, type TrendSample } from "./trend";
+import type { SupabaseClient } from "@supabase/supabase-js";
+
+/**
+ * Resolves the total alcohol grams from influence_logs within the
+ * 8-hour window before `mealMs` for the given user.
+ *
+ * Trigger is on the INFLUENCE, not on meal-linkage:
+ *   - source_meal_id NULL  (standalone alcohol influence) → included
+ *   - source_meal_id set   (linked to a meal)             → included
+ *
+ * Returns 0 when no alcohol influence exists in the window, or when
+ * the query fails (non-fatal — evaluation proceeds without the tag).
+ */
+export async function resolveLinkedAlcohol(
+  sb: SupabaseClient,
+  userId: string,
+  mealMs: number,
+): Promise<number> {
+  try {
+    const windowStart = new Date(mealMs - 8 * 3600_000).toISOString();
+    const windowEnd   = new Date(mealMs + 8 * 3600_000).toISOString();
+    const { data } = await sb
+      .from("influence_logs")
+      .select("alcohol_g")
+      .eq("user_id", userId)
+      .eq("influence_type", "alcohol")
+      .gte("occurred_at", windowStart)
+      .lte("occurred_at", windowEnd);
+    if (!data || data.length === 0) return 0;
+    return (data as Array<{ alcohol_g: number | null }>).reduce(
+      (sum, row) => sum + (typeof row.alcohol_g === "number" && row.alcohol_g > 0 ? row.alcohol_g : 0),
+      0,
+    );
+  } catch {
+    return 0;
+  }
+}
 
 export type OutcomeState = "pending" | "provisional" | "final";
 
@@ -57,6 +94,13 @@ export function lifecycleFor(
    *  Pass `undefined` (or omit) when no CGM history is available — the
    *  evaluation path is identical to before this parameter existed. */
   preMealSamples?: readonly TrendSample[],
+  /** Total alcohol grams from any alcohol influence_log within the last
+   *  8 h of this meal — trigger is on the influence, NOT on meal-linkage.
+   *  source_meal_id may be NULL (standalone influence) or set (linked).
+   *  When > 0, evaluateEntry tags HYPO_DURING with [alcohol_extended_window].
+   *  Resolved by server-side callers via a separate influence_logs query.
+   *  Optional — when omitted, behaviour is identical to the pre-alcohol path. */
+  linkedAlcoholG?: number | null,
 ): LifecycleResult {
   const created = parseDbDate(m.meal_time ?? m.created_at);
   const mealMs = created.getTime();
@@ -120,6 +164,10 @@ export function lifecycleFor(
     // passed in (all existing callers that omit preMealSamples stay on
     // the old path; no behaviour change for them).
     preTrend,
+    // Alcohol influence window (Dual-Emission): trigger is on the influence
+    // log, not on meal-linkage. Standalone influences (source_meal_id NULL)
+    // also extend the hypo monitoring window.
+    linkedAlcoholG: linkedAlcoholG ?? null,
   });
 
   // Curve-finality (Task #187): if the +3h backfill job has populated
