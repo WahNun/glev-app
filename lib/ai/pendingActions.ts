@@ -64,10 +64,11 @@ export type InfluenceEntryPayload = {
 };
 
 export type CycleEntryPayload = {
-  cycle_day?: number | null;
-  phase?: string | null;
+  start_date: string;
+  end_date?: string | null;
+  flow_intensity?: "light" | "medium" | "heavy" | null;
+  phase_marker?: "ovulation" | "pms" | "other" | null;
   notes?: string | null;
-  logged_at?: string | null;
 };
 
 export type AppointmentPayload = {

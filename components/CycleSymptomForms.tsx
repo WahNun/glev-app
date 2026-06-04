@@ -178,6 +178,53 @@ export function CycleForm() {
   const [status, setStatus] = useState<Status>({ kind: "idle" });
   const [savedTick, setSavedTick] = useState<number>(0);
 
+  // AI pre-fill: read glev_pending_cycle from sessionStorage on mount,
+  // then listen for glev:open-cycle-log dispatched by navigateToLogScreen.
+  // The payload shape mirrors the log_cycle_entry tool params:
+  //   { start_date, end_date?, flow_intensity?, phase_marker?, notes? }
+  // phase_marker "ovulation" maps to CyclePhase; "pms"/"other" leave phase
+  // at its default (user picks manually). Clears sessionStorage after reading.
+  useEffect(() => {
+    function applyPayload(raw: unknown) {
+      if (!raw || typeof raw !== "object") return;
+      const p = raw as Record<string, unknown>;
+      const startDate = typeof p.start_date === "string" ? p.start_date : null;
+      const flowIntensity = typeof p.flow_intensity === "string" ? p.flow_intensity : null;
+      const phaseMarker = typeof p.phase_marker === "string" ? p.phase_marker : null;
+      const endDate = typeof p.end_date === "string" && p.end_date ? p.end_date : null;
+      const notesVal = typeof p.notes === "string" && p.notes ? p.notes : null;
+
+      if (flowIntensity && ["light", "medium", "heavy"].includes(flowIntensity)) {
+        setMode("bleeding");
+        setFlow(flowIntensity as FlowIntensity);
+      } else if (phaseMarker) {
+        setMode("marker");
+        // Only "ovulation" maps to a CyclePhase directly.
+        // "pms" / "other" leave the phase picker at its current default.
+        if (phaseMarker === "ovulation") setPhase("ovulation");
+      }
+      if (startDate) setStart(startDate);
+      if (endDate) setEnd(endDate);
+      if (notesVal) setNotes(notesVal);
+    }
+
+    // On mount: check sessionStorage for a pending pre-fill written by
+    // navigateToLogScreen before navigating to this screen.
+    if (typeof window !== "undefined") {
+      const raw = window.sessionStorage.getItem("glev_pending_cycle");
+      if (raw) {
+        try { applyPayload(JSON.parse(raw)); } catch { /* ignore parse errors */ }
+        try { window.sessionStorage.removeItem("glev_pending_cycle"); } catch {}
+      }
+    }
+
+    const handler = (e: Event) => {
+      applyPayload((e as CustomEvent).detail);
+    };
+    window.addEventListener("glev:open-cycle-log", handler);
+    return () => window.removeEventListener("glev:open-cycle-log", handler);
+  }, []);
+
   const valid = (() => {
     if (!start) return false;
     if (mode === "bleeding") {

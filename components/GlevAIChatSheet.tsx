@@ -296,19 +296,27 @@ function PendingActionWidget({
           borderColor: isOutOfRange ? `${WARNING}55` : undefined,
         }}
       >
-        {/* ✕ dismiss */}
+        {/* ✕ dismiss button — top right corner */}
         <button
           type="button"
           aria-label="Verwerfen"
           onClick={onCancel}
           disabled={busy}
           style={{
-            position: "absolute", top: 8, right: 8,
-            background: "none", border: "none",
+            position: "absolute",
+            top: 8,
+            right: 8,
+            background: "none",
+            border: "none",
             cursor: busy ? "default" : "pointer",
-            padding: 4, color: "var(--text-muted)", fontSize: 14,
-            lineHeight: 1, display: "flex", alignItems: "center",
-            justifyContent: "center", opacity: busy ? 0.5 : 1,
+            padding: 4,
+            color: "var(--text-muted)",
+            fontSize: 14,
+            lineHeight: 1,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            opacity: busy ? 0.5 : 1,
           }}
         >
           ✕
@@ -317,9 +325,14 @@ function PendingActionWidget({
         {/* Type label */}
         <div
           style={{
-            display: "flex", alignItems: "center", gap: 5,
-            paddingRight: 20, fontSize: 11, fontWeight: 700,
-            color: "var(--text-muted)", letterSpacing: "0.04em",
+            display: "flex",
+            alignItems: "center",
+            gap: 5,
+            paddingRight: 20,
+            fontSize: 11,
+            fontWeight: 700,
+            color: "var(--text-muted)",
+            letterSpacing: "0.04em",
             textTransform: "uppercase",
           }}
         >
@@ -330,7 +343,8 @@ function PendingActionWidget({
         {/* Value + time */}
         <div
           style={{
-            fontSize: 20, fontWeight: 700,
+            fontSize: 20,
+            fontWeight: 700,
             fontFamily: "var(--font-mono)",
             color: isOutOfRange ? WARNING : "var(--text-strong)",
             letterSpacing: "-0.02em",
@@ -339,9 +353,12 @@ function PendingActionWidget({
           {valueMgdl != null ? `${valueMgdl} mg/dL` : pa.summary}
           <span
             style={{
-              fontSize: 13, fontWeight: 500,
-              color: "var(--text-muted)", marginLeft: 6,
-              fontFamily: "inherit", letterSpacing: "0",
+              fontSize: 13,
+              fontWeight: 500,
+              color: "var(--text-muted)",
+              marginLeft: 6,
+              fontFamily: "inherit",
+              letterSpacing: "0",
             }}
           >
             · Jetzt
@@ -355,11 +372,15 @@ function PendingActionWidget({
             onClick={onQuickSave ?? onConfirm}
             disabled={busy}
             style={{
-              flex: 1, padding: "9px 10px", borderRadius: 8,
+              flex: 1,
+              padding: "9px 10px",
+              borderRadius: 8,
               border: "none",
               background: busy ? "rgba(139,92,246,0.35)" : ACCENT,
-              color: "var(--on-accent)", fontWeight: 600,
-              fontSize: 13, cursor: busy ? "default" : "pointer",
+              color: "var(--on-accent)",
+              fontWeight: 600,
+              fontSize: 13,
+              cursor: busy ? "default" : "pointer",
             }}
           >
             {busy ? "Speichert …" : "Schnell speichern"}
@@ -370,7 +391,8 @@ function PendingActionWidget({
               onClick={onDetailOpen}
               disabled={busy}
               style={{
-                padding: "9px 10px", borderRadius: 8,
+                padding: "9px 10px",
+                borderRadius: 8,
                 border: "1px solid var(--border-strong)",
                 background: "var(--surface-soft)",
                 color: "var(--text-body)",
@@ -381,6 +403,159 @@ function PendingActionWidget({
               }}
             >
               Fingerstick-Details öffnen →
+            </button>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // ── Cycle chip layout (log_cycle_entry) ──────────────────────────
+  // Mini preview with structured pills: mode badge + detail + date.
+  // "Schnell speichern" saves directly; "Zyklus-Details öffnen →"
+  // navigates to /engine?tab=log with the CycleForm pre-filled.
+  if (pa.kind === "log_cycle_entry") {
+    const CYCLE_PINK = "#FF2D78";
+    // Parse the summary: "Zyklus: Mittlere Blutung ab 2026-06-04"
+    // or "Zyklus: Eisprung ab 2026-06-04 bis 2026-06-07"
+    const stripped = pa.summary.replace(/^Zyklus:\s*/i, "");
+    const abIdx = stripped.indexOf(" ab ");
+    const typeLabel = abIdx > -1 ? stripped.slice(0, abIdx) : stripped;
+    const datePart = abIdx > -1 ? stripped.slice(abIdx + 4) : "";
+    // Date: take only the first date before any " bis "
+    const dateLabel = datePart.split(" bis ")[0] ?? datePart;
+    const isBleeding = typeLabel.endsWith("Blutung");
+    const modeBadge = isBleeding ? "Blutung" : "Phase";
+    // Extract intensity word from e.g. "Mittlere Blutung" → "Mittel"
+    const intensityMap: Record<string, string> = {
+      Leichte: "Leicht",
+      Mittlere: "Mittel",
+      Starke: "Stark",
+    };
+    let detailBadge = typeLabel;
+    if (isBleeding) {
+      const intensityWord = typeLabel.replace(" Blutung", "");
+      detailBadge = intensityMap[intensityWord] ?? intensityWord;
+    }
+
+    const pillStyle = (accent: string): React.CSSProperties => ({
+      display: "inline-flex",
+      alignItems: "center",
+      padding: "3px 8px",
+      borderRadius: 8,
+      background: `${accent}18`,
+      border: `1px solid ${accent}35`,
+      color: accent,
+      fontSize: 12,
+      fontWeight: 700,
+      letterSpacing: "-0.01em",
+    });
+
+    return (
+      <div style={{ ...baseCard, position: "relative" }}>
+        {/* ✕ dismiss button — top right corner */}
+        <button
+          type="button"
+          aria-label="Verwerfen"
+          onClick={onCancel}
+          disabled={busy}
+          style={{
+            position: "absolute",
+            top: 8,
+            right: 8,
+            background: "none",
+            border: "none",
+            cursor: busy ? "default" : "pointer",
+            padding: 4,
+            color: "var(--text-muted)",
+            fontSize: 14,
+            lineHeight: 1,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            opacity: busy ? 0.5 : 1,
+          }}
+        >
+          ✕
+        </button>
+
+        {/* Header row: 🌙 ZYKLUS */}
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 5,
+            paddingRight: 20,
+            fontSize: 11,
+            fontWeight: 700,
+            color: "var(--text-muted)",
+            letterSpacing: "0.04em",
+            textTransform: "uppercase",
+          }}
+        >
+          <span>🌙</span>
+          <span>Zyklus</span>
+        </div>
+
+        {/* Mini preview pills: [Blutung/Phase] · [Detail] · [Datum] */}
+        <div
+          style={{
+            display: "flex",
+            flexWrap: "wrap",
+            alignItems: "center",
+            gap: 6,
+          }}
+        >
+          <span style={pillStyle(CYCLE_PINK)}>{modeBadge}</span>
+          <span style={{ color: "var(--text-faint)", fontSize: 12 }}>·</span>
+          <span style={pillStyle(CYCLE_PINK)}>{detailBadge}</span>
+          {dateLabel && (
+            <>
+              <span style={{ color: "var(--text-faint)", fontSize: 12 }}>·</span>
+              <span style={pillStyle("var(--text-dim)")}>{dateLabel}</span>
+            </>
+          )}
+        </div>
+
+        {/* Action buttons */}
+        <div style={{ display: "flex", gap: 8 }}>
+          <button
+            type="button"
+            onClick={onQuickSave ?? onConfirm}
+            disabled={busy}
+            style={{
+              flex: 1,
+              padding: "9px 10px",
+              borderRadius: 8,
+              border: "none",
+              background: busy ? `${CYCLE_PINK}55` : CYCLE_PINK,
+              color: "#fff",
+              fontWeight: 600,
+              fontSize: 13,
+              cursor: busy ? "default" : "pointer",
+            }}
+          >
+            {busy ? "Speichert …" : "Schnell speichern"}
+          </button>
+          {!!onDetailOpen && (
+            <button
+              type="button"
+              onClick={onDetailOpen}
+              disabled={busy}
+              style={{
+                padding: "9px 10px",
+                borderRadius: 8,
+                border: `1px solid ${CYCLE_PINK}40`,
+                background: `${CYCLE_PINK}0d`,
+                color: CYCLE_PINK,
+                fontSize: 13,
+                fontWeight: 600,
+                cursor: busy ? "default" : "pointer",
+                opacity: busy ? 0.5 : 1,
+                whiteSpace: "nowrap",
+              }}
+            >
+              Zyklus-Details →
             </button>
           )}
         </div>
