@@ -134,6 +134,11 @@ const LOW_ROW_ARIA = /(Open Low-glucose alarm|Hypo-Alarm öffnen)/i;
 const ELEVATED_ROW_ARIA = /(Open Elevated alarm|Erhöht-Alarm öffnen)/i;
 const HIGH_ROW_ARIA = /(Open High-glucose alarm|Hyper-Alarm öffnen)/i;
 
+// Conflict warning banner text (alarm_conflict_warning i18n key).
+//   en: "…the alarms overlap."
+//   de: "…die Alarme überschneiden sich."
+const CONFLICT_WARNING = /(the alarms overlap|die Alarme überschneiden sich)/i;
+
 // SnapSlider tap-to-edit readout button: ariaLabel = threshold label.
 // All three sheets use the same translation key (they display identically).
 //   en: "Alarm threshold (mg/dL)"
@@ -414,5 +419,55 @@ test.describe("Sensor & Alarme → alarm rows and sheets", () => {
     await expect(
       page.getByText(/On · above 100 mg\/dL|An · über 100 mg\/dL/),
     ).toBeVisible({ timeout: 10_000 });
+  });
+
+  test("Elevated sheet: conflict warning appears when elevated threshold ≥ high threshold", async ({ page }) => {
+    await loginAsTestUser(page, test.info().workerIndex);
+
+    // Seed: elevated=180, high=170 → 180 ≥ 170 → conflict must be shown.
+    await seedAlarmSettings(testUser.userId, {
+      elevated_alarm_enabled: true,
+      elevated_alarm_threshold_mgdl: 180,
+      high_alarm_enabled: true,
+      high_alarm_threshold_mgdl: 170,
+    });
+
+    await page.goto("/settings/sensor-alarme");
+
+    // Open the Elevated alarm sheet by clicking its settings row.
+    const row = page.getByRole("button", { name: ELEVATED_ROW_ARIA });
+    await expect(row).toBeVisible({ timeout: 15_000 });
+    await row.click();
+
+    // Wait for the sheet to be open (toggle switch rendered).
+    await expect(page.getByRole("switch")).toBeVisible({ timeout: 10_000 });
+
+    // The yellow conflict warning banner must be visible.
+    await expect(page.getByText(CONFLICT_WARNING)).toBeVisible({ timeout: 5_000 });
+  });
+
+  test("Elevated sheet: conflict warning absent when elevated threshold < high threshold", async ({ page }) => {
+    await loginAsTestUser(page, test.info().workerIndex);
+
+    // Seed: elevated=150, high=200 → 150 < 200 → no conflict.
+    await seedAlarmSettings(testUser.userId, {
+      elevated_alarm_enabled: true,
+      elevated_alarm_threshold_mgdl: 150,
+      high_alarm_enabled: true,
+      high_alarm_threshold_mgdl: 200,
+    });
+
+    await page.goto("/settings/sensor-alarme");
+
+    // Open the Elevated alarm sheet.
+    const row = page.getByRole("button", { name: ELEVATED_ROW_ARIA });
+    await expect(row).toBeVisible({ timeout: 15_000 });
+    await row.click();
+
+    // Wait for the sheet to be open (toggle switch rendered).
+    await expect(page.getByRole("switch")).toBeVisible({ timeout: 10_000 });
+
+    // No conflict warning banner should be present.
+    await expect(page.getByText(CONFLICT_WARNING)).toBeHidden();
   });
 });
