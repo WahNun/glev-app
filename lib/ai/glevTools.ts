@@ -43,6 +43,9 @@ import {
   type InsulinLike,
   type MealLike,
 } from "@/lib/iob";
+import { aggregateNutrition } from "@/lib/nutrition/aggregate";
+import { getCachedUserHistory } from "@/lib/nutrition/userHistoryCache";
+import type { ParsedFoodItem } from "@/lib/nutrition/types";
 
 // ── Tool definitions (Mistral function-calling schema) ───────────────
 export const GLEV_TOOLS = [
@@ -1467,6 +1470,25 @@ async function toolLogMealEntry(
     /* best-effort — no CGM should not block meal logging */
   }
 
+  // ── Smart Aggregator + Two-Phase Optimistic Emit ──────────────────
+  // Flags:
+  //   MACRO_AGGREGATOR_V2     — resolve per-item sources via OFF/USDA/GPT.
+  //   OPTIMISTIC_REFINEMENT   — emit meal_prep IMMEDIATELY with Mistral
+  //     estimates, run aggregator detached, write result to
+  //     meal_prep_refinements. Client subscribes via Realtime / polling.
+  const aggregatorEnabled =
+    process.env.MACRO_AGGREGATOR_V2 === "true" ||
+    process.env.NEXT_PUBLIC_MACRO_AGGREGATOR_V2 === "true";
+  const optimisticEnabled =
+    process.env.OPTIMISTIC_REFINEMENT === "true" ||
+    process.env.NEXT_PUBLIC_OPTIMISTIC_REFINEMENT === "true";
+
+  const rawItems = Array.isArray(args.items)
+    ? (args.items as Array<{ name?: unknown; grams?: unknown }>).filter(
+        (i) => typeof i?.name === "string" && typeof i?.grams === "number" && i.grams > 0,
+      )
+    : [];
+
   const timeLabel = formatInUserTimezone(loggedAtMs, userTimezone);
   const macroBits = [`${carbs}g KH`];
   if (protein != null) macroBits.push(`${protein}g P`);
@@ -1474,14 +1496,104 @@ async function toolLogMealEntry(
   if (fiber != null) macroBits.push(`${fiber}g Bal`);
   const summary = `Mahlzeit: ${inputText} (${macroBits.join(", ")}) um ${timeLabel.dateTime}`;
 
-  const params = {
-    input_text: inputText,
-    carbs_grams: carbs,
-    protein_grams: protein,
-    fat_grams: fat,
-    fiber_grams: fiber,
-    logged_at: loggedAtIso,
+  // Generate a stable ID so the client can subscribe before the aggregator runs.
+  const mealPrepId = crypto.randomUUID();
+
+  // Helper: run aggregator, log metrics, write refinement row.
+  async function runAggregator(targetId: string): Promise<import("@/lib/meals").ParsedFood[] | undefined> {
+    if (!aggregatorEnabled || rawItems.length === 0) return undefined;
+    const t0 = Date.now();
+    try {
+      const parsedItems: ParsedFoodItem[] = rawItems.map((i) => ({
+        name:               String(i.name),
+        grams:              Number(i.grams),
+        is_branded:         false,
+        search_term_en:     String(i.name),
+        search_term_de:     String(i.name),
+        quantity_specified: true,
+      }));
+      const userHistory = await getCachedUserHistory(
+        sb, userId, parsedItems.map((p) => p.name),
+      ).catch(() => new Map());
+
+      const agg = await aggregateNutrition(parsedItems, { userHistory });
+      const resolved: import("@/lib/meals").ParsedFood[] = agg.items.map((it) => ({
+        name: it.name, grams: it.grams, carbs: it.carbs,
+        protein: it.protein, fat: it.fat, fiber: it.fiber, source: it.source,
+      }));
+
+      const dbHits  = agg.items.filter((i) => i.source !== "estimated" && i.source !== "unknown").length;
+      const estCnt  = agg.items.length - dbHits;
+      const elapsed = Date.now() - t0;
+      console.log(`[meal_prep] id=${targetId} aggregator: ${agg.items.length} items, ${dbHits} db-hits, ${estCnt} estimates, ${elapsed}ms`);
+
+      if (optimisticEnabled) {
+        // Fire-and-forget: write refinement row; Realtime notifies the client.
+        sb.from("meal_prep_refinements")
+          .upsert({ id: targetId, user_id: userId, items_refined: resolved, status: "completed", completed_at: new Date().toISOString() }, { onConflict: "id" })
+          .then(() => {})
+          .catch((e: unknown) => console.error("[meal_prep] refinement write failed:", e));
+      }
+      return resolved;
+    } catch (aggErr) {
+      console.error(`[meal_prep] id=${targetId} aggregator error (fallback to Mistral macros):`, aggErr);
+      if (optimisticEnabled) {
+        sb.from("meal_prep_refinements")
+          .upsert({ id: targetId, user_id: userId, status: "failed", completed_at: new Date().toISOString() }, { onConflict: "id" })
+          .then(() => {})
+          .catch(() => {});
+      }
+      return undefined;
+    }
+  }
+
+  let resolvedItems: import("@/lib/meals").ParsedFood[] | undefined;
+  let resolvedCarbs   = carbs;
+  let resolvedProtein = protein;
+  let resolvedFat     = fat;
+  let resolvedFiber   = fiber;
+
+  if (aggregatorEnabled && !optimisticEnabled) {
+    // Synchronous path (Phase 2): await aggregator before returning.
+    resolvedItems = await runAggregator(mealPrepId);
+    if (resolvedItems) {
+      const totals = resolvedItems.reduce(
+        (acc, it) => ({ carbs: acc.carbs + it.carbs, protein: acc.protein + it.protein, fat: acc.fat + it.fat, fiber: acc.fiber + it.fiber }),
+        { carbs: 0, protein: 0, fat: 0, fiber: 0 },
+      );
+      resolvedCarbs   = Math.round(totals.carbs   * 10) / 10;
+      resolvedProtein = Math.round(totals.protein  * 10) / 10;
+      resolvedFat     = Math.round(totals.fat      * 10) / 10;
+      resolvedFiber   = Math.round(totals.fiber    * 10) / 10;
+    }
+  } else if (optimisticEnabled && aggregatorEnabled) {
+    // Optimistic path (Phase 3): return immediately, run aggregator detached.
+    // Pre-insert a 'pending' row so the client can subscribe before results arrive.
+    void sb.from("meal_prep_refinements")
+      .insert({ id: mealPrepId, user_id: userId, status: "pending" })
+      .then(() => {})
+      .catch(() => {});
+    // Detach — never await this.
+    void runAggregator(mealPrepId);
+    // Use Mistral estimates as-is; items get source='estimated' placeholder.
+    resolvedItems = rawItems.length > 0
+      ? rawItems.map((i) => ({
+          name: String(i.name), grams: Number(i.grams),
+          carbs: 0, protein: 0, fat: 0, fiber: 0, source: "estimated" as const,
+        }))
+      : undefined;
+  }
+
+  const params: import("@/lib/useGlevAI").MealPendingPayload = {
+    input_text:     inputText,
+    carbs_grams:    resolvedCarbs,
+    protein_grams:  resolvedProtein,
+    fat_grams:      resolvedFat,
+    fiber_grams:    resolvedFiber,
+    logged_at:      loggedAtIso,
     glucose_before: glucoseBefore,
+    meal_prep_id:   mealPrepId,
+    ...(resolvedItems ? { items: resolvedItems } : {}),
   };
 
   return await createPendingAction(sb, userId, "log_meal_entry", params, summary);

@@ -2,13 +2,17 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useLocale } from "next-intl";
-import type { GlevChatMessage, MealQueueItem, PendingAction } from "@/lib/useGlevAI";
+import type { GlevChatMessage, MealPendingPayload, MealQueueItem, PendingAction } from "@/lib/useGlevAI";
+import type { NutritionSource } from "@/lib/nutrition/types";
+import type { ParsedFood } from "@/lib/meals";
 import { useVoiceIntents } from "@/hooks/useVoiceIntents";
 import { useTTS } from "@/hooks/useTTS";
 import IntentConfirmChip, { intentLabel } from "@/components/IntentConfirmChip";
 import GlevLogo from "@/components/GlevLogo";
 import { getActionMeta } from "@/lib/ai/pendingActions";
 import SourceBadge from "@/components/SourceBadge";
+import { aggregateBadge } from "@/lib/nutrition/badgeFor";
+import { supabase } from "@/lib/supabase";
 
 const ACCENT = "#8b5cf6";
 const SHEET_BG = "var(--surface)";
@@ -190,7 +194,8 @@ function MealChipExpanded({
   mealName,
   macroStr,
   timeStr,
-  itemsForExpand,
+  itemsForExpand: initialItems,
+  mealPrepId,
   showQueueBadge,
   mealChipIndex,
   mealChipTotal,
@@ -204,7 +209,9 @@ function MealChipExpanded({
   mealName: string;
   macroStr: string | null;
   timeStr: string | null;
-  itemsForExpand: Array<{ name: string; grams: number }>;
+  itemsForExpand: Array<ParsedFood>;
+  /** Phase 3: id for Realtime refinement subscription. */
+  mealPrepId?: string;
   showQueueBadge: boolean;
   mealChipIndex?: number;
   mealChipTotal?: number;
@@ -213,6 +220,65 @@ function MealChipExpanded({
   onOpenEngine?: () => void;
 }) {
   const [expanded, setExpanded] = useState(false);
+  const [itemsForExpand, setItemsForExpand] = useState<Array<ParsedFood>>(initialItems);
+  const [badgesTransitioning, setBadgesTransitioning] = useState(false);
+
+  // Phase 3 Realtime: subscribe to meal_prep_refinements for this mealPrepId.
+  // When OPTIMISTIC_REFINEMENT=true the aggregator writes a 'completed' row
+  // after resolving per-item sources; we swap in the refined items + fade badges.
+  useEffect(() => {
+    if (!mealPrepId || !supabase) return;
+    // Polling fallback: check every 500ms for max 5s.
+    // Realtime subscribe on the same row as primary.
+    const channel = supabase
+      .channel(`meal-refinement-${mealPrepId}`)
+      .on(
+        "postgres_changes" as Parameters<ReturnType<typeof supabase.channel>["on"]>[0],
+        {
+          event:  "UPDATE",
+          schema: "public",
+          table:  "meal_prep_refinements",
+          filter: `id=eq.${mealPrepId}`,
+        },
+        (payload: { new: { status?: string; items_refined?: ParsedFood[] } }) => {
+          const row = payload.new;
+          if (row.status === "completed" && Array.isArray(row.items_refined) && row.items_refined.length > 0) {
+            setBadgesTransitioning(true);
+            setTimeout(() => {
+              setItemsForExpand(row.items_refined as ParsedFood[]);
+              setBadgesTransitioning(false);
+            }, 250);
+          }
+        },
+      )
+      .subscribe();
+
+    // Polling fallback: query every 500ms for up to 5s if Realtime doesn't fire.
+    let pollCount = 0;
+    const poll = setInterval(async () => {
+      pollCount++;
+      if (pollCount > 10) { clearInterval(poll); return; }
+      const { data } = await supabase
+        .from("meal_prep_refinements")
+        .select("status, items_refined")
+        .eq("id", mealPrepId)
+        .maybeSingle();
+      if (data?.status === "completed" && Array.isArray(data.items_refined) && data.items_refined.length > 0) {
+        clearInterval(poll);
+        setBadgesTransitioning(true);
+        setTimeout(() => {
+          setItemsForExpand(data.items_refined as ParsedFood[]);
+          setBadgesTransitioning(false);
+        }, 250);
+      }
+    }, 500);
+
+    return () => {
+      void supabase.removeChannel(channel);
+      clearInterval(poll);
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mealPrepId]);
 
   return (
     <div
@@ -269,8 +335,20 @@ function MealChipExpanded({
         >
           {mealName}
         </div>
-        {/* Phase 1: all AI-estimated → always ✨ */}
-        <SourceBadge source="estimated" />
+        {/* Aggregate badge from real sources; fades during Realtime refinement. */}
+        {(() => {
+          const badge = aggregateBadge(
+            itemsForExpand.map((it) => ({ source: (it.source ?? "estimated") as NutritionSource })),
+          );
+          const src: NutritionSource =
+            badge === "verified" ? "open_food_facts" :
+            badge === "mixed"    ? "user_history"    : "estimated";
+          return (
+            <span style={{ opacity: badgesTransitioning ? 0 : 1, transition: "opacity 0.25s ease" }}>
+              <SourceBadge source={src} />
+            </span>
+          );
+        })()}
       </div>
 
       {/* Macros + time line */}
@@ -313,11 +391,13 @@ function MealChipExpanded({
                     {item.grams}g
                   </span>
                 </span>
-                <SourceBadge source="estimated" />
+                <span style={{ opacity: badgesTransitioning ? 0 : 1, transition: "opacity 0.25s ease" }}>
+                  <SourceBadge source={(item.source ?? "estimated") as NutritionSource} />
+                </span>
               </div>
             ))
           ) : (
-            // No per-item data yet (Phase 1) — show the macro summary instead
+            // No per-item data (Phase 1 / flag-off) — show meal-name placeholder.
             <div
               style={{
                 display: "flex",
@@ -524,14 +604,11 @@ function PendingActionWidget({
     const macroStr   = mealMatch ? mealMatch[2] : null;
     const timeStr    = mealMatch ? mealMatch[3] : null;
 
-    // Phase 1: all items are AI-estimated. The payload carries individual
-    // items only after Phase 2 wires up per-item DB sources.
-    const p = pa.payload as {
-      input_text?: string;
-      items?: Array<{ name: string; grams: number }>;
-    } | undefined;
-    const itemsForExpand: Array<{ name: string; grams: number }> =
-      p?.items ?? [];
+    // Phase 2/3: cast to MealPendingPayload to get typed items[] + meal_prep_id.
+    // Phase 1 chips (no items) fall back to empty array (backward-compat).
+    const p = pa.payload as MealPendingPayload | undefined;
+    const itemsForExpand: Array<ParsedFood> = p?.items ?? [];
+    const mealPrepId = p?.meal_prep_id;
 
     return (
       <MealChipExpanded
@@ -542,6 +619,7 @@ function PendingActionWidget({
         macroStr={macroStr}
         timeStr={timeStr}
         itemsForExpand={itemsForExpand}
+        mealPrepId={mealPrepId}
         showQueueBadge={showQueueBadge}
         mealChipIndex={mealChipIndex}
         mealChipTotal={mealChipTotal}
