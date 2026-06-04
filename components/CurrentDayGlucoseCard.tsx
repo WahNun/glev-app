@@ -186,7 +186,16 @@ export default function CurrentDayGlucoseCard({ showMealNodes = false }: { showM
         ? { ...cgmCurrentBase, trend: data.current?.trend ?? undefined }
         : null;
 
-      if (!signal?.cancelled) setS({ kind: "ok", cgm, fingersticks, cgmCurrent });
+      // If cgmCurrentBase is strictly newer than the last history point, inject
+      // it as the final CGM array entry so the chart dot always matches the
+      // large displayed value. Skip if timestamp is identical (already present).
+      const lastHistoryT = cgm.length ? cgm[cgm.length - 1].t : -Infinity;
+      const cgmWithCurrent =
+        cgmCurrentBase && cgmCurrentBase.t > lastHistoryT
+          ? [...cgm, { t: cgmCurrentBase.t, v: cgmCurrentBase.v }]
+          : cgm;
+
+      if (!signal?.cancelled) setS({ kind: "ok", cgm: cgmWithCurrent, fingersticks, cgmCurrent });
     } catch (e) {
       if (!signal?.cancelled) setS({ kind: "error", msg: e instanceof Error ? e.message : "fetch failed" });
     }
