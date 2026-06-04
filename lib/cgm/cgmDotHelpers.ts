@@ -52,3 +52,29 @@ export function injectCurrentPoint(
   const lastT = cgm.length ? cgm[cgm.length - 1].t : -Infinity;
   return current.t > lastT ? [...cgm, { t: current.t, v: current.v }] : cgm;
 }
+
+/**
+ * Prevents the live dot from flickering to an older reading when the client
+ * cache returns a partial hit — e.g. a fresh `officialCurrent` was already
+ * displayed but the next `loadHistory()` call resolved from a stale cache
+ * whose history array ends at an earlier timestamp (or vice-versa).
+ *
+ * The rule is simple: **never move the dot backward in time**.
+ * If `next` is null or its timestamp is earlier than `prev`, return `prev`.
+ * Otherwise accept `next`.
+ *
+ * Call this after `pickCgmCurrentBase` and before `injectCurrentPoint`:
+ *
+ *   const raw     = pickCgmCurrentBase(officialCurrent, cgm);
+ *   const guarded = guardCgmCurrentForward(lastKnownRef.current, raw);
+ *   lastKnownRef.current = guarded;
+ *   const cgmWithCurrent = injectCurrentPoint(cgm, guarded);
+ */
+export function guardCgmCurrentForward(
+  prev: CgmPoint | null,
+  next: CgmPoint | null
+): CgmPoint | null {
+  if (!next) return prev;
+  if (!prev) return next;
+  return next.t >= prev.t ? next : prev;
+}

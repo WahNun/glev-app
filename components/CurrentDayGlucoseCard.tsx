@@ -1,6 +1,6 @@
 "use client";
 import { fetchCgmHistory, invalidateCgmCache } from "@/lib/cgm/clientCache";
-import { pickCgmCurrentBase, injectCurrentPoint } from "@/lib/cgm/cgmDotHelpers";
+import { pickCgmCurrentBase, injectCurrentPoint, guardCgmCurrentForward, type CgmPoint } from "@/lib/cgm/cgmDotHelpers";
 import { useTranslations } from "next-intl";
 
 import { useEffect, useMemo, useRef, useState, useCallback } from "react";
@@ -118,6 +118,12 @@ export default function CurrentDayGlucoseCard({ showMealNodes = false }: { showM
   const [s, setS] = useState<State>({ kind: "loading" });
   const [flipped, setFlipped] = useState(false);
 
+  // Tracks the most-recent CGM point we have ever displayed so the guard
+  // below can prevent the dot from flickering backward when the 30-second
+  // client cache returns a partial hit (stale history + fresh officialCurrent,
+  // or vice-versa). Mutated only inside loadHistory, never during render.
+  const lastKnownCurrentRef = useRef<CgmPoint | null>(null);
+
   const loadHistory = useCallback(async (signal?: { cancelled: boolean }) => {
     try {
       // Free plan (or simulator set to Free): skip CGM fetch entirely —
@@ -175,9 +181,18 @@ export default function CurrentDayGlucoseCard({ showMealNodes = false }: { showM
       const officialCurrent = data.current && data.current.value != null && data.current.timestamp
         ? { v: data.current.value, t: parseLluTs(data.current.timestamp) }
         : null;
-      // pickCgmCurrentBase / injectCurrentPoint live in lib/cgm/cgmDotHelpers
-      // and are covered by tests/unit/cgmDotHelpers.test.ts.
-      const cgmCurrentBase = pickCgmCurrentBase(officialCurrent, cgm);
+      // pickCgmCurrentBase / injectCurrentPoint / guardCgmCurrentForward live
+      // in lib/cgm/cgmDotHelpers and are covered by tests/unit/cgmDotHelpers.test.ts.
+      const rawCurrentBase = pickCgmCurrentBase(officialCurrent, cgm);
+
+      // Guard: never flip the dot to an older timestamp than we already showed.
+      // When the 30s client cache returns a stale history snapshot while a
+      // fresh officialCurrent was already displayed (or vice-versa), the raw
+      // pick could land on an earlier reading. The guard keeps the highest
+      // timestamp seen so far and only advances forward (task #1213).
+      const cgmCurrentBase = guardCgmCurrentForward(lastKnownCurrentRef.current, rawCurrentBase);
+      lastKnownCurrentRef.current = cgmCurrentBase;
+
       // Thread the adapter-provided trend string (5-category: risingQuickly /
       // rising / stable / falling / fallingQuickly) through so HeroFront can
       // display a more precise arrow than the 3-state computeDelta15m result.

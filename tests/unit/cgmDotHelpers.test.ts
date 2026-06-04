@@ -1,9 +1,9 @@
 // Unit coverage for the CGM live-dot injection helpers (lib/cgm/cgmDotHelpers).
 //
-// Task background: Task #1210 fixed the chart dot showing the last history
+// Task background: Task #1211 fixed the chart dot showing the last history
 // point instead of the live `officialCurrent` reading when that reading is
-// newer. These tests lock in that fix so a future removal of the injection
-// block is caught immediately.
+// newer. Task #1213 added guardCgmCurrentForward so a stale cache hit cannot
+// flip the dot to an older value than what was already displayed.
 //
 // Pure-function tests — no DB, no network, no Next.js runtime.
 
@@ -11,6 +11,7 @@ import { test, expect } from "@playwright/test";
 import {
   pickCgmCurrentBase,
   injectCurrentPoint,
+  guardCgmCurrentForward,
   type CgmPoint,
 } from "@/lib/cgm/cgmDotHelpers";
 
@@ -162,4 +163,115 @@ test("regression guard: injection removed → dot is last history point, not off
 
   expect(withCurrent[withCurrent.length - 1].v).toBe(115);
   expect(withCurrent[withCurrent.length - 1].v).not.toBe(108);
+});
+
+// ── guardCgmCurrentForward ────────────────────────────────────────────────────
+
+test("guardCgmCurrentForward: no prev → accepts next as-is", () => {
+  const next: CgmPoint = { t: min(10), v: 118 };
+  expect(guardCgmCurrentForward(null, next)).toEqual(next);
+});
+
+test("guardCgmCurrentForward: no next → returns prev unchanged", () => {
+  const prev: CgmPoint = { t: min(10), v: 118 };
+  expect(guardCgmCurrentForward(prev, null)).toEqual(prev);
+});
+
+test("guardCgmCurrentForward: both null → null", () => {
+  expect(guardCgmCurrentForward(null, null)).toBeNull();
+});
+
+test("guardCgmCurrentForward: next newer than prev → accepts next", () => {
+  const prev: CgmPoint = { t: min(10), v: 118 };
+  const next: CgmPoint = { t: min(15), v: 122 };
+  expect(guardCgmCurrentForward(prev, next)).toEqual(next);
+});
+
+test("guardCgmCurrentForward: next older than prev → keeps prev (no backward flip)", () => {
+  const prev: CgmPoint = { t: min(15), v: 122 };
+  const next: CgmPoint = { t: min(10), v: 118 }; // stale cache hit
+  expect(guardCgmCurrentForward(prev, next)).toEqual(prev);
+});
+
+test("guardCgmCurrentForward: same timestamp → accepts next (equal is not backward)", () => {
+  const prev: CgmPoint = { t: min(10), v: 118 };
+  const next: CgmPoint = { t: min(10), v: 118 };
+  expect(guardCgmCurrentForward(prev, next)).toEqual(next);
+});
+
+// ── Race scenario: stale history cache while officialCurrent is already fresh ──
+//
+// Task #1213 scenario: the 30-second client cache returns a snapshot where
+// the history array ends at an earlier point (stale) while a previous render
+// had already picked and displayed a fresher officialCurrent. Without the
+// guard, pickCgmCurrentBase on the stale snapshot returns the old history
+// tail, moving the dot backward. guardCgmCurrentForward prevents this.
+
+test("race: stale cache history, fresh officialCurrent already known → dot stays at known value", () => {
+  // Round 1: fresh network response — history ends at T+20, officialCurrent at T+25.
+  const round1History = makeHistory([95, 100, 105, 108]); // last point at min(15)
+  const round1Official: CgmPoint = { t: min(25), v: 122 };
+  const round1Raw = pickCgmCurrentBase(round1Official, round1History);
+  // Simulate the ref starting at null (first load).
+  const afterRound1 = guardCgmCurrentForward(null, round1Raw);
+  // Should be the officialCurrent (newer than history).
+  expect(afterRound1).toEqual(round1Official);
+
+  // Round 2: cache returns a STALE snapshot — same history but officialCurrent
+  // has gone missing or reverted to an older value (e.g. the cache returned
+  // a 30-second-old entry captured before the fresh officialCurrent arrived).
+  const staleCacheHistory = makeHistory([95, 100, 105]); // shorter / older
+  const staleOfficial: CgmPoint = { t: min(5), v: 101 }; // ancient
+  const round2Raw = pickCgmCurrentBase(staleOfficial, staleCacheHistory);
+  // Raw pick would be the last stale history entry (min(10), v=105) since
+  // it is newer than staleOfficial (min(5)).
+  expect(round2Raw!.t).toBeLessThan(afterRound1!.t);
+
+  // Guard: uses afterRound1 as prev — refuses to go backward.
+  const afterRound2 = guardCgmCurrentForward(afterRound1, round2Raw);
+  expect(afterRound2).toEqual(round1Official); // dot does NOT move backward
+});
+
+test("race: stale officialCurrent while history already showed newer point → dot stays at history value", () => {
+  // Round 1: history is fresher than officialCurrent.
+  const freshHistory = makeHistory([100, 108, 115]); // last point at min(10)
+  const staleOfficial1: CgmPoint = { t: min(-540), v: 90 }; // 9h stale
+  const raw1 = pickCgmCurrentBase(staleOfficial1, freshHistory);
+  const after1 = guardCgmCurrentForward(null, raw1);
+  expect(after1).toEqual(freshHistory[freshHistory.length - 1]);
+
+  // Round 2: cache returns a snapshot where the history has FEWER points
+  // (older cache) and the officialCurrent is still stale.
+  const olderHistory = makeHistory([100, 108]); // one entry shorter
+  const staleOfficial2: CgmPoint = { t: min(-600), v: 88 };
+  const raw2 = pickCgmCurrentBase(staleOfficial2, olderHistory);
+  const after2 = guardCgmCurrentForward(after1, raw2);
+
+  // Guard: the stale cache's "best pick" is older than what we already showed.
+  expect(after2).toEqual(after1); // dot stays at the fresher value
+});
+
+test("race: sequential loads — dot only advances, never retreats", () => {
+  // Simulate 4 loadHistory() rounds. In some rounds the cache is stale.
+  // The guard should produce a monotonically non-decreasing timestamp sequence.
+  const rounds: Array<{ cgm: CgmPoint[]; official: CgmPoint | null }> = [
+    { cgm: makeHistory([100, 105]),           official: { t: min(10), v: 107 } }, // fresh
+    { cgm: makeHistory([100, 105]),           official: { t: min(3),  v: 101 } }, // stale official (cache hit)
+    { cgm: makeHistory([100, 105, 109, 112]), official: { t: min(10), v: 107 } }, // fresh history
+    { cgm: makeHistory([100]),               official: null },                    // very stale cache
+  ];
+
+  let knownCurrent: CgmPoint | null = null;
+  const dotTimestamps: number[] = [];
+
+  for (const round of rounds) {
+    const raw = pickCgmCurrentBase(round.official, round.cgm);
+    knownCurrent = guardCgmCurrentForward(knownCurrent, raw);
+    if (knownCurrent) dotTimestamps.push(knownCurrent.t);
+  }
+
+  // Verify each timestamp is >= the previous one (monotonically non-decreasing).
+  for (let i = 1; i < dotTimestamps.length; i++) {
+    expect(dotTimestamps[i]).toBeGreaterThanOrEqual(dotTimestamps[i - 1]);
+  }
 });
