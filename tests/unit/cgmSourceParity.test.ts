@@ -406,3 +406,85 @@ test("schema-contract: elevated-check and hyper-check also use fetchLiveReading"
   expect(elevatedSrc).toContain("fetchLiveReading");
   expect(hyperSrc).toContain("fetchLiveReading");
 });
+
+/* ─────────────────────────────────────────────────────────────────────────────
+ * 17-20: Schema-contract: elevated-check and hyper-check column / table names
+ *
+ * These tests pin the exact settings column names and cooldown table names used
+ * by the alarm edge functions. A column rename or typo would be silent at
+ * runtime (Supabase returns empty results rather than an error) and would cause
+ * users to miss alarms — the worst kind of failure for a safety-critical app.
+ *
+ * We also verify the comparison direction: both functions must fire when the
+ * glucose value is ABOVE the threshold (high direction), not below it (hypo
+ * direction). The skip guard `<= threshold` proves the alarm fires only when
+ * latestValue > threshold. A hypo-direction implementation would use
+ * `>= threshold` as the skip guard — asserting absence of that pattern rules
+ * out an accidental inversion.
+ * ─────────────────────────────────────────────────────────────────────────── */
+
+test("schema-contract: elevated-check reads elevated_alarm_enabled and elevated_alarm_threshold_mgdl", () => {
+  const src = readSrc("supabase/functions/elevated-check/index.ts");
+
+  // Settings columns fetched from user_settings
+  expect(src).toContain("elevated_alarm_enabled");
+  expect(src).toContain("elevated_alarm_threshold_mgdl");
+
+  // Must filter by the enabled flag (not just select it)
+  expect(src).toContain('.eq("elevated_alarm_enabled", true)');
+
+  // Must select the threshold column so it can be applied per-user.
+  // It appears in a multi-column select string, so we check without surrounding quotes.
+  expect(src).toContain("elevated_alarm_threshold_mgdl");
+});
+
+test("schema-contract: hyper-check reads high_alarm_enabled and high_alarm_threshold_mgdl", () => {
+  const src = readSrc("supabase/functions/hyper-check/index.ts");
+
+  // Settings columns fetched from user_settings
+  expect(src).toContain("high_alarm_enabled");
+  expect(src).toContain("high_alarm_threshold_mgdl");
+
+  // Must filter by the enabled flag (not just select it)
+  expect(src).toContain('.eq("high_alarm_enabled", true)');
+
+  // Must select the threshold column so it can be applied per-user.
+  // It appears in a multi-column select string, so we check without surrounding quotes.
+  expect(src).toContain("high_alarm_threshold_mgdl");
+});
+
+test("schema-contract: elevated-check uses elevated_push_cooldown, hyper-check uses hyper_push_cooldown", () => {
+  const elevatedSrc = readSrc("supabase/functions/elevated-check/index.ts");
+  const hyperSrc = readSrc("supabase/functions/hyper-check/index.ts");
+
+  // Each function must read from its own cooldown table — using the wrong table
+  // would mean the cooldown state of one alarm silences the other.
+  expect(elevatedSrc).toContain('"elevated_push_cooldown"');
+  expect(hyperSrc).toContain('"hyper_push_cooldown"');
+
+  // Cross-check: neither function should reference the other's cooldown table
+  expect(elevatedSrc).not.toContain('"hyper_push_cooldown"');
+  expect(hyperSrc).not.toContain('"elevated_push_cooldown"');
+});
+
+test("schema-contract: elevated-check and hyper-check fire in the HIGH direction (value > threshold)", () => {
+  const elevatedSrc = readSrc("supabase/functions/elevated-check/index.ts");
+  const hyperSrc = readSrc("supabase/functions/hyper-check/index.ts");
+
+  // The skip guard must be `<= threshold` — meaning the alarm fires when
+  // latestValue > threshold (HIGH direction).  If this were `>= threshold`
+  // the function would be a hypo alarm (fires when value is LOW).
+  expect(elevatedSrc).toContain("<= threshold");
+  expect(hyperSrc).toContain("<= threshold");
+
+  // The alarm-sent log line encodes the trigger condition explicitly.
+  // Asserting it contains `> threshold` is a second independent check that
+  // the code understands it is sending a HIGH alarm.
+  expect(elevatedSrc).toContain("> threshold");
+  expect(hyperSrc).toContain("> threshold");
+
+  // Neither function should use the hypo-direction skip guard.
+  // (hypo-check skips when value >= threshold, i.e., value is NOT low enough)
+  expect(elevatedSrc).not.toContain(">= threshold");
+  expect(hyperSrc).not.toContain(">= threshold");
+});
