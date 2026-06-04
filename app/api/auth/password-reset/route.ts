@@ -17,20 +17,47 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
 import { enqueueEmail } from "@/lib/emails/outbox";
 import type { EmailLocale } from "@/lib/emails/beta-welcome";
+import type { SupabaseClient } from "@supabase/supabase-js";
 
-export async function POST(req: NextRequest) {
+// ---------------------------------------------------------------------------
+// Deps interface — lets unit tests inject fakes without standing up the
+// Next runtime, Supabase, or Resend.
+// ---------------------------------------------------------------------------
+
+export type PasswordResetDeps = {
+  /** Supabase admin client (service-role key). */
+  sb: SupabaseClient;
+  /**
+   * Enqueues the branded reset email.
+   * Typed as the narrowest shape the handler actually calls so fakes stay small.
+   */
+  enqueue: (args: {
+    recipient: string;
+    template: string;
+    payload: Record<string, unknown>;
+  }) => Promise<void>;
+};
+
+// ---------------------------------------------------------------------------
+// Core handler — extracted so tests can drive it with mock deps.
+// ---------------------------------------------------------------------------
+
+/**
+ * Core POST handler. Accepts the email address (already validated as a
+ * non-empty RFC-like string) and the app base URL, plus injectable deps.
+ *
+ * Always returns `{ ok: true }` regardless of outcome — never leaks whether
+ * the address exists (prevents user enumeration).
+ *
+ * Also imported directly by unit tests that mock the Supabase client and
+ * enqueueEmail — same pattern as handleConfirmPost / handleInsulinPost.
+ */
+export async function handlePasswordResetPost(
+  email: string,
+  appUrl: string,
+  { sb, enqueue }: PasswordResetDeps,
+): Promise<NextResponse> {
   try {
-    const body = await req.json().catch(() => ({}));
-    const email = String(body?.email ?? "").trim().toLowerCase();
-
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      return NextResponse.json({ ok: true });
-    }
-
-    const sb = getSupabaseAdmin();
-    const rawAppUrl = process.env.NEXT_PUBLIC_APP_URL?.trim();
-    const appUrl = (rawAppUrl || "https://glev.app").replace(/\/$/, "");
-
     const { data: linkData, error: linkErr } = await sb.auth.admin.generateLink({
       type: "recovery",
       email,
@@ -59,7 +86,7 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    await enqueueEmail({
+    await enqueue({
       recipient: email,
       template: "password-reset",
       payload: {
@@ -74,4 +101,23 @@ export async function POST(req: NextRequest) {
   } catch {
     return NextResponse.json({ ok: true });
   }
+}
+
+// ---------------------------------------------------------------------------
+// Next.js route handler
+// ---------------------------------------------------------------------------
+
+export async function POST(req: NextRequest) {
+  const body = await req.json().catch(() => ({}));
+  const email = String(body?.email ?? "").trim().toLowerCase();
+
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    return NextResponse.json({ ok: true });
+  }
+
+  const sb = getSupabaseAdmin();
+  const rawAppUrl = process.env.NEXT_PUBLIC_APP_URL?.trim();
+  const appUrl = (rawAppUrl || "https://glev.app").replace(/\/$/, "");
+
+  return handlePasswordResetPost(email, appUrl, { sb, enqueue: enqueueEmail });
 }
