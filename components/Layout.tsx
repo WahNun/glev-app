@@ -1102,11 +1102,13 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
           const AI_TABS = ["/dashboard", "/entries", "/insights"];
           if (!AI_TABS.some(t => pathname.startsWith(t))) return;
           const dy = startY - e.changedTouches[0].clientY;
-          // Only open when swiping up ≥ 80 px AND the content is
-          // fully scrolled to the bottom (prevents clashing with normal
-          // downward page-scroll gestures).
-          const atBottom = el.scrollTop + el.clientHeight >= el.scrollHeight - 8;
-          if (dy >= 80 && atBottom) {
+          // Open the AI chat when swiping up ≥ 60 px AND the touch
+          // started in the bottom 30 % of the viewport. This bottom-
+          // edge zone is always reachable regardless of scroll position
+          // ("jederzeit per Hochswipe") while avoiding false triggers
+          // for regular page-scroll gestures that start higher up.
+          const bottomZoneStart = typeof window !== "undefined" ? window.innerHeight * 0.7 : 0;
+          if (dy >= 60 && startY >= bottomZoneStart) {
             glevAi.openFromButton();
           }
         }}
@@ -1136,7 +1138,11 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
           if (startY == null) return;
           el._swipeStartY = undefined;
           const dy = startY - e.changedTouches[0].clientY;
-          if (dy >= 60 && aiVoiceEnabled && !glevAi.sheetOpen) {
+          // Only open the AI chat sheet when on allowed tabs (Dashboard /
+          // Entries / Insights). Engine has its own EngineChatPanel and
+          // Settings should never surface the AI overlay.
+          const AI_TABS = ["/dashboard", "/entries", "/insights"];
+          if (dy >= 60 && aiVoiceEnabled && !glevAi.sheetOpen && AI_TABS.some(t => pathname.startsWith(t))) {
             glevAi.openFromButton();
           }
         }}
