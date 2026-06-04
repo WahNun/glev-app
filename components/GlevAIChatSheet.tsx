@@ -258,6 +258,7 @@ function MealChipExpanded({
     const poll = setInterval(async () => {
       pollCount++;
       if (pollCount > 10) { clearInterval(poll); return; }
+      if (!supabase) { clearInterval(poll); return; }
       const { data } = await supabase
         .from("meal_prep_refinements")
         .select("status, items_refined")
