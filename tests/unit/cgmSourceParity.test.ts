@@ -488,3 +488,61 @@ test("schema-contract: elevated-check and hyper-check fire in the HIGH direction
   expect(elevatedSrc).not.toContain(">= threshold");
   expect(hyperSrc).not.toContain(">= threshold");
 });
+
+/* ─────────────────────────────────────────────────────────────────────────────
+ * 21-24: Schema-contract: hypo-check column / table names and direction
+ *
+ * Mirrors the elevated-check / hyper-check contract tests above, but for the
+ * hypo (low-glucose) alarm. A silent column rename or comparison inversion
+ * would mean users never receive a low-glucose push — the most dangerous
+ * failure mode in this safety-critical app.
+ *
+ * Direction: hypo fires when value is BELOW the threshold.
+ *   Skip guard `>= threshold` means "do nothing when value is high enough".
+ *   A high-direction implementation would use `<= threshold` — asserting
+ *   absence of that pattern rules out an accidental inversion.
+ * ─────────────────────────────────────────────────────────────────────────── */
+
+test("schema-contract: hypo-check reads low_alarm_enabled and low_alarm_threshold_mgdl", () => {
+  const src = readSrc("supabase/functions/hypo-check/index.ts");
+
+  // Settings columns fetched from user_settings
+  expect(src).toContain("low_alarm_enabled");
+  expect(src).toContain("low_alarm_threshold_mgdl");
+
+  // Must filter by the enabled flag (not just select it)
+  expect(src).toContain('.eq("low_alarm_enabled", true)');
+
+  // Must select the threshold column so it can be applied per-user.
+  // It appears in a multi-column select string, so we check without surrounding quotes.
+  expect(src).toContain("low_alarm_threshold_mgdl");
+});
+
+test("schema-contract: hypo-check uses hypo_push_cooldown (not elevated or hyper cooldown table)", () => {
+  const src = readSrc("supabase/functions/hypo-check/index.ts");
+
+  // Must use its own dedicated cooldown table
+  expect(src).toContain('"hypo_push_cooldown"');
+
+  // Must NOT accidentally reference either of the high-alarm cooldown tables —
+  // using the wrong table would mean a high-alarm push silences the hypo alarm.
+  expect(src).not.toContain('"elevated_push_cooldown"');
+  expect(src).not.toContain('"hyper_push_cooldown"');
+});
+
+test("schema-contract: hypo-check fires in the LOW direction (value < threshold)", () => {
+  const src = readSrc("supabase/functions/hypo-check/index.ts");
+
+  // The skip guard must be `>= threshold` — meaning the alarm fires only when
+  // latestValue < threshold (LOW / hypo direction).
+  // If this were `<= threshold` the function would behave as a high alarm.
+  expect(src).toContain(">= threshold");
+
+  // The alarm-sent log line must contain `< threshold` as a second independent
+  // confirmation that the code understands it is sending a LOW alarm.
+  expect(src).toContain("< threshold");
+
+  // Must NOT contain the high-direction skip guard.
+  // (elevated-check and hyper-check skip when value <= threshold)
+  expect(src).not.toContain("<= threshold");
+});
