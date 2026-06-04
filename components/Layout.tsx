@@ -130,6 +130,9 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
   // fetch to /api/ai/chat. See DECISIONS.md D-013.
   const aiVoiceEnabled = useFeatureFlag("ai_voice");
   const voiceIntentEnabled = useFeatureFlag("voice_intent_routing") === true;
+  // Fullscreen AI chat state — only used on /engine. The sheet variant
+  // (glevAi.sheetOpen) is used on all other tabs.
+  const [glevAiFullscreenOpen, setGlevAiFullscreenOpen] = useState(false);
   const screenCtx = useScreenContext();
   const glevAi = useGlevAI({
     contextSnapshot: screenCtx,
@@ -350,11 +353,19 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
       try { storedMode = window.localStorage.getItem("glev_fab_mode"); } catch { /* ignore */ }
     }
 
-    // Engine tab guard: the global AI chat sheet must never open while the
-    // user is on /engine. Engine has its own EngineChatPanel and the two
-    // must not overlap. Fall straight through to the default voice route.
+    // Engine tab: short tap opens / toggles the fullscreen AI chat.
+    // Long press on the FAB still opens the quick-add sheet (voice route)
+    // as before — that path is handled in fabHandlePointerDown.
     if (pathname.startsWith("/engine")) {
-      router.push(`/engine?voice=1&vt=${Date.now()}`);
+      if (aiVoiceEnabled && glevAi.consentGranted) {
+        setGlevAiFullscreenOpen((prev) => !prev);
+      } else if (aiVoiceEnabled && !glevAi.consentGranted) {
+        // Show consent modal first; after granting, open fullscreen.
+        glevAi.openFromButton();
+      } else {
+        // AI not enabled — fall back to legacy voice route.
+        router.push(`/engine?voice=1&vt=${Date.now()}`);
+      }
       return;
     }
 
@@ -587,6 +598,8 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
   // Engine has its own embedded EngineChatPanel — the two must not overlap.
   // When the user comes BACK from /engine and there are still meals in the
   // queue, auto-reopen the chat so the next "Engine öffnen" chip is visible.
+  // Also auto-close the fullscreen AI chat when the user navigates away
+  // from /engine (e.g. taps Dashboard, Entries, Insights or Settings).
   useEffect(() => {
     const prev = prevPathnameRef.current;
     prevPathnameRef.current = pathname;
@@ -601,8 +614,25 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
       // User returned from Engine with more meals pending — reopen chat.
       glevAi.openFromButton();
     }
+    // Fullscreen AI chat is only valid on /engine — close it on any route change away.
+    if (!pathname.startsWith("/engine")) {
+      setGlevAiFullscreenOpen(false);
+    }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pathname]);
+
+  // Consent-grant bridge on /engine: when grantConsent() fires it sets
+  // glevAi.sheetOpen = true. Since the sheet is not rendered on /engine
+  // (only the fullscreen variant is), we intercept that state change and
+  // translate it into opening the fullscreen instead.
+  useEffect(() => {
+    if (!pathname.startsWith("/engine")) return;
+    if (glevAi.sheetOpen) {
+      glevAi.closeSheet();
+      setGlevAiFullscreenOpen(true);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [glevAi.sheetOpen, pathname]);
 
   // Horizontal swipe-to-switch-tabs disabled (user request 2026-05-17).
   // The Dashboard and Insights screens now own horizontal swipe themselves
@@ -1229,8 +1259,12 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
           active={quickAddOpen || voice.recording}
           recording={!!(voice.recording || aiThinking || (aiVoiceEnabled && glevAi.streaming))}
           speaking={aiVoiceEnabled ? ttsSpeaking : false}
-          sheetOpen={aiVoiceEnabled ? glevAi.sheetOpen : false}
-          hasConversation={aiVoiceEnabled ? glevAi.messages.length > 0 && !glevAi.sheetOpen : false}
+          sheetOpen={aiVoiceEnabled
+            ? (pathname.startsWith("/engine") ? glevAiFullscreenOpen : glevAi.sheetOpen)
+            : false}
+          hasConversation={aiVoiceEnabled
+            ? (glevAi.messages.length > 0 && (pathname.startsWith("/engine") ? !glevAiFullscreenOpen : !glevAi.sheetOpen))
+            : false}
           showArrow={arrowHint}
         />
         <MobileTab
@@ -1325,13 +1359,26 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
             onDismiss={glevAi.dismissConsent}
             onActivate={glevAi.grantConsent}
           />
-          {/* Defensive render guard: never mount the global AI chat sheet
-              while on /engine. Engine has its own embedded EngineChatPanel
-              and the two must not overlap. The sheet's state is already
-              closed by the pathname useEffect when navigating TO /engine;
-              this guard prevents any openFromButton() leaking through on
-              /engine while the pathname hasn't changed (e.g. FAB tap). */}
-          {!pathname.startsWith("/engine") && (
+          {/* On /engine: fullscreen variant that fills the content area.
+              On all other tabs: the normal bottom-sheet variant.
+              Both share the same useGlevAI state (messages, streaming, etc.). */}
+          {pathname.startsWith("/engine") ? (
+            <GlevAIChatSheet
+              variant="fullscreen"
+              open={glevAiFullscreenOpen}
+              onClose={() => setGlevAiFullscreenOpen(false)}
+              messages={glevAi.messages}
+              streaming={glevAi.streaming}
+              onSend={glevAi.sendMessage}
+              onConfirmAction={glevAi.confirmAction}
+              onCancelAction={glevAi.cancelAction}
+              onClearChat={glevAi.clearMessages}
+              onListeningChange={setAiThinking}
+              voiceIntentEnabled={voiceIntentEnabled}
+              pendingMealNavQueue={glevAi.pendingMealNavQueue}
+              onMealNavTap={glevAi.fireMealNav}
+            />
+          ) : (
             <GlevAIChatSheet
               open={glevAi.sheetOpen}
               onClose={glevAi.closeSheet}

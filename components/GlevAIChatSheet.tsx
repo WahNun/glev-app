@@ -34,6 +34,14 @@ interface Props {
    * Non-matching intents still fall through to the normal chat flow.
    */
   voiceIntentEnabled?: boolean;
+  /**
+   * "sheet"      (default) — bottom-sheet with backdrop + drag handle + slide-up
+   *                          animation. Used on Dashboard, Insights, Entries.
+   * "fullscreen" — fixed overlay that fills the content area between header
+   *                and nav. No backdrop, no drag handle, fade-in animation,
+   *                back-button instead of X. Used on /engine.
+   */
+  variant?: "sheet" | "fullscreen";
 }
 
 const DISCLAIMER =
@@ -199,7 +207,9 @@ export default function GlevAIChatSheet({
   pendingMealNavQueue,
   onMealNavTap,
   voiceIntentEnabled = false,
+  variant = "sheet",
 }: Props) {
+  const isFullscreen = variant === "fullscreen";
   const [input, setInput] = useState("");
   const [sttError, setSttError] = useState<string | null>(null);
   const [sttPartial, setSttPartial] = useState<string | null>(null);
@@ -385,30 +395,48 @@ export default function GlevAIChatSheet({
         @keyframes glevStatusPulse { 0%, 100% { opacity: 0.6; } 50% { opacity: 1; } }
       `}</style>
 
-      {/* Backdrop */}
-      <div
-        onClick={onClose}
-        role="presentation"
-        style={{
-          position: "fixed",
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: "var(--nav-bottom-total)",
-          background: "rgba(0,0,0,0.5)",
-          backdropFilter: "blur(2px)",
-          WebkitBackdropFilter: "blur(2px)",
-          zIndex: 1100,
-          animation: "glevAiFadeIn 0.2s ease",
-        }}
-      />
+      {/* Backdrop — sheet mode only */}
+      {!isFullscreen && (
+        <div
+          onClick={onClose}
+          role="presentation"
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: "var(--nav-bottom-total)",
+            background: "rgba(0,0,0,0.5)",
+            backdropFilter: "blur(2px)",
+            WebkitBackdropFilter: "blur(2px)",
+            zIndex: 1100,
+            animation: "glevAiFadeIn 0.2s ease",
+          }}
+        />
+      )}
 
-      {/* Sheet */}
+      {/* Sheet / Fullscreen container */}
       <div
         role="dialog"
         aria-modal="true"
         aria-label="Glev AI Chat"
-        style={{
+        style={isFullscreen ? {
+          position: "fixed",
+          top: "var(--nav-top-total)",
+          bottom: "var(--nav-bottom-total)",
+          left: 0,
+          right: 0,
+          height: "auto",
+          background: SHEET_BG,
+          color: "var(--text)",
+          borderRadius: 0,
+          border: "none",
+          zIndex: 1101,
+          display: "flex",
+          flexDirection: "column",
+          animation: "glevAiFadeIn 0.18s ease",
+          overflow: "hidden",
+        } : {
           position: "fixed",
           bottom: "var(--nav-bottom-total)",
           left: 0,
@@ -428,35 +456,37 @@ export default function GlevAIChatSheet({
           transition: dragTranslate > 0 ? "none" : "transform 0.22s cubic-bezier(0.32,0.72,0,1)",
         }}
       >
-        {/* Drag handle — swipe down ≥ 80 px to close */}
-        <div
-          aria-hidden="true"
-          onTouchStart={handleDragStart}
-          onTouchMove={handleDragMove}
-          onTouchEnd={handleDragEnd}
-          onTouchCancel={handleDragEnd}
-          style={{
-            flexShrink: 0,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            paddingTop: 10,
-            paddingBottom: 4,
-            cursor: "grab",
-            touchAction: "none",
-            userSelect: "none",
-          }}
-        >
+        {/* Drag handle — sheet mode only, swipe down ≥ 80 px to close */}
+        {!isFullscreen && (
           <div
+            aria-hidden="true"
+            onTouchStart={handleDragStart}
+            onTouchMove={handleDragMove}
+            onTouchEnd={handleDragEnd}
+            onTouchCancel={handleDragEnd}
             style={{
-              width: 36,
-              height: 4,
-              borderRadius: 2,
-              background: "var(--border)",
-              opacity: 0.8,
+              flexShrink: 0,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              paddingTop: 10,
+              paddingBottom: 4,
+              cursor: "grab",
+              touchAction: "none",
+              userSelect: "none",
             }}
-          />
-        </div>
+          >
+            <div
+              style={{
+                width: 36,
+                height: 4,
+                borderRadius: 2,
+                background: "var(--border)",
+                opacity: 0.8,
+              }}
+            />
+          </div>
+        )}
 
         {/* Header */}
         <div
@@ -468,6 +498,31 @@ export default function GlevAIChatSheet({
             flexShrink: 0,
           }}
         >
+          {/* Fullscreen mode: back button on the left */}
+          {isFullscreen && (
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label="Zurück"
+              style={{
+                background: "none",
+                border: "none",
+                color: "var(--text-muted)",
+                cursor: "pointer",
+                padding: "4px 8px 4px 0",
+                display: "flex",
+                alignItems: "center",
+                gap: 4,
+                marginRight: 4,
+                fontSize: 14,
+                fontWeight: 500,
+              }}
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="15 18 9 12 15 6" />
+              </svg>
+            </button>
+          )}
           <span style={{ fontSize: 16, fontWeight: 700, color: "var(--text)", flex: 1 }}>
             Glev AI
           </span>
