@@ -13,6 +13,7 @@ import GlevAIButton from "@/components/GlevAIButton";
 import GlevAIConsentModal from "@/components/GlevAIConsentModal";
 import GlevAIChatSheet from "@/components/GlevAIChatSheet";
 import { useGlevAI } from "@/lib/useGlevAI";
+import { resolveFabAction } from "@/lib/fabAction";
 import { useFeatureFlag } from "@/lib/featureFlags";
 import { useScreenContext } from "@/hooks/useScreenContext";
 import { EngineHeaderProvider, useEngineHeader } from "@/lib/engineHeaderContext";
@@ -349,67 +350,50 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
   // monotonic `vt` token that re-triggers auto-record even if the
   // user is already on /engine.
   const runFabShortTap = () => {
-    // Read user's explicit preference. Default is "voice" — the old
-    // Glev Engine voice input works for ALL users without any flag.
-    // Only "ai" + aiVoiceEnabled=true opens the AI chat sheet.
-    let storedMode: string | null = null;
-    if (typeof window !== "undefined") {
-      try { storedMode = window.localStorage.getItem("glev_fab_mode"); } catch { /* ignore */ }
-    }
+    const action = resolveFabAction({
+      pathname,
+      aiVoiceEnabled,
+      consentGranted: glevAi.consentGranted,
+      sheetOpen: glevAi.sheetOpen,
+      fullscreenOpen: glevAiFullscreenOpen,
+    });
 
-    // Engine tab: short tap opens / toggles the fullscreen AI chat.
-    // Long press on the FAB still opens the quick-add sheet (voice route)
-    // as before — that path is handled in fabHandlePointerDown.
-    if (pathname.startsWith("/engine")) {
-      if (aiVoiceEnabled && glevAi.consentGranted) {
-        setGlevAiFullscreenOpen((prev) => !prev);
-      } else if (aiVoiceEnabled && !glevAi.consentGranted) {
-        // Show consent modal first; after granting, open fullscreen.
+    switch (action.type) {
+      case "toggle-fullscreen":
+        setGlevAiFullscreenOpen(action.willOpen);
+        // Auto-start voice when opening so the user can speak immediately.
+        if (action.willOpen) {
+          window.setTimeout(() => {
+            window.dispatchEvent(new CustomEvent("glev:voice-start"));
+          }, 350);
+        }
+        break;
+
+      case "consent-modal":
+        // Shows the activation modal; after granting, sheet opens.
         glevAi.openFromButton();
-      } else {
-        // AI not enabled — fall back to legacy voice route.
-        router.push(`/engine?voice=1&vt=${Date.now()}`);
-      }
-      return;
-    }
+        break;
 
-    // "tap" chat-position overrides fabMode: always open the AI chat on short-tap.
-    // This is independent of the stored fabMode so the user doesn't need to
-    // set two separate prefs for the same goal.
-    const chatPos = (() => { try { return window.localStorage.getItem("glev_chat_position"); } catch { return null; } })();
-    if (chatPos === "tap" && aiVoiceEnabled && glevAi.consentGranted) {
-      if (glevAi.sheetOpen) {
+      case "voice-start":
+        // Sheet already open — start a new voice take.
         window.dispatchEvent(new CustomEvent("glev:voice-start"));
-        return;
-      }
-      glevAi.openFromButton();
-      window.setTimeout(() => {
-        window.dispatchEvent(new CustomEvent("glev:voice-start"));
-      }, 350);
-      return;
-    }
+        break;
 
-    // AI mode: only when user explicitly chose "ai", feature flag is on,
-    // AND consent has already been granted. Without consent the user would
-    // see the activation modal on every tap — instead fall through to voice
-    // so the FAB always does something useful without prompting.
-    if (storedMode === "ai" && aiVoiceEnabled && glevAi.consentGranted) {
-      // If the chat sheet is already open, start a new voice take.
-      if (glevAi.sheetOpen) {
-        window.dispatchEvent(new CustomEvent("glev:voice-start"));
-        return;
-      }
-      glevAi.openFromButton();
-      // Delay voice-start so the sheet can animate in before recording.
-      window.setTimeout(() => {
-        window.dispatchEvent(new CustomEvent("glev:voice-start"));
-      }, 350);
-      return;
-    }
+      case "open-sheet-voice":
+        // Open the chat sheet, then trigger voice after the animation.
+        glevAi.openFromButton();
+        window.setTimeout(() => {
+          window.dispatchEvent(new CustomEvent("glev:voice-start"));
+        }, 350);
+        break;
 
-    // Default (and fallback when AI not available or consent not granted):
-    // open legacy voice input — works for ALL users.
-    router.push(`/engine?voice=1&vt=${Date.now()}`);
+      case "legacy-navigate":
+        // No AI feature flag — navigate to Engine voice mode.
+        // replace (not push) avoids stacking /engine on top of the previous
+        // entry page — which was causing the "nav-flash" after a save.
+        router.replace(`/engine?voice=1&vt=${Date.now()}`);
+        break;
+    }
   };
 
   // Footer-nav helper: always navigate, but gracefully stop any active
