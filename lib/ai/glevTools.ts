@@ -654,6 +654,10 @@ export type PendingActionEnvelope = {
     token: string;
     kind: GlevToolName;
     summary: string;
+    /** Serialised tool params — forwarded to the client so the
+     *  "Detail →" button can pre-populate the matching log form
+     *  via sessionStorage without an extra server round-trip. */
+    payload?: Record<string, unknown>;
   };
 };
 
@@ -1344,6 +1348,7 @@ async function createPendingAction(
       token: data.token as string,
       kind,
       summary,
+      payload: params,
     },
   };
 }

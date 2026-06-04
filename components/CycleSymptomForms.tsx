@@ -479,25 +479,80 @@ export function SymptomForm() {
   const [severities, setSeverities] = useState<SeveritiesMap>({});
   const [occurredAt, setOccurredAt] = useState<string>(() => nowLocalDt());
 
-  // Voice-intent pre-fill: glev:open-symptom-log dispatched by useVoiceIntents
-  // when the classifier recognises a symptom utterance (e.g. "Ich fühle mich
-  // hypoglykämisch"). Pre-selects matching symptom chips and sets default
-  // severities — user still confirms with "Speichern" (compliance gate D-003).
+  // Shared helper: apply a pending symptom payload (from sessionStorage on
+  // mount, or from the glev:open-symptom-log event for in-page pre-fills).
+  // Reads symptom_types, severity (1–5), and logged_at from the payload
+  // and updates local form state. User still has to tap "Speichern"
+  // (compliance gate D-003 — no auto-save).
+  function applySymptomPayload(p: {
+    symptom_types?: unknown;
+    severity?: unknown;
+    logged_at?: unknown;
+  }) {
+    if (!Array.isArray(p?.symptom_types)) return;
+    const incoming = (p.symptom_types as unknown[]).filter(
+      (s): s is SymptomType =>
+        typeof s === "string" && SYMPTOM_TYPES.includes(s as SymptomType),
+    );
+    if (incoming.length === 0) return;
+
+    const rawSev = Number(p.severity);
+    const sev: SeverityValue =
+      Number.isFinite(rawSev) && rawSev >= 1 && rawSev <= 5
+        ? (Math.round(rawSev) as SeverityValue)
+        : 3;
+
+    setSelected(new Set(incoming));
+    setSeverities(
+      Object.fromEntries(incoming.map((s) => [s, sev])) as SeveritiesMap,
+    );
+
+    if (typeof p.logged_at === "string" && p.logged_at) {
+      try {
+        const d = new Date(p.logged_at);
+        if (!isNaN(d.getTime())) {
+          const off = d.getTimezoneOffset() * 60_000;
+          setOccurredAt(new Date(d.getTime() - off).toISOString().slice(0, 16));
+        }
+      } catch { /* ignore invalid dates */ }
+    }
+  }
+
+  // On mount: read sessionStorage["glev_pending_symptom"] written by
+  // navigateToLogScreen when the user taps "Detail →" in the AI chat.
+  // Consumed once and then cleared so re-opening the tab doesn't re-fill.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      const raw = window.sessionStorage.getItem("glev_pending_symptom");
+      if (!raw) return;
+      window.sessionStorage.removeItem("glev_pending_symptom");
+      const p = JSON.parse(raw) as {
+        symptom_types?: unknown;
+        severity?: unknown;
+        logged_at?: unknown;
+      };
+      applySymptomPayload(p);
+    } catch { /* ignore parse / quota errors */ }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // glev:open-symptom-log: dispatched by navigateToLogScreen (Detail →) when
+  // the form is already mounted (in-page navigation), and by useVoiceIntents
+  // when the classifier recognises a symptom utterance. Reads symptom_types,
+  // severity, and logged_at — user still confirms with "Speichern" (D-003).
   useEffect(() => {
     const handler = (e: Event) => {
-      const detail = (e as CustomEvent<{ symptom_types?: string[] }>).detail;
-      if (!Array.isArray(detail?.symptom_types)) return;
-      const incoming = detail.symptom_types.filter(
-        (s): s is SymptomType => SYMPTOM_TYPES.includes(s as SymptomType),
-      );
-      if (incoming.length === 0) return;
-      setSelected(new Set(incoming));
-      setSeverities(
-        Object.fromEntries(incoming.map((s) => [s, 3 as const])) as SeveritiesMap,
-      );
+      const detail = (e as CustomEvent<{
+        symptom_types?: unknown;
+        severity?: unknown;
+        logged_at?: unknown;
+      }>).detail;
+      applySymptomPayload(detail ?? {});
     };
     window.addEventListener("glev:open-symptom-log", handler);
     return () => window.removeEventListener("glev:open-symptom-log", handler);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   const [notes, setNotes] = useState("");
   const [status, setStatus] = useState<Status>({ kind: "idle" });

@@ -45,6 +45,10 @@ export type PendingAction = {
   summary: string;
   state: PendingActionState;
   error?: string;
+  /** Tool params forwarded from the SSE frame so the "Detail →"
+   *  button can pre-populate the matching log form without an extra
+   *  server round-trip. Written to sessionStorage by navigateToLogScreen. */
+  payload?: unknown;
 };
 
 export type GlevChatMessage = {
@@ -415,6 +419,7 @@ export function useGlevAI(opts?: {
                   token: string;
                   kind: string;
                   summary: string;
+                  payload?: unknown;
                 };
                 meal_prep?: {
                   input_text: string;
@@ -459,6 +464,7 @@ export function useGlevAI(opts?: {
                   kind: pa.kind,
                   summary: pa.summary,
                   state: "pending",
+                  payload: pa.payload,
                 };
                 // For log_meal_entry: associate the token with the last
                 // queued meal_prep item so "Engine öffnen" chips can look

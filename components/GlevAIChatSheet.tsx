@@ -1331,15 +1331,7 @@ export default function GlevAIChatSheet({
                       }
                       onDetailOpen={
                         onDetailOpen
-                          ? () => {
-                              let payload: unknown;
-                              if (pa.kind === "log_fingerstick") {
-                                const m2 = pa.summary.match(/(\d+)\s*mg\/dL/);
-                                const v = m2 ? parseInt(m2[1], 10) : null;
-                                if (v != null) payload = { value_mg_dl: v };
-                              }
-                              onDetailOpen(m.id, pa.token, pa.kind, payload);
-                            }
+                          ? () => onDetailOpen(m.id, pa.token, pa.kind, pa.payload)
                           : undefined
                       }
                       isMealChipActive={isMealChipActive}

@@ -32,6 +32,10 @@ export type ExerciseEntryPayload = {
 
 export type SymptomEntryPayload = {
   symptom_types: string[];
+  /** Single severity value 1–5 applied uniformly to all symptom_types.
+   *  Stored as a flat number by the AI tool; expanded to a per-type
+   *  severities map by execLogSymptomEntry on confirm. */
+  severity?: number;
   notes?: string | null;
   logged_at?: string | null;
 };
