@@ -17,6 +17,20 @@ const inp: React.CSSProperties = {
 
 type StringTargets = Record<keyof MacroTargets, string>;
 
+/**
+ * Pure helper — mirrors the onBlur clamping logic used by every macro input.
+ *
+ * Rules (snap-back fix, Task #1220):
+ *   - Empty / non-numeric → fall back to `def`.
+ *   - Valid number       → clamped to [0, max].
+ *
+ * Exported so the unit-test suite can cover it without mounting the component.
+ */
+export function clampMacroOnBlur(rawValue: string, max: number, def: number): number {
+  const n = parseInt(rawValue, 10);
+  return Number.isFinite(n) ? Math.max(0, Math.min(max, n)) : def;
+}
+
 function toStringTargets(m: MacroTargets): StringTargets {
   return {
     carbs:   String(m.carbs),
@@ -124,8 +138,7 @@ export default function MakrosPage() {
                   setDisplayValues((prev) => ({ ...prev, [target.key]: e.target.value }));
                 }}
                 onBlur={(e) => {
-                  const n = parseInt(e.target.value, 10);
-                  const clamped = Number.isFinite(n) ? Math.max(0, Math.min(target.max, n)) : target.def;
+                  const clamped = clampMacroOnBlur(e.target.value, target.max, target.def);
                   setDisplayValues((prev) => ({ ...prev, [target.key]: String(clamped) }));
                   updMacro(target.key, clamped);
                 }}
