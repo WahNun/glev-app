@@ -89,14 +89,21 @@ export async function POST(req: NextRequest) {
     getTemplate("meta_lead_reminder_email"),
   ]);
 
-  // Meta-Leads die vor 24h+ angelegt wurden, noch nicht aktiviert und noch nicht erinnert
+  // Meta-Leads die vor 24h+ angelegt wurden, noch nicht aktiviert und noch nicht erinnert.
+  // AUSNAHME: Wenn filterUserIds gesetzt ist (manueller Button im CRM), wird der 24h-Cutoff
+  // nicht angewendet — damit können frisch injizierte Test-Leads sofort erinnert werden.
   const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-  const { data: leads, error: leadsErr } = await sb
+  let leadsQuery = sb
     .from("meta_leads")
     .select("email, phone, full_name, received_at")
     .is("reminder_sent_at", null)
-    .not("email", "is", null)
-    .lte("received_at", cutoff);
+    .not("email", "is", null);
+
+  if (!filterUserIds) {
+    leadsQuery = leadsQuery.lte("received_at", cutoff);
+  }
+
+  const { data: leads, error: leadsErr } = await leadsQuery;
 
   if (leadsErr) return NextResponse.json({ error: leadsErr.message }, { status: 500 });
   if (!leads || leads.length === 0) return NextResponse.json({ results: [] });

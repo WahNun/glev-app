@@ -34,7 +34,7 @@ export const DEFAULTS: Record<string, MessageTemplate> = {
     key: "meta_lead_reminder_sms",
     label: "Meta Lead — Reminder (SMS)",
     sms_text:
-      "Hast du Glev noch nicht ausprobiert? Als T1D-Nutzer:in hilft dir Glev dabei, deine Insulindosierung besser einzuschätzen. Dein kostenloser 7-Tage-Test: {{link}}\n\nFragen? Antworte einfach auf diese SMS.\nAbmelden: glev.app/sms-stop?t={{token}}&u={{user_id}} · Fragen: lucas@glev.app",
+      "Lucas hier, Glev-Gründer. Du hattest dich für den 7-Tage-Test gespeichert — hier dein Link: {{link}}\n\nAbmelden: glev.app/sms-stop?t={{token}}&u={{user_id}} · Fragen: lucas@glev.app",
     email_subject: null,
     email_intro: null,
     updated_at: null,

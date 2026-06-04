@@ -10,6 +10,7 @@ import { createMetaLeadAction } from "../buyers/actions";
 import ActivatePendingButton from "../buyers/ActivatePendingButton";
 import ReminderButton from "../buyers/ReminderButton";
 import BulkSmsButton from "../buyers/BulkSmsButton";
+import TestLeadInjector from "./TestLeadInjector";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -314,6 +315,8 @@ export default async function CrmPage({
       {bfyErrMsg && <p style={errStyle}>{bfyErrMsg}</p>}
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(340px, 1fr))", gap: 12, marginBottom: 24 }}>
+        <TestLeadInjector />
+
         <section style={panelStyle}>
           <h2 style={panelTitle}>Meta-Lead anlegen — 7-Tage Trial</h2>
           {createdParam === "1" && <p style={successStyle}>✓ Account angelegt. Invite-Email + SMS (falls Telefon) verschickt.</p>}
