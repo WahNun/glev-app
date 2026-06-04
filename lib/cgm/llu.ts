@@ -319,7 +319,7 @@ export type Reading = {
   trend: string;
 };
 
-function mapMeasurement(m: LluMeasurement | undefined | null): Reading | null {
+export function mapMeasurement(m: LluMeasurement | undefined | null): Reading | null {
   if (!m) return null;
   return {
     value: m.ValueInMgPerDl ?? m.Value ?? null,
