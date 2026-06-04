@@ -1,5 +1,5 @@
 import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
-import { isAdminAuthed } from "@/lib/adminAuth";
+import { isAnyAuthed } from "@/lib/adminAuth";
 import { loginAction } from "./actions";
 import AdminLoginForm from "../_components/AdminLoginForm";
 import { computeEffectivePlan } from "@/lib/admin/effectivePlan";
@@ -23,7 +23,7 @@ export default async function CrmPage({
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const sp = await searchParams;
-  const authed = await isAdminAuthed();
+  const authed = await isAnyAuthed();
 
   if (!authed) {
     const errParam = Array.isArray(sp.err) ? sp.err[0] : sp.err;

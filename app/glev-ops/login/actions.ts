@@ -6,9 +6,13 @@ import {
   verifyMarketerCredentials,
   setAdminCookie,
   setMarketerCookie,
-  clearAdminCookie,
 } from "@/lib/adminAuth";
 
+/**
+ * Shared login action for /glev-ops/login.
+ * Tries marketer credentials first, then admin credentials.
+ * Marketer → /glev-ops/crm, Admin → /glev-ops.
+ */
 export async function loginAction(formData: FormData): Promise<void> {
   const email    = String(formData.get("email")    ?? "");
   const password = String(formData.get("password") ?? "");
@@ -23,13 +27,8 @@ export async function loginAction(formData: FormData): Promise<void> {
   const adminOk = await verifyAdminCredentials(email, password, totp);
   if (adminOk) {
     await setAdminCookie();
-    redirect("/glev-ops/crm");
+    redirect("/glev-ops");
   }
 
-  redirect("/glev-ops/crm?err=bad");
-}
-
-export async function logoutAction(): Promise<void> {
-  await clearAdminCookie();
-  redirect("/glev-ops/crm");
+  redirect("/glev-ops/login?err=bad");
 }

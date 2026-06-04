@@ -1,13 +1,17 @@
 /**
  * Shared admin authentication helpers for /glev-ops/*.
  *
- * Three-factor login:
+ * Three-factor login (admin):
  *   1. E-Mail        (ADMIN_EMAIL env var)
  *   2. Passwort      (ADMIN_API_SECRET env var)
  *   3. TOTP-Code     (ADMIN_TOTP_SECRET env var — base32, compatible with Google Authenticator)
  *
- * The session cookie stores an HMAC of the secret rather than the raw secret
- * so the plaintext never lives in the browser.
+ * Marketer login (read-only CRM access):
+ *   1. E-Mail        (MARKETER_EMAIL env var)
+ *   2. Passwort      (MARKETER_PASSWORD env var)
+ *
+ * Cookie format: "${role}:${hmac}" where role is "admin" | "marketer".
+ * Backward-compat: old plain-hex admin cookies are accepted and treated as "admin".
  *
  * TOTP is implemented natively via Node crypto (RFC 6238 / RFC 4226).
  * No external library needed — avoids Turbopack static-export issues with otplib.
@@ -59,7 +63,6 @@ function verifyTotp(token: string, secret: string): boolean {
   if (!/^\d{6}$/.test(t)) return false;
   const key     = base32Decode(secret);
   const counter = Math.floor(Date.now() / 30_000);
-  // Accept ±1 window (30 s clock drift tolerance)
   for (let drift = -1; drift <= 1; drift++) {
     if (hotp(key, counter + drift) === t) return true;
   }
@@ -70,8 +73,13 @@ function verifyTotp(token: string, secret: string): boolean {
 // Session helpers
 // ---------------------------------------------------------------------------
 
-function computeSessionToken(): string {
+function computeAdminHmac(): string {
   const secret = process.env.ADMIN_API_SECRET ?? "";
+  return createHmac("sha256", secret).update(SESSION_HMAC_KEY).digest("hex");
+}
+
+function computeMarketerHmac(): string {
+  const secret = process.env.MARKETER_PASSWORD ?? "";
   return createHmac("sha256", secret).update(SESSION_HMAC_KEY).digest("hex");
 }
 
@@ -90,8 +98,8 @@ function safeEqual(a: string, b: string): boolean {
 // ---------------------------------------------------------------------------
 
 /**
- * Verify all three credentials.
- * Always takes ~400 ms (success or failure) to slow brute-force attempts.
+ * Verify admin credentials (email + password; TOTP temporarily disabled).
+ * Always takes ~400 ms to slow brute-force attempts.
  */
 export async function verifyAdminCredentials(
   email: string,
@@ -102,11 +110,9 @@ export async function verifyAdminCredentials(
 
   const expectedPassword = process.env.ADMIN_API_SECRET ?? "";
   const expectedEmail    = (process.env.ADMIN_EMAIL ?? "").toLowerCase().trim();
-  const totpSecret       = process.env.ADMIN_TOTP_SECRET ?? "";
 
   if (!expectedPassword || expectedPassword.length < 16) return false;
   if (!expectedEmail)  return false;
-  // ADMIN_TOTP_SECRET check skipped while 2FA is temporarily disabled
 
   const emailOk    = safeEqual(email.toLowerCase().trim(), expectedEmail);
   const passwordOk = safeEqual(password, expectedPassword);
@@ -116,20 +122,92 @@ export async function verifyAdminCredentials(
   return emailOk && passwordOk;
 }
 
-/** Check whether the current request carries a valid admin session cookie. */
-export async function isAdminAuthed(): Promise<boolean> {
-  const expected = process.env.ADMIN_API_SECRET ?? "";
-  if (!expected || expected.length < 16) return false;
-  const store = await cookies();
-  const tok   = store.get(ADMIN_COOKIE)?.value ?? "";
-  if (!tok) return false;
-  return safeEqual(tok, computeSessionToken());
+/**
+ * Verify marketer credentials (email + password, no TOTP).
+ * Always takes ~400 ms to slow brute-force attempts.
+ */
+export async function verifyMarketerCredentials(
+  email: string,
+  password: string,
+): Promise<boolean> {
+  await new Promise((r) => setTimeout(r, 400));
+
+  const expectedEmail    = (process.env.MARKETER_EMAIL ?? "").toLowerCase().trim();
+  const expectedPassword = process.env.MARKETER_PASSWORD ?? "";
+
+  if (!expectedEmail || !expectedPassword || expectedPassword.length < 8) return false;
+
+  const emailOk    = safeEqual(email.toLowerCase().trim(), expectedEmail);
+  const passwordOk = safeEqual(password, expectedPassword);
+
+  return emailOk && passwordOk;
 }
 
-/** Write the session cookie (call after successful login). */
+/**
+ * Read the session role from the current request cookie.
+ * Returns "admin" | "marketer" | null.
+ *
+ * Backward-compat: old plain-hex cookies (no role prefix) are treated as "admin".
+ */
+export async function getSessionRole(): Promise<"admin" | "marketer" | null> {
+  const adminSecret = process.env.ADMIN_API_SECRET ?? "";
+  if (!adminSecret || adminSecret.length < 16) return null;
+
+  const store = await cookies();
+  const tok   = store.get(ADMIN_COOKIE)?.value ?? "";
+  if (!tok) return null;
+
+  if (tok.startsWith("admin:")) {
+    const expected = "admin:" + computeAdminHmac();
+    return safeEqual(tok, expected) ? "admin" : null;
+  }
+
+  if (tok.startsWith("marketer:")) {
+    const marketerPw = process.env.MARKETER_PASSWORD ?? "";
+    if (!marketerPw || marketerPw.length < 8) return null;
+    const expected = "marketer:" + computeMarketerHmac();
+    return safeEqual(tok, expected) ? "marketer" : null;
+  }
+
+  // Backward-compat: old plain-hex admin token (no role prefix)
+  const legacyHmac = computeAdminHmac();
+  return safeEqual(tok, legacyHmac) ? "admin" : null;
+}
+
+/** Check whether the current request carries a valid admin session cookie. */
+export async function isAdminAuthed(): Promise<boolean> {
+  const role = await getSessionRole();
+  return role === "admin";
+}
+
+/** Check whether the current request carries a valid marketer session cookie. */
+export async function isMarketerAuthed(): Promise<boolean> {
+  const role = await getSessionRole();
+  return role === "marketer";
+}
+
+/** Check whether the current request is authenticated as any role (admin or marketer). */
+export async function isAnyAuthed(): Promise<boolean> {
+  const role = await getSessionRole();
+  return role !== null;
+}
+
+/** Write the admin session cookie (call after successful admin login). */
 export async function setAdminCookie(): Promise<void> {
   const store = await cookies();
-  store.set(ADMIN_COOKIE, computeSessionToken(), {
+  store.set(ADMIN_COOKIE, "admin:" + computeAdminHmac(), {
+    httpOnly: true,
+    sameSite: "strict",
+    secure:   process.env.NODE_ENV === "production",
+    path:     COOKIE_PATH,
+    maxAge:   60 * 60 * 8,
+  });
+}
+
+/** Write the marketer session cookie (call after successful marketer login). */
+export async function setMarketerCookie(): Promise<void> {
+  const store = await cookies();
+  store.set(ADMIN_COOKIE, "marketer:" + computeMarketerHmac(), {
     httpOnly: true,
     sameSite: "strict",
     secure:   process.env.NODE_ENV === "production",

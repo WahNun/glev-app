@@ -14,7 +14,7 @@ interface NavGroup {
   items: ReadonlyArray<NavItem>;
 }
 
-const GROUPS: ReadonlyArray<NavGroup> = [
+const ALL_GROUPS: ReadonlyArray<NavGroup> = [
   {
     label: "Nutzer & Accounts",
     items: [
@@ -59,22 +59,36 @@ const GROUPS: ReadonlyArray<NavGroup> = [
   },
 ];
 
+const MARKETER_GROUPS: ReadonlyArray<NavGroup> = [
+  {
+    label: "Nutzer & Accounts",
+    items: [
+      { href: "/glev-ops/crm", label: "CRM" },
+    ],
+  },
+];
+
 function isItemActive(pathname: string, href: string) {
   return pathname === href || pathname.startsWith(href + "/");
 }
 
-function getActiveGroupIndex(pathname: string): number {
-  for (let i = 0; i < GROUPS.length; i++) {
-    if (GROUPS[i].items.some((it) => isItemActive(pathname, it.href))) {
+function getActiveGroupIndex(pathname: string, groups: ReadonlyArray<NavGroup>): number {
+  for (let i = 0; i < groups.length; i++) {
+    if (groups[i].items.some((it) => isItemActive(pathname, it.href))) {
       return i;
     }
   }
   return 0;
 }
 
-export default function AdminNav() {
+interface Props {
+  role?: "admin" | "marketer";
+}
+
+export default function AdminNav({ role = "admin" }: Props) {
   const pathname = usePathname() ?? "";
-  const activeGroupIndex = getActiveGroupIndex(pathname);
+  const GROUPS = role === "marketer" ? MARKETER_GROUPS : ALL_GROUPS;
+  const activeGroupIndex = getActiveGroupIndex(pathname, GROUPS);
   const activeGroup = GROUPS[activeGroupIndex];
 
   return (
@@ -82,8 +96,8 @@ export default function AdminNav() {
       {/* Primary bar — brand + group tabs + logout */}
       <div style={primaryBarStyle}>
         <div style={innerStyle}>
-          <Link href="/glev-ops" style={brandStyle}>
-            Glev Admin
+          <Link href={role === "marketer" ? "/glev-ops/crm" : "/glev-ops"} style={brandStyle}>
+            Glev {role === "marketer" ? "CRM" : "Admin"}
           </Link>
 
           <div style={groupTabsStyle}>
