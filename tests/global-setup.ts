@@ -27,6 +27,17 @@ export const TEST_USER_FIXTURE_PATH = path.join(
 const E2E_WORKER_COUNT = 2;
 
 export default async function globalSetup() {
+  // Pure-unit suites (e.g. the *TranslationKeys.test.ts files run by the
+  // "Translation key checks" workflow) import JSON / pure functions directly —
+  // no dev server, no logged-in user. They run with PLAYWRIGHT_SKIP_WEBSERVER=1
+  // (same flag that disables the webServer in playwright.config.ts). Skip the
+  // Supabase test-user provisioning entirely for those runs so they don't
+  // require SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY. The full e2e suite does
+  // NOT set this flag, so it still provisions normally.
+  if (process.env.PLAYWRIGHT_SKIP_WEBSERVER === "1") {
+    return;
+  }
+
   const users = await provisionTestUsers(E2E_WORKER_COUNT);
 
   fs.mkdirSync(path.dirname(TEST_USERS_FIXTURE_PATH), { recursive: true });
