@@ -57,6 +57,21 @@ export type GlevChatMessage = {
   pendingActions?: PendingAction[];
 };
 
+/** One meal waiting for the user to tap through to the Engine screen.
+ *  Multiple meals in a single turn (e.g. "Haribo AND Croissant") are
+ *  stored as a queue so neither overwrites the other in sessionStorage. */
+export type MealQueueItem = {
+  mealPrep: {
+    input_text: string;
+    carbs: number;
+    protein: number | null;
+    fat: number | null;
+    fiber: number | null;
+  };
+  /** Display label derived from input_text (max 40 chars). */
+  label: string;
+};
+
 export type ContextSnapshot = {
   /** Active screen name — forwarded to the API so the preamble can
    *  note which view the user has open. Optional; non-dashboard
@@ -131,15 +146,15 @@ export function useGlevAI(opts?: {
   const [messages, setMessages] = useState<GlevChatMessage[]>([]);
   const [streaming, setStreaming] = useState<boolean>(false);
   const abortRef = useRef<AbortController | null>(null);
-  // When a meal_prep frame arrives mid-stream we store the navigation
-  // target here and execute it AFTER the stream finishes so the AI's
-  // text response ("Ich habe X Gramm KH eingetragen…") has a chance to
-  // arrive before the stream is aborted by closeSheet.
-  const pendingNavigateRef = useRef<string | null>(null);
-  // After the stream ends, pendingNavigateRef is promoted to this state
-  // so the chat sheet can render a tap-to-open chip. The user taps it
-  // instead of being auto-navigated — gives them time to read the response.
-  const [pendingMealNav, setPendingMealNav] = useState<string | null>(null);
+  // Collects meal_prep items that arrive mid-stream. We must NOT write
+  // to sessionStorage immediately because multiple meals in one turn
+  // (e.g. "Haribo AND Croissant") would overwrite each other. After
+  // the stream ends this ref is flushed into state as an ordered queue.
+  const pendingMealQueueRef = useRef<MealQueueItem[]>([]);
+  // Tap-chip queue: user works through meals one at a time. Each call
+  // to fireMealNav() pops the first item, writes its macros into
+  // sessionStorage, and navigates to /engine.
+  const [pendingMealNavQueue, setPendingMealNavQueue] = useState<MealQueueItem[]>([]);
   // Keep a ref to the latest opts so sendMessage always reads the current
   // contextSnapshot without needing opts?.contextSnapshot in its dep array.
   // Including an inline object in useCallback deps would recreate sendMessage
@@ -409,19 +424,16 @@ export function useGlevAI(opts?: {
               if (parsed.navigate) {
                 optsRef.current?.onNavigate?.(parsed.navigate);
               }
-              if (parsed.meal_prep && typeof window !== "undefined") {
-                // Store macros in sessionStorage NOW (sync) so they are
-                // available whenever the navigation fires.
-                try {
-                  sessionStorage.setItem(
-                    "glev_pending_meal",
-                    JSON.stringify(parsed.meal_prep),
-                  );
-                } catch { /* sessionStorage may be unavailable */ }
-                // Queue the navigation for AFTER the stream ends so the
-                // AI's text response can arrive first. Executing onNavigate
-                // here would call closeSheet → abort, leaving an empty bubble.
-                pendingNavigateRef.current = "/engine";
+              if (parsed.meal_prep) {
+                // Collect into the queue ref — do NOT write to sessionStorage
+                // here. Multiple meals in one turn would overwrite each other.
+                // We flush to state after the stream ends and only write the
+                // specific meal's macros when the user taps its chip.
+                const label = (parsed.meal_prep.input_text ?? "").slice(0, 40);
+                pendingMealQueueRef.current = [
+                  ...pendingMealQueueRef.current,
+                  { mealPrep: parsed.meal_prep, label },
+                ];
               }
               // Phase 2: set_macro — dispatched as a CustomEvent so the
               // active engine-macros screen can update its local state
@@ -496,12 +508,13 @@ export function useGlevAI(opts?: {
             m.id === assistantId ? { ...m, isStreaming: false } : m,
           ),
         );
-        // Promote deferred navigation to visible tap-chip state.
-        // The user taps the chip to open the engine — no auto-navigate.
-        if (pendingNavigateRef.current) {
-          const path = pendingNavigateRef.current;
-          pendingNavigateRef.current = null;
-          setPendingMealNav(path);
+        // Flush collected meal_prep items into the queue state.
+        // The chip becomes visible once streaming has stopped so the
+        // user has time to read the AI's response before tapping.
+        if (pendingMealQueueRef.current.length > 0) {
+          const items = pendingMealQueueRef.current;
+          pendingMealQueueRef.current = [];
+          setPendingMealNavQueue((prev) => [...prev, ...items]);
         }
       }
     },
@@ -606,19 +619,26 @@ export function useGlevAI(opts?: {
     sendMessage,
     confirmAction,
     cancelAction,
-    /** Non-null when a meal_prep response is ready and waiting for the user
-     *  to tap through to the Engine screen. Set after stream ends; cleared
-     *  by fireMealNav() when the user taps the chip. */
-    pendingMealNav,
-    /** Called by the chat sheet's meal-nav tap chip. Fires the prefill event,
-     *  navigates, and clears the pending state. */
+    /** Ordered queue of meals waiting for the user to tap through to
+     *  the Engine screen. Populated after stream ends; first item is
+     *  popped by fireMealNav() each time the user taps the chip.
+     *  Multi-meal turns ("Haribo UND Croissant") produce multiple items
+     *  so neither overwrites the other. */
+    pendingMealNavQueue,
+    /** Called by the chat sheet's meal-nav tap chip. Writes the first
+     *  item's macros to sessionStorage, dispatches glev:meal-prefill,
+     *  navigates to /engine, and pops the item from the queue. */
     fireMealNav: () => {
-      if (!pendingMealNav) return;
-      setPendingMealNav(null);
+      if (pendingMealNavQueue.length === 0) return;
+      const [first, ...rest] = pendingMealNavQueue;
+      setPendingMealNavQueue(rest);
       if (typeof window !== "undefined") {
+        try {
+          sessionStorage.setItem("glev_pending_meal", JSON.stringify(first.mealPrep));
+        } catch { /* ignore quota / privacy errors */ }
         window.dispatchEvent(new CustomEvent("glev:meal-prefill"));
       }
-      optsRef.current?.onNavigate?.(pendingMealNav);
+      optsRef.current?.onNavigate?.("/engine");
     },
   };
 }

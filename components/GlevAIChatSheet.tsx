@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import type { GlevChatMessage, PendingAction } from "@/lib/useGlevAI";
+import type { GlevChatMessage, MealQueueItem, PendingAction } from "@/lib/useGlevAI";
 import { useVoiceIntents } from "@/hooks/useVoiceIntents";
 import { useTTS } from "@/hooks/useTTS";
 import IntentConfirmChip, { intentLabel } from "@/components/IntentConfirmChip";
@@ -23,9 +23,10 @@ interface Props {
   /** Called whenever the chat sheet's STT listening state changes so the
    *  parent (Layout.tsx) can reflect it on the FAB. */
   onListeningChange?: (listening: boolean) => void;
-  /** When set, a tap chip is shown inviting the user to open the Engine.
-   *  Cleared automatically when the user taps the chip (via onMealNavTap). */
-  pendingMealNav?: string | null;
+  /** Queue of meals waiting for the user to tap through to the Engine screen.
+   *  First item is the active chip; each onMealNavTap() call pops one.
+   *  Multi-meal turns ("Haribo UND Croissant") produce multiple items. */
+  pendingMealNavQueue?: MealQueueItem[];
   onMealNavTap?: () => void;
   /**
    * When true, voice transcripts are classified into intents before
@@ -195,7 +196,7 @@ export default function GlevAIChatSheet({
   onCancelAction,
   onClearChat,
   onListeningChange,
-  pendingMealNav,
+  pendingMealNavQueue,
   onMealNavTap,
   voiceIntentEnabled = false,
 }: Props) {
@@ -746,8 +747,11 @@ export default function GlevAIChatSheet({
           />
         )}
 
-        {/* Meal-nav tap chip — shown after AI confirms a meal_prep response */}
-        {pendingMealNav && (
+        {/* Meal-nav tap chip — shown after AI confirms one or more meal_prep
+            responses. When multiple meals arrive in one turn (e.g. "Haribo
+            UND Croissant") a count badge shows how many remain so the user
+            knows to come back for the next one after saving in Engine. */}
+        {pendingMealNavQueue && pendingMealNavQueue.length > 0 && (
           <button
             onClick={onMealNavTap}
             style={{
@@ -764,11 +768,17 @@ export default function GlevAIChatSheet({
               alignItems: "center",
               gap: 8,
               width: "calc(100% - 32px)",
-              justifyContent: "center",
             }}
           >
-            <span>Engine öffnen</span>
-            <span style={{ fontSize: 16 }}>→</span>
+            <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              {pendingMealNavQueue[0].label || "Mahlzeit"} — Engine öffnen
+            </span>
+            {pendingMealNavQueue.length > 1 && (
+              <span style={{ fontSize: 12, opacity: 0.65, flexShrink: 0 }}>
+                1 von {pendingMealNavQueue.length}
+              </span>
+            )}
+            <span style={{ fontSize: 16, flexShrink: 0 }}>→</span>
           </button>
         )}
 

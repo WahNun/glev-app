@@ -580,13 +580,26 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
     }
   }, [pathname, sourceHdr, wizardStep]);
 
+  // Track previous pathname so we can detect returning from /engine.
+  const prevPathnameRef = useRef<string>("");
+
   // Close the global AI chat sheet when the user navigates to /engine.
-  // Engine has its own embedded EngineChatPanel — the two should not
-  // overlap. We act on pathname changes only (not on sheetOpen) to
-  // avoid an infinite effect loop.
+  // Engine has its own embedded EngineChatPanel — the two must not overlap.
+  // When the user comes BACK from /engine and there are still meals in the
+  // queue, auto-reopen the chat so the next "Engine öffnen" chip is visible.
   useEffect(() => {
+    const prev = prevPathnameRef.current;
+    prevPathnameRef.current = pathname;
+
     if (pathname.startsWith("/engine") && glevAi.sheetOpen) {
       glevAi.closeSheet();
+    } else if (
+      prev.startsWith("/engine") &&
+      !pathname.startsWith("/engine") &&
+      glevAi.pendingMealNavQueue.length > 0
+    ) {
+      // User returned from Engine with more meals pending — reopen chat.
+      glevAi.openFromButton();
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pathname]);
@@ -1330,7 +1343,7 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
               onClearChat={glevAi.clearMessages}
               onListeningChange={setAiThinking}
               voiceIntentEnabled={voiceIntentEnabled}
-              pendingMealNav={glevAi.pendingMealNav}
+              pendingMealNavQueue={glevAi.pendingMealNavQueue}
               onMealNavTap={glevAi.fireMealNav}
             />
           )}
