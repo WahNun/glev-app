@@ -161,7 +161,7 @@ export const GLEV_TOOLS = [
     function: {
       name: "log_meal_entry",
       description:
-        "Öffnet den Mahlzeit-Eingabe-Screen und füllt die Makros vor. WICHTIG: speichert NICHT direkt — der Nutzer sieht die vorausgefüllten Werte im Engine-Screen und bestätigt per Klick oder Sprachbefehl ('Speichern'). Aufrufen, wenn der Nutzer eine Mahlzeit beschreibt oder loggen möchte (z. B. 'Ich esse ein Croissant', 'Trag 60g Pasta ein'). Bei unklaren Werten schätze die Makros nach bestem Wissen — der Nutzer kann sie anschließend korrigieren. Niemals aufrufen bei reinen Fragen oder wenn der Nutzer gerade schon auf dem Engine-Screen ist und nur einzelne Werte korrigiert (dann set_macro nutzen).",
+        "Öffnet den Mahlzeit-Eingabe-Screen und füllt die Makros vor. WICHTIG: speichert NICHT direkt — der Nutzer bestätigt per UI-Button. Aufrufen, wenn der Nutzer eine Mahlzeit beschreibt oder loggen möchte. Bei unklaren Werten schätze die Makros nach bestem Wissen. Niemals aufrufen bei reinen Fragen oder beim set_macro-Einsatz. PFLICHT: items[] muss immer geliefert werden — eine Zeile pro Zutat/Komponente (NIE die gesamte Mahlzeit als ein Block). Beispiel: 'Hähnchen mit Reis' → [{name:'Hähnchenbrust',grams:180},{name:'Basmatireis',grams:150}].",
       parameters: {
         type: "object",
         properties: {
@@ -192,8 +192,21 @@ export const GLEV_TOOLS = [
             description:
               "Optional: Zeitpunkt der Mahlzeit als ISO-8601-String (z. B. '2026-06-04T10:30:00'). Wenn der Nutzer eine Uhrzeit nennt oder die Mahlzeit in der Vergangenheit liegt, hier eintragen; sonst weglassen — das System verwendet dann den aktuellen Zeitpunkt.",
           },
+          items: {
+            type: "array",
+            description:
+              "PFLICHT: Eine Zeile pro Zutat/Komponente. NIE die gesamte Mahlzeit als ein Item. Beispiele: 'Hähnchen mit Reis und Salat' → [{name:'Hähnchenbrust',grams:180},{name:'Basmatireis',grams:150},{name:'Salat',grams:80}]. 'Croissant' → [{name:'Croissant',grams:70}]. Gramm = Schätzung typischer Portionsgröße.",
+            items: {
+              type: "object",
+              properties: {
+                name:  { type: "string",  description: "Name der Zutat/Komponente (Deutsch oder Englisch)." },
+                grams: { type: "number",  description: "Menge in Gramm." },
+              },
+              required: ["name", "grams"],
+            },
+          },
         },
-        required: ["input_text", "carbs_grams"],
+        required: ["input_text", "carbs_grams", "items"],
       },
     },
   },
