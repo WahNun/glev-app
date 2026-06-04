@@ -39,6 +39,21 @@ const META_PIXEL_ID = "960780236789931";
 // when env() returns 0. Re-measures on resize / orientation-change.
 const BOOTSTRAP_SCRIPT = `
 (function(){
+  // Recovery-hash guard (runs BEFORE the app bundle, so before the Supabase
+  // client's detectSessionInUrl can consume/strip the hash on /login or /).
+  // Supabase Implicit Flow appends the session as a URL hash:
+  //   …#access_token=…&type=recovery|invite|signup  (or #error_code=otp_expired).
+  // If that ever lands on the wrong path (root, /login, /auth/callback bounce,
+  // or an old email link) we forward it — hash intact — to /auth/confirm, the
+  // only page with the manual setSession() hash handler. See DECISIONS.md D-001.
+  try{
+    var rh=window.location.hash||'';
+    if(rh&&window.location.pathname!=='/auth/confirm'&&
+       /[#&](type=(recovery|invite|signup)|error_code=|error=)/.test(rh)){
+      window.location.replace('/auth/confirm'+rh);
+      return;
+    }
+  }catch(e){}
   try{
     var c=document.cookie.match(/(?:^|;\\s*)THEME=([^;]+)/);
     var v=c?decodeURIComponent(c[1]):null;
