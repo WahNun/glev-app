@@ -9,7 +9,7 @@ import React from "react";
 
 export const DEV_COCKPIT_PHASES = {
   // ⬇️ The ONLY value to bump when a major phase ships.
-  currentPhase: 5,
+  currentPhase: 6,
   // Roadmap labels (index 0 = Phase 1). totalPhases is derived from this list.
   labels: [
     "Task Management",

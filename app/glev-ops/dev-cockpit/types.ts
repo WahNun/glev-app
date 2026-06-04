@@ -18,6 +18,10 @@ export type TaskStatus =
   | "building"
   | "build_failed"
   | "build_complete"
+  // ── Phase 6 — Coding Agent lifecycle (sandboxed; no writes) ──
+  | "generating_code"
+  | "code_ready"
+  | "code_failed"
   | "preview_ready"
   | "applied"
   | "rejected"
@@ -35,6 +39,10 @@ export interface DevTask {
   plan_text: string | null;
   // Phase 5 — generated build-execution plan (BuildExecutionPlan JSON) or null.
   build_plan: unknown | null;
+  // Phase 6 — latest code draft (CodeGenerationDraft JSON) + metadata, or null.
+  generated_code: unknown | null;
+  code_generation_version: number | null;
+  generated_at: string | null;
   diff_summary: string | null;
   changed_files: unknown[];
   created_at: string;
@@ -191,6 +199,60 @@ export interface DevBuild {
 export const BUILD_COLUMNS =
   "id, task_id, version, status, scope, steps, included_notes_snapshot, excluded_notes_snapshot, affected_areas, risks, complexity, created_at, updated_at";
 
+// ── Code Generation Draft (Phase 6 — Coding Agent, sandboxed) ───────────────
+
+export type ChangeSize = "small" | "medium" | "large";
+
+export interface CodeBlock {
+  file: string;
+  code: string;
+}
+
+/** Core draft returned by the coding agent (metadata added by orchestration). */
+export interface GeneratedCodeDraft {
+  summary: string;
+  files_to_create: string[];
+  files_to_modify: string[];
+  implementation_steps: string[];
+  generated_code_blocks: CodeBlock[];
+  risks: string[];
+  estimated_change_size: ChangeSize;
+}
+
+/**
+ * FROZEN code draft artifact. PROPOSALS ONLY — no files are written, no commits,
+ * no PRs, no deploys. Stored as JSON in `dev_cockpit_tasks.generated_code` (the
+ * latest draft, denormalized for the card) AND as a row in
+ * `dev_cockpit_code_generations` (per-draft immutable history).
+ */
+export interface CodeGenerationDraft extends GeneratedCodeDraft {
+  code_id: string;
+  version: number;
+  status: TaskStatus;
+  created_at: string;
+  updated_at: string;
+}
+
+/** A row in dev_cockpit_code_generations — one immutable code draft (history). */
+export interface DevCodeGeneration {
+  id: string;
+  task_id: string;
+  version: number;
+  status: TaskStatus;
+  summary: string | null;
+  files_to_create: unknown[];
+  files_to_modify: unknown[];
+  implementation_steps: unknown[];
+  generated_code_blocks: unknown[];
+  risks: unknown[];
+  estimated_change_size: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export const CODEGEN_COLUMNS =
+  "id, task_id, version, status, summary, files_to_create, files_to_modify, implementation_steps, generated_code_blocks, risks, estimated_change_size, created_at, updated_at";
+
 // ── Sidebar filters ─────────────────────────────────────────────────────────
 
 export type TaskFilter =
@@ -217,6 +279,9 @@ export const ACTIVE_STATUSES: TaskStatus[] = [
   "building",
   "build_failed",
   "build_complete",
+  "generating_code",
+  "code_ready",
+  "code_failed",
   "preview_ready",
 ];
 
@@ -263,6 +328,9 @@ export const STATUS_LABEL: Record<TaskStatus, string> = {
   building: "Building",
   build_failed: "Build fehlgeschlagen",
   build_complete: "Build fertig",
+  generating_code: "Code-Generierung",
+  code_ready: "Code-Draft bereit",
+  code_failed: "Code fehlgeschlagen",
   preview_ready: "Preview bereit",
   applied: "Angewendet",
   rejected: "Abgelehnt",
@@ -281,6 +349,9 @@ export const STATUS_STYLE: Record<TaskStatus, React.CSSProperties> = {
   building: { background: "#ffedd5", color: "#9a3412", border: "1px solid #fed7aa" },
   build_failed: { background: "#fee2e2", color: "#991b1b", border: "1px solid #fca5a5" },
   build_complete: { background: "#d1fae5", color: "#065f46", border: "1px solid #6ee7b7" },
+  generating_code: { background: "#e0e7ff", color: "#3730a3", border: "1px solid #a5b4fc" },
+  code_ready: { background: "#dcfce7", color: "#166534", border: "1px solid #86efac" },
+  code_failed: { background: "#fee2e2", color: "#991b1b", border: "1px solid #fca5a5" },
   preview_ready: { background: "#f3e8ff", color: "#6b21a8", border: "1px solid #d8b4fe" },
   applied: { background: "#dcfce7", color: "#166534", border: "1px solid #86efac" },
   rejected: { background: "#fee2e2", color: "#991b1b", border: "1px solid #fca5a5" },
@@ -291,4 +362,4 @@ export const STATUS_STYLE: Record<TaskStatus, React.CSSProperties> = {
 
 // Column list used by every task SELECT so the shape always matches DevTask.
 export const TASK_COLUMNS =
-  "id, title, prompt, status, branch_name, preview_url, plan_text, build_plan, diff_summary, changed_files, created_at, updated_at";
+  "id, title, prompt, status, branch_name, preview_url, plan_text, build_plan, generated_code, code_generation_version, generated_at, diff_summary, changed_files, created_at, updated_at";
