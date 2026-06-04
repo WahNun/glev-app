@@ -672,8 +672,6 @@ function PendingActionWidget({
     );
   }
 
-  }
-
   // ── Non-meal chip layout (Bolus, Exercise, Symptom, …) ───────────
   // ✕ icon top-right + type label + summary + [Schnell speichern] [Detail →]
   const { icon, label } = getActionMeta(pa.kind);
