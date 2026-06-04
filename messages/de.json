@@ -834,6 +834,8 @@
     "engine_status_warming_up": "AUFWÄRMPHASE",
     "engine_outcome_weighted": "ergebnisgewichtet",
     "engine_final_meals": "{n, plural, one {# abgeschlossene Mahlzeit} other {# abgeschlossene Mahlzeiten}} · letzte 90 Tage",
+    "engine_pairing_badge": "{total, plural, one {# Mahlzeit} other {# Mahlzeiten}} · {paired} gepaart",
+    "engine_pairing_explainer": "Glev hat {paired} von {total, plural, one {# Mahlzeit} other {# Mahlzeiten}} im 90-Tage-Fenster einen Bolus zugeordnet. Mehr Paarungen bedeuten eine genauere ICR-Berechnung.",
     "engine_icr_source": "{explicit} explizit getaggt · {timeWindow} zeitnah gepaart · {mealColumn} aus Mahlzeit-Spalte ({total, plural, one {# Mahlzeit} other {# Mahlzeiten}} gesamt · letzte 90 Tage)",
     "engine_icr_source_tooltip": "Glev nutzt deine letzten Mahlzeiten, um deinen persönlichen KH-Faktor zu berechnen. Mahlzeiten, bei denen du Insulin direkt mitgeloggt hast, zählen am meisten. Bei separaten Insulin-Einträgen versucht Glev automatisch, sie der passenden Mahlzeit zuzuordnen.",
     "engine_icr_relink_open": "Zuordnungen prüfen ↓",

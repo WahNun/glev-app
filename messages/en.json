@@ -834,6 +834,8 @@
     "engine_status_warming_up": "WARMING UP",
     "engine_outcome_weighted": "outcome-weighted",
     "engine_final_meals": "{n, plural, one {# final meal} other {# final meals}} · last 90 days",
+    "engine_pairing_badge": "{total, plural, one {# meal} other {# meals}} · {paired} paired",
+    "engine_pairing_explainer": "Glev matched a bolus to {paired} of {total, plural, one {# meal} other {# meals}} in the 90-day window. More pairings → more accurate ICR calculation.",
     "engine_icr_source": "{explicit} explicitly tagged · {timeWindow} time-window paired · {mealColumn} from meal column ({total, plural, one {# meal} other {# meals}} total · last 90 days)",
     "engine_icr_source_tooltip": "Glev uses your recent meals to calculate your personal carb ratio. Meals where you logged insulin alongside the meal count the most. For separate insulin entries, Glev tries to match them to the right meal automatically.",
     "engine_icr_relink_open": "Review matches ↓",

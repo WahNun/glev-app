@@ -288,7 +288,8 @@ export default function InsightsPage() {
   // Relink-panel open state lives HERE (not inside RelinkSourceLine) so that
   // the panel expansion triggers a re-render of the FlipCard wrapper and the
   // grid cell correctly resizes when the user expands the panel.
-  const [relinkOpen, setRelinkOpen]     = useState(false);
+  const [relinkOpen, setRelinkOpen]         = useState(false);
+  const [pairingTooltipOpen, setPairingTooltipOpen] = useState(false);
   // Biological sex — gates the cycle half of the "Zyklus & Symptome"
   // card. Male users see a symptoms-only variant (cycle stats hidden,
   // card retitled). Null/unset is treated as "show everything" so
@@ -2509,6 +2510,55 @@ export default function InsightsPage() {
                       <span style={{ fontSize:10, color:"var(--text-faint)", marginLeft:"auto", textAlign:"right", lineHeight:1.3, opacity: 0.7 }}>
                         {tInsights("engine_final_meals", { n: enginePattern.sampleSize })}
                       </span>
+                    </div>
+                  )}
+                  {/* Pairing quality badge — shows "N meals · M paired"
+                      so users can see how well their bolus logs are
+                      matched to meals. Hidden when pairedCount is 0
+                      (flag off or no bolus logs logged yet). Tapping
+                      toggles a one-line explainer. Stop-propagation
+                      wrapper prevents FlipCard from flipping on tap. */}
+                  {adaptiveICR.pairedCount > 0 && (
+                    <div
+                      onClick={(e) => e.stopPropagation()}
+                      onKeyDown={(e) => e.stopPropagation()}
+                      style={{ marginTop: 4 }}
+                    >
+                      <button
+                        type="button"
+                        title={tInsights("engine_pairing_explainer", {
+                          paired: adaptiveICR.pairedCount,
+                          total: adaptiveICR.sampleSize,
+                        })}
+                        onClick={() => setPairingTooltipOpen(o => !o)}
+                        style={{
+                          display: "inline-flex", alignItems: "center", gap: 5,
+                          background: "transparent", border: "none", padding: 0,
+                          fontSize: 10, color: "var(--text-faint)",
+                          cursor: "pointer", font: "inherit", opacity: 0.85,
+                        }}
+                      >
+                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+                          <circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/>
+                        </svg>
+                        {tInsights("engine_pairing_badge", {
+                          paired: adaptiveICR.pairedCount,
+                          total: adaptiveICR.sampleSize,
+                        })}
+                      </button>
+                      {pairingTooltipOpen && (
+                        <div style={{
+                          marginTop: 5, padding: "7px 10px", borderRadius: 8,
+                          background: "var(--surface-soft)",
+                          border: "1px solid var(--border)",
+                          fontSize: 12, color: "var(--text-muted)", lineHeight: 1.5,
+                        }}>
+                          {tInsights("engine_pairing_explainer", {
+                            paired: adaptiveICR.pairedCount,
+                            total: adaptiveICR.sampleSize,
+                          })}
+                        </div>
+                      )}
                     </div>
                   )}
                   {/* Scope-coupling badge (Task #332). The engine itself
