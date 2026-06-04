@@ -145,22 +145,22 @@ export type ActionNavConfig = {
 
 const NAV_CONFIG: Record<NonMealActionKind, ActionNavConfig> = {
   log_exercise_entry: {
-    tab: "log",
+    tab: "exercise",
     event: "glev:open-exercise-log",
     storageKey: "glev_pending_exercise",
   },
   log_symptom_entry: {
-    tab: "log",
+    tab: "symptoms",
     event: "glev:open-symptom-log",
     storageKey: "glev_pending_symptom",
   },
   log_bolus_entry: {
-    tab: "log",
+    tab: "bolus",
     event: "glev:open-insulin-log",
     storageKey: "glev_pending_bolus",
   },
   log_basal_entry: {
-    tab: "log",
+    tab: "bolus",
     event: "glev:open-insulin-log",
     storageKey: "glev_pending_basal",
   },
@@ -180,7 +180,7 @@ const NAV_CONFIG: Record<NonMealActionKind, ActionNavConfig> = {
     storageKey: "glev_pending_influence",
   },
   log_cycle_entry: {
-    tab: "log",
+    tab: "cycle",
     event: "glev:open-cycle-log",
     storageKey: "glev_pending_cycle",
   },
