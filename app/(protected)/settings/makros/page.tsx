@@ -15,18 +15,35 @@ const inp: React.CSSProperties = {
   fontSize: 14, outline: "none", width: "100%", boxSizing: "border-box",
 };
 
+type StringTargets = Record<keyof MacroTargets, string>;
+
+function toStringTargets(m: MacroTargets): StringTargets {
+  return {
+    carbs:   String(m.carbs),
+    protein: String(m.protein),
+    fat:     String(m.fat),
+    fiber:   String(m.fiber),
+  };
+}
+
 export default function MakrosPage() {
   const t = useTranslations("settings");
 
   const touchedRef = useRef(false);
   const [macroTargets, setMacroTargets] = useState<MacroTargets>(DEFAULT_MACRO_TARGETS);
+  const [displayValues, setDisplayValues] = useState<StringTargets>(toStringTargets(DEFAULT_MACRO_TARGETS));
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [saveError, setSaveError] = useState("");
 
   useEffect(() => {
     fetchMacroTargets()
-      .then((m) => { if (!touchedRef.current) setMacroTargets(m); })
+      .then((m) => {
+        if (!touchedRef.current) {
+          setMacroTargets(m);
+          setDisplayValues(toStringTargets(m));
+        }
+      })
       .catch(() => {});
   }, []);
 
@@ -83,10 +100,16 @@ export default function MakrosPage() {
                 type="number"
                 min={0}
                 max={target.max}
-                value={macroTargets[target.key]}
+                value={displayValues[target.key]}
                 onChange={(e) => {
-                  const n = parseInt(e.target.value);
-                  updMacro(target.key, Number.isFinite(n) ? Math.max(0, Math.min(target.max, n)) : target.def);
+                  touchedRef.current = true;
+                  setDisplayValues((prev) => ({ ...prev, [target.key]: e.target.value }));
+                }}
+                onBlur={(e) => {
+                  const n = parseInt(e.target.value, 10);
+                  const clamped = Number.isFinite(n) ? Math.max(0, Math.min(target.max, n)) : target.def;
+                  setDisplayValues((prev) => ({ ...prev, [target.key]: String(clamped) }));
+                  updMacro(target.key, clamped);
                 }}
               />
             </div>
