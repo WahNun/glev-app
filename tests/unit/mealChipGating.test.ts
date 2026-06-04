@@ -81,25 +81,31 @@ function computeChipActiveStates(
 }
 
 // ── Section 1: Source-contract — "Engine öffnen →" vs. "Bestätigen" ───────────
+//
+// Phase 3 extracted the meal chip JSX into a dedicated MealChipExpanded
+// component so it could own its own useState (expand toggle). All meal-chip
+// contract tests now search inside that component's block rather than inside
+// PendingActionWidget's `if (isMeal)` branch, which now just renders
+// <MealChipExpanded …/>.
 
 test("meal chip layout contains the text 'Engine öffnen →'", () => {
-  // The string must appear inside the `if (isMeal)` block.
-  // We detect it by finding the meal-chip section (between `if (isMeal) {`
-  // and the closing non-meal comment) and checking that the button text exists.
-  const mealBlockStart = CHAT_SHEET_SRC.indexOf("// ── Meal chip layout");
-  const mealBlockEnd = CHAT_SHEET_SRC.indexOf("// ── Non-meal chip layout");
+  // Phase 3: button text is rendered via the `t.open_engine` variable
+  // (value: "Engine öffnen →") rather than a hard-coded string literal.
+  // We assert the variable reference is present inside MealChipExpanded.
+  const mealBlockStart = CHAT_SHEET_SRC.indexOf("// ── MealChipExpanded");
+  const mealBlockEnd   = CHAT_SHEET_SRC.indexOf("function PendingActionWidget");
 
   expect(mealBlockStart).toBeGreaterThan(-1);
   expect(mealBlockEnd).toBeGreaterThan(mealBlockStart);
 
   const mealBlock = CHAT_SHEET_SRC.slice(mealBlockStart, mealBlockEnd);
-  expect(mealBlock).toContain("Engine öffnen →");
+  // Variable reference t.open_engine renders "Engine öffnen →" at runtime.
+  expect(mealBlock).toContain("t.open_engine");
 });
 
 test("meal chip layout does NOT contain a 'Bestätigen' button", () => {
-  const mealBlockStart = CHAT_SHEET_SRC.indexOf("// ── Meal chip layout");
-  const mealBlockEnd = CHAT_SHEET_SRC.indexOf("// ── Non-meal chip layout");
-
+  const mealBlockStart = CHAT_SHEET_SRC.indexOf("// ── MealChipExpanded");
+  const mealBlockEnd   = CHAT_SHEET_SRC.indexOf("function PendingActionWidget");
   const mealBlock = CHAT_SHEET_SRC.slice(mealBlockStart, mealBlockEnd);
   // The word "Bestätigen" must not appear anywhere inside the meal chip block.
   expect(mealBlock).not.toContain("Bestätigen");
@@ -118,8 +124,8 @@ test("non-meal chip layout has 'Schnell speichern' quick-save button", () => {
 // ── Section 2: Source-contract — inactive chip dimming ───────────────────────
 
 test("inactive meal chip is dimmed to opacity 0.4", () => {
-  const mealBlockStart = CHAT_SHEET_SRC.indexOf("// ── Meal chip layout");
-  const mealBlockEnd = CHAT_SHEET_SRC.indexOf("// ── Non-meal chip layout");
+  const mealBlockStart = CHAT_SHEET_SRC.indexOf("// ── MealChipExpanded");
+  const mealBlockEnd   = CHAT_SHEET_SRC.indexOf("function PendingActionWidget");
   const mealBlock = CHAT_SHEET_SRC.slice(mealBlockStart, mealBlockEnd);
 
   // The style object must use `inactive ? 0.4 : 1` for opacity.
@@ -130,8 +136,8 @@ test("inactive meal chip container does NOT block pointer-events at the wrapper 
   // Task #1154: The ✕ dismiss button must be tappable on inactive chips.
   // pointerEvents: "none" was moved OFF the container — the "Engine öffnen →"
   // button is gated by its native `disabled` prop instead.
-  const mealBlockStart = CHAT_SHEET_SRC.indexOf("// ── Meal chip layout");
-  const mealBlockEnd = CHAT_SHEET_SRC.indexOf("// ── Non-meal chip layout");
+  const mealBlockStart = CHAT_SHEET_SRC.indexOf("// ── MealChipExpanded");
+  const mealBlockEnd   = CHAT_SHEET_SRC.indexOf("function PendingActionWidget");
   const mealBlock = CHAT_SHEET_SRC.slice(mealBlockStart, mealBlockEnd);
 
   // The container's style object must NOT contain pointerEvents conditional.
@@ -145,8 +151,8 @@ test("inactive meal chip container does NOT block pointer-events at the wrapper 
 test("inactive meal chip 'Engine öffnen →' button is disabled when inactive", () => {
   // The engine button must be disabled={busy || inactive} so it stays blocked
   // while the ✕ button remains independently clickable.
-  const mealBlockStart = CHAT_SHEET_SRC.indexOf("// ── Meal chip layout");
-  const mealBlockEnd = CHAT_SHEET_SRC.indexOf("// ── Non-meal chip layout");
+  const mealBlockStart = CHAT_SHEET_SRC.indexOf("// ── MealChipExpanded");
+  const mealBlockEnd   = CHAT_SHEET_SRC.indexOf("function PendingActionWidget");
   const mealBlock = CHAT_SHEET_SRC.slice(mealBlockStart, mealBlockEnd);
 
   // Anchor on onClick={onOpenEngine} — that uniquely identifies the engine button
@@ -161,13 +167,15 @@ test("inactive meal chip 'Engine öffnen →' button is disabled when inactive",
 test("inactive meal chip ✕ dismiss button is NOT disabled when inactive (only when busy)", () => {
   // Task #1154: the ✕ button must be enabled even on inactive chips so users
   // can individually skip queued meals they don't want logged.
-  const mealBlockStart = CHAT_SHEET_SRC.indexOf("// ── Meal chip layout");
-  const mealBlockEnd = CHAT_SHEET_SRC.indexOf("// ── Non-meal chip layout");
+  const mealBlockStart = CHAT_SHEET_SRC.indexOf("// ── MealChipExpanded");
+  const mealBlockEnd   = CHAT_SHEET_SRC.indexOf("function PendingActionWidget");
   const mealBlock = CHAT_SHEET_SRC.slice(mealBlockStart, mealBlockEnd);
 
-  // Find the dismiss button section (between aria-label and summary div).
-  const dismissStart = mealBlock.indexOf('aria-label="Mahlzeit verwerfen"');
-  const dismissEnd = mealBlock.indexOf("{/* Summary text", dismissStart);
+  // Phase 3: aria-label is now rendered via t.discard_meal variable
+  // (value: "Mahlzeit verwerfen") instead of a hard-coded string.
+  // End marker: first comment after the dismiss button closing tag.
+  const dismissStart = mealBlock.indexOf("{t.discard_meal}");
+  const dismissEnd = mealBlock.indexOf("{/* Header: meal name", dismissStart);
   const dismissButton = mealBlock.slice(dismissStart, dismissEnd);
 
   // Must be disabled only when busy — NOT when inactive.
@@ -178,22 +186,25 @@ test("inactive meal chip ✕ dismiss button is NOT disabled when inactive (only 
 // ── Section 3: Source-contract — ✕ cancel button ─────────────────────────────
 
 test("meal chip has a ✕ dismiss button with aria-label 'Mahlzeit verwerfen'", () => {
-  const mealBlockStart = CHAT_SHEET_SRC.indexOf("// ── Meal chip layout");
-  const mealBlockEnd = CHAT_SHEET_SRC.indexOf("// ── Non-meal chip layout");
+  const mealBlockStart = CHAT_SHEET_SRC.indexOf("// ── MealChipExpanded");
+  const mealBlockEnd   = CHAT_SHEET_SRC.indexOf("function PendingActionWidget");
   const mealBlock = CHAT_SHEET_SRC.slice(mealBlockStart, mealBlockEnd);
 
-  expect(mealBlock).toContain('aria-label="Mahlzeit verwerfen"');
+  // Phase 3: aria-label is rendered via the t.discard_meal variable
+  // (COPY["de"].discard_meal = "Mahlzeit verwerfen").
+  expect(mealBlock).toContain("{t.discard_meal}");
 });
 
 test("✕ cancel button calls onCancel prop", () => {
   // The dismiss button's onClick must be wired to onCancel, not onOpenEngine.
-  const mealBlockStart = CHAT_SHEET_SRC.indexOf("// ── Meal chip layout");
-  const mealBlockEnd = CHAT_SHEET_SRC.indexOf("// ── Non-meal chip layout");
+  const mealBlockStart = CHAT_SHEET_SRC.indexOf("// ── MealChipExpanded");
+  const mealBlockEnd   = CHAT_SHEET_SRC.indexOf("function PendingActionWidget");
   const mealBlock = CHAT_SHEET_SRC.slice(mealBlockStart, mealBlockEnd);
 
-  // Find the dismiss button section (between aria-label and the summary div)
-  const dismissStart = mealBlock.indexOf('aria-label="Mahlzeit verwerfen"');
-  const dismissEnd = mealBlock.indexOf("{/* Summary text", dismissStart);
+  // Find the dismiss button section (between t.discard_meal and the header comment).
+  // End marker: {/* Header: meal name is the first JSX comment after </button>.
+  const dismissStart = mealBlock.indexOf("{t.discard_meal}");
+  const dismissEnd = mealBlock.indexOf("{/* Header: meal name", dismissStart);
   const dismissButton = mealBlock.slice(dismissStart, dismissEnd);
 
   expect(dismissButton).toContain("onClick={onCancel}");

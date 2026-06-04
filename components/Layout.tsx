@@ -138,8 +138,11 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
   const glevAi = useGlevAI({
     contextSnapshot: screenCtx,
     onNavigate: (path) => {
-      glevAi.closeSheet?.();
+      // Push first so Next.js starts the route transition before the sheet
+      // disappears. Closing first briefly exposes the underlying page
+      // (dashboard flash) while the new route is still loading.
       router.push(path);
+      window.setTimeout(() => glevAi.closeSheet?.(), 0);
     },
   });
   // Heartbeat: last_seen_at einmal pro Session aktualisieren (Re-Engagement-Tracking).
