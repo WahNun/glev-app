@@ -3334,6 +3334,7 @@ function ExerciseEditor({ log, onSaved, onCancel }: {
 
   const tIns = useTranslations("insights");
   const tx = useTranslations("entriesExpand");
+  const locale = useLocale();
   // Apple-Health-synced rows lock type/duration (and HR/time-window —
   // not edited here anyway). Intensity + notes stay editable per the
   // migration's agreed UI policy. Time is also locked for synced rows
@@ -3491,7 +3492,7 @@ function ExerciseEditor({ log, onSaved, onCancel }: {
       {/* Dauer (1–600 min) */}
       <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
         <label style={{ fontSize:13, color:"var(--text-dim)", display:"flex", alignItems:"center", gap:6 }}>
-          <span>Dauer</span>
+          <span>{locale === "en" ? "Duration" : "Dauer"}</span>
           {isSynced && <LockGlyph hint={lockedHint}/>}
         </label>
         {isSynced ? (
@@ -3520,7 +3521,7 @@ function ExerciseEditor({ log, onSaved, onCancel }: {
             step={1}
             unit="min"
             accent={EXERCISE_ACCENT}
-            ariaLabel="Dauer"
+            ariaLabel={locale === "en" ? "Duration" : "Dauer"}
           />
         )}
       </div>
@@ -3529,7 +3530,7 @@ function ExerciseEditor({ log, onSaved, onCancel }: {
           (die Watch-Wallclock ist authoritative). Beim Save dreht der
           Server eine CGM-Historie-Abfrage für die neue Uhrzeit. */}
       <DateTimeField
-        label="Start-Zeit"
+        label={locale === "en" ? "Start time" : "Start-Zeit"}
         value={startedAtLocal}
         onChange={setStartedAtLocal}
         accent={EXERCISE_ACCENT}
@@ -3537,7 +3538,7 @@ function ExerciseEditor({ log, onSaved, onCancel }: {
         disabledHint={lockedHint}
         hint={
           !isSynced && startedAtLocal.trim() !== startedAtSeed.trim()
-            ? "Glukose-Wert wird beim Speichern für die neue Zeit aus der CGM-Historie nachgezogen."
+            ? (locale === "en" ? "Glucose value will be pulled from CGM history for the new time when saving." : "Glukose-Wert wird beim Speichern für die neue Zeit aus der CGM-Historie nachgezogen.")
             : undefined
         }
       />
@@ -3547,7 +3548,7 @@ function ExerciseEditor({ log, onSaved, onCancel }: {
           beim Drag „zurücksprang" (User-Report 2026-05-18). */}
       <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
         <label style={{ fontSize:13, color:"var(--text-dim)" }}>
-          Intensität —{" "}
+          {locale === "en" ? "Intensity —" : "Intensität —"}{" "}
           <span style={{ color:EXERCISE_ACCENT, fontWeight:700 }}>
             {intensityLabel(intensity)}
           </span>
@@ -3556,7 +3557,7 @@ function ExerciseEditor({ log, onSaved, onCancel }: {
           value={intensity}
           onChange={setIntensity}
           accent={EXERCISE_ACCENT}
-          ariaLabel="Intensität"
+          ariaLabel={locale === "en" ? "Intensity" : "Intensität"}
           options={[
             { value: "low",    label: intensityLabel("low") },
             { value: "medium", label: intensityLabel("medium") },
@@ -4051,6 +4052,7 @@ function MealEditor({ meal, onSaved, onCancel }: {
   onCancel: () => void;
 }) {
   const tx = useTranslations("entriesExpand");
+  const locale = useLocale();
   // Carbs input now follows the user's chosen display unit (g / BE / KE)
   // — same pattern as the engine wizard. The value is seeded via
   // carbUnit.fromGrams() and converted back via carbUnit.toGrams() on
@@ -4205,11 +4207,11 @@ function MealEditor({ meal, onSaved, onCancel }: {
     const f  = parseNum(fat);
     const fb = parseNum(fiber);
     if (c === null || p === null || f === null || fb === null) {
-      setErr("Bitte gültige Zahlen für alle Makros eintragen (0 ist erlaubt).");
+      setErr(locale === "en" ? "Please enter valid numbers for all macros (0 is allowed)." : "Bitte gültige Zahlen für alle Makros eintragen (0 ist erlaubt).");
       return;
     }
     if (c < 0 || p < 0 || f < 0 || fb < 0) {
-      setErr("Makro-Werte dürfen nicht negativ sein.");
+      setErr(locale === "en" ? "Macro values can't be negative." : "Makro-Werte dürfen nicht negativ sein.");
       return;
     }
     // Insulin: empty → null (Bolus offen), else must be a finite number ≥ 0.
@@ -4220,7 +4222,7 @@ function MealEditor({ meal, onSaved, onCancel }: {
     } else {
       const iv = parseNum(bt);
       if (iv === null || iv < 0) {
-        setErr("Bolus muss 0 oder positiv sein (oder leer für 'noch offen').");
+        setErr(locale === "en" ? "Bolus must be 0 or positive (or leave empty for 'still open')." : "Bolus muss 0 oder positiv sein (oder leer für 'noch offen').");
         return;
       }
       i = iv;
@@ -4582,7 +4584,7 @@ function CycleRowCard({ log, onDelete, deleting, onUpdated }: {
       </div>
       <button
         onClick={() => setEditing(true)}
-        aria-label="Bearbeiten"
+        aria-label={locale === "en" ? "Edit" : "Bearbeiten"}
         style={{
           background:"transparent", border:"none", cursor:"pointer",
           color:"var(--text-faint)", padding:6, borderRadius:6,
@@ -4849,6 +4851,7 @@ function InfluenceEditor({ log, onSaved, onCancel }: {
   const t = useTranslations("engineLog");
   const tCommon = useTranslations();
   const tx = useTranslations("entriesExpand");
+  const locale = useLocale();
   const [type, setType]       = useState<InfluenceType>(log.influence_type);
   const [amount, setAmount]   = useState<string>(log.amount ?? "");
   const [details, setDetails] = useState<string>(log.details ?? "");
@@ -4928,7 +4931,7 @@ function InfluenceEditor({ log, onSaved, onCancel }: {
       </div>
 
       <DateTimeField
-        label="Zeitpunkt"
+        label={locale === "en" ? "Time" : "Zeitpunkt"}
         value={occurredLocal}
         onChange={setOccurredLocal}
         accent={INFLUENCE_ACCENT}
@@ -4969,6 +4972,7 @@ function SymptomEditor({ log, onSaved, onCancel }: {
 }) {
   const t = useTranslations("engineLog");
   const tx = useTranslations("entriesExpand");
+  const locale = useLocale();
   // Per-symptom severity (Task: per-symptom severity in the edit
   // sheet). Each chip carries its own 1..5 value; toggling a chip
   // off drops its entry, toggling on (re)adds with the row's old
@@ -5146,7 +5150,7 @@ function SymptomEditor({ log, onSaved, onCancel }: {
       )}
 
       <DateTimeField
-        label="Zeitpunkt"
+        label={locale === "en" ? "Time" : "Zeitpunkt"}
         value={occurredLocal}
         onChange={setOccurredLocal}
         accent={SYMPTOM_ACCENT}
@@ -5381,6 +5385,7 @@ function CycleEditor({ log, onSaved, onCancel }: {
 }) {
   const t = useTranslations("engineLog");
   const tx = useTranslations("entriesExpand");
+  const locale = useLocale();
   const accent = "#FF2D78";
   const isBleeding = log.flow_intensity != null;
   const [startDate, setStartDate] = useState<string>(log.start_date);
@@ -5396,9 +5401,9 @@ function CycleEditor({ log, onSaved, onCancel }: {
     if (busy) return;
     setErr(null);
     if (!startDate || !/^\d{4}-\d{2}-\d{2}$/.test(startDate)) {
-      setErr("Datum ungültig."); return;
+      setErr(locale === "en" ? "Invalid date." : "Datum ungültig."); return;
     }
-    if (startDate > todayIso) { setErr("Datum darf nicht in der Zukunft liegen."); return; }
+    if (startDate > todayIso) { setErr(locale === "en" ? "Date can't be in the future." : "Datum darf nicht in der Zukunft liegen."); return; }
     setBusy(true);
     try {
       const patch: { start_date?: string; flow_intensity?: FlowIntensity | null; notes?: string | null } = {};
@@ -5432,7 +5437,7 @@ function CycleEditor({ log, onSaved, onCancel }: {
       </div>
 
       <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
-        <label style={{ fontSize:13, color:"var(--text-dim)" }}>Datum</label>
+        <label style={{ fontSize:13, color:"var(--text-dim)" }}>{locale === "en" ? "Date" : "Datum"}</label>
         <input
           type="date"
           value={startDate}
@@ -5452,12 +5457,12 @@ function CycleEditor({ log, onSaved, onCancel }: {
 
       {isBleeding && (
         <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
-          <label style={{ fontSize:13, color:"var(--text-dim)" }}>Stärke</label>
+          <label style={{ fontSize:13, color:"var(--text-dim)" }}>{locale === "en" ? "Intensity" : "Stärke"}</label>
           <SegmentedChoice<FlowIntensity>
             value={flow ?? "medium"}
             onChange={setFlow}
             accent={accent}
-            ariaLabel="Stärke"
+            ariaLabel={locale === "en" ? "Intensity" : "Stärke"}
             options={[
               { value: "light",  label: t("cycle_flow_light") },
               { value: "medium", label: t("cycle_flow_medium") },

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import Script from "next/script";
-import { useTranslations } from "next-intl";
+import { useTranslations, useLocale } from "next-intl";
 import GlevLockup from "@/components/GlevLockup";
 import LocaleSwitcher from "@/components/LocaleSwitcher";
 
@@ -40,6 +40,7 @@ const BORDER = "var(--border)";
 
 export default function BlogPage() {
   const t = useTranslations("marketing");
+  const locale = useLocale();
 
   return (
     <main
@@ -193,15 +194,31 @@ export default function BlogPage() {
             borderRadius: 10,
           }}
         >
-          Wenn hier nichts erscheint, blockiert vermutlich ein Browser-
-          Plugin den externen Blog-Loader. Schreib uns kurz an{" "}
-          <a
-            href="mailto:hello@glev.app"
-            style={{ color: "var(--text)", textDecoration: "underline" }}
-          >
-            hello@glev.app
-          </a>{" "}
-          — wir helfen weiter.
+          {locale === "en" ? (
+            <>
+              If nothing appears here, a browser plugin (e.g. an ad blocker) is
+              probably blocking it. Write to us at{" "}
+              <a
+                href="mailto:hello@glev.app"
+                style={{ color: "var(--text)", textDecoration: "underline" }}
+              >
+                hello@glev.app
+              </a>{" "}
+              — we&apos;re happy to help.
+            </>
+          ) : (
+            <>
+              Wenn hier nichts erscheint, blockiert vermutlich ein Browser-
+              Plugin den externen Blog-Loader. Schreib uns kurz an{" "}
+              <a
+                href="mailto:hello@glev.app"
+                style={{ color: "var(--text)", textDecoration: "underline" }}
+              >
+                hello@glev.app
+              </a>{" "}
+              — wir helfen weiter.
+            </>
+          )}
         </p>
       </section>
 

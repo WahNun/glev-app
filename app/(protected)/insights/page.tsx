@@ -1957,16 +1957,16 @@ export default function InsightsPage() {
                     <span style={{ fontSize:18, fontWeight:800, color:b7.hi > 25 ? ORANGE : GREEN, fontFamily:"var(--font-mono)" }}>{b7.hi}</span>
                     <span style={{ fontSize:10, color:"var(--text-faint)" }}>%</span>
                   </div>
-                  <div style={{ fontSize:9, color:"var(--text-ghost)", marginTop:1 }}>Ziel: &lt; 25 %</div>
+                  <div style={{ fontSize:9, color:"var(--text-ghost)", marginTop:1 }}>{locale === "en" ? "Target: < 25%" : "Ziel: < 25 %"}</div>
                 </div>
                 {hyperCount7d > 0 && (
                   <div style={{ flex:1, padding:"8px 10px", background:`${ORANGE}08`, borderRadius:10, border:`1px solid ${ORANGE}20` }}>
-                    <div style={{ fontSize:10, color:"var(--text-faint)", fontWeight:600, textTransform:"uppercase", letterSpacing:"0.06em" }}>≈ Dauer</div>
+                    <div style={{ fontSize:10, color:"var(--text-faint)", fontWeight:600, textTransform:"uppercase", letterSpacing:"0.06em" }}>{locale === "en" ? "≈ duration" : "≈ Dauer"}</div>
                     <div style={{ display:"flex", alignItems:"baseline", gap:3, marginTop:3 }}>
                       <span style={{ fontSize:18, fontWeight:800, color:ORANGE, fontFamily:"var(--font-mono)" }}>{(hyperCount7d * 5 / 60).toFixed(1)}</span>
                       <span style={{ fontSize:10, color:"var(--text-faint)" }}>h / 7d</span>
                     </div>
-                    <div style={{ fontSize:9, color:"var(--text-ghost)", marginTop:1 }}>bei 5-min CGM-Takt</div>
+                    <div style={{ fontSize:9, color:"var(--text-ghost)", marginTop:1 }}>{locale === "en" ? "at 5-min CGM cadence" : "bei 5-min CGM-Takt"}</div>
                   </div>
                 )}
               </div>
@@ -2066,12 +2066,12 @@ export default function InsightsPage() {
                       </div>
                     </div>
                     <div style={{ flex:1, padding:"8px 10px", background:`${cvColor}08`, borderRadius:10, border:`1px solid ${cvColor}20` }}>
-                      <div style={{ fontSize:10, color:"var(--text-faint)", fontWeight:600, textTransform:"uppercase", letterSpacing:"0.06em" }}>Ziel</div>
+                      <div style={{ fontSize:10, color:"var(--text-faint)", fontWeight:600, textTransform:"uppercase", letterSpacing:"0.06em" }}>{locale === "en" ? "Target" : "Ziel"}</div>
                       <div style={{ display:"flex", alignItems:"baseline", gap:2, marginTop:3 }}>
                         <span style={{ fontSize:15, fontWeight:800, color:cvColor, fontFamily:"var(--font-mono)" }}>&lt; 36</span>
                         <span style={{ fontSize:10, color:"var(--text-faint)" }}>%</span>
                       </div>
-                      <div style={{ fontSize:9, color:"var(--text-ghost)", marginTop:1 }}>CV-Zielwert</div>
+                      <div style={{ fontSize:9, color:"var(--text-ghost)", marginTop:1 }}>{locale === "en" ? "CV target" : "CV-Zielwert"}</div>
                     </div>
                   </div>
                 );
@@ -3073,8 +3073,8 @@ export default function InsightsPage() {
               <div style={{ display:"flex", gap:10, padding:"12px 10px", background:`${GREEN}08`, border:`1px solid ${GREEN}25`, borderRadius:10, alignItems:"flex-start" }}>
                 <div style={{ width:22, height:22, borderRadius:99, background:`${GREEN}20`, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0, fontSize:14, color:GREEN, fontWeight:800 }}>✓</div>
                 <div>
-                  <div style={{ fontSize:13, fontWeight:700, color:GREEN, marginBottom:2 }}>Keine Auffälligkeiten</div>
-                  <div style={{ fontSize:12, color:"var(--text-dim)", lineHeight:1.45 }}>Alle BZ-Muster liegen im Zielbereich — weiter so!</div>
+                  <div style={{ fontSize:13, fontWeight:700, color:GREEN, marginBottom:2 }}>{locale === "en" ? "Nothing unusual" : "Keine Auffälligkeiten"}</div>
+                  <div style={{ fontSize:12, color:"var(--text-dim)", lineHeight:1.45 }}>{locale === "en" ? "All BG patterns are within target — keep it up!" : "Alle BZ-Muster liegen im Zielbereich — weiter so!"}</div>
                 </div>
               </div>
             )}

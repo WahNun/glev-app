@@ -3,7 +3,7 @@
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { hapticSelection } from "@/lib/haptics";
-import { useTranslations } from "next-intl";
+import { useTranslations, useLocale } from "next-intl";
 import { signOut } from "@/lib/auth";
 import GlevLockup from "@/components/GlevLockup";
 import GlevLogo from "@/components/GlevLogo";
@@ -110,6 +110,7 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router   = useRouter();
   const tNav = useTranslations("nav");
+  const locale = useLocale();
   const [aboutOpen, setAboutOpen] = useState(false);
   const [signOutConfirm, setSignOutConfirm] = useState(false);
   // The mobile-header AccountSheet trigger was removed in the
@@ -1031,7 +1032,7 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
             <button
               type="button"
               onClick={voice.requestStop}
-              aria-label="Sprachaufnahme beenden"
+              aria-label={locale === "en" ? "Stop voice recording" : "Sprachaufnahme beenden"}
               style={{
                 display: "inline-flex", alignItems: "center", gap: 8,
                 height: 32, padding: "0 12px", borderRadius: 99,
@@ -1315,7 +1316,7 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
         data-glev-fab-hit="true"
         aria-haspopup="dialog"
         aria-expanded={quickAddOpen || voice.recording}
-        aria-label={voice.recording ? "Glev — Aufnahme beenden" : "Glev"}
+        aria-label={voice.recording ? (locale === "en" ? "Glev — stop recording" : "Glev — Aufnahme beenden") : "Glev"}
         style={{
           position: "fixed",
           bottom: "calc(var(--nav-bottom-total) - 15px)",

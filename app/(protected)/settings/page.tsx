@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useTranslations } from "next-intl";
+import { useTranslations, useLocale } from "next-intl";
 import { useState, useCallback } from "react";
 import { signOut } from "@/lib/auth";
 import PlanSimulator from "@/components/PlanSimulator";
@@ -88,6 +88,7 @@ function FirstNavRow({ iconColor, icon, label, path, router }: NavRowProps) {
 
 export default function SettingsPage() {
   const t = useTranslations("settings");
+  const locale = useLocale();
   const router = useRouter();
   const [signingOut, setSigningOut] = useState(false);
   const [referralSharing, setReferralSharing] = useState(false);
@@ -158,10 +159,10 @@ export default function SettingsPage() {
       <NavSection>
         {row(ACCENT,
           <svg {...ip}><circle cx="12" cy="8" r="4" /><path d="M4 21c0-4 4-7 8-7s8 3 8 7" /></svg>,
-          "Konto", "/settings/konto", true)}
+          locale === "en" ? "Account" : "Konto", "/settings/konto", true)}
         {row(PURPLE,
           <svg {...ip}><circle cx="12" cy="12" r="3" /><path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83" /></svg>,
-          "App-Einstellungen", "/settings/app")}
+          locale === "en" ? "App settings" : "App-Einstellungen", "/settings/app")}
       </NavSection>
 
       <NavSection>
@@ -176,7 +177,7 @@ export default function SettingsPage() {
           </span>
           <span style={{ flex: 1, lineHeight: 1.25 }}>
             <span style={{ display: "block", fontSize: 14, fontWeight: 500, color: referralError ? "#EF4444" : "var(--text-strong)" }}>
-              {referralError ? "Fehler — bitte nochmal versuchen" : referralCopied ? t("referral_share_copy_success") : t("row_referral")}
+              {referralError ? (locale === "en" ? "Error — please try again" : "Fehler — bitte nochmal versuchen") : referralCopied ? t("referral_share_copy_success") : t("row_referral")}
             </span>
             <span style={{ display: "block", fontSize: 12, color: "var(--text-faint)", marginTop: 1 }}>
               {t("subtitle_referral")}
@@ -191,26 +192,26 @@ export default function SettingsPage() {
       <NavSection>
         {row(GREEN,
           <svg {...ip}><rect x="3" y="4" width="18" height="18" rx="2" /><line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" /></svg>,
-          "Für den Arzt", "/settings/fuer-den-arzt", true)}
+          locale === "en" ? "For your doctor" : "Für den Arzt", "/settings/fuer-den-arzt", true)}
         {row(ACCENT,
           <svg {...ip}><path d="M12 2a10 10 0 1 0 10 10" /><path d="M12 12l8-8" /><path d="M18 2h4v4" /></svg>,
           "Glev Engine", "/settings/glev-engine")}
         {row(ACCENT,
           <svg {...ip}><circle cx="12" cy="8" r="4" /><path d="M4 21c0-4 4-7 8-7s8 3 8 7" /></svg>,
-          "Mein Körper", "/settings/mein-koerper")}
+          locale === "en" ? "My body" : "Mein Körper", "/settings/mein-koerper")}
         {row(ACCENT,
           <svg {...ip}><path d="M18 6L6 18" /><path d="M14 4l6 6" /><path d="M4 14l6 6" /></svg>,
           "Insulin", "/settings/insulin")}
         {row(GREEN,
           <svg {...ip}><path d="M12 2C8 8 6 12 6 15a6 6 0 0 0 12 0c0-3-2-7-6-13z" /></svg>,
-          "Glukose", "/settings/glukose")}
+          locale === "en" ? "Glucose" : "Glukose", "/settings/glukose")}
         {row(ACCENT,
           <svg {...ip}><path d="M4 12h3l2-6 4 12 2-6h5" /></svg>,
           "Sensor & Alarme", "/settings/sensor-alarme")}
       </NavSection>
 
       <p style={{ fontSize: 12, fontWeight: 600, color: "var(--text-faint)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6, marginTop: 4 }}>
-        Featurewünsche und Hilfe
+        {locale === "en" ? "Feature requests & help" : "Featurewünsche und Hilfe"}
       </p>
       <NavSection>
         <button
@@ -275,7 +276,7 @@ export default function SettingsPage() {
           opacity: signingOut ? 0.6 : 1,
         }}
       >
-        {signingOut ? "Wird abgemeldet…" : "Abmelden"}
+        {signingOut ? (locale === "en" ? "Signing out…" : "Wird abgemeldet…") : (locale === "en" ? "Sign out" : "Abmelden")}
       </button>
     </div>
   );

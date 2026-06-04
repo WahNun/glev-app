@@ -510,7 +510,8 @@ function OutcomeChart({ meals }: { meals: Meal[] }) {
 
 export default function DashboardPage() {
   const router = useRouter();
-  const dateLocale = localeToBcp47(useLocale());
+  const locale = useLocale();
+  const dateLocale = localeToBcp47(locale);
   const t = useTranslations("dashboard");
   const tQuick = useTranslations("quickAdd");
   const engineHdr = useEngineHeader();
@@ -1406,7 +1407,7 @@ function RecentEntries({
           <button
             onClick={() => go(idx - 1)}
             disabled={idx === 0}
-            aria-label="Älterer Eintrag"
+            aria-label={locale === "en" ? "Older entry" : "Älterer Eintrag"}
             style={{ ...arrowBase, opacity: idx === 0 ? 0.25 : 1, cursor: idx === 0 ? "default" : "pointer" }}
           >
             <svg width="10" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -1471,7 +1472,7 @@ function RecentEntries({
           <button
             onClick={() => go(idx + 1)}
             disabled={idx === orderedRows.length - 1}
-            aria-label="Neuerer Eintrag"
+            aria-label={locale === "en" ? "Newer entry" : "Neuerer Eintrag"}
             style={{ ...arrowBase, opacity: idx === orderedRows.length - 1 ? 0.25 : 1, cursor: idx === orderedRows.length - 1 ? "default" : "pointer" }}
           >
             <svg width="10" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
