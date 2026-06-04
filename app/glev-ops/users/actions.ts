@@ -1321,12 +1321,15 @@ export async function sendPasswordResetAction(
   // Recovery-Link bei Supabase erzeugen. generateLink liefert den
   // action_link zurück — Supabase verschickt dabei KEINE eigene Mail
   // (das Senden übernehmen wir mit unserem bilingualen Template).
-  // redirectTo zeigt direkt auf /auth/confirm, das in der
-  // Supabase-Allowlist (URI Allow List) eingetragen ist.
+  // redirectTo zeigt auf /auth/callback?next=/auth/confirm (spiegelt den
+  // Login-Page-Flow). Direkter Redirect auf /auth/confirm würde den Token
+  // als URL-Hash (#access_token=…) anhängen, den das SDK wegprocessed →
+  // User landet auf /#. Der /auth/callback-Handler exchanged den Code
+  // serverseitig und leitet dann zu /auth/confirm?session=ready&type=recovery.
   const { data: linkData, error: linkErr } = await sb.auth.admin.generateLink({
     type: "recovery",
     email,
-    options: { redirectTo: `${appUrl}/auth/confirm` },
+    options: { redirectTo: `${appUrl}/auth/callback?next=/auth/confirm` },
   });
   if (linkErr || !linkData?.properties?.action_link) {
     return {
