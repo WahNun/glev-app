@@ -485,7 +485,7 @@ export async function POST(req: NextRequest) {
           // wird Mistral als „rejected: only one write per turn" zurück-
           // gegeben — damit kann das Modell entweder im Text drauf
           // hinweisen oder im nächsten Turn nachziehen.
-          let pendingEmittedThisRound = false;
+          let pendingEmittedThisRound = false; // still tracks state for the Mistral stub note
           for (const call of toolCalls) {
             const fn = call.function;
             const rawArgs =
@@ -506,19 +506,6 @@ export async function POST(req: NextRequest) {
             // user confirmation" stub so it doesn't try to confirm
             // itself or chain more writes in the same round.
             if (isPendingActionEnvelope(result)) {
-              if (pendingEmittedThisRound) {
-                messages.push({
-                  role: "tool",
-                  name: fn?.name ?? "",
-                  toolCallId: call.id,
-                  content: JSON.stringify({
-                    status: "rejected",
-                    reason:
-                      "only_one_write_action_per_turn — bereits eine andere Speicher-Aktion in dieser Runde vorgeschlagen. Wenn das hier auch nötig ist, schlage es im nächsten Turn separat vor.",
-                  }),
-                });
-                continue;
-              }
               pendingEmittedThisRound = true;
               send(JSON.stringify({ pending_action: result.pending_action }));
               messages.push({

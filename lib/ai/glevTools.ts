@@ -432,6 +432,167 @@ export const GLEV_TOOLS = [
   {
     type: "function" as const,
     function: {
+      name: "log_exercise_entry",
+      description:
+        "Schlägt das Speichern einer Sporteinheit vor (exercise_logs). WICHTIG: schreibt NICHT direkt — Bestätigung per UI-Button. Nur aufrufen, wenn der Nutzer explizit eine abgeschlossene Einheit loggen möchte ('ich war heute joggen', 'hab gerade 45 min Krafttraining gemacht'). Niemals für geplante oder hypothetische Aktivitäten.",
+      parameters: {
+        type: "object",
+        properties: {
+          exercise_type: {
+            type: "string",
+            enum: [
+              "cardio", "strength", "hiit", "yoga", "cycling", "run",
+              "swimming", "football", "tennis", "volleyball", "basketball",
+              "breathwork", "hot_shower", "cold_shower", "hypertrophy",
+            ],
+            description:
+              "Sportart. Wähle den passendsten Typ: cardio (allgemeines Cardio), strength (Kraft/Gym), hiit, yoga, cycling (Fahrrad), run (Laufen), swimming (Schwimmen), football/tennis/volleyball/basketball (Teamsport), breathwork (Atemübungen), hot_shower/cold_shower (Temperaturreize).",
+          },
+          duration_minutes: {
+            type: "integer",
+            description: "Dauer in Minuten (1-600). Pflichtfeld.",
+          },
+          intensity: {
+            type: "string",
+            enum: ["low", "medium", "high"],
+            description: "Intensität: low (locker), medium (moderat), high (anstrengend).",
+          },
+          notes: {
+            type: "string",
+            description: "Optional: kurze Notiz (z. B. 'Intervalle 5×1 min').",
+          },
+          logged_at: {
+            type: "string",
+            description:
+              "Optional: Zeitpunkt der Einheit als ISO-8601-String. Wenn der Nutzer eine Uhrzeit nennt ('heute um 8 Uhr'), hier eintragen; sonst weglassen.",
+          },
+        },
+        required: ["exercise_type", "duration_minutes", "intensity"],
+      },
+    },
+  },
+  {
+    type: "function" as const,
+    function: {
+      name: "log_symptom_entry",
+      description:
+        "Schlägt das Speichern eines Symptom-Eintrags vor (symptom_logs). WICHTIG: schreibt NICHT direkt — Bestätigung per UI-Button. Nur aufrufen, wenn der Nutzer explizit Symptome schildert ('ich habe Kopfschmerzen', 'mir ist schwindelig', 'ich bin total müde'). Wähle alle passenden symptom_types aus der Liste.",
+      parameters: {
+        type: "object",
+        properties: {
+          symptom_types: {
+            type: "array",
+            items: {
+              type: "string",
+              enum: [
+                "headache", "fatigue", "cramps", "nausea", "cravings",
+                "low_mood", "sleep_disturbance", "brain_fog", "bloating",
+                "anxiety", "irritability", "back_pain", "breast_tenderness",
+                "dizziness", "mouth_dryness", "polyuria", "water_retention",
+              ],
+            },
+            description:
+              "Liste der Symptom-Tokens (mindestens 1). headache=Kopfschmerz, fatigue=Müdigkeit, cramps=Krämpfe, nausea=Übelkeit, cravings=Heißhunger, low_mood=gedrückte Stimmung, sleep_disturbance=Schlafprobleme, brain_fog=Konzentrationsprobleme, bloating=Blähungen, anxiety=Angst, irritability=Reizbarkeit, back_pain=Rückenschmerzen, breast_tenderness=Brustspannen, dizziness=Schwindel, mouth_dryness=Mundtrockenheit, polyuria=häufiges Wasserlassen, water_retention=Wassereinlagerungen.",
+          },
+          severity: {
+            type: "integer",
+            description:
+              "Schweregrad 1 (sehr leicht) bis 5 (stark) — gilt für alle genannten Symptome. Wenn der Nutzer keinen Grad nennt, wähle 3 (moderat).",
+          },
+          notes: {
+            type: "string",
+            description: "Optional: kurze Beschreibung oder Kontext.",
+          },
+          logged_at: {
+            type: "string",
+            description:
+              "Optional: Zeitpunkt des Auftretens als ISO-8601-String. Wenn der Nutzer eine Zeit nennt, hier eintragen; sonst weglassen.",
+          },
+        },
+        required: ["symptom_types", "severity"],
+      },
+    },
+  },
+  {
+    type: "function" as const,
+    function: {
+      name: "log_influence_entry",
+      description:
+        "Schlägt das Speichern eines Einflussfaktor-Eintrags vor (influence_logs) — für Dinge, die den Blutzucker beeinflussen können, aber nicht in die anderen Kategorien passen: Alkohol, Cannabis, Medikamente (Nicht-Insulin), sonstiges. WICHTIG: schreibt NICHT direkt — Bestätigung per UI-Button. Rein dokumentarisch — die Engine ändert Dosierungen NICHT aufgrund dieser Einträge.",
+      parameters: {
+        type: "object",
+        properties: {
+          influence_type: {
+            type: "string",
+            enum: ["alcohol", "cannabis", "medication", "other"],
+            description:
+              "Typ: alcohol, cannabis, medication (z. B. Kortison, Antibiotika), other (sonstiges).",
+          },
+          details: {
+            type: "string",
+            description:
+              "Optional: Was genau (z. B. 'Rotwein', 'Ibuprofen 400mg', 'Stressphase').",
+          },
+          amount: {
+            type: "string",
+            description: "Optional: Menge als Freitext (z. B. '2 Gläser', '400mg', '1 Zug').",
+          },
+          notes: {
+            type: "string",
+            description: "Optional: weitere Notiz.",
+          },
+          logged_at: {
+            type: "string",
+            description:
+              "Optional: Zeitpunkt als ISO-8601-String. Wenn der Nutzer eine Zeit nennt, hier eintragen; sonst weglassen.",
+          },
+        },
+        required: ["influence_type"],
+      },
+    },
+  },
+  {
+    type: "function" as const,
+    function: {
+      name: "log_cycle_entry",
+      description:
+        "Schlägt das Speichern eines Zyklus-Eintrags vor (menstrual_logs). WICHTIG: schreibt NICHT direkt — Bestätigung per UI-Button. NUR aufrufen, wenn der Nutzer das Zyklus-Logging aktiviert hat (cycle_logging_enabled = true im Kontext-Preamble) UND explizit einen Zyklus-Eintrag loggen möchte. Für Blutungs-Einträge: flow_intensity setzen. Für Phasen-Marker: phase_marker setzen. Mindestens eines der beiden Felder ist Pflicht.",
+      parameters: {
+        type: "object",
+        properties: {
+          start_date: {
+            type: "string",
+            description: "Datum als YYYY-MM-DD (Pflichtfeld). Startdatum der Blutung oder des Phasen-Markers.",
+          },
+          end_date: {
+            type: "string",
+            description:
+              "Optional: Enddatum als YYYY-MM-DD (nur für Blutungseinträge mit bekanntem Ende). Muss >= start_date sein.",
+          },
+          flow_intensity: {
+            type: "string",
+            enum: ["light", "medium", "heavy"],
+            description:
+              "Blutungsintensität: light (leicht), medium (mittel), heavy (stark). Für Blutungseinträge Pflicht; für Phasen-Marker weglassen.",
+          },
+          phase_marker: {
+            type: "string",
+            enum: ["ovulation", "pms", "other"],
+            description:
+              "Phasen-Marker: ovulation (Eisprung), pms (PMS), other (sonstiges). Für Phasen-Einträge Pflicht; für Blutungseinträge weglassen.",
+          },
+          notes: {
+            type: "string",
+            description: "Optional: kurze Notiz.",
+          },
+        },
+        required: ["start_date"],
+      },
+    },
+  },
+  {
+    type: "function" as const,
+    function: {
       name: "navigate_to",
       description:
         "Navigiert den Nutzer zu einem bestimmten Screen in der App. Aufrufen, wenn der Nutzer explizit darum bittet (z. B. 'Zeig mir das Dashboard', 'Geh zu den Einstellungen', 'Öffne Insights'). Nicht proaktiv aufrufen.",
@@ -465,6 +626,10 @@ export type GlevToolName =
   | "log_bolus_entry"
   | "log_basal_entry"
   | "log_fingerstick"
+  | "log_exercise_entry"
+  | "log_symptom_entry"
+  | "log_influence_entry"
+  | "log_cycle_entry"
   | "add_appointment"
   | "add_timeline_check"
   | "set_macro"
@@ -615,13 +780,21 @@ export async function executeGlevTool(
       case "save_user_observation":
         return await toolSaveUserObservation(sb, userId, args);
       case "log_meal_entry":
-        return await toolLogMealEntry(sb, userId, args);
+        return await toolLogMealEntry(sb, userId, args, userTimezone);
       case "log_bolus_entry":
         return await toolLogBolusEntry(sb, userId, args, userTimezone);
       case "log_basal_entry":
         return await toolLogBasalEntry(sb, userId, args, userTimezone);
       case "log_fingerstick":
         return await toolLogFingerstick(sb, userId, args);
+      case "log_exercise_entry":
+        return await toolLogExerciseEntry(sb, userId, args, userTimezone);
+      case "log_symptom_entry":
+        return await toolLogSymptomEntry(sb, userId, args, userTimezone);
+      case "log_influence_entry":
+        return await toolLogInfluenceEntry(sb, userId, args, userTimezone);
+      case "log_cycle_entry":
+        return await toolLogCycleEntry(sb, userId, args, userTimezone);
       case "add_appointment":
         return await toolAddAppointment(sb, userId, args);
       case "add_timeline_check":
@@ -1171,9 +1344,10 @@ async function createPendingAction(
 }
 
 async function toolLogMealEntry(
-  _sb: SupabaseClient,
-  _userId: string,
+  sb: SupabaseClient,
+  userId: string,
   args: Record<string, unknown>,
+  userTimezone: string | null,
 ): Promise<unknown> {
   const inputText =
     typeof args.input_text === "string" ? args.input_text.trim().slice(0, 200) : "";
@@ -1195,10 +1369,55 @@ async function toolLogMealEntry(
       ? Number(args.fiber_grams)
       : null;
 
-  // No pending_action needed — just pre-fill the Engine screen and let
-  // the user confirm there (via tap or voice "Speichern"). This keeps the
-  // save gesture in the user's hand while still removing the friction of
-  // manual macro entry.
+  // Historic entry (logged_at > 5 min in the past): create a pending_action
+  // with a direct DB insert so multiple past meals can be logged in one turn
+  // without opening the Engine screen. Also fetch the nearest CGM reading to
+  // pre-fill glucose_before.
+  const loggedAtRaw = typeof args.logged_at === "string" ? args.logged_at.trim() : "";
+  const loggedAtMs = loggedAtRaw ? new Date(loggedAtRaw).getTime() : NaN;
+  const isHistoric = Number.isFinite(loggedAtMs) && Date.now() - loggedAtMs > 5 * 60_000;
+
+  if (isHistoric) {
+    let glucoseBefore: number | null = null;
+    try {
+      const hist = await getHistory(userId);
+      if (hist?.history?.length) {
+        const candidates = hist.history
+          .filter((r) => r.timestamp && r.value != null)
+          .map((r) => ({
+            value: r.value as number,
+            dist: Math.abs(new Date(r.timestamp!).getTime() - loggedAtMs),
+          }))
+          .filter((r) => r.dist <= 60 * 60_000);
+        candidates.sort((a, b) => a.dist - b.dist);
+        if (candidates[0]) glucoseBefore = candidates[0].value;
+      }
+    } catch {
+      /* best-effort — no CGM should not block meal logging */
+    }
+
+    const timeLabel = formatInUserTimezone(loggedAtMs, userTimezone);
+    const macroBits = [`${carbs}g KH`];
+    if (protein != null) macroBits.push(`${protein}g P`);
+    if (fat != null) macroBits.push(`${fat}g F`);
+    const summary = `Mahlzeit: ${inputText} (${macroBits.join(", ")}) um ${timeLabel.dateTime}`;
+
+    const params = {
+      input_text: inputText,
+      carbs_grams: carbs,
+      protein_grams: protein,
+      fat_grams: fat,
+      fiber_grams: fiber,
+      logged_at: new Date(loggedAtMs).toISOString(),
+      glucose_before: glucoseBefore,
+    };
+
+    return await createPendingAction(sb, userId, "log_meal_entry", params, summary);
+  }
+
+  // Current entry: pre-fill the Engine screen so the user can review macros
+  // and confirm via tap or voice "Speichern". This keeps the save gesture
+  // in the user's hand while removing the friction of manual macro entry.
   return {
     meal_prep: { input_text: inputText, carbs, protein, fat, fiber },
   } satisfies MealPrepEnvelope;
@@ -1421,6 +1640,226 @@ async function toolAddAppointment(
   const summary = `Termin: ${date}${note ? ` — ${note}` : ""}`;
 
   return await createPendingAction(sb, userId, "add_appointment", params, summary);
+}
+
+// ── Universal Logging tools ───────────────────────────────────────────
+
+const VALID_EXERCISE_TYPES_SET = new Set([
+  "cardio", "strength", "hiit", "yoga", "cycling", "run",
+  "swimming", "football", "tennis", "volleyball", "basketball",
+  "breathwork", "hot_shower", "cold_shower", "hypertrophy",
+]);
+
+async function toolLogExerciseEntry(
+  sb: SupabaseClient,
+  userId: string,
+  args: Record<string, unknown>,
+  userTimezone: string | null,
+): Promise<unknown> {
+  const exerciseType = typeof args.exercise_type === "string" ? args.exercise_type.trim() : "";
+  if (!VALID_EXERCISE_TYPES_SET.has(exerciseType)) {
+    return { error: `Unbekannter Sporttyp: ${exerciseType}` };
+  }
+
+  const durationRaw = Number(args.duration_minutes);
+  if (!Number.isFinite(durationRaw) || durationRaw < 1 || durationRaw > 600) {
+    return { error: "duration_minutes muss zwischen 1 und 600 liegen" };
+  }
+  const duration = Math.round(durationRaw);
+
+  const intensity = typeof args.intensity === "string" ? args.intensity.trim() : "";
+  if (!["low", "medium", "high"].includes(intensity)) {
+    return { error: "intensity muss 'low', 'medium' oder 'high' sein" };
+  }
+
+  const notes = shorten(typeof args.notes === "string" ? args.notes : null, 200);
+  const loggedAt = resolveLoggedAt(args.logged_at);
+  const timeLabel = formatInUserTimezone(new Date(loggedAt).getTime(), userTimezone);
+
+  const typeLabel: Record<string, string> = {
+    cardio: "Cardio", strength: "Krafttraining", hiit: "HIIT", yoga: "Yoga",
+    cycling: "Radfahren", run: "Laufen", swimming: "Schwimmen",
+    football: "Fußball", tennis: "Tennis", volleyball: "Volleyball",
+    basketball: "Basketball", breathwork: "Atemübungen",
+    hot_shower: "Warme Dusche", cold_shower: "Kalte Dusche",
+    hypertrophy: "Hypertrophie",
+  };
+  const intensityLabel: Record<string, string> = {
+    low: "locker", medium: "moderat", high: "intensiv",
+  };
+  const label = typeLabel[exerciseType] ?? exerciseType;
+  const intLabel = intensityLabel[intensity] ?? intensity;
+  const summary = `Sport: ${label} ${duration} min (${intLabel}) um ${timeLabel.dateTime}`;
+
+  return await createPendingAction(sb, userId, "log_exercise_entry", {
+    exercise_type: exerciseType,
+    duration_minutes: duration,
+    intensity,
+    notes,
+    logged_at: loggedAt,
+  }, summary);
+}
+
+const VALID_SYMPTOM_TYPES_SET = new Set([
+  "headache", "fatigue", "cramps", "nausea", "cravings",
+  "low_mood", "sleep_disturbance", "brain_fog", "bloating",
+  "anxiety", "irritability", "back_pain", "breast_tenderness",
+  "dizziness", "mouth_dryness", "polyuria", "water_retention",
+]);
+
+async function toolLogSymptomEntry(
+  sb: SupabaseClient,
+  userId: string,
+  args: Record<string, unknown>,
+  userTimezone: string | null,
+): Promise<unknown> {
+  const typesRaw = Array.isArray(args.symptom_types) ? args.symptom_types : [];
+  const validTypes = typesRaw.filter(
+    (t): t is string => typeof t === "string" && VALID_SYMPTOM_TYPES_SET.has(t),
+  );
+  if (!validTypes.length) {
+    return { error: "symptom_types muss mindestens einen gültigen Token enthalten" };
+  }
+
+  const severityRaw = Number(args.severity);
+  if (!Number.isFinite(severityRaw) || severityRaw < 1 || severityRaw > 5) {
+    return { error: "severity muss zwischen 1 und 5 liegen" };
+  }
+  const severity = Math.round(severityRaw);
+
+  const notes = shorten(typeof args.notes === "string" ? args.notes : null, 200);
+  const loggedAt = resolveLoggedAt(args.logged_at);
+  const timeLabel = formatInUserTimezone(new Date(loggedAt).getTime(), userTimezone);
+
+  const summary =
+    `Symptome: ${validTypes.join(", ")} (Schweregrad ${severity}/5) um ${timeLabel.timeOnly}`;
+
+  return await createPendingAction(sb, userId, "log_symptom_entry", {
+    symptom_types: validTypes,
+    severity,
+    notes,
+    logged_at: loggedAt,
+  }, summary);
+}
+
+async function toolLogInfluenceEntry(
+  sb: SupabaseClient,
+  userId: string,
+  args: Record<string, unknown>,
+  userTimezone: string | null,
+): Promise<unknown> {
+  const influenceType = typeof args.influence_type === "string" ? args.influence_type.trim() : "";
+  if (!["alcohol", "cannabis", "medication", "other"].includes(influenceType)) {
+    return {
+      error: "influence_type muss 'alcohol', 'cannabis', 'medication' oder 'other' sein",
+    };
+  }
+
+  const details = shorten(typeof args.details === "string" ? args.details : null, 200);
+  const amount = shorten(typeof args.amount === "string" ? args.amount : null, 100);
+  const notes = shorten(typeof args.notes === "string" ? args.notes : null, 200);
+  const loggedAt = resolveLoggedAt(args.logged_at);
+  const timeLabel = formatInUserTimezone(new Date(loggedAt).getTime(), userTimezone);
+
+  const typeLabel: Record<string, string> = {
+    alcohol: "Alkohol", cannabis: "Cannabis",
+    medication: "Medikament", other: "Sonstiges",
+  };
+  const label = typeLabel[influenceType] ?? influenceType;
+  const detailBit = details ? ` (${details})` : "";
+  const amountBit = amount ? ` — ${amount}` : "";
+  const summary = `Einfluss: ${label}${detailBit}${amountBit} um ${timeLabel.timeOnly}`;
+
+  return await createPendingAction(sb, userId, "log_influence_entry", {
+    influence_type: influenceType,
+    details,
+    amount,
+    notes,
+    logged_at: loggedAt,
+  }, summary);
+}
+
+async function toolLogCycleEntry(
+  sb: SupabaseClient,
+  userId: string,
+  args: Record<string, unknown>,
+  _userTimezone: string | null,
+): Promise<unknown> {
+  // Feature-flag guard: user must have opted in to cycle logging.
+  const { data: settings } = await sb
+    .from("user_settings")
+    .select("cycle_logging_enabled")
+    .eq("user_id", userId)
+    .maybeSingle();
+  if (
+    !(settings as { cycle_logging_enabled?: boolean } | null)?.cycle_logging_enabled
+  ) {
+    return {
+      error:
+        "Zyklus-Logging ist nicht aktiviert. Der Nutzer kann es in den Einstellungen unter 'Zyklus & Hormone' einschalten.",
+    };
+  }
+
+  const startDate = typeof args.start_date === "string" ? args.start_date.trim() : "";
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(startDate)) {
+    return { error: "start_date muss YYYY-MM-DD sein" };
+  }
+
+  const endDate =
+    typeof args.end_date === "string" && args.end_date.trim()
+      ? args.end_date.trim()
+      : null;
+  if (endDate && !/^\d{4}-\d{2}-\d{2}$/.test(endDate)) {
+    return { error: "end_date muss YYYY-MM-DD sein" };
+  }
+  if (endDate && endDate < startDate) {
+    return { error: "end_date darf nicht vor start_date liegen" };
+  }
+
+  const flowIntensity =
+    typeof args.flow_intensity === "string" && args.flow_intensity.trim()
+      ? args.flow_intensity.trim()
+      : null;
+  if (flowIntensity && !["light", "medium", "heavy"].includes(flowIntensity)) {
+    return { error: "flow_intensity muss 'light', 'medium' oder 'heavy' sein" };
+  }
+
+  const phaseMarker =
+    typeof args.phase_marker === "string" && args.phase_marker.trim()
+      ? args.phase_marker.trim()
+      : null;
+  if (phaseMarker && !["ovulation", "pms", "other"].includes(phaseMarker)) {
+    return { error: "phase_marker muss 'ovulation', 'pms' oder 'other' sein" };
+  }
+
+  if (!flowIntensity && !phaseMarker) {
+    return {
+      error:
+        "Mindestens flow_intensity (Blutungsintensität) oder phase_marker muss angegeben werden.",
+    };
+  }
+
+  const notes = shorten(typeof args.notes === "string" ? args.notes : null, 200);
+
+  const intensityLabel: Record<string, string> = {
+    light: "Leichte", medium: "Mittlere", heavy: "Starke",
+  };
+  const phaseLabel: Record<string, string> = {
+    ovulation: "Eisprung", pms: "PMS", other: "Phasen-Marker",
+  };
+  const typeLabel = flowIntensity
+    ? `${intensityLabel[flowIntensity] ?? flowIntensity} Blutung`
+    : phaseLabel[phaseMarker!] ?? "Phasen-Marker";
+  const endBit = endDate ? ` bis ${endDate}` : "";
+  const summary = `Zyklus: ${typeLabel} ab ${startDate}${endBit}`;
+
+  return await createPendingAction(sb, userId, "log_cycle_entry", {
+    start_date: startDate,
+    end_date: endDate,
+    flow_intensity: flowIntensity,
+    phase_marker: phaseMarker,
+    notes,
+  }, summary);
 }
 
 // ── Phase 3 tools ────────────────────────────────────────────────────

@@ -51,9 +51,10 @@ export type GlevChatMessage = {
   role: "user" | "assistant";
   content: string;
   isStreaming?: boolean;
-  /** Confirm/cancel widget under the bubble, only set on assistant
-   *  bubbles that came back from a WRITE-tool call. */
-  pendingAction?: PendingAction;
+  /** Confirm/cancel widgets under the bubble — one per WRITE-tool call.
+   *  Multi-entry turns (e.g. exercise + symptom in one message) produce
+   *  multiple chips, each confirmed or cancelled independently. */
+  pendingActions?: PendingAction[];
 };
 
 export type ContextSnapshot = {
@@ -433,22 +434,22 @@ export function useGlevAI(opts?: {
                 );
               }
               if (parsed.pending_action) {
-                // WRITE-tool result: attach the confirm/cancel widget to
-                // the currently streaming assistant bubble. The bubble's
-                // own text continues to stream in parallel (Mistral
-                // writes a short „Soll ich das so speichern?"-Satz).
+                // WRITE-tool result: append a confirm/cancel chip to the
+                // currently streaming assistant bubble. Multiple chips can
+                // accumulate in one turn (multi-entry logging).
                 const pa = parsed.pending_action;
+                const newChip: PendingAction = {
+                  token: pa.token,
+                  kind: pa.kind,
+                  summary: pa.summary,
+                  state: "pending",
+                };
                 setMessages((prev) =>
                   prev.map((m) =>
                     m.id === assistantId
                       ? {
                           ...m,
-                          pendingAction: {
-                            token: pa.token,
-                            kind: pa.kind,
-                            summary: pa.summary,
-                            state: "pending",
-                          },
+                          pendingActions: [...(m.pendingActions ?? []), newChip],
                         }
                       : m,
                   ),
@@ -513,20 +514,26 @@ export function useGlevAI(opts?: {
    * /api/ai/confirm-action. Idempotent on the server (used_at guard);
    * we also short-circuit locally if the widget is no longer "pending".
    */
-  const confirmAction = useCallback(async (messageId: string) => {
-    let token: string | null = null;
-    setMessages((prev) =>
-      prev.map((m) => {
-        if (m.id !== messageId || !m.pendingAction) return m;
-        if (m.pendingAction.state !== "pending") return m;
-        token = m.pendingAction.token;
-        return {
-          ...m,
-          pendingAction: { ...m.pendingAction, state: "confirming" },
-        };
-      }),
-    );
-    if (!token) return;
+  /** Patch a single PendingAction in the pendingActions[] array by token. */
+  function patchAction(
+    prev: GlevChatMessage[],
+    messageId: string,
+    token: string,
+    patch: Partial<PendingAction>,
+  ): GlevChatMessage[] {
+    return prev.map((m) => {
+      if (m.id !== messageId || !m.pendingActions) return m;
+      return {
+        ...m,
+        pendingActions: m.pendingActions.map((a) =>
+          a.token === token ? { ...a, ...patch } : a,
+        ),
+      };
+    });
+  }
+
+  const confirmAction = useCallback(async (messageId: string, token: string) => {
+    setMessages((prev) => patchAction(prev, messageId, token, { state: "confirming" }));
 
     try {
       const res = await fetch("/api/ai/confirm-action", {
@@ -539,28 +546,10 @@ export function useGlevAI(opts?: {
         const msg =
           (body && typeof body.error === "string" && body.error) ||
           `HTTP ${res.status}`;
-        setMessages((prev) =>
-          prev.map((m) =>
-            m.id === messageId && m.pendingAction
-              ? {
-                  ...m,
-                  pendingAction: { ...m.pendingAction, state: "error", error: msg },
-                }
-              : m,
-          ),
-        );
+        setMessages((prev) => patchAction(prev, messageId, token, { state: "error", error: msg }));
         return;
       }
-      setMessages((prev) =>
-        prev.map((m) =>
-          m.id === messageId && m.pendingAction
-            ? {
-                ...m,
-                pendingAction: { ...m.pendingAction, state: "confirmed" },
-              }
-            : m,
-        ),
-      );
+      setMessages((prev) => patchAction(prev, messageId, token, { state: "confirmed" }));
       // For add_timeline_check: arm a local OS reminder. Best-effort —
       // a failed schedule must never block the confirmation success state.
       const sr = body?.scheduleReminder;
@@ -583,16 +572,7 @@ export function useGlevAI(opts?: {
       }
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Speichern fehlgeschlagen";
-      setMessages((prev) =>
-        prev.map((m) =>
-          m.id === messageId && m.pendingAction
-            ? {
-                ...m,
-                pendingAction: { ...m.pendingAction, state: "error", error: msg },
-              }
-            : m,
-        ),
-      );
+      setMessages((prev) => patchAction(prev, messageId, token, { state: "error", error: msg }));
     }
   }, []);
 
@@ -601,17 +581,8 @@ export function useGlevAI(opts?: {
    * its own (TTL 5 min) — no server roundtrip needed because the
    * confirm endpoint won't be called.
    */
-  const cancelAction = useCallback((messageId: string) => {
-    setMessages((prev) =>
-      prev.map((m) => {
-        if (m.id !== messageId || !m.pendingAction) return m;
-        if (m.pendingAction.state !== "pending") return m;
-        return {
-          ...m,
-          pendingAction: { ...m.pendingAction, state: "cancelled" },
-        };
-      }),
-    );
+  const cancelAction = useCallback((messageId: string, token: string) => {
+    setMessages((prev) => patchAction(prev, messageId, token, { state: "cancelled" }));
   }, []);
 
   return {

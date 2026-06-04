@@ -17,8 +17,8 @@ interface Props {
   messages: GlevChatMessage[];
   streaming: boolean;
   onSend: (text: string) => void;
-  onConfirmAction?: (messageId: string) => void;
-  onCancelAction?: (messageId: string) => void;
+  onConfirmAction?: (messageId: string, token: string) => void;
+  onCancelAction?: (messageId: string, token: string) => void;
   onClearChat?: () => void;
   /** Called whenever the chat sheet's STT listening state changes so the
    *  parent (Layout.tsx) can reflect it on the FAB. */
@@ -669,14 +669,15 @@ export default function GlevAIChatSheet({
                 );
               })()}
 
-              {/* Pending-action widget (WRITE-tool confirmation gate, Task 2) */}
-              {m.pendingAction && (
+              {/* Pending-action widgets — one chip per WRITE-tool call in this turn */}
+              {m.pendingActions?.map((pa) => (
                 <PendingActionWidget
-                  pa={m.pendingAction}
-                  onConfirm={() => onConfirmAction?.(m.id)}
-                  onCancel={() => onCancelAction?.(m.id)}
+                  key={pa.token}
+                  pa={pa}
+                  onConfirm={() => onConfirmAction?.(m.id, pa.token)}
+                  onCancel={() => onCancelAction?.(m.id, pa.token)}
                 />
-              )}
+              ))}
             </div>
           ))}
         </div>

@@ -166,6 +166,14 @@ async function executeConfirmedAction(
       return await execLogBasalEntry(sb, userId, params);
     case "log_fingerstick":
       return await execLogFingerstick(sb, userId, params);
+    case "log_exercise_entry":
+      return await execLogExerciseEntry(sb, userId, params);
+    case "log_symptom_entry":
+      return await execLogSymptomEntry(sb, userId, params);
+    case "log_influence_entry":
+      return await execLogInfluenceEntry(sb, userId, params);
+    case "log_cycle_entry":
+      return await execLogCycleEntry(sb, userId, params);
     case "add_appointment":
       return await execAddAppointment(sb, userId, params);
     case "add_timeline_check":
@@ -200,11 +208,17 @@ async function execLogMealEntry(
   // GPT-Parse-Lauf gemacht — wir loggen nur das Roh-Statement plus die
   // vom Modell genannten Makros. Das ist konsistent mit dem manuellen
   // "schnell loggen"-Eintrag aus dem Engine-Tab.
+  const glucoseBefore =
+    typeof p.glucose_before === "number" && Number.isFinite(p.glucose_before)
+      ? p.glucose_before
+      : null;
+  const createdAt = resolveLoggedAt(p.logged_at);
+
   const row: Record<string, unknown> = {
     user_id: userId,
     input_text: inputText,
     parsed_json: [],
-    glucose_before: null,
+    glucose_before: glucoseBefore,
     glucose_after: null,
     carbs_grams: carbs,
     protein_grams: protein,
@@ -212,6 +226,7 @@ async function execLogMealEntry(
     insulin_units: null,
     meal_type: mealType,
     evaluation: null,
+    created_at: createdAt,
   };
 
   const { data, error } = await sb
@@ -330,6 +345,157 @@ async function execLogFingerstick(
     .single();
   if (error) throw new Error(error.message);
   return { insertedId: data?.id as string | undefined };
+}
+
+async function execLogExerciseEntry(
+  sb: SupabaseClient,
+  userId: string,
+  p: Record<string, unknown>,
+): Promise<{ insertedId?: string }> {
+  const exerciseType = typeof p.exercise_type === "string" ? p.exercise_type : "";
+  const durationMinutes =
+    typeof p.duration_minutes === "number" ? p.duration_minutes : null;
+  const intensity = typeof p.intensity === "string" ? p.intensity : "";
+
+  if (!exerciseType) throw new Error("exercise_type fehlt");
+  if (durationMinutes === null || !Number.isFinite(durationMinutes)) {
+    throw new Error("duration_minutes muss eine Zahl sein");
+  }
+  if (!["low", "medium", "high"].includes(intensity)) {
+    throw new Error("intensity muss 'low', 'medium' oder 'high' sein");
+  }
+
+  const notes =
+    typeof p.notes === "string" && p.notes.trim() ? p.notes.trim() : null;
+  const createdAt = resolveLoggedAt(p.logged_at);
+
+  const { data, error } = await sb
+    .from("exercise_logs")
+    .insert({
+      user_id: userId,
+      exercise_type: exerciseType,
+      duration_minutes: Math.round(durationMinutes),
+      intensity,
+      notes,
+      created_at: createdAt,
+    })
+    .select("id")
+    .single();
+  if (error) throw new Error(error.message);
+  return { insertedId: (data as { id: string } | null)?.id };
+}
+
+async function execLogSymptomEntry(
+  sb: SupabaseClient,
+  userId: string,
+  p: Record<string, unknown>,
+): Promise<{ insertedId?: string }> {
+  const symptomTypes = Array.isArray(p.symptom_types) ? p.symptom_types : [];
+  if (!symptomTypes.length) throw new Error("symptom_types darf nicht leer sein");
+  const severity = typeof p.severity === "number" ? p.severity : null;
+  if (severity === null || severity < 1 || severity > 5) {
+    throw new Error("severity muss zwischen 1 und 5 liegen");
+  }
+  const notes =
+    typeof p.notes === "string" && p.notes.trim() ? p.notes.trim() : null;
+  const occurredAt = resolveLoggedAt(p.logged_at);
+
+  // Build the per-symptom severities JSONB map from the flat severity value.
+  const severities: Record<string, number> = {};
+  for (const t of symptomTypes) {
+    if (typeof t === "string") severities[t] = Math.round(severity);
+  }
+
+  const { data, error } = await sb
+    .from("symptom_logs")
+    .insert({
+      user_id: userId,
+      symptom_types: symptomTypes,
+      severities,
+      notes,
+      occurred_at: occurredAt,
+    })
+    .select("id")
+    .single();
+  if (error) throw new Error(error.message);
+  return { insertedId: (data as { id: string } | null)?.id };
+}
+
+async function execLogInfluenceEntry(
+  sb: SupabaseClient,
+  userId: string,
+  p: Record<string, unknown>,
+): Promise<{ insertedId?: string }> {
+  const influenceType = typeof p.influence_type === "string" ? p.influence_type : "";
+  if (!["alcohol", "cannabis", "medication", "other"].includes(influenceType)) {
+    throw new Error("influence_type ungültig");
+  }
+  const details =
+    typeof p.details === "string" && p.details.trim() ? p.details.trim() : null;
+  const amount =
+    typeof p.amount === "string" && p.amount.trim() ? p.amount.trim() : null;
+  const notes =
+    typeof p.notes === "string" && p.notes.trim() ? p.notes.trim() : null;
+  const occurredAt = resolveLoggedAt(p.logged_at);
+
+  const { data, error } = await sb
+    .from("influence_logs")
+    .insert({
+      user_id: userId,
+      influence_type: influenceType,
+      details,
+      amount,
+      notes,
+      occurred_at: occurredAt,
+    })
+    .select("id")
+    .single();
+  if (error) throw new Error(error.message);
+  return { insertedId: (data as { id: string } | null)?.id };
+}
+
+async function execLogCycleEntry(
+  sb: SupabaseClient,
+  userId: string,
+  p: Record<string, unknown>,
+): Promise<{ insertedId?: string }> {
+  const startDate = typeof p.start_date === "string" ? p.start_date.trim() : "";
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(startDate)) {
+    throw new Error("start_date muss YYYY-MM-DD sein");
+  }
+  const endDate =
+    typeof p.end_date === "string" && p.end_date.trim()
+      ? p.end_date.trim()
+      : null;
+  const flowIntensity =
+    typeof p.flow_intensity === "string" && p.flow_intensity.trim()
+      ? p.flow_intensity.trim()
+      : null;
+  const phaseMarker =
+    typeof p.phase_marker === "string" && p.phase_marker.trim()
+      ? p.phase_marker.trim()
+      : null;
+  const notes =
+    typeof p.notes === "string" && p.notes.trim() ? p.notes.trim() : null;
+
+  if (!flowIntensity && !phaseMarker) {
+    throw new Error("flow_intensity oder phase_marker ist Pflicht");
+  }
+
+  const { data, error } = await sb
+    .from("menstrual_logs")
+    .insert({
+      user_id: userId,
+      start_date: startDate,
+      end_date: endDate,
+      flow_intensity: flowIntensity,
+      phase_marker: phaseMarker,
+      notes,
+    })
+    .select("id")
+    .single();
+  if (error) throw new Error(error.message);
+  return { insertedId: (data as { id: string } | null)?.id };
 }
 
 async function execAddAppointment(
