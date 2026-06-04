@@ -320,13 +320,63 @@ export function InsulinForm({ initialType = "bolus" }: { initialType?: "bolus" |
     return () => { cancelled = true; };
   }, [type]);
 
+  // sessionStorage pre-fill on mount: read glev_pending_insulin written by
+  // navigateToLogScreen (via the log_insulin AI chip "Detail →" button).
+  // Does NOT submit — user must still tap "Speichern" (D-003 compliance).
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      const raw = window.sessionStorage.getItem("glev_pending_insulin");
+      if (!raw) return;
+      window.sessionStorage.removeItem("glev_pending_insulin");
+      const p = JSON.parse(raw) as {
+        units?: number;
+        insulin_name?: string;
+        insulin_type?: string;
+        logged_at?: string;
+        notes?: string;
+      };
+      if (typeof p.units === "number" && p.units > 0) setUnits(String(p.units));
+      if (typeof p.insulin_name === "string" && p.insulin_name.trim()) setName(p.insulin_name.trim());
+      if (p.insulin_type === "basal") handleTypeChange("basal");
+      else if (p.insulin_type === "bolus") setType("bolus");
+      if (typeof p.notes === "string" && p.notes.trim()) setNotes(p.notes.trim());
+      if (typeof p.logged_at === "string" && p.logged_at.trim()) {
+        const d = new Date(p.logged_at.trim());
+        if (Number.isFinite(d.getTime())) {
+          const deltaMin = Math.round((Date.now() - d.getTime()) / 60_000);
+          if (deltaMin <= 0) {
+            setTakenMinAgo(0);
+          } else if (deltaMin <= 5) {
+            setTakenMinAgo(5);
+          } else if (deltaMin <= 15) {
+            setTakenMinAgo(15);
+          } else {
+            setCustomTakenAt(toLocalDtString(d));
+            setTakenMinAgo(TAKEN_CUSTOM);
+          }
+        }
+      }
+    } catch {
+      /* ignore parse/quota errors */
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // Voice-intent pre-fill: glev:open-bolus-log dispatched by useVoiceIntents
   // when the intent classifier recognises a bolus utterance (e.g. "4 Einheiten
-  // Novorapid"). Fills in units and insulin name, but does NOT submit — the
-  // user must still tap "Speichern" (compliance gate D-003).
+  // Novorapid"). Also dispatched by navigateToLogScreen (log_insulin Detail →).
+  // Fills in units, insulin name, type, and time but does NOT submit —
+  // the user must still tap "Speichern" (compliance gate D-003).
   useEffect(() => {
     const handler = (e: Event) => {
-      const detail = (e as CustomEvent<{ units?: number; insulin_name?: string; notes?: string }>).detail;
+      const detail = (e as CustomEvent<{
+        units?: number;
+        insulin_name?: string;
+        notes?: string;
+        insulin_type?: string;
+        logged_at?: string;
+      }>).detail;
       if (typeof detail?.units === "number" && detail.units > 0) {
         setUnits(String(detail.units));
       }
@@ -336,8 +386,32 @@ export function InsulinForm({ initialType = "bolus" }: { initialType?: "bolus" |
       if (typeof detail?.notes === "string" && detail.notes.trim()) {
         setNotes(detail.notes.trim());
       }
-      // Force bolus tab so the pre-fill is visible immediately.
-      setType("bolus");
+      // insulin_type from log_insulin chip Detail flow
+      if (detail?.insulin_type === "basal") {
+        handleTypeChange("basal");
+      } else if (detail?.insulin_type === "bolus") {
+        setType("bolus");
+      } else {
+        // Voice flow default: always show bolus tab
+        setType("bolus");
+      }
+      // logged_at from log_insulin chip Detail flow
+      if (typeof detail?.logged_at === "string" && detail.logged_at.trim()) {
+        const d = new Date(detail.logged_at.trim());
+        if (Number.isFinite(d.getTime())) {
+          const deltaMin = Math.round((Date.now() - d.getTime()) / 60_000);
+          if (deltaMin <= 0) {
+            setTakenMinAgo(0);
+          } else if (deltaMin <= 5) {
+            setTakenMinAgo(5);
+          } else if (deltaMin <= 15) {
+            setTakenMinAgo(15);
+          } else {
+            setCustomTakenAt(toLocalDtString(d));
+            setTakenMinAgo(TAKEN_CUSTOM);
+          }
+        }
+      }
     };
     window.addEventListener("glev:open-bolus-log", handler);
     return () => window.removeEventListener("glev:open-bolus-log", handler);

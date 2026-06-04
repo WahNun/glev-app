@@ -164,6 +164,11 @@ async function executeConfirmedAction(
       return await execLogBolusEntry(sb, userId, params);
     case "log_basal_entry":
       return await execLogBasalEntry(sb, userId, params);
+    case "log_insulin":
+      if (params.insulin_type === "basal") {
+        return await execLogBasalEntry(sb, userId, params);
+      }
+      return await execLogBolusEntry(sb, userId, params);
     case "log_fingerstick":
       return await execLogFingerstick(sb, userId, params);
     case "log_exercise_entry":

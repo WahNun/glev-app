@@ -563,6 +563,117 @@ function PendingActionWidget({
     );
   }
 
+  // ── log_insulin mini-preview chip ────────────────────────────────
+  // Special layout: brand · units IE · Bolus/Basal badge · time
+  // Buttons: [Schnell speichern] [Bolus-Details → / Basal-Details →] + ✕
+  if (pa.kind === "log_insulin") {
+    const p = pa.payload as {
+      units?: number;
+      insulin_name?: string;
+      insulin_type?: string;
+      logged_at?: string;
+    } | undefined;
+    const iType = p?.insulin_type === "basal" ? "basal" : "bolus";
+    const iName = p?.insulin_name ?? (iType === "bolus" ? "Bolus" : "Basal");
+    const iUnits = p?.units ?? 0;
+    const iTime = (() => {
+      if (!p?.logged_at) return "Jetzt";
+      const ms = new Date(p.logged_at).getTime();
+      if (!Number.isFinite(ms)) return "Jetzt";
+      const deltaMin = Math.round((Date.now() - ms) / 60_000);
+      if (deltaMin <= 2) return "Jetzt";
+      if (deltaMin < 60) return `vor ${deltaMin} min`;
+      const hr = Math.round(deltaMin / 60);
+      if (hr < 24) return `vor ${hr} h`;
+      return new Date(ms).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" });
+    })();
+    const typeBadgeColor = iType === "bolus" ? "#4F6EF7" : "#10b981";
+    const detailLabel = iType === "bolus" ? "Bolus-Details →" : "Basal-Details →";
+
+    return (
+      <div style={{ ...baseCard, position: "relative" }}>
+        {/* ✕ dismiss button */}
+        <button
+          type="button"
+          aria-label="Verwerfen"
+          onClick={onCancel}
+          disabled={busy}
+          style={{
+            position: "absolute", top: 8, right: 8,
+            background: "none", border: "none",
+            cursor: busy ? "default" : "pointer",
+            padding: 4, color: "var(--text-muted)", fontSize: 14,
+            lineHeight: 1, display: "flex", alignItems: "center",
+            justifyContent: "center", opacity: busy ? 0.5 : 1,
+          }}
+        >✕</button>
+
+        {/* Mini preview row: brand · units IE · badge · time */}
+        <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", paddingRight: 20 }}>
+          <span style={{ fontSize: 14, fontWeight: 700, color: "var(--text-strong)" }}>
+            {iName}
+          </span>
+          <span style={{
+            fontFamily: "var(--font-mono)", fontSize: 13,
+            color: "var(--text-body)", fontWeight: 600,
+          }}>
+            {iUnits} IE
+          </span>
+          <span style={{
+            fontSize: 10, fontWeight: 700, letterSpacing: "0.05em",
+            padding: "2px 7px", borderRadius: 20,
+            background: `${typeBadgeColor}18`,
+            border: `1px solid ${typeBadgeColor}40`,
+            color: typeBadgeColor,
+            textTransform: "uppercase" as const,
+          }}>
+            {iType === "bolus" ? "Bolus" : "Basal"}
+          </span>
+          <span style={{ fontSize: 11, color: "var(--text-muted)" }}>
+            {iTime}
+          </span>
+        </div>
+
+        {/* Action buttons */}
+        <div style={{ display: "flex", gap: 8 }}>
+          <button
+            type="button"
+            onClick={onQuickSave ?? onConfirm}
+            disabled={busy}
+            style={{
+              flex: 1, padding: "9px 10px", borderRadius: 8, border: "none",
+              background: busy ? "rgba(79,110,247,0.35)" : "#4F6EF7",
+              color: "var(--on-accent)", fontWeight: 600, fontSize: 13,
+              cursor: busy ? "default" : "pointer",
+            }}
+          >
+            {busy ? "Speichert …" : "Schnell speichern"}
+          </button>
+          {onDetailOpen && (
+            <button
+              type="button"
+              onClick={onDetailOpen}
+              disabled={busy}
+              style={{
+                padding: "9px 10px", borderRadius: 8,
+                border: "1px solid var(--border-strong)",
+                background: "var(--surface-soft)",
+                color: "var(--text-body)", fontSize: 13,
+                cursor: busy ? "default" : "pointer",
+                opacity: busy ? 0.5 : 1,
+                whiteSpace: "nowrap" as const,
+              }}
+            >
+              {detailLabel}
+            </button>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  }
+
   // ── Non-meal chip layout (Bolus, Exercise, Symptom, …) ───────────
   // ✕ icon top-right + type label + summary + [Schnell speichern] [Detail →]
   const { icon, label } = getActionMeta(pa.kind);

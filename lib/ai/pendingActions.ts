@@ -54,6 +54,14 @@ export type InsulinBasalPayload = {
   logged_at?: string | null;
 };
 
+export type InsulinEntryPayload = {
+  units: number;
+  insulin_name?: string | null;
+  insulin_type: "bolus" | "basal";
+  notes?: string | null;
+  logged_at?: string | null;
+};
+
 export type FingerstickPayload = {
   value_mg_dl: number;
   notes?: string | null;
@@ -108,6 +116,7 @@ export type PendingActionKind =
   | "log_symptom_entry"
   | "log_bolus_entry"
   | "log_basal_entry"
+  | "log_insulin"
   | "log_fingerstick"
   | "log_influence_entry"
   | "log_cycle_entry"
@@ -152,6 +161,11 @@ const NAV_CONFIG: Record<NonMealActionKind, ActionNavConfig> = {
     tab: "log",
     event: "glev:open-insulin-log",
     storageKey: "glev_pending_basal",
+  },
+  log_insulin: {
+    tab: "bolus",
+    event: "glev:open-bolus-log",
+    storageKey: "glev_pending_insulin",
   },
   log_fingerstick: {
     tab: "log",
@@ -209,6 +223,7 @@ export function getActionMeta(kind: string): { label: string; icon: string } {
     case "log_symptom_entry":     return { icon: "🩺", label: "Symptom" };
     case "log_bolus_entry":       return { icon: "💉", label: "Bolus" };
     case "log_basal_entry":       return { icon: "💉", label: "Basal" };
+    case "log_insulin":           return { icon: "💉", label: "Insulin" };
     case "log_fingerstick":       return { icon: "🩸", label: "Fingerst." };
     case "log_influence_entry":   return { icon: "⚡", label: "Einfluss" };
     case "log_cycle_entry":       return { icon: "🌙", label: "Zyklus" };

@@ -598,6 +598,51 @@ export const GLEV_TOOLS = [
   {
     type: "function" as const,
     function: {
+      name: "log_insulin",
+      description: `Schlägt das Speichern einer Insulin-Dosis vor (insulin_logs) — EINHEITLICHES Tool für Bolus und Basal. WICHTIG: schreibt NICHT direkt — Bestätigung erfolgt per UI-Button. Nur aufrufen, wenn der Nutzer explizit eine bereits gespritzte Dosis dokumentieren will.
+
+Bolus-Insuline (schnell wirkend → insulin_type: "bolus"):
+Fiasp, NovoRapid, Novolog, Humalog, Apidra, Lyumjev, Admelog
+
+Basal-Insuline (lang wirkend → insulin_type: "basal"):
+Tresiba, Degludec, Lantus, Glargine, Toujeo, Basaglar, Levemir, Detemir
+
+Wenn der Nutzer einen Markennamen nennt, leite insulin_type automatisch aus der obigen Liste ab. Niemals eine Dosis vorschlagen oder berechnen — IE-Zahl muss vom Nutzer kommen.`,
+      parameters: {
+        type: "object",
+        properties: {
+          units: {
+            type: "number",
+            description: "Anzahl IE (0-100). Pflichtfeld.",
+          },
+          insulin_name: {
+            type: "string",
+            description:
+              "Marken-/Insulin-Name (z. B. 'Fiasp', 'Tresiba'). Wenn der Nutzer einen Markennamen nennt, immer angeben.",
+          },
+          insulin_type: {
+            type: "string",
+            enum: ["bolus", "basal"],
+            description:
+              "Typ: 'bolus' für schnell wirkende Insuline (Fiasp, NovoRapid, Humalog, Apidra, Lyumjev, Novolog, Admelog), 'basal' für lang wirkende Insuline (Tresiba, Degludec, Lantus, Glargine, Toujeo, Basaglar, Levemir, Detemir). Pflichtfeld — aus Markenname ableiten wenn nicht explizit genannt.",
+          },
+          logged_at: {
+            type: "string",
+            description:
+              "Optional: Zeitpunkt der Injektion als ISO-8601-String (z. B. '2026-06-04T08:30:00'). Wenn der Nutzer eine Uhrzeit nennt, hier eintragen; sonst weglassen.",
+          },
+          notes: {
+            type: "string",
+            description: "Optional: kurze Notiz.",
+          },
+        },
+        required: ["units", "insulin_type"],
+      },
+    },
+  },
+  {
+    type: "function" as const,
+    function: {
       name: "navigate_to",
       description:
         "Navigiert den Nutzer zu einem bestimmten Screen in der App. Aufrufen, wenn der Nutzer explizit darum bittet (z. B. 'Zeig mir das Dashboard', 'Geh zu den Einstellungen', 'Öffne Insights'). Nicht proaktiv aufrufen.",
@@ -630,6 +675,7 @@ export type GlevToolName =
   | "log_meal_entry"
   | "log_bolus_entry"
   | "log_basal_entry"
+  | "log_insulin"
   | "log_fingerstick"
   | "log_exercise_entry"
   | "log_symptom_entry"
@@ -794,6 +840,8 @@ export async function executeGlevTool(
         return await toolLogBolusEntry(sb, userId, args, userTimezone);
       case "log_basal_entry":
         return await toolLogBasalEntry(sb, userId, args, userTimezone);
+      case "log_insulin":
+        return await toolLogInsulinEntry(sb, userId, args, userTimezone);
       case "log_fingerstick":
         return await toolLogFingerstick(sb, userId, args);
       case "log_exercise_entry":
@@ -1327,6 +1375,7 @@ async function createPendingAction(
   kind: GlevToolName,
   params: Record<string, unknown>,
   summary: string,
+  clientPayload?: Record<string, unknown>,
 ): Promise<PendingActionEnvelope | { error: string }> {
   const expiresAt = new Date(Date.now() + PENDING_TTL_MS).toISOString();
   const { data, error } = await sb
@@ -1423,6 +1472,42 @@ async function toolLogMealEntry(
   };
 
   return await createPendingAction(sb, userId, "log_meal_entry", params, summary);
+}
+
+async function toolLogInsulinEntry(
+  sb: SupabaseClient,
+  userId: string,
+  args: Record<string, unknown>,
+  userTimezone: string | null,
+): Promise<unknown> {
+  const units = Number(args.units);
+  if (!Number.isFinite(units) || units <= 0 || units > 100) {
+    return { error: "units ungültig (0-100 IE erwartet)" };
+  }
+  const insulinType = args.insulin_type === "basal" ? "basal" : "bolus";
+  const insulinName =
+    typeof args.insulin_name === "string" && args.insulin_name.trim()
+      ? args.insulin_name.trim().slice(0, 60)
+      : insulinType === "bolus" ? "Bolus" : "Basal";
+  const notes =
+    typeof args.notes === "string" && args.notes.trim()
+      ? args.notes.trim().slice(0, 200)
+      : null;
+
+  const loggedAt = resolveLoggedAt(args.logged_at);
+  const timeLabel = formatLoggedAt(new Date(loggedAt).getTime(), userTimezone);
+  const typeLabel = insulinType === "bolus" ? "Bolus" : "Basal";
+
+  const params = {
+    units,
+    insulin_name: insulinName,
+    insulin_type: insulinType,
+    notes,
+    logged_at: loggedAt,
+  };
+  const summary = `${typeLabel}: ${units} IE ${insulinName}${notes ? ` (${notes})` : ""} — ${timeLabel}`;
+
+  return await createPendingAction(sb, userId, "log_insulin", params, summary, params);
 }
 
 async function toolLogBolusEntry(

@@ -458,7 +458,12 @@ export function useGlevAI(opts?: {
                 // WRITE-tool result: append a confirm/cancel chip to the
                 // currently streaming assistant bubble. Multiple chips can
                 // accumulate in one turn (multi-entry logging).
-                const pa = parsed.pending_action;
+                const pa = parsed.pending_action as {
+                  token: string;
+                  kind: string;
+                  summary: string;
+                  payload?: Record<string, unknown>;
+                };
                 const newChip: PendingAction = {
                   token: pa.token,
                   kind: pa.kind,
