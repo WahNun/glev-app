@@ -9,6 +9,7 @@ import { useLocale, useTranslations } from "next-intl";
 import { fetchMeals, fetchMealsForEngine, unifiedOutcome, type Meal } from "@/lib/meals";
 import { TYPE_COLORS, chipLabelsFrom } from "@/lib/mealTypes";
 import { computeAdaptiveICR } from "@/lib/engine/adaptiveICR";
+import { ADAPTIVE_ICR_PAIRING_V2 } from "@/lib/engine/adaptiveFlags";
 import { fetchIcrSchedule, findActiveSlot, saveIcrSchedule, EMPTY_ICR_SCHEDULE, type IcrSchedule } from "@/lib/icrSchedule";
 import { fetchInsulinSettings, persistEngineIcr, DEFAULT_INSULIN_SETTINGS, fetchTargetRange, getTargetRange, DEFAULT_TARGET_RANGE } from "@/lib/userSettings";
 import { pairBolusesToMeals } from "@/lib/engine/pairing";
@@ -46,7 +47,9 @@ import {
   type FingerstickReading,
 } from "@/lib/fingerstick";
 import { fetchRecentInsulinLogs, type InsulinLog } from "@/lib/insulin";
+import { logICRPairingStats } from "@/app/actions/logICRPairingStats";
 import { hapticSelection } from "@/lib/haptics";
+
 import { fetchRecentExerciseLogs, type ExerciseLog, type ExerciseType } from "@/lib/exercise";
 import { evaluateExercise, aggregateExerciseTypeStats, PATTERN_MIN_SESSIONS, type ExerciseOutcome, type ExerciseTypeStats } from "@/lib/exerciseEval";
 import { fetchRecentMenstrualLogs, type MenstrualLog } from "@/lib/menstrual";
@@ -60,6 +63,11 @@ import { useCarbUnit } from "@/hooks/useCarbUnit";
 import { fetchCgmSamples, type ContinuousReading } from "@/lib/cgmSamplesClient";
 import { fetchPostBolusChecksRaw, type PostBolusCheckRaw } from "@/lib/mealTimelineChecks";
 import { supabase } from "@/lib/supabase";
+
+// Extra buffer added to the bolus-fetch window so pre- and post-boluses
+// at the edge of the 90-day meal window (up to ±30 min away from the
+// oldest/newest meal) are not silently excluded by the pairing algorithm.
+const ICR_BOLUS_FETCH_BUFFER_DAYS = 30 / (24 * 60);
 
 /** Default top-to-bottom order. Hero block (time-in-range, gmi-a1c,
  *  glucose-trend, meal-evaluation) mirrors the homepage `InsightsScreen()`
@@ -364,8 +372,15 @@ export default function InsightsPage() {
     if (loading) return;
     // Persist only the global learned ICR — slot-level values stay
     // display-only for now (they live in `windows[]` on the result).
-    const a = computeAdaptiveICR(engineMeals, engineBoluses, icrSchedule);
+    const a = computeAdaptiveICR(
+      engineMeals,
+      ADAPTIVE_ICR_PAIRING_V2 ? engineBoluses : undefined,
+      icrSchedule,
+    );
     persistEngineIcr(a.global, a.sampleSize);
+    if (ADAPTIVE_ICR_PAIRING_V2) {
+      logICRPairingStats(a).catch(() => {});
+    }
   }, [loading, engineMeals, engineBoluses, icrSchedule]);
   useEffect(() => {
     fetchUserProfile().then((p) => setSex(p.sex)).catch(() => {});
@@ -474,7 +489,7 @@ export default function InsightsPage() {
     async () => {
       const [em, ilEngine, ex, ml, sl, act, pbc] = await Promise.all([
         fetchMealsForEngine().catch(() => [] as Meal[]),
-        fetchRecentInsulinLogs(90).catch(() => [] as InsulinLog[]),
+        fetchRecentInsulinLogs(90 + ICR_BOLUS_FETCH_BUFFER_DAYS).catch(() => [] as InsulinLog[]),
         fetchRecentExerciseLogs(insightsFetchDays).catch(() => [] as ExerciseLog[]),
         fetchRecentMenstrualLogs(insightsFetchDays).catch(() => [] as MenstrualLog[]),
         fetchRecentSymptomLogs(insightsFetchDays).catch(() => [] as SymptomLog[]),
@@ -1260,7 +1275,11 @@ export default function InsightsPage() {
   // (`engineMeals`) so the morning/afternoon/evening ICR buckets and the
   // pattern detector's recent-window stats aren't dragged off course by
   // year-old rows. Long-term tiles below continue to read from `meals`.
-  const adaptiveICR  = computeAdaptiveICR(engineMeals, engineBoluses, icrSchedule);
+  const adaptiveICR  = computeAdaptiveICR(
+    engineMeals,
+    ADAPTIVE_ICR_PAIRING_V2 ? engineBoluses : undefined,
+    icrSchedule,
+  );
   const enginePattern = detectPattern(engineMeals);
   const settings: AdaptiveSettings = {
     icr: adaptiveICR.global ? Math.round(adaptiveICR.global * 10) / 10 : 15,

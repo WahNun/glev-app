@@ -15,7 +15,10 @@ import { fetchRecentExerciseLogs, type ExerciseLog } from "@/lib/exercise";
 import { fetchRecentActivityClient, summariseActivityContext, type ActivityContext } from "@/lib/dailyActivity";
 import { HIGH_ACTIVITY_RATIO, HIGH_ACTIVITY_MIN_ABS, HIGH_ACTIVITY_MIN_SAMPLE } from "@/lib/engine/evaluation";
 import { computeAdaptiveICR } from "@/lib/engine/adaptiveICR";
+import { ADAPTIVE_ICR_PAIRING_V2 } from "@/lib/engine/adaptiveFlags";
+import { logICRPairingStats } from "@/app/actions/logICRPairingStats";
 import { shouldShowBothChips } from "@/lib/engine/doseChipGating";
+
 import { getEffectiveICR } from "@/lib/icrSchedule";
 import { detectPattern } from "@/lib/engine/patterns";
 import { suggestAdjustment, type AdaptiveSettings } from "@/lib/engine/adjustment";
@@ -48,6 +51,11 @@ import SaveButton from "@/components/log/SaveButton";
 import ReviewMacrosCards from "@/components/ReviewMacrosCards";
 import { usePlan } from "@/hooks/usePlan";
 import UpgradeGate from "@/components/UpgradeGate";
+
+// Extra buffer added to the bolus-fetch window so pre- and post-boluses
+// at the edge of the 90-day meal window (up to ±30 min away from the
+// oldest/newest meal) are not silently excluded by the pairing algorithm.
+const ICR_BOLUS_FETCH_BUFFER_DAYS = 30 / (24 * 60);
 
 // datetime-local needs "YYYY-MM-DDTHH:mm" in the *local* timezone (the input
 // strips the offset). Using toISOString() would silently shift the value to
@@ -1679,16 +1687,16 @@ export default function EnginePage() {
   }, [insulinType]);
 
   useEffect(() => {
-    // Fetch meals AND the recent bolus logs in parallel so the adaptive
-    // ICR computation can pair user-logged boluses to meals (see
-    // lib/engine/pairing.ts). Users who log boluses separately from
-    // meals (or split a single meal across multiple shots) get their
-    // real dosing folded into the ICR average — without pairing they
-    // were invisible to the engine. Falls back to meal.insulin_units
-    // when fetching boluses fails so the engine still runs.
+    // Fetch meals and — when ADAPTIVE_ICR_PAIRING_V2 is active — the
+    // 90-day bolus logs in parallel so `computeAdaptiveICR` can pair
+    // separately-logged boluses to meals (lib/engine/pairing.ts).
+    // When the flag is off, skip the extra network request and preserve
+    // the legacy `meal.insulin_units`-only path with no regression.
     Promise.all([
       fetchMealsForEngine(),
-      fetchRecentInsulinLogs(90).catch(() => [] as InsulinLog[]),
+      ADAPTIVE_ICR_PAIRING_V2
+        ? fetchRecentInsulinLogs(90 + ICR_BOLUS_FETCH_BUFFER_DAYS).catch(() => [] as InsulinLog[])
+        : Promise.resolve(undefined as InsulinLog[] | undefined),
     ])
       .then(([fetched, bolusesForPairing]) => {
         setMeals(fetched);
@@ -1718,6 +1726,9 @@ export default function EnginePage() {
         // entry to `adjustment_history` when the user opted into
         // auto-apply AND sample size ≥10.
         persistEngineIcr(adaptive.global, adaptive.sampleSize).catch(() => {});
+        if (ADAPTIVE_ICR_PAIRING_V2) {
+          logICRPairingStats(adaptive).catch(() => {});
+        }
         if (adaptive.global !== null && adaptive.sampleSize >= 3) {
           // Round to 1 decimal — matches Insights display precision and
           // keeps `runGlevEngine`'s `carbs / icr` math stable.

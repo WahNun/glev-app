@@ -171,6 +171,10 @@ export function computeAdaptiveICR(
   let pairedCount = 0;
   let pairedExplicitCount = 0;
   let pairedTimeWindowCount = 0;
+  // Counts final+carbs>0 meals with neither a paired bolus nor their
+  // own insulin_units. Only meaningful when `boluses` is provided (V2
+  // pairing mode) — used in the debug log below.
+  let unpairedExcluded = 0;
   for (const m of meals) {
     const lc = lifecycleFor(m);
     if (lc.state !== "final") continue;
@@ -192,7 +196,14 @@ export function computeAdaptiveICR(
       // insulin_units is > 0.
       insulin = m.insulin_units ?? 0;
     }
-    if (insulin <= 0) continue;
+    if (insulin <= 0) {
+      // When V2 pairing is active (boluses arg provided), track meals
+      // excluded because they have neither a paired bolus nor their own
+      // insulin_units — these must not inflate the sample count or skew
+      // confidence thresholds.
+      if (boluses !== undefined) unpairedExcluded++;
+      continue;
+    }
 
     const w = OUTCOME_WEIGHT[lc.outcome ?? "GOOD"] ?? 0.5;
     if (w <= 0) continue;
@@ -230,6 +241,19 @@ export function computeAdaptiveICR(
         };
       })
     : [];
+
+  // Debug log — emitted whenever V2 pairing is active (i.e. the caller
+  // passed a `boluses` array). Surfaces pairing statistics so engineers
+  // can verify the feature flag's effect without touching the UI:
+  //   paired     — meals that contributed a bolus-log-derived insulin value
+  //   boluses    — total bolus entries in the supplied window
+  //   excluded   — final+carbs>0 meals skipped for lacking any insulin
+  if (boluses !== undefined) {
+    // eslint-disable-next-line no-console
+    console.log(
+      `[adaptiveICR] paired ${pairedCount} meals, ${boluses.length} boluses, ${unpairedExcluded} unpaired (excluded)`,
+    );
+  }
 
   return {
     global:    weightedAverage(buckets.all),
