@@ -164,12 +164,24 @@ function ConfirmInner() {
   const sessionReady = params.get("session") === "ready";
   const hasParams   = Boolean(code || tokenHash || sessionReady);
 
+  // Implicit/hash recovery flow: Supabase redirects to
+  // /auth/confirm#access_token=…&type=recovery (or #error_code=otp_expired on a
+  // used/expired link). detectSessionInUrl is DISABLED on this page (lib/supabase.ts),
+  // so the SDK does NOT auto-process the hash here and PASSWORD_RECOVERY never fires.
+  // We detect + process the hash manually in the effect below. Start in "verifying"
+  // when a recovery hash is present so the user never sees a false "invalid" flash.
+  const hasRecoveryHash =
+    typeof window !== "undefined" &&
+    /(?:^|#|&)(access_token|error_code|error)=/.test(window.location.hash);
+
   const [state, setState] = useState<State>(
     sessionReady
       ? { kind: "ready" }
       : hasParams
         ? { kind: "needs_confirm" }
-        : { kind: "invalid", reason: "Kein gültiger Bestätigungs-Link — bitte fordere einen neuen Link an." },
+        : hasRecoveryHash
+          ? { kind: "verifying" }
+          : { kind: "invalid", reason: "Kein gültiger Bestätigungs-Link — bitte fordere einen neuen Link an." },
   );
   const [password, setPassword] = useState("");
   const [confirm, setConfirm]   = useState("");
@@ -181,19 +193,63 @@ function ConfirmInner() {
       return;
     }
 
-    // Implicit-Flow-Fallback: Supabase sends #access_token=…&type=recovery as a
-    // hash fragment. useSearchParams() can't read it (browsers strip hashes before
-    // HTTP requests). The SDK processes the hash automatically and fires
-    // PASSWORD_RECOVERY. We listen here so the password form appears even when
-    // there are no query params (hasParams = false).
+    // Implicit/hash recovery flow. Supabase redirects to
+    // /auth/confirm#access_token=…&refresh_token=…&type=recovery (or
+    // #error=…&error_code=otp_expired on an expired/used link).
+    //
+    // IMPORTANT: detectSessionInUrl is DISABLED on /auth/confirm (lib/supabase.ts)
+    // so the SDK does NOT consume the hash here and PASSWORD_RECOVERY never fires
+    // on its own — an onAuthStateChange listener alone is a no-op on this page.
+    // We therefore process the hash MANUALLY: parse the tokens and call
+    // setSession() ourselves, then show the password form. (For the ?code /
+    // ?token_hash flows hasParams is true and we keep the button-gated flow that
+    // protects the OTP from mail-scanners.)
     if (!hasParams) {
-      const { data: { subscription } } = supabase.auth.onAuthStateChange(
-        (event) => {
-          if (event === "PASSWORD_RECOVERY") {
-            setState({ kind: "ready" });
-          }
-        },
-      );
+      const raw = typeof window !== "undefined" ? window.location.hash.replace(/^#/, "") : "";
+      const hp = new URLSearchParams(raw);
+      const accessToken  = hp.get("access_token");
+      const refreshToken = hp.get("refresh_token");
+      const errCode      = hp.get("error_code") || hp.get("error");
+
+      // Belt-and-suspenders: if a session ever arrives via the SDK/setSession,
+      // surface the form too.
+      const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
+        if (event === "PASSWORD_RECOVERY" || event === "SIGNED_IN") {
+          setState((s) => (s.kind === "ready" ? s : { kind: "ready" }));
+        }
+      });
+
+      if (errCode) {
+        setState({
+          kind: "invalid",
+          reason:
+            "Dieser Reset-Link ist abgelaufen oder wurde bereits verwendet. Bitte fordere einen neuen an.",
+          linkUsed: true,
+        });
+      } else if (accessToken && refreshToken) {
+        setState({ kind: "verifying" });
+        supabase.auth
+          .setSession({ access_token: accessToken, refresh_token: refreshToken })
+          .then(({ error: se }) => {
+            if (se) {
+              setState({ kind: "invalid", reason: se.message });
+            } else {
+              setState({ kind: "ready" });
+              // Strip the token hash from the address bar.
+              if (typeof window !== "undefined") {
+                window.history.replaceState(
+                  null,
+                  "",
+                  window.location.pathname + window.location.search,
+                );
+              }
+            }
+          })
+          .catch((e) =>
+            setState({ kind: "invalid", reason: e instanceof Error ? e.message : String(e) }),
+          );
+      }
+
       return () => subscription.unsubscribe();
     }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
