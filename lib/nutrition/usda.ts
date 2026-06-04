@@ -15,10 +15,10 @@ import { cacheGet, cacheSet } from "./cache";
 
 // 2.5s hard ceiling. USDA p95 is ~600ms when not rate-limited;
 // DEMO_KEY 429s come back immediately. Lowered from 3s alongside OFF
-// in 2026-05-04 voice-latency fix: with parallel DB lookups (see
-// aggregate.ts resolveItem) the slower of OFF/USDA bounds the
-// per-item wall time, so this ceiling directly caps it.
-const USDA_TIMEOUT_MS = 2500;
+// 1.5s hard ceiling (Phase 3 tightening — was 2.5s). USDA p95 is ~600ms
+// when not rate-limited; ceiling cut matches OFF so the two parallel DB
+// calls bound out at the same wall time. See openFoodFacts.ts comment.
+const USDA_TIMEOUT_MS = 1500;
 const USDA_BASE = "https://api.nal.usda.gov/fdc/v1/foods/search";
 
 interface UsdaSearchResponse {

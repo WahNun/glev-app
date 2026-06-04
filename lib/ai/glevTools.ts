@@ -44,7 +44,7 @@ import {
   type MealLike,
 } from "@/lib/iob";
 import { aggregateNutrition } from "@/lib/nutrition/aggregate";
-import { lookupUserFoodHistory } from "@/lib/nutrition/userFoodHistory";
+import { getCachedUserHistory } from "@/lib/nutrition/userHistoryCache";
 import type { ParsedFoodItem } from "@/lib/nutrition/types";
 
 // ── Tool definitions (Mistral function-calling schema) ───────────────
@@ -164,7 +164,7 @@ export const GLEV_TOOLS = [
     function: {
       name: "log_meal_entry",
       description:
-        "Öffnet den Mahlzeit-Eingabe-Screen und füllt die Makros vor. WICHTIG: speichert NICHT direkt — der Nutzer sieht die vorausgefüllten Werte im Engine-Screen und bestätigt per Klick oder Sprachbefehl ('Speichern'). Aufrufen, wenn der Nutzer eine Mahlzeit beschreibt oder loggen möchte (z. B. 'Ich esse ein Croissant', 'Trag 60g Pasta ein'). Bei unklaren Werten schätze die Makros nach bestem Wissen — der Nutzer kann sie anschließend korrigieren. Niemals aufrufen bei reinen Fragen oder wenn der Nutzer gerade schon auf dem Engine-Screen ist und nur einzelne Werte korrigiert (dann set_macro nutzen).",
+        "Öffnet den Mahlzeit-Eingabe-Screen und füllt die Makros vor. WICHTIG: speichert NICHT direkt — der Nutzer bestätigt per UI-Button. Aufrufen, wenn der Nutzer eine Mahlzeit beschreibt oder loggen möchte. Bei unklaren Werten schätze die Makros nach bestem Wissen. Niemals aufrufen bei reinen Fragen oder beim set_macro-Einsatz. PFLICHT: items[] muss immer geliefert werden — eine Zeile pro Zutat/Komponente (NIE die gesamte Mahlzeit als ein Block). Beispiel: 'Hähnchen mit Reis' → [{name:'Hähnchenbrust',grams:180},{name:'Basmatireis',grams:150}].",
       parameters: {
         type: "object",
         properties: {
@@ -198,18 +198,18 @@ export const GLEV_TOOLS = [
           items: {
             type: "array",
             description:
-              "Optional (Phase 2): strukturierte Auflistung der einzelnen Lebensmittel/Zutaten. Wenn du die Mahlzeit in sinnvolle Komponenten aufteilen kannst (z. B. 'Hähnchen', 'Reis', 'Brokkoli'), gib sie hier mit Name und Gramm an. Für selbst berechnete Gesamtmakros weglassen.",
+              "PFLICHT: Eine Zeile pro Zutat/Komponente. NIE die gesamte Mahlzeit als ein Item. Beispiele: 'Hähnchen mit Reis und Salat' → [{name:'Hähnchenbrust',grams:180},{name:'Basmatireis',grams:150},{name:'Salat',grams:80}]. 'Croissant' → [{name:'Croissant',grams:70}]. Gramm = Schätzung typischer Portionsgröße.",
             items: {
               type: "object",
               properties: {
-                name:  { type: "string",  description: "Name der Zutat/Komponente auf Deutsch oder Englisch." },
+                name:  { type: "string",  description: "Name der Zutat/Komponente (Deutsch oder Englisch)." },
                 grams: { type: "number",  description: "Menge in Gramm." },
               },
               required: ["name", "grams"],
             },
           },
         },
-        required: ["input_text", "carbs_grams"],
+        required: ["input_text", "carbs_grams", "items"],
       },
     },
   },
@@ -1470,15 +1470,18 @@ async function toolLogMealEntry(
     /* best-effort — no CGM should not block meal logging */
   }
 
-  // ── Phase 2: Smart Aggregator ─────────────────────────────────────
-  // When MACRO_AGGREGATOR_V2=true and Mistral provided an `items[]`
-  // array, run each item through the existing OFF/USDA/GPT cascade
-  // (aggregateNutrition) so every food component gets a real DB-backed
-  // source tag. Totals from the aggregator replace Mistral's estimates.
-  // Feature-flag off or no items[] → identical behaviour to Phase 1.
+  // ── Smart Aggregator + Two-Phase Optimistic Emit ──────────────────
+  // Flags:
+  //   MACRO_AGGREGATOR_V2     — resolve per-item sources via OFF/USDA/GPT.
+  //   OPTIMISTIC_REFINEMENT   — emit meal_prep IMMEDIATELY with Mistral
+  //     estimates, run aggregator detached, write result to
+  //     meal_prep_refinements. Client subscribes via Realtime / polling.
   const aggregatorEnabled =
     process.env.MACRO_AGGREGATOR_V2 === "true" ||
     process.env.NEXT_PUBLIC_MACRO_AGGREGATOR_V2 === "true";
+  const optimisticEnabled =
+    process.env.OPTIMISTIC_REFINEMENT === "true" ||
+    process.env.NEXT_PUBLIC_OPTIMISTIC_REFINEMENT === "true";
 
   const rawItems = Array.isArray(args.items)
     ? (args.items as Array<{ name?: unknown; grams?: unknown }>).filter(
@@ -1486,70 +1489,100 @@ async function toolLogMealEntry(
       )
     : [];
 
+  const timeLabel = formatInUserTimezone(loggedAtMs, userTimezone);
+  const macroBits = [`${carbs}g KH`];
+  if (protein != null) macroBits.push(`${protein}g P`);
+  if (fat != null) macroBits.push(`${fat}g F`);
+  if (fiber != null) macroBits.push(`${fiber}g Bal`);
+  const summary = `Mahlzeit: ${inputText} (${macroBits.join(", ")}) um ${timeLabel.dateTime}`;
+
+  // Generate a stable ID so the client can subscribe before the aggregator runs.
+  const mealPrepId = crypto.randomUUID();
+
+  // Helper: run aggregator, log metrics, write refinement row.
+  async function runAggregator(targetId: string): Promise<import("@/lib/meals").ParsedFood[] | undefined> {
+    if (!aggregatorEnabled || rawItems.length === 0) return undefined;
+    const t0 = Date.now();
+    try {
+      const parsedItems: ParsedFoodItem[] = rawItems.map((i) => ({
+        name:               String(i.name),
+        grams:              Number(i.grams),
+        is_branded:         false,
+        search_term_en:     String(i.name),
+        search_term_de:     String(i.name),
+        quantity_specified: true,
+      }));
+      const userHistory = await getCachedUserHistory(
+        sb, userId, parsedItems.map((p) => p.name),
+      ).catch(() => new Map());
+
+      const agg = await aggregateNutrition(parsedItems, { userHistory });
+      const resolved: import("@/lib/meals").ParsedFood[] = agg.items.map((it) => ({
+        name: it.name, grams: it.grams, carbs: it.carbs,
+        protein: it.protein, fat: it.fat, fiber: it.fiber, source: it.source,
+      }));
+
+      const dbHits  = agg.items.filter((i) => i.source !== "estimated" && i.source !== "unknown").length;
+      const estCnt  = agg.items.length - dbHits;
+      const elapsed = Date.now() - t0;
+      console.log(`[meal_prep] id=${targetId} aggregator: ${agg.items.length} items, ${dbHits} db-hits, ${estCnt} estimates, ${elapsed}ms`);
+
+      if (optimisticEnabled) {
+        // Fire-and-forget: write refinement row; Realtime notifies the client.
+        sb.from("meal_prep_refinements")
+          .upsert({ id: targetId, user_id: userId, items_refined: resolved, status: "completed", completed_at: new Date().toISOString() }, { onConflict: "id" })
+          .then(() => {})
+          .catch((e: unknown) => console.error("[meal_prep] refinement write failed:", e));
+      }
+      return resolved;
+    } catch (aggErr) {
+      console.error(`[meal_prep] id=${targetId} aggregator error (fallback to Mistral macros):`, aggErr);
+      if (optimisticEnabled) {
+        sb.from("meal_prep_refinements")
+          .upsert({ id: targetId, user_id: userId, status: "failed", completed_at: new Date().toISOString() }, { onConflict: "id" })
+          .then(() => {})
+          .catch(() => {});
+      }
+      return undefined;
+    }
+  }
+
+  let resolvedItems: import("@/lib/meals").ParsedFood[] | undefined;
   let resolvedCarbs   = carbs;
   let resolvedProtein = protein;
   let resolvedFat     = fat;
   let resolvedFiber   = fiber;
-  let resolvedItems: import("@/lib/meals").ParsedFood[] | undefined;
 
-  if (aggregatorEnabled && rawItems.length > 0) {
-    const t0 = Date.now();
-    try {
-      // Build ParsedFoodItem[] for the aggregator.
-      const parsedItems: ParsedFoodItem[] = rawItems.map((i) => ({
-        name:            String(i.name),
-        grams:           Number(i.grams),
-        is_branded:      false,
-        search_term_en:  String(i.name),
-        search_term_de:  String(i.name),
-        quantity_specified: true,
-      }));
-
-      // Load per-user history for personalised portion sizes.
-      const userHistory = await lookupUserFoodHistory(
-        sb,
-        userId,
-        parsedItems.map((p) => p.name),
-      ).catch(() => new Map());
-
-      const agg = await aggregateNutrition(parsedItems, { userHistory });
-
-      // Build ParsedFood[] with resolved sources.
-      resolvedItems = agg.items.map((it) => ({
-        name:    it.name,
-        grams:   it.grams,
-        carbs:   it.carbs,
-        protein: it.protein,
-        fat:     it.fat,
-        fiber:   it.fiber,
-        source:  it.source,
-      }));
-
-      // Prefer aggregator totals — they come from verified DB sources.
-      resolvedCarbs   = Math.round(agg.totals.carbs   * 10) / 10;
-      resolvedProtein = Math.round(agg.totals.protein  * 10) / 10;
-      resolvedFat     = Math.round(agg.totals.fat      * 10) / 10;
-      resolvedFiber   = Math.round(agg.totals.fiber    * 10) / 10;
-
-      const dbHits  = agg.items.filter((i) => i.source !== "estimated" && i.source !== "unknown").length;
-      const estCnt  = agg.items.length - dbHits;
-      console.log(
-        `[meal_prep] aggregator: ${agg.items.length} items, ${dbHits} db-hits, ${estCnt} estimates, ${Date.now() - t0}ms total`,
+  if (aggregatorEnabled && !optimisticEnabled) {
+    // Synchronous path (Phase 2): await aggregator before returning.
+    resolvedItems = await runAggregator(mealPrepId);
+    if (resolvedItems) {
+      const totals = resolvedItems.reduce(
+        (acc, it) => ({ carbs: acc.carbs + it.carbs, protein: acc.protein + it.protein, fat: acc.fat + it.fat, fiber: acc.fiber + it.fiber }),
+        { carbs: 0, protein: 0, fat: 0, fiber: 0 },
       );
-    } catch (aggErr) {
-      // Aggregator failure is non-fatal: fall back to Mistral-only macros
-      // with no items[] so Phase 1 chip rendering is unchanged.
-      console.error("[meal_prep] aggregator error (fallback to Mistral macros):", aggErr);
-      resolvedItems = undefined;
+      resolvedCarbs   = Math.round(totals.carbs   * 10) / 10;
+      resolvedProtein = Math.round(totals.protein  * 10) / 10;
+      resolvedFat     = Math.round(totals.fat      * 10) / 10;
+      resolvedFiber   = Math.round(totals.fiber    * 10) / 10;
     }
+  } else if (optimisticEnabled && aggregatorEnabled) {
+    // Optimistic path (Phase 3): return immediately, run aggregator detached.
+    // Pre-insert a 'pending' row so the client can subscribe before results arrive.
+    void sb.from("meal_prep_refinements")
+      .insert({ id: mealPrepId, user_id: userId, status: "pending" })
+      .then(() => {})
+      .catch(() => {});
+    // Detach — never await this.
+    void runAggregator(mealPrepId);
+    // Use Mistral estimates as-is; items get source='estimated' placeholder.
+    resolvedItems = rawItems.length > 0
+      ? rawItems.map((i) => ({
+          name: String(i.name), grams: Number(i.grams),
+          carbs: 0, protein: 0, fat: 0, fiber: 0, source: "estimated" as const,
+        }))
+      : undefined;
   }
-
-  const timeLabel = formatInUserTimezone(loggedAtMs, userTimezone);
-  const macroBits = [`${resolvedCarbs}g KH`];
-  if (resolvedProtein != null) macroBits.push(`${resolvedProtein}g P`);
-  if (resolvedFat     != null) macroBits.push(`${resolvedFat}g F`);
-  if (resolvedFiber   != null) macroBits.push(`${resolvedFiber}g Bal`);
-  const summary = `Mahlzeit: ${inputText} (${macroBits.join(", ")}) um ${timeLabel.dateTime}`;
 
   const params: import("@/lib/useGlevAI").MealPendingPayload = {
     input_text:     inputText,
@@ -1559,6 +1592,7 @@ async function toolLogMealEntry(
     fiber_grams:    resolvedFiber,
     logged_at:      loggedAtIso,
     glucose_before: glucoseBefore,
+    meal_prep_id:   mealPrepId,
     ...(resolvedItems ? { items: resolvedItems } : {}),
   };
 

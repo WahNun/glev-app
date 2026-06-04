@@ -11,12 +11,13 @@ import { cacheGet, cacheSet } from "./cache";
  * https://world.openfoodfacts.org/data
  */
 
-// 2.5s hard ceiling. OFF p95 is ~1.2s when healthy; the previous 3s
-// budget was set when OFF + USDA ran sequentially and an OFF timeout
-// blocked the USDA fallback. Now they run in parallel (see
-// aggregate.ts resolveItem), so a tighter ceiling here directly cuts
-// voice→form latency when both DBs miss and we fall through to GPT.
-const OFF_TIMEOUT_MS = 2500;
+// 1.5s hard ceiling (Phase 3 tightening — was 2.5s). OFF p95 is ~1.2s
+// when healthy; tighter ceiling in the chat-aggregator context means a
+// cold miss completes in ~1.5s max before falling through to GPT. When
+// the optimistic-refinement path is used (OPTIMISTIC_REFINEMENT=true)
+// the Mistral estimate shows immediately and this timeout only affects
+// the background refinement, so user sees no latency at all.
+const OFF_TIMEOUT_MS = 1500;
 const OFF_BASE = "https://world.openfoodfacts.org/cgi/search.pl";
 
 interface OffSearchResponse {

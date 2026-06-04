@@ -63,37 +63,32 @@ async function resolveItem(
     }
   }
 
-  // SPECULATIVE PARALLEL DB lookups — up to 2026-05-04 these ran
-  // sequentially (OFF then USDA, or USDA then OFF depending on
-  // is_branded). When both DBs MISS, that meant up to 6s of
-  // timeout-waiting per item before the GPT estimator even started —
-  // driving the voice→form round-trip to 12s+ for multi-item
-  // German-branded meals (the user-reported bug).
-  //
-  // Strategy: kick BOTH lookups off in parallel, then await the
-  // PRIMARY first. If primary hits, return immediately — the
-  // secondary is already in flight but its result is discarded
-  // (Node will still consume the response; that's fine). If primary
-  // misses, the secondary is usually already resolved (or close to
-  // it), so the await is near-instant. Worst case (both miss) is
-  // bounded by max(OFF, USDA) ≈ 2.5s instead of sequential
-  // OFF + USDA ≈ 5s — and the happy path stays at primary-only
-  // latency (~600ms USDA, ~1.2s OFF).
+  // Phase 3: Promise.any race — both lookups fire simultaneously and the
+  // first non-null hit wins. The slower one's in-flight request continues
+  // until its own timeout (1.5s), but we don't wait for it. Wall time =
+  // min(OFF, USDA) on a hit, max(OFF, USDA) on a full miss — capped at
+  // 1.5s per Phase 3 timeout tightening. Priority tiebreak: if both
+  // respond within the same tick, branded → prefer OFF; generic → prefer USDA.
   const offTerm  = item.search_term_de || item.name;
   const usdaTerm = item.search_term_en || item.name;
-  const offP  = lookupOpenFoodFacts(offTerm);
-  const usdaP = lookupUSDA(usdaTerm);
 
-  if (item.is_branded) {
-    const off = await offP;
-    if (off) return { per100: off, source: "open_food_facts" };
-    const usda = await usdaP;
-    if (usda) return { per100: usda, source: "usda" };
-  } else {
-    const usda = await usdaP;
-    if (usda) return { per100: usda, source: "usda" };
-    const off = await offP;
-    if (off) return { per100: off, source: "open_food_facts" };
+  // Wrap each lookup as a Promise that rejects when the result is null
+  // (Promise.any needs a rejection to fall through to the next).
+  const offHit  = lookupOpenFoodFacts(offTerm).then((r) => {
+    if (!r) throw new Error("off-miss");
+    return { per100: r, source: "open_food_facts" as const };
+  });
+  const usdaHit = lookupUSDA(usdaTerm).then((r) => {
+    if (!r) throw new Error("usda-miss");
+    return { per100: r, source: "usda" as const };
+  });
+
+  // Order the race so the preferred source wins when both resolve simultaneously.
+  const raceOrder = item.is_branded ? [offHit, usdaHit] : [usdaHit, offHit];
+  try {
+    return await Promise.any(raceOrder);
+  } catch {
+    // Both DBs missed — fall through to GPT / category-default below.
   }
 
   // Both DBs missed → GPT estimate. estimateItemNutrition THROWS on
