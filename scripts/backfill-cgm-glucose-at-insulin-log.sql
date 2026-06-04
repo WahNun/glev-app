@@ -43,7 +43,7 @@ from_cgm_samples AS (
     ABS(EXTRACT(EPOCH FROM s.timestamp) - c.log_epoch) AS dist_secs
   FROM candidates c
   JOIN cgm_samples s
-    ON  s.user_id  = c.user_id
+    ON  s.user_id  = c.user_id::uuid   -- insulin_logs.user_id is text; cgm_samples is uuid
     AND s.timestamp BETWEEN c.created_at - INTERVAL '10 minutes'
                         AND c.created_at + INTERVAL '10 minutes'
   ORDER BY c.log_id, dist_secs ASC
@@ -57,7 +57,7 @@ from_apple AS (
     ABS(EXTRACT(EPOCH FROM a.timestamp) - c.log_epoch) AS dist_secs
   FROM candidates c
   JOIN apple_health_readings a
-    ON  a.user_id  = c.user_id
+    ON  a.user_id  = c.user_id::uuid   -- insulin_logs.user_id is text; apple_health_readings is uuid
     AND a.timestamp BETWEEN c.created_at - INTERVAL '10 minutes'
                         AND c.created_at + INTERVAL '10 minutes'
   ORDER BY c.log_id, dist_secs ASC
