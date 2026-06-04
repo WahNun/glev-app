@@ -1423,3 +1423,52 @@ export async function sendMagicLinkAction(
   revalidateUserPaths(userId);
   return { ok: true };
 }
+
+// ---------------------------------------------------------------------------
+// Glev AI — Feature-Flag ein-/ausschalten (ai_voice in user_settings.feature_flags)
+// ---------------------------------------------------------------------------
+
+/**
+ * Setzt oder löscht das `ai_voice`-Flag in `user_settings.feature_flags`.
+ * enabled=true  → Flag auf true setzen (Glev AI freischalten)
+ * enabled=false → Flag entfernen  (Glev AI deaktivieren)
+ */
+export async function setAiVoiceFlagAction(
+  formData: FormData,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const adminToken = await requireAdminToken();
+  const userId  = String(formData.get("userId") ?? "").trim();
+  const enabled = formData.get("enabled") === "true";
+
+  if (!userId) return { ok: false, error: "userId fehlt" };
+
+  const sb = getSupabaseAdmin();
+
+  const { data: existing } = await sb
+    .from("user_settings")
+    .select("feature_flags")
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  const flags: Record<string, unknown> = { ...(existing?.feature_flags ?? {}) };
+  if (enabled) {
+    flags.ai_voice = true;
+  } else {
+    delete flags.ai_voice;
+  }
+
+  const { error } = await sb
+    .from("user_settings")
+    .upsert({ user_id: userId, feature_flags: flags }, { onConflict: "user_id" });
+
+  if (error) return { ok: false, error: error.message };
+
+  await writeAuditLog({
+    action: enabled ? "ai_voice_enable" : "ai_voice_disable",
+    targetUserId: userId,
+    adminToken,
+  });
+
+  revalidateUserPaths(userId);
+  return { ok: true };
+}

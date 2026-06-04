@@ -5,16 +5,6 @@ import { supabase } from "./supabase";
 
 export type FeatureFlag = "ai_voice" | "voice_intent_routing";
 
-/**
- * Email address that is allowed to use the ai_voice feature.
- *
- * Glev AI (Mistral chat, AI settings page, AI FAB) is under active
- * development and not yet ready for general users. Restricting it to
- * this email keeps the feature invisible to everyone else while Lucas
- * builds it out — exactly the same pattern as PlanSimulator's
- * NEXT_PUBLIC_ADMIN_EMAIL guard.
- */
-const AI_OWNER_EMAIL = "lucas@wahnon-connect.com";
 
 /**
  * Liest ein Feature-Flag für den eingeloggten User aus user_settings.feature_flags.
@@ -67,14 +57,9 @@ export function useFeatureFlag(flag: FeatureFlag): boolean | null {
       if (cancelled) return;
       if (!user) { setEnabled(false); return; }
 
-      // ai_voice is restricted to the owner email while in development.
-      // voice_intent_routing has no email guard — it's enabled per-user
-      // via the feature_flags JSONB column in user_settings.
-      if (flag === "ai_voice" && user.email !== AI_OWNER_EMAIL) {
-        setEnabled(false);
-        return;
-      }
-
+      // All flags (including ai_voice) are now controlled exclusively via
+      // user_settings.feature_flags — no hardcoded email guard.
+      // Admins enable ai_voice per-user from /glev-ops/users/[id].
       supabase!
         .from("user_settings")
         .select("feature_flags")

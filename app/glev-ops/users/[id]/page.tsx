@@ -40,7 +40,7 @@ export default async function AdminUserDetailPage({
   }
   const email = (authUser.email ?? "").toLowerCase();
 
-  const [profileRes, cgmRes, proRes, betaRes, mealCountRes, insulinCountRes] =
+  const [profileRes, cgmRes, proRes, betaRes, mealCountRes, insulinCountRes, settingsRes] =
     await Promise.all([
       sb.from("profiles").select("*").eq("user_id", id).maybeSingle(),
       sb.from("cgm_credentials").select("*").eq("user_id", id).maybeSingle(),
@@ -52,7 +52,11 @@ export default async function AdminUserDetailPage({
         : Promise.resolve({ data: null, error: null }),
       sb.from("meals").select("id", { count: "exact", head: true }).eq("user_id", id),
       sb.from("insulin_logs").select("id", { count: "exact", head: true }).eq("user_id", id),
+      sb.from("user_settings").select("feature_flags").eq("user_id", id).maybeSingle(),
     ]);
+
+  const featureFlags = (settingsRes.data?.feature_flags ?? {}) as Record<string, unknown>;
+  const aiVoiceEnabled = featureFlags.ai_voice === true;
 
   const profile = (profileRes.data ?? null) as Record<string, unknown> | null;
   const cgm = (cgmRes.data ?? null) as
@@ -285,6 +289,7 @@ export default async function AdminUserDetailPage({
             : null
         }
         smsOptedOut={!!(profile?.sms_opted_out)}
+        aiVoiceEnabled={aiVoiceEnabled}
       />
 
       {/* Audit */}

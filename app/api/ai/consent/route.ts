@@ -22,7 +22,6 @@ import { authedClient } from "@/app/api/insulin/_helpers";
  * optimistically flip its local consent state without a separate read.
  */
 const CONSENT_VERSION = "v1.0";
-const AI_OWNER_EMAIL = "lucas@wahnon-connect.com";
 
 type Scope = "glucose" | "iob" | "history";
 const SCOPE_COLUMN: Record<Scope, "ai_consent_glucose_at" | "ai_consent_iob_at" | "ai_consent_history_at"> = {
@@ -38,7 +37,14 @@ export async function POST(req: NextRequest) {
   }
   const { sb, user } = auth;
 
-  if (user.email !== AI_OWNER_EMAIL) {
+  // Gate: user must have ai_voice flag enabled by an admin.
+  const { data: settingsRow } = await sb
+    .from("user_settings")
+    .select("feature_flags")
+    .eq("user_id", user.id)
+    .maybeSingle();
+  const flags = (settingsRow?.feature_flags ?? {}) as Record<string, unknown>;
+  if (flags.ai_voice !== true) {
     return NextResponse.json({ error: "not available" }, { status: 403 });
   }
 

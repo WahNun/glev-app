@@ -16,6 +16,7 @@ import {
   setRoleAction,
   sendMagicLinkAction,
   sendPasswordResetAction,
+  setAiVoiceFlagAction,
 } from "../actions";
 
 function readAdminToken(): string {
@@ -54,6 +55,7 @@ export default function UserActions({
   hasActiveStripeSub,
   phone,
   smsOptedOut,
+  aiVoiceEnabled,
 }: {
   userId: string;
   email: string;
@@ -68,6 +70,7 @@ export default function UserActions({
   hasActiveStripeSub: boolean;
   phone: string | null;
   smsOptedOut: boolean;
+  aiVoiceEnabled: boolean;
 }) {
   const [confirmKind, setConfirmKind] = useState<"soft" | "hard" | "cancel_ban" | null>(null);
   const [confirmEmail, setConfirmEmail] = useState("");
@@ -87,6 +90,11 @@ export default function UserActions({
   // SMS Opt-Out-Relink
   const [relinkPending, setRelinkPending] = useState(false);
   const [relinkResult, setRelinkResult] = useState<{ ok: boolean; msg: string } | null>(null);
+
+  // Glev AI Feature-Flag
+  const [aiEnabled, setAiEnabled] = useState(aiVoiceEnabled);
+  const [aiPending, setAiPending] = useState(false);
+  const [aiResult, setAiResult] = useState<{ ok: boolean; msg: string } | null>(null);
 
   async function sendRelink() {
     if (relinkPending) return;
@@ -409,6 +417,73 @@ export default function UserActions({
         {pushResult && (
           <p style={{ margin: "10px 0 0", fontSize: 13, color: pushResult.ok ? "#15803d" : "#991b1b" }}>
             {pushResult.msg}
+          </p>
+        )}
+      </section>
+
+      {/* --- Glev AI freischalten --- */}
+      <section style={section}>
+        <h2 style={h2}>Glev AI</h2>
+        <p style={{ ...muted, margin: "0 0 14px" }}>
+          Schaltet den KI-Chat (Glev AI FAB, Meal-Chip-Flow, Voice-Intent) für diesen User frei.
+          Das Flag <code>ai_voice</code> wird in <code>user_settings.feature_flags</code> gesetzt.
+          Der User muss danach noch selbst den Consent im App einmalig bestätigen.
+        </p>
+        <div style={{ display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
+          <span
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 8,
+              padding: "6px 14px",
+              borderRadius: 999,
+              background: aiEnabled ? "#dcfce7" : "#f1f5f9",
+              border: `1px solid ${aiEnabled ? "#86efac" : "#cbd5e1"}`,
+              color: aiEnabled ? "#166534" : "#475569",
+              fontWeight: 700,
+              fontSize: 13,
+            }}
+          >
+            {aiEnabled ? "✅ Glev AI aktiv" : "⛔ Glev AI inaktiv"}
+          </span>
+          <button
+            type="button"
+            disabled={aiPending}
+            onClick={() => {
+              if (aiPending) return;
+              const next = !aiEnabled;
+              setAiPending(true);
+              setAiResult(null);
+              const fd = new FormData();
+              fd.set("userId", userId);
+              fd.set("enabled", String(next));
+              void setAiVoiceFlagAction(fd).then((res) => {
+                if (res.ok) {
+                  setAiEnabled(next);
+                  setAiResult({
+                    ok: true,
+                    msg: next ? `✅ Glev AI für ${email} freigeschaltet` : `✅ Glev AI für ${email} deaktiviert`,
+                  });
+                } else {
+                  setAiResult({ ok: false, msg: `❌ ${res.error}` });
+                }
+                setAiPending(false);
+              });
+            }}
+            style={{
+              ...btnSecondary,
+              opacity: aiPending ? 0.6 : 1,
+              cursor: aiPending ? "not-allowed" : "pointer",
+              borderColor: aiEnabled ? "#fca5a5" : "#86efac",
+              color: aiEnabled ? "#991b1b" : "#15803d",
+            }}
+          >
+            {aiPending ? "Speichert…" : aiEnabled ? "🔒 Glev AI deaktivieren" : "✨ Glev AI freischalten"}
+          </button>
+        </div>
+        {aiResult && (
+          <p style={{ margin: "10px 0 0", fontSize: 13, color: aiResult.ok ? "#15803d" : "#991b1b" }}>
+            {aiResult.msg}
           </p>
         )}
       </section>
