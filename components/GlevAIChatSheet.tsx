@@ -494,6 +494,20 @@ export default function GlevAIChatSheet({
     return () => window.clearTimeout(timer);
   }, [sttError]);
 
+  // E2E test bridge — exposes setSttError so Playwright tests can inject
+  // error state directly without requiring a real mic / live API failure.
+  // No-ops in production (just sets a window property nothing else reads).
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    (window as unknown as Record<string, unknown>)["__glevTestSetSttError"] =
+      setSttError;
+    return () => {
+      delete (window as unknown as Record<string, unknown>)[
+        "__glevTestSetSttError"
+      ];
+    };
+  }, [setSttError]);
+
   // Bewusst KEIN Auto-Focus beim Öffnen: das Software-Keyboard würde
   // sonst auf iOS/Android sofort die halbe Sheet-Höhe verschlucken und
   // den Disclaimer/Input-Footer überdecken. Tastatur kommt erst wenn
@@ -1141,6 +1155,7 @@ export default function GlevAIChatSheet({
         {/* STT error toast — shown briefly when transcription fails */}
         {sttError && (
           <div
+            data-testid="stt-error-banner"
             style={{
               flexShrink: 0,
               padding: "4px 16px 6px",
