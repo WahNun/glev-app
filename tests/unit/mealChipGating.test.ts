@@ -8,9 +8,10 @@
  *   2. A ✕ ghost button that discards/cancels the pending meal entry.
  *
  * When a turn produces multiple meal chips (e.g. "Pizza AND Ice Cream"),
- * only the *first* unresolved chip is interactive; subsequent ones are
- * dimmed (opacity 0.4, pointerEvents: none) and become active after the
- * first is resolved (confirmed or cancelled).
+ * only the *first* unresolved chip is interactive for navigation; subsequent
+ * ones are dimmed (opacity 0.4) and their "Engine öffnen →" button is
+ * disabled. The ✕ dismiss button on inactive chips remains tappable so users
+ * can selectively skip an unwanted queued meal (Task #1154).
  *
  * Why Playwright runner (no browser):
  *   The repo's only test runner is Playwright. `playwright.config.ts`
@@ -104,13 +105,14 @@ test("meal chip layout does NOT contain a 'Bestätigen' button", () => {
   expect(mealBlock).not.toContain("Bestätigen");
 });
 
-test("non-meal chip layout retains the 'Bestätigen' button", () => {
-  // Ensure we have not accidentally removed Bestätigen from non-meal chips.
+test("non-meal chip layout has 'Schnell speichern' quick-save button", () => {
+  // Task #1158 replaced the old "Bestätigen" confirm button on non-meal chips
+  // with [Schnell speichern] + [Detail →] buttons.
   const nonMealBlockStart = CHAT_SHEET_SRC.indexOf("// ── Non-meal chip layout");
   expect(nonMealBlockStart).toBeGreaterThan(-1);
 
   const nonMealBlock = CHAT_SHEET_SRC.slice(nonMealBlockStart);
-  expect(nonMealBlock).toContain("Bestätigen");
+  expect(nonMealBlock).toContain("Schnell speichern");
 });
 
 // ── Section 2: Source-contract — inactive chip dimming ───────────────────────
@@ -124,13 +126,53 @@ test("inactive meal chip is dimmed to opacity 0.4", () => {
   expect(mealBlock).toMatch(/opacity:\s*inactive\s*\?\s*0\.4\s*:/);
 });
 
-test("inactive meal chip has pointerEvents: 'none'", () => {
+test("inactive meal chip container does NOT block pointer-events at the wrapper level", () => {
+  // Task #1154: The ✕ dismiss button must be tappable on inactive chips.
+  // pointerEvents: "none" was moved OFF the container — the "Engine öffnen →"
+  // button is gated by its native `disabled` prop instead.
   const mealBlockStart = CHAT_SHEET_SRC.indexOf("// ── Meal chip layout");
   const mealBlockEnd = CHAT_SHEET_SRC.indexOf("// ── Non-meal chip layout");
   const mealBlock = CHAT_SHEET_SRC.slice(mealBlockStart, mealBlockEnd);
 
-  // The style must toggle pointerEvents between "none" (inactive) and "auto".
-  expect(mealBlock).toMatch(/pointerEvents:\s*inactive\s*\?\s*["']none["']/);
+  // The container's style object must NOT contain pointerEvents conditional.
+  // We look for it specifically on the wrapping div's style (before the first button).
+  const containerStyleStart = mealBlock.indexOf("...baseCard");
+  const firstButtonStart = mealBlock.indexOf("<button", containerStyleStart);
+  const containerStyle = mealBlock.slice(containerStyleStart, firstButtonStart);
+  expect(containerStyle).not.toMatch(/pointerEvents:\s*inactive/);
+});
+
+test("inactive meal chip 'Engine öffnen →' button is disabled when inactive", () => {
+  // The engine button must be disabled={busy || inactive} so it stays blocked
+  // while the ✕ button remains independently clickable.
+  const mealBlockStart = CHAT_SHEET_SRC.indexOf("// ── Meal chip layout");
+  const mealBlockEnd = CHAT_SHEET_SRC.indexOf("// ── Non-meal chip layout");
+  const mealBlock = CHAT_SHEET_SRC.slice(mealBlockStart, mealBlockEnd);
+
+  // Anchor on onClick={onOpenEngine} — that uniquely identifies the engine button
+  // and avoids hitting the same string in the comment above the block.
+  const engineBtnStart = mealBlock.indexOf("onClick={onOpenEngine}");
+  expect(engineBtnStart).toBeGreaterThan(-1);
+  // Look forward ~300 chars to find the disabled prop on the same button element.
+  const engineBtnContext = mealBlock.slice(engineBtnStart, engineBtnStart + 300);
+  expect(engineBtnContext).toMatch(/disabled=\{busy \|\| inactive\}/);
+});
+
+test("inactive meal chip ✕ dismiss button is NOT disabled when inactive (only when busy)", () => {
+  // Task #1154: the ✕ button must be enabled even on inactive chips so users
+  // can individually skip queued meals they don't want logged.
+  const mealBlockStart = CHAT_SHEET_SRC.indexOf("// ── Meal chip layout");
+  const mealBlockEnd = CHAT_SHEET_SRC.indexOf("// ── Non-meal chip layout");
+  const mealBlock = CHAT_SHEET_SRC.slice(mealBlockStart, mealBlockEnd);
+
+  // Find the dismiss button section (between aria-label and summary div).
+  const dismissStart = mealBlock.indexOf('aria-label="Mahlzeit verwerfen"');
+  const dismissEnd = mealBlock.indexOf("{/* Summary text", dismissStart);
+  const dismissButton = mealBlock.slice(dismissStart, dismissEnd);
+
+  // Must be disabled only when busy — NOT when inactive.
+  expect(dismissButton).toMatch(/disabled=\{busy\}/);
+  expect(dismissButton).not.toMatch(/disabled=\{busy \|\| inactive\}/);
 });
 
 // ── Section 3: Source-contract — ✕ cancel button ─────────────────────────────

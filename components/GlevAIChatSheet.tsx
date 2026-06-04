@@ -194,22 +194,24 @@ function PendingActionWidget({
         style={{
           ...baseCard,
           opacity: inactive ? 0.4 : 1,
-          pointerEvents: inactive ? "none" : "auto",
           position: "relative",
         }}
       >
-        {/* ✕ dismiss button — top right corner */}
+        {/* ✕ dismiss button — top right corner.
+            Inactive chips: still tappable (no pointerEvents block here), but
+            shown as a ghost button so the user knows it's a secondary action. */}
         <button
           type="button"
           aria-label="Mahlzeit verwerfen"
           onClick={onCancel}
-          disabled={busy || inactive}
+          disabled={busy}
           style={{
             position: "absolute",
             top: 8,
             right: 8,
-            background: "none",
-            border: "none",
+            background: inactive ? "var(--border-soft)" : "none",
+            border: inactive ? "1px solid var(--border)" : "none",
+            borderRadius: inactive ? 4 : 0,
             cursor: busy ? "default" : "pointer",
             padding: 4,
             color: "var(--text-muted)",
