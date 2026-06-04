@@ -31,6 +31,7 @@ import {
   convertQueueNoteToTask,
   listAttachments,
   listBuilds,
+  listCodeGenerations,
   addMessage,
 } from "./actions";
 import {
@@ -47,6 +48,9 @@ import {
   type BuildPlan,
   type BuildExecutionPlan,
   type DevBuild,
+  type CodeGenerationDraft,
+  type DevCodeGeneration,
+  type CodeBlock,
 } from "./types";
 
 // Parse a task's stored plan_text (JSON) into a BuildPlan, or null if none/invalid.
@@ -100,6 +104,45 @@ function parseBuildPlan(raw: unknown): BuildExecutionPlan | null {
     affected_areas: arr(p.affected_areas),
     risks: arr(p.risks),
     complexity: p.complexity === "low" || p.complexity === "high" ? p.complexity : "medium",
+    created_at: typeof p.created_at === "string" ? p.created_at : "",
+    updated_at: typeof p.updated_at === "string" ? p.updated_at : "",
+  };
+}
+
+// Parse a task's stored generated_code (jsonb) into a CodeGenerationDraft, or null.
+function parseCodeDraft(raw: unknown): CodeGenerationDraft | null {
+  if (!raw) return null;
+  let obj: unknown = raw;
+  if (typeof raw === "string") {
+    try {
+      obj = JSON.parse(raw);
+    } catch {
+      return null;
+    }
+  }
+  if (!obj || typeof obj !== "object") return null;
+  const p = obj as Partial<CodeGenerationDraft> & Record<string, unknown>;
+  const arr = (v: unknown) => (Array.isArray(v) ? (v as unknown[]).map(String) : []);
+  const blocks: CodeBlock[] = Array.isArray(p.generated_code_blocks)
+    ? (p.generated_code_blocks as unknown[]).map((b) => {
+        const o = (b && typeof b === "object" ? b : {}) as Record<string, unknown>;
+        return { file: typeof o.file === "string" ? o.file : "", code: typeof o.code === "string" ? o.code : "" };
+      })
+    : [];
+  return {
+    code_id: typeof p.code_id === "string" ? p.code_id : "",
+    version: typeof p.version === "number" ? p.version : 1,
+    status: (typeof p.status === "string" ? p.status : "code_ready") as TaskStatus,
+    summary: typeof p.summary === "string" ? p.summary : "",
+    files_to_create: arr(p.files_to_create),
+    files_to_modify: arr(p.files_to_modify),
+    implementation_steps: arr(p.implementation_steps),
+    generated_code_blocks: blocks,
+    risks: arr(p.risks),
+    estimated_change_size:
+      p.estimated_change_size === "small" || p.estimated_change_size === "large"
+        ? p.estimated_change_size
+        : "medium",
     created_at: typeof p.created_at === "string" ? p.created_at : "",
     updated_at: typeof p.updated_at === "string" ? p.updated_at : "",
   };
@@ -177,7 +220,8 @@ function StatusIndicator({ status, animated }: { status: TaskStatus; animated?: 
     animated ||
     status === "planning" ||
     status === "planning_build" ||
-    status === "building";
+    status === "building" ||
+    status === "generating_code";
 
   if (spinning) {
     return (
@@ -202,6 +246,8 @@ function StatusIndicator({ status, animated }: { status: TaskStatus; animated?: 
       return <GlevStatic color="#16a34a" title="Plan fertig — bereit für Start Build" label="waiting_for_start" />;
     case "build_ready":
       return <GlevStatic color="#16a34a" title="Build Plan fertig" label="build_ready" />;
+    case "code_ready":
+      return <GlevStatic color="#16a34a" title="Code-Draft fertig" label="code_ready" />;
     case "preview_ready":
       return <GlevStatic color="#16a34a" title="Build fertig — Apply Changes" label="preview_ready" />;
     case "applied":
@@ -215,6 +261,7 @@ function StatusIndicator({ status, animated }: { status: TaskStatus; animated?: 
       );
     case "rejected":
     case "build_failed":
+    case "code_failed":
       return (
         <span style={indicatorBox} title={STATUS_LABEL[status]} aria-label={status}>
           <svg {...ICON} viewBox="0 0 24 24" fill="none" stroke="#dc2626" strokeWidth={3} strokeLinecap="round">
@@ -474,6 +521,7 @@ export default function DevCockpit({ initialTasks }: { initialTasks: DevTask[] }
   const [queue, setQueue] = useState<DevQueueNote[]>([]);
   const [attachments, setAttachments] = useState<DevAttachment[]>([]);
   const [builds, setBuilds] = useState<DevBuild[]>([]);
+  const [codeDrafts, setCodeDrafts] = useState<DevCodeGeneration[]>([]);
 
   // ── Per-task / per-action pending state (NO global blocking) ───────────────
   // Each long/async action tracks ONLY the affected task(s), so the rest of the
@@ -485,6 +533,8 @@ export default function DevCockpit({ initialTasks }: { initialTasks: DevTask[] }
   const [analyzingIds, setAnalyzingIds] = useState<Set<string>>(() => new Set());
   // Phase 5 — tasks whose build plan is being generated (parallel allowed).
   const [buildingTaskIds, setBuildingTaskIds] = useState<Set<string>>(() => new Set());
+  // Phase 6 — tasks whose code draft is being generated (parallel allowed).
+  const [generatingCodeIds, setGeneratingCodeIds] = useState<Set<string>>(() => new Set());
   const [actionPendingByTaskId, setActionPendingByTaskId] = useState<
     Record<string, "cancel" | "archive" | "backlog">
   >({});
@@ -525,6 +575,7 @@ export default function DevCockpit({ initialTasks }: { initialTasks: DevTask[] }
   const selectedTask = tasks.find((t) => t.id === selectedId) ?? null;
   const plan = selectedTask ? parsePlan(selectedTask.plan_text) : null;
   const buildPlan = selectedTask ? parseBuildPlan(selectedTask.build_plan) : null;
+  const codeDraft = selectedTask ? parseCodeDraft(selectedTask.generated_code) : null;
 
   // ── Data loading ────────────────────────────────────────────────────────────
 
@@ -553,11 +604,12 @@ export default function DevCockpit({ initialTasks }: { initialTasks: DevTask[] }
 
   function loadTaskDetail(taskId: string) {
     run(async () => {
-      const [m, q, a, b] = await Promise.all([
+      const [m, q, a, b, c] = await Promise.all([
         listMessages(taskId),
         listQueueNotes(taskId),
         listAttachments(taskId),
         listBuilds(taskId),
+        listCodeGenerations(taskId),
       ]);
       // Discard stale responses: only apply if this task is still selected.
       // Without this, a slow load for an earlier task can land after a newer
@@ -567,6 +619,7 @@ export default function DevCockpit({ initialTasks }: { initialTasks: DevTask[] }
       if (q.ok) setQueue(q.data);
       if (a.ok) setAttachments(a.data);
       if (b.ok) setBuilds(b.data);
+      if (c.ok) setCodeDrafts(c.data);
     });
   }
 
@@ -581,6 +634,7 @@ export default function DevCockpit({ initialTasks }: { initialTasks: DevTask[] }
     setQueue([]);
     setAttachments([]);
     setBuilds([]);
+    setCodeDrafts([]);
     if (!selectedId) return;
     loadTaskDetail(selectedId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -751,6 +805,50 @@ export default function DevCockpit({ initialTasks }: { initialTasks: DevTask[] }
         setNotice("Build Plan erstellt — bereit.");
       } finally {
         setBuildingTaskIds((prev) => {
+          const next = new Set(prev);
+          next.delete(id);
+          return next;
+        });
+      }
+    });
+  }
+
+  // Phase 6 — Generate Code: sandboxed code draft from the build plan. Per-task,
+  // non-blocking, parallel. PROPOSALS ONLY — nothing is written.
+  function handleGenerateCode() {
+    if (!selectedTask) {
+      setError("Erst eine Task auswählen.");
+      return;
+    }
+    const id = selectedTask.id;
+    if (generatingCodeIds.has(id)) return;
+    setGeneratingCodeIds((prev) => new Set(prev).add(id));
+    // Optimistic: show generating_code immediately (spinning Glev icon).
+    setTasks((prev) => prev.map((t) => (t.id === id ? { ...t, status: "generating_code" } : t)));
+    setNotice("Generiere Code-Draft…");
+    run(async () => {
+      try {
+        const r = await fetch("/glev-ops/dev-cockpit/api/generate-code", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ taskId: id }),
+        });
+        const res = (await r.json().catch(() => ({ ok: false, error: "bad-response" }))) as
+          | { ok: true; task: DevTask; draft: CodeGenerationDraft }
+          | { ok: false; error: string };
+        if (!res.ok) {
+          setError(errText(res.error));
+          const t = await getTask(id);
+          if (t.ok) setTasks((prev) => prev.map((x) => (x.id === id ? t.data : x)));
+          if (activeTaskIdRef.current === id) loadTaskDetail(id);
+          return;
+        }
+        setTasks((prev) => prev.map((t) => (t.id === res.task.id ? res.task : t)));
+        if (activeTaskIdRef.current === id) loadTaskDetail(id);
+        refreshSummary();
+        setNotice("Code-Draft erstellt (nur Vorschlag).");
+      } finally {
+        setGeneratingCodeIds((prev) => {
           const next = new Set(prev);
           next.delete(id);
           return next;
@@ -1002,6 +1100,11 @@ export default function DevCockpit({ initialTasks }: { initialTasks: DevTask[] }
             {buildingTaskIds.size === 1 ? "Build-Plan läuft…" : `${buildingTaskIds.size} Build-Pläne laufen…`}
           </span>
         )}
+        {generatingCodeIds.size > 0 && (
+          <span style={{ fontSize: 12, color: "#3730a3" }}>
+            {generatingCodeIds.size === 1 ? "Code-Gen läuft…" : `${generatingCodeIds.size} Code-Gens laufen…`}
+          </span>
+        )}
       </div>
 
       {/* ── Toast / notice ── */}
@@ -1189,6 +1292,36 @@ export default function DevCockpit({ initialTasks }: { initialTasks: DevTask[] }
                   </div>
                 )}
 
+                {/* Code History (Phase 6) — separate from Build History, display only */}
+                {codeDrafts.length > 0 && (
+                  <div style={{ marginTop: 16 }}>
+                    <div style={planSectionTitle}>Code History</div>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                      {codeDrafts.map((c) => (
+                        <div
+                          key={c.id}
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 8,
+                            padding: "6px 10px",
+                            background: "#f9fafb",
+                            border: "1px solid #e5e7eb",
+                            borderRadius: 6,
+                            fontSize: 12,
+                          }}
+                        >
+                          <span style={{ fontWeight: 700, color: "#111" }}>Code Draft #{c.version}</span>
+                          {evalBadge(STATUS_STYLE[c.status] ?? {}, STATUS_LABEL[c.status] ?? c.status)}
+                          <span style={{ color: "#9ca3af", marginLeft: "auto" }}>
+                            {fmtDateTime(c.created_at)} · {shortId(c.id)}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
                 {/* Follow-up answer + Analyze / Re-Analyze (Phase 3) */}
                 <div style={{ marginTop: 14 }}>
                   <textarea
@@ -1236,6 +1369,24 @@ export default function DevCockpit({ initialTasks }: { initialTasks: DevTask[] }
                           ? "Re-Plan Build"
                           : "Start Build"}
                     </button>
+                    {/* Generate Code — Phase 6, only once a build plan exists. */}
+                    {(selectedTask.status === "build_ready" ||
+                      selectedTask.status === "generating_code" ||
+                      selectedTask.status === "code_ready" ||
+                      selectedTask.status === "code_failed") && (
+                      <button
+                        style={btnPrimaryStyle}
+                        onClick={handleGenerateCode}
+                        disabled={generatingCodeIds.has(selectedTask.id)}
+                        title="Coding Agent erzeugt einen Code-Draft (nur Vorschlag — nichts wird geschrieben)"
+                      >
+                        {generatingCodeIds.has(selectedTask.id)
+                          ? "Generiere…"
+                          : codeDraft
+                            ? "Re-Generate Code"
+                            : "Generate Code"}
+                      </button>
+                    )}
                   </div>
                 </div>
               </>
@@ -1377,6 +1528,82 @@ export default function DevCockpit({ initialTasks }: { initialTasks: DevTask[] }
                 items={buildPlan.affected_areas}
               />
               <PlanSection title="Risiken" items={buildPlan.risks} accent="#92400e" />
+            </section>
+          )}
+
+          {/* Code Draft card (Phase 6) — sandboxed proposal, never written */}
+          {selectedTask && codeDraft && (
+            <section style={cardStyle}>
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  margin: "0 0 10px",
+                  paddingBottom: 10,
+                  borderBottom: "1px solid #f3f4f6",
+                }}
+              >
+                <h2 style={{ ...cardTitleStyle, margin: 0, padding: 0, border: "none" }}>
+                  Code Draft <span style={{ color: "#9ca3af", fontWeight: 600 }}>#{codeDraft.version}</span>
+                </h2>
+                <span style={complexityPill(codeDraft.estimated_change_size === "small" ? "low" : codeDraft.estimated_change_size === "large" ? "high" : "medium")}>
+                  Change: {codeDraft.estimated_change_size}
+                </span>
+              </div>
+
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 12 }}>
+                {evalBadge({ background: "#f3f4f6", color: "#374151", border: "1px solid #e5e7eb" }, `Draft ID: ${shortId(codeDraft.code_id)}`)}
+                {evalBadge({ background: "#e0e7ff", color: "#3730a3", border: "1px solid #a5b4fc" }, `Version ${codeDraft.version}`)}
+                {evalBadge(STATUS_STYLE[codeDraft.status] ?? {}, STATUS_LABEL[codeDraft.status] ?? codeDraft.status)}
+                {evalBadge({ background: "#f9fafb", color: "#6b7280", border: "1px solid #e5e7eb" }, `Created: ${fmtDateTime(codeDraft.created_at)}`)}
+                {evalBadge({ background: "#f9fafb", color: "#6b7280", border: "1px solid #e5e7eb" }, `Updated: ${fmtDateTime(codeDraft.updated_at)}`)}
+              </div>
+
+              {codeDraft.summary && (
+                <p style={{ margin: "0 0 14px", fontSize: 14, lineHeight: 1.5, color: "#111", whiteSpace: "pre-wrap" }}>
+                  {codeDraft.summary}
+                </p>
+              )}
+
+              <PlanSection title="Files To Create" items={codeDraft.files_to_create} mono accent="#166534" />
+              <PlanSection title="Files To Modify" items={codeDraft.files_to_modify} mono accent="#9a3412" />
+
+              {codeDraft.implementation_steps.length > 0 && (
+                <div style={{ marginBottom: 14 }}>
+                  <div style={planSectionTitle}>Implementation Steps</div>
+                  <ol style={{ margin: 0, padding: "0 0 0 20px", display: "flex", flexDirection: "column", gap: 4 }}>
+                    {codeDraft.implementation_steps.map((s, i) => (
+                      <li key={i} style={{ fontSize: 13, lineHeight: 1.45, color: "#111" }}>{s}</li>
+                    ))}
+                  </ol>
+                </div>
+              )}
+
+              <PlanSection title="Risks" items={codeDraft.risks} accent="#92400e" />
+
+              {/* Generated code blocks (proposal only) */}
+              {codeDraft.generated_code_blocks.length > 0 && (
+                <div style={{ marginTop: 4 }}>
+                  <div style={planSectionTitle}>Generated Code (Vorschlag)</div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                    {codeDraft.generated_code_blocks.map((b, i) => (
+                      <details key={i} style={{ border: "1px solid #e5e7eb", borderRadius: 6, overflow: "hidden" }}>
+                        <summary style={{ cursor: "pointer", padding: "6px 10px", background: "#f9fafb", fontSize: 12, fontWeight: 600, fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace", color: "#111" }}>
+                          {b.file || `Block ${i + 1}`}
+                        </summary>
+                        <pre style={{ margin: 0, padding: "10px 12px", overflowX: "auto", fontSize: 12, lineHeight: 1.5, background: "#0f172a", color: "#e2e8f0", fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace" }}>
+                          <code>{b.code}</code>
+                        </pre>
+                      </details>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <p style={{ margin: "12px 0 0", fontSize: 11, color: "#9ca3af" }}>
+                🔒 Nur Vorschlag — keine Datei wurde geschrieben, kein Commit, kein Merge, kein Deploy.
+              </p>
             </section>
           )}
 

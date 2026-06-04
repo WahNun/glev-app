@@ -35,7 +35,15 @@ import {
 } from "./types";
 import { performAnalyze } from "@/lib/devCockpit/performAnalyze";
 import { performStartBuild } from "@/lib/devCockpit/performStartBuild";
-import { BUILD_COLUMNS, type BuildExecutionPlan, type DevBuild } from "./types";
+import { performGenerateCode } from "@/lib/devCockpit/performGenerateCode";
+import {
+  BUILD_COLUMNS,
+  CODEGEN_COLUMNS,
+  type BuildExecutionPlan,
+  type DevBuild,
+  type CodeGenerationDraft,
+  type DevCodeGeneration,
+} from "./types";
 
 // ── Result envelope ─────────────────────────────────────────────────────────
 
@@ -56,6 +64,7 @@ function fail(error: string): { ok: false; error: string } {
 const ALL_STATUSES: TaskStatus[] = [
   "draft", "planning", "waiting_for_start", "waiting_for_input",
   "planning_build", "build_ready", "building", "build_failed", "build_complete",
+  "generating_code", "code_ready", "code_failed",
   "preview_ready", "applied", "rejected", "cancelled", "archived", "backlog",
 ];
 
@@ -272,6 +281,38 @@ export async function listBuilds(taskId: string): Promise<Result<DevBuild[]>> {
 
   if (error) return fail(error.message);
   return { ok: true, data: (data ?? []) as DevBuild[] };
+}
+
+/**
+ * Generate Code (Phase 6) — produce a sandboxed code draft from the build plan.
+ * PROPOSALS ONLY: no files written, no commits/branches/PRs/deploys. Delegates
+ * to the shared orchestration; the UI calls the route handler
+ * (POST /glev-ops/dev-cockpit/api/generate-code) to stay off the action queue.
+ */
+export async function generateCode(
+  taskId: string,
+): Promise<Result<{ task: DevTask; draft: CodeGenerationDraft }>> {
+  const res = await performGenerateCode(taskId);
+  if (!res.ok) return fail(res.error);
+  return { ok: true, data: { task: res.task, draft: res.draft } };
+}
+
+/** List a task's code drafts newest-first (code history — display only). */
+export async function listCodeGenerations(
+  taskId: string,
+): Promise<Result<DevCodeGeneration[]>> {
+  if (!(await requireAdmin())) return fail("auth");
+  if (!taskId) return fail("missing-id");
+
+  const sb = getSupabaseAdmin();
+  const { data, error } = await sb
+    .from("dev_cockpit_code_generations")
+    .select(CODEGEN_COLUMNS)
+    .eq("task_id", taskId)
+    .order("version", { ascending: false });
+
+  if (error) return fail(error.message);
+  return { ok: true, data: (data ?? []) as DevCodeGeneration[] };
 }
 
 // ── Messages ─────────────────────────────────────────────────────────────────
