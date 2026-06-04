@@ -2,26 +2,29 @@
 
 ## Decisions
 
-### D-001 · Password-reset redirectTo must route through /auth/callback (2026-06-04)
+### D-001 · Password-reset redirectTo: two routes, two different URLs (2026-06-04)
 
-`admin.generateLink({ type: "recovery" })` produces a **hash-based** session token. When Supabase processes the link and redirects to the `redirectTo` URL, it appends the token as a URL *hash fragment* (`#access_token=…`). Hash fragments are client-side only — the Supabase JS SDK immediately consumes and strips them, leaving the user on `/#` instead of the password-reset form.
+This project uses **Supabase Implicit Flow** (no PKCE toggle is available in the Email provider settings). Supabase appends the session as a hash fragment when redirecting: `#access_token=…&type=recovery`. Hash fragments are browser-only — the server never sees them.
 
-**The required redirect URL for the admin panel (`app/glev-ops/users/actions.ts`):**
+**Admin-panel route (`app/glev-ops/users/actions.ts`):**
 ```
 ${appUrl}/auth/callback?next=/auth/confirm
 ```
+The admin flow uses `admin.generateLink()` in a context where Supabase can issue a PKCE code. `/auth/callback` is a server-side Route Handler that exchanges the code via `exchangeCodeForSession()` and redirects cleanly to `/auth/confirm?session=ready&type=recovery`.
 
-**Why the hop through `/auth/callback`:**
-Our server-side handler (`app/auth/callback/route.ts`) calls `supabase.auth.exchangeCodeForSession()`, which resolves the hash token server-side and sets a proper session cookie. It then redirects to `/auth/confirm?session=ready&type=recovery` — a clean URL the page can render from.
+**Self-service route (`app/api/auth/password-reset/route.ts`):**
+```
+${appUrl}/auth/confirm
+```
+The self-service flow uses Implicit Flow — Supabase appends `#access_token=…&type=recovery` to `/auth/confirm`. `/auth/confirm` is a **client component** with an `onAuthStateChange(PASSWORD_RECOVERY)` listener that handles this hash-based token. Routing through `/auth/callback` (a server route) would silently drop the hash fragment and break the flow.
 
-**Contrast with `resetPasswordForEmail()` (PKCE flow):**
-That method sends a PKCE code as a query-string parameter (`?code=…`), not a hash. Query params survive server-side routing, so `/auth/confirm` can handle them directly without the callback hop.
+**Why these must stay different:**
+- Admin → `/auth/callback` (server code exchange, no hash involved)
+- Self-service → `/auth/confirm` directly (client component handles `PASSWORD_RECOVERY` event)
 
-**History:** This URL was toggled four times (Tasks #1152 → #1171 → #1179 → #1187), breaking real users' reset emails each time. The self-service route (`app/api/auth/password-reset/route.ts`) currently uses `/auth/confirm` directly and should be watched — if it breaks, switch it to `/auth/callback?next=/auth/confirm` as well.
+**Nicht wieder öffnen:** Do not unify these two URLs without first confirming whether PKCE is active. The distinction is load-bearing.
 
-**Nicht wieder öffnen:** Do not simplify the admin-panel `redirectTo` back to `/auth/confirm` without first verifying that real users can complete the reset flow end-to-end in production. The `/auth/callback` hop is load-bearing.
-
-**See also:** `tests/unit/passwordResetRedirectTo.test.ts` — schema-contract tests that catch accidental URL reversions.
+**See also:** `tests/unit/passwordResetRedirectTo.test.ts` and `tests/unit/passwordResetRoute.test.ts`.
 
 ---
 
@@ -29,6 +32,7 @@ That method sends a PKCE code as a query-string parameter (`?code=…`), not a h
 
 | Date | Title | Task | Summary |
 | :--- | :--- | :--- | :--- |
+| 2026-06-04 | Hotfix: Password-Reset landet auf glev.app# statt Reset-Formular (Implicit Flow) | — | **Root cause:** Supabase uses Implicit Flow (no PKCE toggle in Email provider settings). It appends the session token as a hash fragment: `/auth/confirm#access_token=…&type=recovery`. `useSearchParams()` in `/auth/confirm` only reads query params — hash fragments are invisible to it → page rendered `state=invalid`. **Fix 1** (`app/auth/confirm/page.tsx`): Added `onAuthStateChange(PASSWORD_RECOVERY)` listener in the `!hasParams` branch. When Supabase SDK processes the hash, it fires `PASSWORD_RECOVERY`; the listener sets `state=ready` so the password form appears. **Fix 2** (`app/api/auth/password-reset/route.ts`): Reverted `redirectTo` back to `${appUrl}/auth/confirm` (a client component that can handle the hash). The previous fix routing through `/auth/callback` was wrong for Implicit Flow — `/auth/callback` is a server route that never receives hash fragments. **Tests updated:** `passwordResetRedirectTo.test.ts` and `passwordResetRoute.test.ts` both aligned to `${appUrl}/auth/confirm`. D-001 updated to document the two-URL distinction (admin → `/auth/callback`, self-service → `/auth/confirm`). |
 | 2026-06-04 | Hotfix: Self-service Password-Reset landet auf Startseite statt Reset-Formular | — | **`app/api/auth/password-reset/route.ts`**: `redirectTo` war `${appUrl}/auth/confirm` — genau wie bei Tasks #1152/#1171/#1179 (Admin-Flow). `admin.generateLink()` hängt den Token als URL-Hash an (`#access_token=…`), den das Supabase JS SDK client-seitig entfernt → User landet auf `/#` (Startseite). Fix: `${appUrl}/auth/callback?next=/auth/confirm`. `/auth/callback` tauscht den Code server-seitig und leitet sauber zu `/auth/confirm` weiter. Tests in `passwordResetRoute.test.ts` auf neue URL angepasst. |
 | 2026-06-04 | Hotfix: Vercel-Build-Fehler — PasswordResetDeps.enqueue-Typ zu loose | — | **`app/api/auth/password-reset/route.ts`**: `PasswordResetDeps.enqueue` war als `(args: { template: string; ... }) => Promise<void>` typisiert — zu unspezifisch für `enqueueEmail`, das generisch `<T extends EmailTemplate>` ist und `Promise<{ id: string; deduplicated: boolean }>` zurückgibt. Fix: `enqueue: typeof enqueueEmail`. **`tests/unit/passwordResetRoute.test.ts`**: Mock-Funktion gibt jetzt `{ id: "test-id", deduplicated: false }` zurück; `display_name: null` → `undefined` (war `string \| undefined`-Typ); `PasswordResetPayload`-Import für Payload-Cast in Assertion. Kein neuer D-XXX-Eintrag nötig. |
 | 2026-06-04 | Unit-Tests für POST /api/auth/password-reset (Task #1189) | 1189 | **Pure test addition — no production logic changed beyond a testability refactor.** `app/api/auth/password-reset/route.ts`: Core logic extracted into exported `handlePasswordResetPost(email, appUrl, { sb, enqueue })` helper (same pattern as `handleConfirmPost` / `handleInsulinPost`). `PasswordResetDeps` type exported for injection. `POST` route handler now delegates to `handlePasswordResetPost` with real deps. `tests/unit/passwordResetRoute.test.ts` (new, 11 tests): (1) Happy path — `generateLink` called with `type:"recovery"`, correct email, `redirectTo: ${appUrl}/auth/confirm`; `enqueueEmail` called with `template:"password-reset"`, correct recipient/payload/resetUrl/appUrl. (2) Enumeration prevention — route returns `{ ok: true }` even when `generateLink` fails or `action_link` is missing; enqueue not called. (3) Locale — `profiles.language="en"` → locale `"en"`; absent/null/unsupported → locale `"de"` (default). (4) Display name — `null` forwarded as `null`. (5) redirectTo invariant across staging/production URLs. (6) Resilience — `{ ok: true }` even when `enqueue` throws. All 11 tests green (35.7 s). Kein D-XXX-Eintrag nötig (kein neuer Cloud-Service, kein Schema-Change, kein Auth-/Compliance-Prinzip geändert — reine Testbarkeits-Refaktorierung + Test-Ergänzung). |

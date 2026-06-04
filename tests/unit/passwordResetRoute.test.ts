@@ -9,7 +9,7 @@
 //      generateLink fails (unknown email, Supabase error, missing action_link).
 //   3. Locale resolution — profiles.language "en" → enqueue receives locale "en";
 //      profiles.language absent or anything else → locale "de" (default).
-//   4. redirectTo invariant — generateLink always receives `${appUrl}/auth/callback?next=/auth/confirm`.
+//   4. redirectTo invariant — generateLink always receives `${appUrl}/auth/confirm`.
 //   5. Display name forwarding — name from profiles.display_name is passed to enqueue.
 //
 // Why Playwright runner (no browser):
@@ -128,7 +128,7 @@ test("happy path: generateLink called with correct type, email, and redirectTo",
   };
   expect(arg.type).toBe("recovery");
   expect(arg.email).toBe(TEST_EMAIL);
-  expect(arg.options.redirectTo).toBe(`${TEST_APP_URL}/auth/callback?next=/auth/confirm`);
+  expect(arg.options.redirectTo).toBe(`${TEST_APP_URL}/auth/confirm`);
 });
 
 test("happy path: enqueueEmail called with template 'password-reset' and correct payload", async () => {
@@ -238,7 +238,7 @@ test("display name: null display_name forwarded as null to enqueue", async () =>
   expect(enqueueCalls[0].payload.name).toBeNull();
 });
 
-test("redirectTo: always routes through /auth/callback?next=/auth/confirm for any appUrl", async () => {
+test("redirectTo: always ends with /auth/confirm for any appUrl", async () => {
   const urls = [
     "https://glev.app",
     "https://staging.glev.app",
@@ -253,7 +253,7 @@ test("redirectTo: always routes through /auth/callback?next=/auth/confirm for an
       options: { redirectTo: string };
     };
     expect(arg.options.redirectTo, `appUrl: ${appUrl}`).toBe(
-      `${appUrl}/auth/callback?next=/auth/confirm`,
+      `${appUrl}/auth/confirm`,
     );
   }
 });

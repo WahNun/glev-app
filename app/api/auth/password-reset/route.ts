@@ -51,15 +51,16 @@ export async function handlePasswordResetPost(
   { sb, enqueue }: PasswordResetDeps,
 ): Promise<NextResponse> {
   try {
-    // ⚠️ DO NOT CHANGE the redirectTo path — see DECISIONS.md § D-001.
-    // admin.generateLink() produces a hash-based token. Supabase appends it as
-    // #access_token=… which the JS SDK strips client-side, landing the user on
-    // /#. The /auth/callback hop exchanges the code server-side and then
-    // redirects cleanly to /auth/confirm. A bare /auth/confirm redirect breaks.
+    // ⚠️ DO NOT route through /auth/callback here — see DECISIONS.md § D-001.
+    // This project uses Supabase Implicit Flow (no PKCE toggle). Supabase appends
+    // the session as a hash fragment: /auth/confirm#access_token=…&type=recovery.
+    // Hash fragments are browser-only; a server-side route like /auth/callback
+    // never receives them and would drop the token. /auth/confirm is a client
+    // component whose onAuthStateChange(PASSWORD_RECOVERY) listener handles this.
     const { data: linkData, error: linkErr } = await sb.auth.admin.generateLink({
       type: "recovery",
       email,
-      options: { redirectTo: `${appUrl}/auth/callback?next=/auth/confirm` },
+      options: { redirectTo: `${appUrl}/auth/confirm` },
     });
 
     if (linkErr || !linkData?.properties?.action_link) {

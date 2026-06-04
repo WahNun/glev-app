@@ -178,8 +178,25 @@ function ConfirmInner() {
   useEffect(() => {
     if (!supabase) {
       setState({ kind: "invalid", reason: "Auth-Service nicht konfiguriert." });
+      return;
     }
-  }, []);
+
+    // Implicit-Flow-Fallback: Supabase sends #access_token=…&type=recovery as a
+    // hash fragment. useSearchParams() can't read it (browsers strip hashes before
+    // HTTP requests). The SDK processes the hash automatically and fires
+    // PASSWORD_RECOVERY. We listen here so the password form appears even when
+    // there are no query params (hasParams = false).
+    if (!hasParams) {
+      const { data: { subscription } } = supabase.auth.onAuthStateChange(
+        (event) => {
+          if (event === "PASSWORD_RECOVERY") {
+            setState({ kind: "ready" });
+          }
+        },
+      );
+      return () => subscription.unsubscribe();
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function handleConfirmClick() {
     if (!supabase) {
