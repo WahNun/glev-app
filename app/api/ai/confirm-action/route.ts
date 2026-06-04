@@ -3,6 +3,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { authedClient } from "@/app/api/insulin/_helpers";
 import type { ParsedFood } from "@/lib/meals";
 import { classifyMeal } from "@/lib/meals";
+import { getHistory } from "@/lib/cgm";
 
 /**
  * POST /api/ai/confirm-action
@@ -277,6 +278,36 @@ function resolveLoggedAt(raw: unknown): string {
   return new Date().toISOString();
 }
 
+/**
+ * Best-effort CGM snapshot for at-log-time glucose capture.
+ * Finds the CGM reading closest to `targetMs` within `windowMs` (default ±10 min).
+ * Returns null when no CGM is connected, no history is available, or the
+ * nearest reading is outside the window — callers must tolerate null gracefully.
+ */
+async function fetchBgNearTimestamp(
+  userId: string,
+  targetMs: number,
+  windowMs = 10 * 60_000,
+): Promise<number | null> {
+  try {
+    const hist = await getHistory(userId);
+    if (!hist?.history?.length) return null;
+    const candidates = hist.history
+      .filter((r) => r.timestamp != null && r.value != null)
+      .map((r) => ({
+        value: r.value as number,
+        dist: Math.abs(new Date(r.timestamp!).getTime() - targetMs),
+      }))
+      .filter((r) => r.dist <= windowMs);
+    if (candidates.length === 0) return null;
+    candidates.sort((a, b) => a.dist - b.dist);
+    return candidates[0].value;
+  } catch {
+    console.info("[confirm-action] no bg snapshot available (CGM not connected or history empty)");
+    return null;
+  }
+}
+
 async function execLogBolusEntry(
   sb: SupabaseClient,
   userId: string,
@@ -295,6 +326,8 @@ async function execLogBolusEntry(
     throw new Error("units muss zwischen 0 und 100 IE liegen");
   }
 
+  const bgAtLog = await fetchBgNearTimestamp(userId, new Date(createdAt).getTime());
+
   const row: Record<string, unknown> = {
     user_id: userId,
     insulin_type: "bolus",
@@ -302,6 +335,7 @@ async function execLogBolusEntry(
     units,
     notes,
     created_at: createdAt,
+    cgm_glucose_at_log: bgAtLog,
   };
 
   const { data, error } = await sb
@@ -331,6 +365,8 @@ async function execLogBasalEntry(
     throw new Error("units muss zwischen 0 und 100 IE liegen");
   }
 
+  const bgAtLog = await fetchBgNearTimestamp(userId, new Date(createdAt).getTime());
+
   const row: Record<string, unknown> = {
     user_id: userId,
     insulin_type: "basal",
@@ -338,6 +374,7 @@ async function execLogBasalEntry(
     units,
     notes,
     created_at: createdAt,
+    cgm_glucose_at_log: bgAtLog,
   };
 
   const { data, error } = await sb
