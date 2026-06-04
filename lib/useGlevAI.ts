@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { scheduleCheckReminder } from "@/lib/mealCheckReminders";
 import { getActionNavConfig } from "@/lib/ai/pendingActions";
+import type { ParsedFood } from "@/lib/meals";
 
 /**
  * useGlevAI — owns everything the Glev AI button + consent modal +
@@ -49,6 +50,25 @@ export type PendingAction = {
    *  button can pre-populate the matching log form without an extra
    *  server round-trip. Written to sessionStorage by navigateToLogScreen. */
   payload?: unknown;
+};
+
+/**
+ * Narrowed payload shape for `log_meal_entry` PendingActions.
+ * Phase 2 adds `items` — per-item breakdown with DB-resolved sources
+ * (open_food_facts / usda / user_history / user_confirmed / estimated).
+ * Optional for backward-compat: Phase 1 chips render a placeholder when absent.
+ */
+export type MealPendingPayload = {
+  input_text: string;
+  carbs_grams: number;
+  protein_grams: number | null;
+  fat_grams: number | null;
+  fiber_grams: number | null;
+  logged_at: string;
+  glucose_before: number | null;
+  /** Per-item nutrition breakdown with resolved sources. Present when
+   *  MACRO_AGGREGATOR_V2=true and aggregation succeeded. */
+  items?: ParsedFood[];
 };
 
 export type GlevChatMessage = {

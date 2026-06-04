@@ -11,10 +11,10 @@ export interface ParsedFood {
   fiber: number;
   // Optional macro provenance from the two-stage nutrition pipeline
   // (lib/nutrition/aggregate). Persisted into meals.parsed_json (jsonb)
-  // so historical entries can be audited later — was this meal scored
-  // against verified DB values or a GPT estimate? Older rows predate
-  // the pipeline and won't have this field, hence optional.
-  source?: "open_food_facts" | "usda" | "estimated" | "unknown";
+  // so historical entries can be audited later. Older rows predate the
+  // pipeline and won't have this field, hence optional.
+  // Expanded in Phase 2 to include user_history + user_confirmed.
+  source?: "open_food_facts" | "usda" | "estimated" | "unknown" | "user_history" | "user_confirmed";
 }
 
 export interface Meal {

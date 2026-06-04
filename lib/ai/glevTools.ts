@@ -43,6 +43,9 @@ import {
   type InsulinLike,
   type MealLike,
 } from "@/lib/iob";
+import { aggregateNutrition } from "@/lib/nutrition/aggregate";
+import { lookupUserFoodHistory } from "@/lib/nutrition/userFoodHistory";
+import type { ParsedFoodItem } from "@/lib/nutrition/types";
 
 // ── Tool definitions (Mistral function-calling schema) ───────────────
 export const GLEV_TOOLS = [
@@ -191,6 +194,19 @@ export const GLEV_TOOLS = [
             type: "string",
             description:
               "Optional: Zeitpunkt der Mahlzeit als ISO-8601-String (z. B. '2026-06-04T10:30:00'). Wenn der Nutzer eine Uhrzeit nennt oder die Mahlzeit in der Vergangenheit liegt, hier eintragen; sonst weglassen — das System verwendet dann den aktuellen Zeitpunkt.",
+          },
+          items: {
+            type: "array",
+            description:
+              "Optional (Phase 2): strukturierte Auflistung der einzelnen Lebensmittel/Zutaten. Wenn du die Mahlzeit in sinnvolle Komponenten aufteilen kannst (z. B. 'Hähnchen', 'Reis', 'Brokkoli'), gib sie hier mit Name und Gramm an. Für selbst berechnete Gesamtmakros weglassen.",
+            items: {
+              type: "object",
+              properties: {
+                name:  { type: "string",  description: "Name der Zutat/Komponente auf Deutsch oder Englisch." },
+                grams: { type: "number",  description: "Menge in Gramm." },
+              },
+              required: ["name", "grams"],
+            },
           },
         },
         required: ["input_text", "carbs_grams"],
@@ -1454,21 +1470,96 @@ async function toolLogMealEntry(
     /* best-effort — no CGM should not block meal logging */
   }
 
+  // ── Phase 2: Smart Aggregator ─────────────────────────────────────
+  // When MACRO_AGGREGATOR_V2=true and Mistral provided an `items[]`
+  // array, run each item through the existing OFF/USDA/GPT cascade
+  // (aggregateNutrition) so every food component gets a real DB-backed
+  // source tag. Totals from the aggregator replace Mistral's estimates.
+  // Feature-flag off or no items[] → identical behaviour to Phase 1.
+  const aggregatorEnabled =
+    process.env.MACRO_AGGREGATOR_V2 === "true" ||
+    process.env.NEXT_PUBLIC_MACRO_AGGREGATOR_V2 === "true";
+
+  const rawItems = Array.isArray(args.items)
+    ? (args.items as Array<{ name?: unknown; grams?: unknown }>).filter(
+        (i) => typeof i?.name === "string" && typeof i?.grams === "number" && i.grams > 0,
+      )
+    : [];
+
+  let resolvedCarbs   = carbs;
+  let resolvedProtein = protein;
+  let resolvedFat     = fat;
+  let resolvedFiber   = fiber;
+  let resolvedItems: import("@/lib/meals").ParsedFood[] | undefined;
+
+  if (aggregatorEnabled && rawItems.length > 0) {
+    const t0 = Date.now();
+    try {
+      // Build ParsedFoodItem[] for the aggregator.
+      const parsedItems: ParsedFoodItem[] = rawItems.map((i) => ({
+        name:            String(i.name),
+        grams:           Number(i.grams),
+        is_branded:      false,
+        search_term_en:  String(i.name),
+        search_term_de:  String(i.name),
+        quantity_specified: true,
+      }));
+
+      // Load per-user history for personalised portion sizes.
+      const userHistory = await lookupUserFoodHistory(
+        sb,
+        userId,
+        parsedItems.map((p) => p.name),
+      ).catch(() => new Map());
+
+      const agg = await aggregateNutrition(parsedItems, { userHistory });
+
+      // Build ParsedFood[] with resolved sources.
+      resolvedItems = agg.items.map((it) => ({
+        name:    it.name,
+        grams:   it.grams,
+        carbs:   it.carbs,
+        protein: it.protein,
+        fat:     it.fat,
+        fiber:   it.fiber,
+        source:  it.source,
+      }));
+
+      // Prefer aggregator totals — they come from verified DB sources.
+      resolvedCarbs   = Math.round(agg.totals.carbs   * 10) / 10;
+      resolvedProtein = Math.round(agg.totals.protein  * 10) / 10;
+      resolvedFat     = Math.round(agg.totals.fat      * 10) / 10;
+      resolvedFiber   = Math.round(agg.totals.fiber    * 10) / 10;
+
+      const dbHits  = agg.items.filter((i) => i.source !== "estimated" && i.source !== "unknown").length;
+      const estCnt  = agg.items.length - dbHits;
+      console.log(
+        `[meal_prep] aggregator: ${agg.items.length} items, ${dbHits} db-hits, ${estCnt} estimates, ${Date.now() - t0}ms total`,
+      );
+    } catch (aggErr) {
+      // Aggregator failure is non-fatal: fall back to Mistral-only macros
+      // with no items[] so Phase 1 chip rendering is unchanged.
+      console.error("[meal_prep] aggregator error (fallback to Mistral macros):", aggErr);
+      resolvedItems = undefined;
+    }
+  }
+
   const timeLabel = formatInUserTimezone(loggedAtMs, userTimezone);
-  const macroBits = [`${carbs}g KH`];
-  if (protein != null) macroBits.push(`${protein}g P`);
-  if (fat != null) macroBits.push(`${fat}g F`);
-  if (fiber != null) macroBits.push(`${fiber}g Bal`);
+  const macroBits = [`${resolvedCarbs}g KH`];
+  if (resolvedProtein != null) macroBits.push(`${resolvedProtein}g P`);
+  if (resolvedFat     != null) macroBits.push(`${resolvedFat}g F`);
+  if (resolvedFiber   != null) macroBits.push(`${resolvedFiber}g Bal`);
   const summary = `Mahlzeit: ${inputText} (${macroBits.join(", ")}) um ${timeLabel.dateTime}`;
 
-  const params = {
-    input_text: inputText,
-    carbs_grams: carbs,
-    protein_grams: protein,
-    fat_grams: fat,
-    fiber_grams: fiber,
-    logged_at: loggedAtIso,
+  const params: import("@/lib/useGlevAI").MealPendingPayload = {
+    input_text:     inputText,
+    carbs_grams:    resolvedCarbs,
+    protein_grams:  resolvedProtein,
+    fat_grams:      resolvedFat,
+    fiber_grams:    resolvedFiber,
+    logged_at:      loggedAtIso,
     glucose_before: glucoseBefore,
+    ...(resolvedItems ? { items: resolvedItems } : {}),
   };
 
   return await createPendingAction(sb, userId, "log_meal_entry", params, summary);
