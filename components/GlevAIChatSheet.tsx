@@ -8,6 +8,7 @@ import { useTTS } from "@/hooks/useTTS";
 import IntentConfirmChip, { intentLabel } from "@/components/IntentConfirmChip";
 import GlevLogo from "@/components/GlevLogo";
 import { getActionMeta } from "@/lib/ai/pendingActions";
+import SourceBadge from "@/components/SourceBadge";
 
 const ACCENT = "#8b5cf6";
 const SHEET_BG = "var(--surface)";
@@ -54,6 +55,9 @@ const COPY = {
     meal_fallback:         "Mahlzeit",
     open_engine_chip:      "Engine öffnen",
     n_of_total:            (n: number, total: number) => `${n} von ${total}`,
+    details_expand:        "Details ⌄",
+    details_collapse:      "Details ⌃",
+    ai_source_label:       "KI",
     mic_stop:              "Aufnahme stoppen",
     mic_start:             "Spracheingabe starten",
     placeholder_listening: "Spreche …",
@@ -99,6 +103,9 @@ const COPY = {
     meal_fallback:         "Meal",
     open_engine_chip:      "Open Engine",
     n_of_total:            (n: number, total: number) => `${n} of ${total}`,
+    details_expand:        "Details ⌄",
+    details_collapse:      "Details ⌃",
+    ai_source_label:       "AI",
     mic_stop:              "Stop recording",
     mic_start:             "Start voice input",
     placeholder_listening: "Listening …",
@@ -172,6 +179,229 @@ interface Props {
  *   • When `isMealChipActive` is false the entire widget is dimmed
  *     and non-interactive — the user must resolve earlier chips first.
  */
+
+// ── MealChipExpanded ──────────────────────────────────────────────────────
+// Extracted so it can own its own useState (expand toggle) without making
+// PendingActionWidget a client component or violating hooks rules.
+function MealChipExpanded({
+  baseCard,
+  inactive,
+  busy,
+  mealName,
+  macroStr,
+  timeStr,
+  itemsForExpand,
+  showQueueBadge,
+  mealChipIndex,
+  mealChipTotal,
+  t,
+  onCancel,
+  onOpenEngine,
+}: {
+  baseCard: React.CSSProperties;
+  inactive: boolean;
+  busy: boolean;
+  mealName: string;
+  macroStr: string | null;
+  timeStr: string | null;
+  itemsForExpand: Array<{ name: string; grams: number }>;
+  showQueueBadge: boolean;
+  mealChipIndex?: number;
+  mealChipTotal?: number;
+  t: typeof COPY["de"] | typeof COPY["en"];
+  onCancel: () => void;
+  onOpenEngine?: () => void;
+}) {
+  const [expanded, setExpanded] = useState(false);
+
+  return (
+    <div
+      style={{
+        ...baseCard,
+        opacity: inactive ? 0.4 : 1,
+        position: "relative",
+      }}
+    >
+      {/* ✕ dismiss — top-right corner */}
+      <button
+        type="button"
+        aria-label={t.discard_meal}
+        onClick={onCancel}
+        disabled={busy}
+        style={{
+          position: "absolute",
+          top: 8,
+          right: 8,
+          background: inactive ? "var(--border-soft)" : "none",
+          border: inactive ? "1px solid var(--border)" : "none",
+          borderRadius: inactive ? 4 : 0,
+          cursor: busy ? "default" : "pointer",
+          padding: 4,
+          color: "var(--text-muted)",
+          fontSize: 14,
+          lineHeight: 1,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          opacity: busy ? 0.5 : 1,
+        }}
+      >
+        ✕
+      </button>
+
+      {/* Header: meal name + source badge */}
+      <div
+        style={{
+          display: "flex",
+          alignItems: "flex-start",
+          gap: 6,
+          paddingRight: 24,
+        }}
+      >
+        <div
+          style={{
+            flex: 1,
+            color: "var(--text-strong)",
+            fontSize: 13,
+            fontWeight: 600,
+            lineHeight: 1.35,
+          }}
+        >
+          {mealName}
+        </div>
+        {/* Phase 1: all AI-estimated → always ✨ */}
+        <SourceBadge source="estimated" />
+      </div>
+
+      {/* Macros + time line */}
+      {(macroStr || timeStr) && (
+        <div style={{ color: "var(--text-body)", fontSize: 12, lineHeight: 1.4 }}>
+          {macroStr && <span>({macroStr})</span>}
+          {macroStr && timeStr && " "}
+          {timeStr && <span style={{ color: "var(--text-muted)" }}>um {timeStr}</span>}
+        </div>
+      )}
+
+      {/* Expand: per-item list (Phase 1 = all ✨ KI) */}
+      {expanded && (
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            gap: 4,
+            padding: "8px 10px",
+            background: "var(--surface-alt, rgba(255,255,255,0.03))",
+            borderRadius: 8,
+            border: "1px solid var(--border)",
+          }}
+        >
+          {itemsForExpand.length > 0 ? (
+            itemsForExpand.map((item, i) => (
+              <div
+                key={i}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 8,
+                  fontSize: 12,
+                  color: "var(--text-body)",
+                }}
+              >
+                <span style={{ flex: 1 }}>
+                  {item.name}
+                  <span style={{ color: "var(--text-muted)", marginLeft: 4 }}>
+                    {item.grams}g
+                  </span>
+                </span>
+                <SourceBadge source="estimated" />
+              </div>
+            ))
+          ) : (
+            // No per-item data yet (Phase 1) — show the macro summary instead
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                fontSize: 12,
+                color: "var(--text-body)",
+              }}
+            >
+              <span>{mealName}</span>
+              <SourceBadge source="estimated" />
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Queue badge */}
+      {showQueueBadge && (
+        <div
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 4,
+            alignSelf: "flex-start",
+            padding: "2px 7px",
+            borderRadius: 10,
+            background: "var(--border-soft)",
+            border: "1px solid var(--border)",
+            color: "var(--text-muted)",
+            fontSize: 11,
+            fontWeight: 500,
+          }}
+        >
+          {t.meal_n_of_m(mealChipIndex!, mealChipTotal!)}
+        </div>
+      )}
+
+      {/* Action row: [Details ⌄] [Engine öffnen →] */}
+      <div style={{ display: "flex", gap: 8 }}>
+        <button
+          type="button"
+          onClick={() => setExpanded((v) => !v)}
+          disabled={inactive}
+          style={{
+            flex: 1,
+            padding: "8px 10px",
+            borderRadius: 8,
+            border: "1px solid var(--border)",
+            background: "var(--border-soft)",
+            color: "var(--text-body)",
+            fontWeight: 500,
+            fontSize: 12,
+            cursor: inactive ? "default" : "pointer",
+          }}
+        >
+          {expanded ? t.details_collapse : t.details_expand}
+        </button>
+        <button
+          type="button"
+          onClick={onOpenEngine}
+          disabled={busy || inactive}
+          style={{
+            flex: 2,
+            padding: "8px 10px",
+            borderRadius: 8,
+            border: "none",
+            background: busy ? "rgba(139,92,246,0.35)" : ACCENT,
+            color: "var(--on-accent)",
+            fontWeight: 600,
+            fontSize: 13,
+            cursor: busy || inactive ? "default" : "pointer",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: 6,
+          }}
+        >
+          {busy ? t.opening : t.open_engine}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function PendingActionWidget({
   pa,
   onConfirm,
@@ -275,7 +505,7 @@ function PendingActionWidget({
   const busy = pa.state === "confirming";
 
   // ── Meal chip layout ─────────────────────────────────────────────
-  // ✕ icon top-right + full-width "Engine öffnen →" button.
+  // Header row (meal name + ✨ badge) · macros line · two buttons side-by-side.
   // When inactive (a later meal in the same turn), dims to 0.4 opacity
   // and shows a "Mahlzeit N von M" badge so the user knows it's queued.
   if (isMeal) {
@@ -285,93 +515,40 @@ function PendingActionWidget({
       mealChipIndex != null &&
       mealChipTotal != null &&
       mealChipTotal > 1;
+
+    // Parse meal name + macros out of pa.summary so we can render them
+    // separately. Format: "Mahlzeit: <name> (<macros>) um <time>"
+    // Fall back to showing the whole summary if it doesn't match.
+    const mealMatch = pa.summary.match(/^Mahlzeit:\s*(.+?)\s*\(([^)]+)\)\s*um\s*(.+)$/);
+    const mealName   = mealMatch ? mealMatch[1] : pa.summary;
+    const macroStr   = mealMatch ? mealMatch[2] : null;
+    const timeStr    = mealMatch ? mealMatch[3] : null;
+
+    // Phase 1: all items are AI-estimated. The payload carries individual
+    // items only after Phase 2 wires up per-item DB sources.
+    const p = pa.payload as {
+      input_text?: string;
+      items?: Array<{ name: string; grams: number }>;
+    } | undefined;
+    const itemsForExpand: Array<{ name: string; grams: number }> =
+      p?.items ?? [];
+
     return (
-      <div
-        style={{
-          ...baseCard,
-          opacity: inactive ? 0.4 : 1,
-          position: "relative",
-        }}
-      >
-        {/* ✕ dismiss button — top right corner.
-            Inactive chips: still tappable (no pointerEvents block here), but
-            shown as a ghost button so the user knows it's a secondary action. */}
-        <button
-          type="button"
-          aria-label={t.discard_meal}
-          onClick={onCancel}
-          disabled={busy}
-          style={{
-            position: "absolute",
-            top: 8,
-            right: 8,
-            background: inactive ? "var(--border-soft)" : "none",
-            border: inactive ? "1px solid var(--border)" : "none",
-            borderRadius: inactive ? 4 : 0,
-            cursor: busy ? "default" : "pointer",
-            padding: 4,
-            color: "var(--text-muted)",
-            fontSize: 14,
-            lineHeight: 1,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            opacity: busy ? 0.5 : 1,
-          }}
-        >
-          ✕
-        </button>
-
-        {/* Summary text — leave room for the ✕ button */}
-        <div style={{ color: "var(--text-body)", fontSize: 12, paddingRight: 24 }}>
-          {pa.summary}
-        </div>
-
-        {/* Queue position badge — only shown on inactive chips when multiple meals */}
-        {showQueueBadge && (
-          <div
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 4,
-              alignSelf: "flex-start",
-              padding: "2px 7px",
-              borderRadius: 10,
-              background: "var(--border-soft)",
-              border: "1px solid var(--border)",
-              color: "var(--text-muted)",
-              fontSize: 11,
-              fontWeight: 500,
-            }}
-          >
-            {t.meal_n_of_m(mealChipIndex!, mealChipTotal!)}
-          </div>
-        )}
-
-        {/* Full-width "Engine öffnen →" button */}
-        <button
-          type="button"
-          onClick={onOpenEngine}
-          disabled={busy || inactive}
-          style={{
-            width: "100%",
-            padding: "10px 12px",
-            borderRadius: 8,
-            border: "none",
-            background: busy ? "rgba(139,92,246,0.35)" : ACCENT,
-            color: "var(--on-accent)",
-            fontWeight: 600,
-            fontSize: 13,
-            cursor: busy ? "default" : "pointer",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            gap: 6,
-          }}
-        >
-          {busy ? t.opening : t.open_engine}
-        </button>
-      </div>
+      <MealChipExpanded
+        baseCard={baseCard}
+        inactive={inactive}
+        busy={busy}
+        mealName={mealName}
+        macroStr={macroStr}
+        timeStr={timeStr}
+        itemsForExpand={itemsForExpand}
+        showQueueBadge={showQueueBadge}
+        mealChipIndex={mealChipIndex}
+        mealChipTotal={mealChipTotal}
+        t={t}
+        onCancel={onCancel}
+        onOpenEngine={onOpenEngine}
+      />
     );
   }
 

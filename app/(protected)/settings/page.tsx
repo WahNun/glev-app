@@ -240,6 +240,19 @@ export default function SettingsPage() {
           </span>
           <span aria-hidden style={{ flexShrink: 0, color: "var(--text-faint)", fontSize: 18, lineHeight: 1 }}>›</span>
         </button>
+        <button
+          type="button"
+          onClick={() => router.push("/settings/data-sources")}
+          style={{ width: "100%", display: "flex", alignItems: "center", gap: 14, padding: "12px 14px", background: "transparent", border: "none", cursor: "pointer", textAlign: "left", color: "inherit", borderTop: "1px solid var(--border)" }}
+        >
+          <span aria-hidden style={{ width: 32, height: 32, borderRadius: 8, flexShrink: 0, background: `${ACCENT}18`, color: ACCENT, display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <svg {...ip}><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" /></svg>
+          </span>
+          <span style={{ flex: 1, fontSize: 14, fontWeight: 500, color: "var(--text-strong)", lineHeight: 1.25 }}>
+            {locale === "en" ? "Data sources & AI accuracy" : "Datenquellen & KI-Genauigkeit"}
+          </span>
+          <span aria-hidden style={{ flexShrink: 0, color: "var(--text-faint)", fontSize: 18, lineHeight: 1 }}>›</span>
+        </button>
       </NavSection>
 
       <div style={{ marginTop: 32, marginBottom: 8 }}>

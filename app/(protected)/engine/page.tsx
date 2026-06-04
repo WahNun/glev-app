@@ -9,6 +9,7 @@ import { getCurrentTrendArrow } from "@/lib/cgm/trendArrow";
 import { scheduleJobsForLog } from "@/lib/cgmJobs";
 import { TYPE_COLORS } from "@/lib/mealTypes";
 import { logDebug } from "@/lib/debug";
+import Link from "next/link";
 import { fetchRecentInsulinLogs, updateInsulinLogLink, type InsulinLog } from "@/lib/insulin";
 import { fetchRecentExerciseLogs, type ExerciseLog } from "@/lib/exercise";
 import { fetchRecentActivityClient, summariseActivityContext, type ActivityContext } from "@/lib/dailyActivity";
@@ -3758,6 +3759,29 @@ export default function EnginePage() {
                     <div style={{ padding: "12px 16px", background: "var(--surface-soft)", borderRadius: 12, border: `1px solid ${BORDER}` }}>
                       <div style={{ fontSize: 12, color: "var(--text-ghost)", lineHeight: 1.6 }}>
                         <strong style={{ color: "var(--text-dim)" }}>{tEngine("disclaimer_label")}</strong> {tEngine("disclaimer_body")}
+                      </div>
+                    </div>
+
+                    {/* Macros transparency footer */}
+                    <div style={{ padding: "10px 14px", borderRadius: 10, background: "transparent", border: "1px solid var(--border)" }}>
+                      <div style={{ fontSize: 11, color: "var(--text-ghost)", lineHeight: 1.65 }}>
+                        {locale === "en" ? (
+                          <>
+                            Nutritional values from Open Food Facts, USDA FoodData Central, and your previous logs. Items marked ✨ were estimated by AI.{" "}
+                            Glev is a documentation app and does not replace medical advice.{" "}
+                            <Link href="/settings/data-sources" style={{ color: "var(--text-muted)", textDecoration: "underline", textUnderlineOffset: 2 }}>
+                              Understand data sources & AI accuracy →
+                            </Link>
+                          </>
+                        ) : (
+                          <>
+                            Nährwerte aus Open Food Facts, USDA FoodData Central und deinen bisherigen Logs. Items mit ✨ wurden per KI geschätzt.{" "}
+                            Glev ist eine Dokumentations-App und ersetzt keine ärztliche Beratung.{" "}
+                            <Link href="/settings/data-sources" style={{ color: "var(--text-muted)", textDecoration: "underline", textUnderlineOffset: 2 }}>
+                              Datenquellen & KI-Genauigkeit verstehen →
+                            </Link>
+                          </>
+                        )}
                       </div>
                     </div>
                   </>
