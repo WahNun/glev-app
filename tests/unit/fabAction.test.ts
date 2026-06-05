@@ -10,6 +10,11 @@
 //      to the navigation stack, so the previous entry page briefly showed
 //      through during the transition. Fixed by using router.replace.
 //
+// Task #1229: consent-granted users now navigate to /glev-ai (fullscreen
+// page) instead of opening the sheet. The sheet remains reachable via
+// swipe-up only. `open-sheet-voice` is retired; `navigate-glev-ai` is
+// the new primary consent action on non-engine pages.
+//
 // resolveFabAction is a pure function extracted for testability.
 // No DOM, no DB, no Next.js runtime.
 
@@ -73,9 +78,33 @@ test("engine sub-path (/engine/something) is also handled as engine", () => {
   expect(action.type).toBe("toggle-fullscreen");
 });
 
+// ── /glev-ai page ────────────────────────────────────────────────────────────
+
+test("/glev-ai + AI+consent: starts voice take (already on fullscreen page)", () => {
+  const action = resolveFabAction({
+    pathname: "/glev-ai",
+    aiVoiceEnabled: true,
+    consentGranted: true,
+    sheetOpen: false,
+    fullscreenOpen: false,
+  });
+  expect(action).toEqual({ type: "voice-start" });
+});
+
+test("/glev-ai + no AI: legacy navigate", () => {
+  const action = resolveFabAction({
+    pathname: "/glev-ai",
+    aiVoiceEnabled: false,
+    consentGranted: false,
+    sheetOpen: false,
+    fullscreenOpen: false,
+  });
+  expect(action).toEqual({ type: "legacy-navigate" });
+});
+
 // ── Non-engine pages — primary AI+consent flow ──────────────────────────────
 
-test("dashboard + AI+consent + sheet closed: opens sheet and triggers voice", () => {
+test("dashboard + AI+consent + sheet closed: navigates to /glev-ai", () => {
   const action = resolveFabAction({
     pathname: "/dashboard",
     aiVoiceEnabled: true,
@@ -83,11 +112,10 @@ test("dashboard + AI+consent + sheet closed: opens sheet and triggers voice", ()
     sheetOpen: false,
     fullscreenOpen: false,
   });
-  // Core fix: must be open-sheet-voice, NOT legacy-navigate
-  expect(action).toEqual({ type: "open-sheet-voice" });
+  expect(action).toEqual({ type: "navigate-glev-ai" });
 });
 
-test("entries + AI+consent + sheet closed: opens sheet and triggers voice", () => {
+test("entries + AI+consent: navigates to /glev-ai", () => {
   const action = resolveFabAction({
     pathname: "/entries",
     aiVoiceEnabled: true,
@@ -95,10 +123,10 @@ test("entries + AI+consent + sheet closed: opens sheet and triggers voice", () =
     sheetOpen: false,
     fullscreenOpen: false,
   });
-  expect(action).toEqual({ type: "open-sheet-voice" });
+  expect(action).toEqual({ type: "navigate-glev-ai" });
 });
 
-test("insights + AI+consent + sheet already open: starts voice take", () => {
+test("insights + AI+consent + sheet already open: still navigates to /glev-ai", () => {
   const action = resolveFabAction({
     pathname: "/insights",
     aiVoiceEnabled: true,
@@ -106,10 +134,10 @@ test("insights + AI+consent + sheet already open: starts voice take", () => {
     sheetOpen: true,
     fullscreenOpen: false,
   });
-  expect(action).toEqual({ type: "voice-start" });
+  expect(action).toEqual({ type: "navigate-glev-ai" });
 });
 
-test("settings + AI+consent + sheet closed: opens sheet and triggers voice", () => {
+test("settings + AI+consent: navigates to /glev-ai", () => {
   const action = resolveFabAction({
     pathname: "/settings",
     aiVoiceEnabled: true,
@@ -117,7 +145,7 @@ test("settings + AI+consent + sheet closed: opens sheet and triggers voice", () 
     sheetOpen: false,
     fullscreenOpen: false,
   });
-  expect(action).toEqual({ type: "open-sheet-voice" });
+  expect(action).toEqual({ type: "navigate-glev-ai" });
 });
 
 // ── Non-engine + AI but no consent ──────────────────────────────────────────

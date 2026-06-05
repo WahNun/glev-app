@@ -1472,3 +1472,36 @@ export async function setAiVoiceFlagAction(
   revalidateUserPaths(userId);
   return { ok: true };
 }
+
+/**
+ * Admin action: grants AI consent for a user by setting
+ * profiles.ai_consent_at = NOW(). This lets admins onboard users
+ * who cannot tap the in-app consent modal themselves (e.g. demo accounts,
+ * support handoffs). Writes an audit log entry for traceability.
+ */
+export async function grantAiConsentAction(
+  formData: FormData,
+): Promise<{ ok: boolean; error?: string }> {
+  const adminToken = await requireAdminToken();
+  const userId = String(formData.get("userId") ?? "").trim();
+
+  if (!userId) return { ok: false, error: "userId fehlt" };
+
+  const sb = getSupabaseAdmin();
+
+  const { error } = await sb
+    .from("profiles")
+    .update({ ai_consent_at: new Date().toISOString() })
+    .eq("user_id", userId);
+
+  if (error) return { ok: false, error: error.message };
+
+  await writeAuditLog({
+    action: "ai_consent_grant",
+    targetUserId: userId,
+    adminToken,
+  });
+
+  revalidateUserPaths(userId);
+  return { ok: true };
+}

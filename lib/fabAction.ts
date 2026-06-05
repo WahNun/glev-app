@@ -3,18 +3,18 @@
  * Extracted from Layout.tsx so the decision logic can be unit-tested
  * without mounting the full component tree.
  *
- * Returns one of four action types:
+ * Returns one of five action types:
  *   "toggle-fullscreen"  – on /engine with AI+consent: toggle fullscreen chat
  *   "consent-modal"      – AI enabled but consent not yet granted: show modal
- *   "voice-start"        – sheet already open: start new voice take
- *   "open-sheet-voice"   – open sheet then trigger voice after animation
+ *   "voice-start"        – on /glev-ai: start a new voice take in the fullscreen page
+ *   "navigate-glev-ai"   – consent granted on any other tab: navigate to /glev-ai
  *   "legacy-navigate"    – no AI flag: navigate to /engine?voice=1
  */
 export type FabAction =
   | { type: "toggle-fullscreen"; willOpen: boolean }
   | { type: "consent-modal" }
   | { type: "voice-start" }
-  | { type: "open-sheet-voice" }
+  | { type: "navigate-glev-ai" }
   | { type: "legacy-navigate" };
 
 export function resolveFabAction(opts: {
@@ -28,7 +28,6 @@ export function resolveFabAction(opts: {
   const {
     pathname,
     consentGranted,
-    sheetOpen,
     fullscreenOpen,
   } = opts;
   // Treat null (flag still loading) as false so the FAB gracefully falls
@@ -46,12 +45,18 @@ export function resolveFabAction(opts: {
     return { type: "legacy-navigate" };
   }
 
-  // ── Non-engine pages ─────────────────────────────────────────────────────
-  if (aiVoiceEnabled && consentGranted) {
-    if (sheetOpen) {
+  // ── Glev AI fullscreen page ───────────────────────────────────────────────
+  // The page IS the fullscreen AI chat — FAB tap starts a new voice take.
+  if (pathname.startsWith("/glev-ai")) {
+    if (aiVoiceEnabled && consentGranted) {
       return { type: "voice-start" };
     }
-    return { type: "open-sheet-voice" };
+    return { type: "legacy-navigate" };
+  }
+
+  // ── Non-engine, non-glev-ai pages ────────────────────────────────────────
+  if (aiVoiceEnabled && consentGranted) {
+    return { type: "navigate-glev-ai" };
   }
 
   if (aiVoiceEnabled && !consentGranted) {

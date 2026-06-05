@@ -17,6 +17,7 @@ import {
   sendMagicLinkAction,
   sendPasswordResetAction,
   setAiVoiceFlagAction,
+  grantAiConsentAction,
 } from "../actions";
 
 function readAdminToken(): string {
@@ -56,6 +57,7 @@ export default function UserActions({
   phone,
   smsOptedOut,
   aiVoiceEnabled,
+  aiConsentAt,
 }: {
   userId: string;
   email: string;
@@ -71,6 +73,7 @@ export default function UserActions({
   phone: string | null;
   smsOptedOut: boolean;
   aiVoiceEnabled: boolean;
+  aiConsentAt: string | null;
 }) {
   const [confirmKind, setConfirmKind] = useState<"soft" | "hard" | "cancel_ban" | null>(null);
   const [confirmEmail, setConfirmEmail] = useState("");
@@ -95,6 +98,11 @@ export default function UserActions({
   const [aiEnabled, setAiEnabled] = useState(aiVoiceEnabled);
   const [aiPending, setAiPending] = useState(false);
   const [aiResult, setAiResult] = useState<{ ok: boolean; msg: string } | null>(null);
+
+  // AI Consent (profiles.ai_consent_at)
+  const [consentAt, setConsentAt] = useState(aiConsentAt);
+  const [consentPending, setConsentPending] = useState(false);
+  const [consentResult, setConsentResult] = useState<{ ok: boolean; msg: string } | null>(null);
 
   async function sendRelink() {
     if (relinkPending) return;
@@ -486,6 +494,54 @@ export default function UserActions({
             {aiResult.msg}
           </p>
         )}
+
+        {/* AI Consent grant — sets profiles.ai_consent_at */}
+        <div style={{ marginTop: 16, paddingTop: 14, borderTop: "1px solid #eee" }}>
+          <p style={{ ...muted, margin: "0 0 10px" }}>
+            <strong>AI Consent</strong> (<code>profiles.ai_consent_at</code>) —{" "}
+            {consentAt
+              ? `Erteilt am ${new Date(consentAt).toISOString().slice(0, 16).replace("T", " ")} UTC`
+              : "Noch nicht erteilt (User muss im App selbst zustimmen oder Admin kann hier überschreiben)."}{" "}
+          </p>
+          <button
+            type="button"
+            disabled={consentPending || !!consentAt}
+            onClick={() => {
+              if (consentPending || consentAt) return;
+              setConsentPending(true);
+              setConsentResult(null);
+              const fd = new FormData();
+              fd.set("userId", userId);
+              void grantAiConsentAction(fd).then((res) => {
+                if (res.ok) {
+                  setConsentAt(new Date().toISOString());
+                  setConsentResult({ ok: true, msg: `✅ AI Consent für ${email} gesetzt` });
+                } else {
+                  setConsentResult({ ok: false, msg: `❌ ${res.error}` });
+                }
+                setConsentPending(false);
+              });
+            }}
+            style={{
+              ...btnSecondary,
+              opacity: consentPending || !!consentAt ? 0.5 : 1,
+              cursor: consentPending || !!consentAt ? "not-allowed" : "pointer",
+              borderColor: consentAt ? "#86efac" : "#cbd5e1",
+              color: consentAt ? "#15803d" : "#111",
+            }}
+          >
+            {consentPending
+              ? "Speichert…"
+              : consentAt
+                ? "✅ Consent bereits erteilt"
+                : "🤝 AI Consent jetzt erteilen"}
+          </button>
+          {consentResult && (
+            <p style={{ margin: "8px 0 0", fontSize: 13, color: consentResult.ok ? "#15803d" : "#991b1b" }}>
+              {consentResult.msg}
+            </p>
+          )}
+        </div>
       </section>
 
       {/* --- SMS Opt-Out-Link erneut senden --- */}

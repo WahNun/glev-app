@@ -290,6 +290,7 @@ export default async function AdminUserDetailPage({
         }
         smsOptedOut={!!(profile?.sms_opted_out)}
         aiVoiceEnabled={aiVoiceEnabled}
+        aiConsentAt={(profile?.ai_consent_at as string | null) ?? null}
       />
 
       {/* Audit */}

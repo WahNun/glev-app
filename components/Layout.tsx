@@ -13,6 +13,7 @@ import GlevAIButton from "@/components/GlevAIButton";
 import GlevAIConsentModal from "@/components/GlevAIConsentModal";
 import GlevAIChatSheet from "@/components/GlevAIChatSheet";
 import { useGlevAI } from "@/lib/useGlevAI";
+import { GlevAIProvider } from "@/lib/glevAIContext";
 import { resolveFabAction } from "@/lib/fabAction";
 import { useFeatureFlag } from "@/lib/featureFlags";
 import { useScreenContext } from "@/hooks/useScreenContext";
@@ -375,16 +376,13 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
         break;
 
       case "voice-start":
-        // Sheet already open — start a new voice take.
+        // Already on /glev-ai — start a new voice take in the fullscreen page.
         window.dispatchEvent(new CustomEvent("glev:voice-start"));
         break;
 
-      case "open-sheet-voice":
-        // Open the chat sheet, then trigger voice after the animation.
-        glevAi.openFromButton();
-        window.setTimeout(() => {
-          window.dispatchEvent(new CustomEvent("glev:voice-start"));
-        }, 350);
+      case "navigate-glev-ai":
+        // Consent granted on a non-engine tab — navigate to the fullscreen AI page.
+        router.push("/glev-ai");
         break;
 
       case "legacy-navigate":
@@ -592,17 +590,21 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
     const prev = prevPathnameRef.current;
     prevPathnameRef.current = pathname;
 
-    if (pathname.startsWith("/engine") && glevAi.sheetOpen) {
+    if (
+      (pathname.startsWith("/engine") || pathname.startsWith("/glev-ai")) &&
+      glevAi.sheetOpen
+    ) {
       glevAi.closeSheet();
     } else if (
       prev.startsWith("/engine") &&
       !pathname.startsWith("/engine") &&
+      !pathname.startsWith("/glev-ai") &&
       glevAi.pendingMealNavQueue.length > 0
     ) {
       // User returned from Engine with more meals pending — reopen chat.
       glevAi.openFromButton();
     }
-    // Fullscreen AI chat is only valid on /engine — close it on any route change away.
+    // Fullscreen AI chat overlay is only valid on /engine — close it on any route change away.
     if (!pathname.startsWith("/engine")) {
       setGlevAiFullscreenOpen(false);
     }
@@ -1153,7 +1155,9 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
         }}
       >
         <TrialCountdownBanner />
-        {children}
+        <GlevAIProvider value={glevAi}>
+          {children}
+        </GlevAIProvider>
       </main>
 
       {/* MOBILE BOTTOM NAV — 5 tabs (Dashboard, Einträge, Glev,
@@ -1248,10 +1252,19 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
           recording={!!(voice.recording || aiThinking || (aiVoiceEnabled && glevAi.streaming))}
           speaking={aiVoiceEnabled ? ttsSpeaking : false}
           sheetOpen={aiVoiceEnabled
-            ? (pathname.startsWith("/engine") ? glevAiFullscreenOpen : glevAi.sheetOpen)
+            ? (pathname.startsWith("/engine")
+                ? glevAiFullscreenOpen
+                : pathname.startsWith("/glev-ai")
+                  ? true
+                  : glevAi.sheetOpen)
             : false}
           hasConversation={aiVoiceEnabled
-            ? (glevAi.messages.length > 0 && (pathname.startsWith("/engine") ? !glevAiFullscreenOpen : !glevAi.sheetOpen))
+            ? (glevAi.messages.length > 0 &&
+                (pathname.startsWith("/engine")
+                  ? !glevAiFullscreenOpen
+                  : pathname.startsWith("/glev-ai")
+                    ? false
+                    : !glevAi.sheetOpen))
             : false}
           showArrow={arrowHint}
         />
@@ -1347,9 +1360,10 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
             onDismiss={glevAi.dismissConsent}
             onActivate={glevAi.grantConsent}
           />
-          {/* On /engine: fullscreen variant that fills the content area.
-              On all other tabs: the normal bottom-sheet variant.
-              Both share the same useGlevAI state (messages, streaming, etc.). */}
+          {/* On /engine: fullscreen overlay variant that fills the content area.
+              On /glev-ai: null — the page itself renders the fullscreen chat
+                           via GlevAIProvider (shared useGlevAI state).
+              On all other tabs: the normal swipe-up bottom-sheet variant. */}
           {pathname.startsWith("/engine") ? (
             <GlevAIChatSheet
               variant="fullscreen"
@@ -1369,7 +1383,7 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
               pendingMealNavQueue={glevAi.pendingMealNavQueue}
               onMealNavTap={glevAi.fireMealNav}
             />
-          ) : (
+          ) : pathname.startsWith("/glev-ai") ? null : (
             <GlevAIChatSheet
               open={glevAi.sheetOpen}
               onClose={glevAi.closeSheet}
