@@ -35,17 +35,30 @@ ${appUrl}/auth/confirm
 
 ### D-002 · Junction-Integration: Entscheidung zurückgestellt bis Q3 2026 (2026-06-05)
 
-**Status:** Code vorhanden, UI frozen, 0 aktive User.
+**Was ist Junction?** CGM-Daten-Aggregator (ähnlich Thryve) — eine API für Dexcom + Libre + Co. Ziel war ursprünglich, unabhängig von direkten Abbott/Dexcom-Partnerships zu sein. Dieser Value-Prop löst sich in der Praxis nicht ein: Aggregatoren wie Junction bauen ihre Integration selbst auf Partner-Status mit den Herstellern auf — sie umgehen die Partnership-Anforderung nicht, sie abstrahieren sie nur.
 
-`JUNCTION_API_KEY` wird in zwei Routen referenziert (`/api/cgm/glucose`, `/api/cgm/connect`). Die UI-Oberfläche zeigt „coming soon" und ist bewusst nicht zugänglich. Der Sandbox-Key war beim Credentials-Leak vom 2026-06-05 mit dabei — kein Production-Impact, da 0 User die Integration nutzen.
+**Technischer Status:**
+- `JUNCTION_API_KEY` wird aktiv referenziert in `/api/cgm/glucose` + `/api/cgm/connect`
+- Engine-Mount lädt `/api/cgm/glucose` für CGM-Autofill → **wenn Key fehlt oder Route bricht: 500-Error, Engine-Autofill silent kaputt**
+- UI zeigt „coming soon", ist nicht navigierbar
+- 0 aktive User haben Junction angeschlossen (Sandbox-Environment laut Dashboard-Screenshot)
+- Sandbox-Key war im Credentials-Leak vom 2026-06-05 enthalten — kein Production-Impact (Sandbox, 0 User)
+
+**Aktuelle CGM-Datenquellen:**
+| Quelle | Status |
+|---|---|
+| LibreLinkUp (Libre) | ✅ Produktiv |
+| Nightscout-Bridge (Dexcom) | ✅ Produktiv |
+| Apple Health | 🚧 Geplant |
+| Junction | ❓ Code da, kein klarer Mehrwert |
 
 **Zwei Optionen:**
-1. **Killen** — Code + Env-Var entfernen. Vorteil: weniger Maintenance-Overhead, kein toter Code im Bundle.
-2. **Aktivieren** — wenn Junction klaren Mehrwert gegenüber den bestehenden CGM-Quellen (LibreLinkUp, Nightscout, Apple Health) bietet, z. B. durch Sensor-Support für Medtronic Guardian oder Eversense, die keiner der drei anderen Kanäle abdeckt.
+1. **Killen** — Code + Env-Var aus `.env.example` entfernen. Vorteil: kein toter Code, kein potenziell brechender 500-Pfad im Engine-Autofill, weniger Maintenance.
+2. **Aktivieren** — nur wenn Junction Sensor-Support für Geräte bietet, die LLU + Nightscout nicht abdecken (z. B. Medtronic Guardian, Eversense). Erfordert dann eigenes Sprint-Ticket.
 
-**Entscheidung:** Bis Q3 2026 oder unmittelbar vor Live-Launch treffen. Bis dahin: kein Aufwand, Sandbox-Key bleibt als no-op in `.env.example` (nie in Production gesetzt).
+**Entscheidung:** Bis Q3 2026 oder unmittelbar vor Live-Launch. Bis dahin: kein Aufwand, Sandbox-Key in Secrets belassen (nie in Vercel Production gesetzt).
 
-**Nicht wieder öffnen:** Kein Agent soll Junction-Code aktivieren, erweitern oder den Key in Vercel setzen, bevor diese Entscheidung explizit getroffen und dieser Eintrag aktualisiert wurde.
+**Nicht wieder öffnen:** Kein Agent soll Junction-Code aktivieren, den Key in Vercel setzen oder die Routen erweitern, bevor diese Entscheidung explizit getroffen und dieser Eintrag auf „Killen" oder „Aktivieren" aktualisiert wurde.
 
 ---
 
