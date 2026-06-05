@@ -38,6 +38,7 @@ const DEFAULT_PUSH_BODY = "Dein BZ liegt bei {{value}} mg/dL — prüf Korrektur
 interface AlarmSettingsRow {
   user_id: string;
   high_alarm_threshold_mgdl: number | null;
+  notif_critical_alerts: boolean | null;
 }
 
 interface PushTokenRow {
@@ -48,6 +49,7 @@ interface PushTokenRow {
 
 interface UserEntry extends PushTokenRow {
   high_alarm_threshold_mgdl: number | null;
+  notif_critical_alerts: boolean | null;
 }
 
 interface CooldownRow {
@@ -142,11 +144,12 @@ async function sendFcmPushV1(
 async function sendApnsPush(
   keyP8: string, keyId: string, teamId: string, bundleId: string,
   token: string, title: string, body: string,
+  interruptionLevel: "critical" | "time-sensitive" = "time-sensitive",
 ): Promise<void> {
   const jwt = await getApnsJwt(keyP8, keyId, teamId);
   const url = `https://api.push.apple.com/3/device/${token}`;
   const payload = JSON.stringify({
-    aps: { alert: { title, body }, sound: "glev_high_alarm.wav", badge: 1, "interruption-level": "time-sensitive", "content-available": 1 },
+    aps: { alert: { title, body }, sound: "glev_high_alarm.wav", badge: 1, "interruption-level": interruptionLevel, "content-available": 1 },
   });
   const res = await fetch(url, {
     method: "POST",
@@ -195,7 +198,7 @@ Deno.serve(async (_req: Request) => {
 
   const { data: alarmRows, error: alarmError } = await sb
     .from("user_settings")
-    .select("user_id, high_alarm_threshold_mgdl")
+    .select("user_id, high_alarm_threshold_mgdl, notif_critical_alerts")
     .eq("high_alarm_enabled", true) as { data: AlarmSettingsRow[] | null; error: { message: string } | null };
 
   if (alarmError) {
@@ -209,6 +212,7 @@ Deno.serve(async (_req: Request) => {
 
   const alarmUserIds = alarmRows.map((r) => r.user_id);
   const alarmByUserId = new Map<string, number | null>(alarmRows.map((r) => [r.user_id, r.high_alarm_threshold_mgdl]));
+  const criticalByUserId = new Map<string, boolean>(alarmRows.map((r) => [r.user_id, r.notif_critical_alerts === true]));
 
   const { data: tokenRows, error: tokenError } = await sb
     .from("profiles")
@@ -226,7 +230,9 @@ Deno.serve(async (_req: Request) => {
   }
 
   const users: UserEntry[] = tokenRows.map((r) => ({
-    ...r, high_alarm_threshold_mgdl: alarmByUserId.get(r.user_id) ?? null,
+    ...r,
+    high_alarm_threshold_mgdl: alarmByUserId.get(r.user_id) ?? null,
+    notif_critical_alerts: criticalByUserId.get(r.user_id) ?? false,
   }));
 
   const userIds = users.map((u) => u.user_id);
@@ -315,6 +321,13 @@ Deno.serve(async (_req: Request) => {
         continue;
       }
 
+      // NULL in DB → false (conservative default — user must explicitly opt in)
+      const criticalEnabled = user.notif_critical_alerts === true;
+      const interruptionLevel: "critical" | "time-sensitive" = criticalEnabled ? "critical" : "time-sensitive";
+      console.log(
+        `${tag} dispatch: bg=${latestValue} threshold=${threshold} critical_pref=${criticalEnabled} level=${interruptionLevel} platform=${user.push_platform}`,
+      );
+
       const valueStr = String(Math.round(latestValue));
       const title = pushTitle.replace(/\{\{value\}\}/g, valueStr);
       const body = pushBody.replace(/\{\{value\}\}/g, valueStr);
@@ -330,12 +343,12 @@ Deno.serve(async (_req: Request) => {
           errors.push(`${user.user_id}: APNs secrets not set`);
           continue;
         }
-        await sendApnsPush(apnsKeyP8, apnsKeyId, apnsTeamId, apnsBundleId, user.push_token, title, body);
+        await sendApnsPush(apnsKeyP8, apnsKeyId, apnsTeamId, apnsBundleId, user.push_token, title, body, interruptionLevel);
       }
 
       await sb.from("hyper_push_cooldown").upsert({ user_id: user.user_id, last_sent_at: now.toISOString() });
       sent++;
-      console.log(`${tag} 🟠 ALARM SENT (${user.push_platform}) — value=${latestValue} > threshold=${threshold} source=${cgmSource}`);
+      console.log(`${tag} 🟠 ALARM SENT (${user.push_platform}) — value=${latestValue} > threshold=${threshold} source=${cgmSource} level=${interruptionLevel}`);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       errors.push(`${user.user_id}: ${msg}`);

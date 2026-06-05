@@ -58,6 +58,7 @@ const CGM_LOOKBACK_MS = CGM_LOOKBACK_MINUTES * 60 * 1000;
 interface AlarmSettingsRow {
   user_id: string;
   low_alarm_threshold_mgdl: number | null;
+  notif_critical_alerts: boolean | null;
 }
 
 interface PushTokenRow {
@@ -68,6 +69,7 @@ interface PushTokenRow {
 
 interface UserEntry extends PushTokenRow {
   low_alarm_threshold_mgdl: number | null;
+  notif_critical_alerts: boolean | null;
 }
 
 interface CooldownRow {
@@ -242,6 +244,7 @@ async function sendApnsPush(
   token: string,
   title: string,
   body: string,
+  interruptionLevel: "critical" | "time-sensitive" = "time-sensitive",
 ): Promise<void> {
   const jwt = await getApnsJwt(keyP8, keyId, teamId);
 
@@ -251,7 +254,7 @@ async function sendApnsPush(
       alert: { title, body },
       sound: "glev_low_alarm.wav",
       badge: 1,
-      "interruption-level": "time-sensitive",
+      "interruption-level": interruptionLevel,
       "content-available": 1,
     },
   });
@@ -315,7 +318,7 @@ Deno.serve(async (_req: Request) => {
   /* 1. Fetch user_ids where alarm is enabled */
   const { data: alarmRows, error: alarmError } = await sb
     .from("user_settings")
-    .select("user_id, low_alarm_threshold_mgdl")
+    .select("user_id, low_alarm_threshold_mgdl, notif_critical_alerts")
     .eq("low_alarm_enabled", true) as {
       data: AlarmSettingsRow[] | null;
       error: { message: string } | null;
@@ -333,6 +336,9 @@ Deno.serve(async (_req: Request) => {
   const alarmUserIds = alarmRows.map((r) => r.user_id);
   const alarmByUserId = new Map<string, number | null>(
     alarmRows.map((r) => [r.user_id, r.low_alarm_threshold_mgdl]),
+  );
+  const criticalByUserId = new Map<string, boolean>(
+    alarmRows.map((r) => [r.user_id, r.notif_critical_alerts === true]),
   );
 
   /* 2. Fetch push tokens for those users */
@@ -361,6 +367,7 @@ Deno.serve(async (_req: Request) => {
   const users: UserEntry[] = tokenRows.map((r) => ({
     ...r,
     low_alarm_threshold_mgdl: alarmByUserId.get(r.user_id) ?? null,
+    notif_critical_alerts: criticalByUserId.get(r.user_id) ?? false,
   }));
 
   /* 4. Fetch cooldown rows */
@@ -477,6 +484,13 @@ Deno.serve(async (_req: Request) => {
       }
 
       /* 8. Send push */
+      // NULL in DB → false (conservative default — user must explicitly opt in)
+      const criticalEnabled = user.notif_critical_alerts === true;
+      const interruptionLevel: "critical" | "time-sensitive" = criticalEnabled ? "critical" : "time-sensitive";
+      console.log(
+        `${tag} dispatch: bg=${latestValue} threshold=${threshold} critical_pref=${criticalEnabled} level=${interruptionLevel} platform=${user.push_platform}`,
+      );
+
       const valueStr = String(Math.round(latestValue));
       const title = pushTitle.replace(/\{\{value\}\}/g, valueStr);
       const body = pushBody.replace(/\{\{value\}\}/g, valueStr);
@@ -496,7 +510,7 @@ Deno.serve(async (_req: Request) => {
           );
           continue;
         }
-        await sendApnsPush(apnsKeyP8, apnsKeyId, apnsTeamId, apnsBundleId, user.push_token, title, body);
+        await sendApnsPush(apnsKeyP8, apnsKeyId, apnsTeamId, apnsBundleId, user.push_token, title, body, interruptionLevel);
       }
 
       /* 9. Upsert cooldown row */

@@ -38,6 +38,8 @@ const DEFAULT_PUSH_BODY = "Dein BZ liegt bei {{value}} mg/dL — behalte ihn im 
 interface AlarmSettingsRow {
   user_id: string;
   elevated_alarm_threshold_mgdl: number | null;
+  // notif_critical_alerts is read for logging parity but elevated is NEVER critical
+  notif_critical_alerts: boolean | null;
 }
 
 interface PushTokenRow {
@@ -48,6 +50,7 @@ interface PushTokenRow {
 
 interface UserEntry extends PushTokenRow {
   elevated_alarm_threshold_mgdl: number | null;
+  notif_critical_alerts: boolean | null;
 }
 
 interface CooldownRow {
@@ -195,7 +198,7 @@ Deno.serve(async (_req: Request) => {
 
   const { data: alarmRows, error: alarmError } = await sb
     .from("user_settings")
-    .select("user_id, elevated_alarm_threshold_mgdl")
+    .select("user_id, elevated_alarm_threshold_mgdl, notif_critical_alerts")
     .eq("elevated_alarm_enabled", true) as { data: AlarmSettingsRow[] | null; error: { message: string } | null };
 
   if (alarmError) {
@@ -209,6 +212,7 @@ Deno.serve(async (_req: Request) => {
 
   const alarmUserIds = alarmRows.map((r) => r.user_id);
   const alarmByUserId = new Map<string, number | null>(alarmRows.map((r) => [r.user_id, r.elevated_alarm_threshold_mgdl]));
+  const criticalByUserId = new Map<string, boolean>(alarmRows.map((r) => [r.user_id, r.notif_critical_alerts === true]));
 
   const { data: tokenRows, error: tokenError } = await sb
     .from("profiles")
@@ -226,7 +230,9 @@ Deno.serve(async (_req: Request) => {
   }
 
   const users: UserEntry[] = tokenRows.map((r) => ({
-    ...r, elevated_alarm_threshold_mgdl: alarmByUserId.get(r.user_id) ?? null,
+    ...r,
+    elevated_alarm_threshold_mgdl: alarmByUserId.get(r.user_id) ?? null,
+    notif_critical_alerts: criticalByUserId.get(r.user_id) ?? false,
   }));
 
   const userIds = users.map((u) => u.user_id);
@@ -314,6 +320,13 @@ Deno.serve(async (_req: Request) => {
         console.log(`${tag} value=${latestValue} <= threshold=${threshold} (source=${cgmSource}) — no alarm`);
         continue;
       }
+
+      // Elevated is NEVER critical — medically correct boundary (140–250 is not life-threatening)
+      // and explicitly out of scope for the Apple Critical Alerts entitlement (D-025).
+      const interruptionLevel = "time-sensitive" as const;
+      console.log(
+        `[elevated-check][${user.user_id}] dispatch: bg=${latestValue} threshold=${threshold} critical_pref=${user.notif_critical_alerts === true} level=${interruptionLevel} platform=${user.push_platform}`,
+      );
 
       const valueStr = String(Math.round(latestValue));
       const title = pushTitle.replace(/\{\{value\}\}/g, valueStr);
