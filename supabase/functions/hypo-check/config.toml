@@ -1,4 +1,9 @@
 [functions.hypo-check]
+# No JWT verification — this is a cron-triggered endpoint called from GitHub Actions
+# without an auth header. All three alarm functions must have verify_jwt = false.
+# Without this, Supabase defaults to verify_jwt = true and returns 401 to the cron curl.
+verify_jwt = false
+
 # Run every 5 minutes — matches the local LowGlucoseAlarmTicker polling interval.
 # Cron syntax: minute hour day-of-month month day-of-week
 schedule = "*/5 * * * *"
