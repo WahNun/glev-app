@@ -6,6 +6,7 @@ import { getLocale, getMessages } from "next-intl/server";
 import { cookies } from "next/headers";
 import "./globals.css";
 import { PreventZoom } from "@/components/PreventZoom";
+import { Analytics } from "@vercel/analytics/next";
 import PushNotificationsProvider from "@/components/PushNotificationsProvider";
 import MealCheckReminderProvider from "@/components/MealCheckReminderProvider";
 import LandscapeGlucoseOverlay from "@/components/LandscapeGlucoseOverlay";
@@ -267,6 +268,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
             <MealCheckReminderProvider />
             <LandscapeGlucoseOverlay />
             {children}
+            <Analytics />
             <CookieBanner />
             <ServiceWorkerRegistration />
           </ThemeProvider>
