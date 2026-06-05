@@ -4,6 +4,7 @@ import { authedClient } from "@/app/api/insulin/_helpers";
 import type { ParsedFood } from "@/lib/meals";
 import { classifyMeal } from "@/lib/meals";
 import { getHistory } from "@/lib/cgm";
+import { naiveIsoToUtcMs, resolveLoggedAt } from "@/lib/ai/glevTools";
 
 /**
  * POST /api/ai/confirm-action
@@ -271,57 +272,6 @@ async function execLogMealEntry(
   return { insertedId: data?.id as string | undefined };
 }
 
-/**
- * Converts a naive ISO-8601 string (no timezone offset, e.g. "2026-06-05T16:30:00")
- * to a UTC millisecond timestamp by interpreting the wall-clock time in the given
- * IANA timezone. Defensive fallback for when the model omits the UTC offset.
- */
-function naiveIsoToUtcMs(naiveIso: string, tz: string): number | null {
-  try {
-    const m = naiveIso.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?/);
-    if (!m) return null;
-    const [, y, mo, d, h, min, s = "00"] = m;
-    const approxUtcMs = Date.UTC(+y, +mo - 1, +d, +h, +min, +s);
-    const parts = new Intl.DateTimeFormat("en-CA", {
-      timeZone: tz,
-      year: "numeric", month: "2-digit", day: "2-digit",
-      hour: "2-digit", minute: "2-digit", second: "2-digit",
-      hour12: false,
-    }).formatToParts(new Date(approxUtcMs));
-    const get = (type: string) =>
-      parseInt(parts.find((p) => p.type === type)?.value ?? "0", 10);
-    const localMs = Date.UTC(
-      get("year"), get("month") - 1, get("day"),
-      get("hour"), get("minute"), get("second"),
-    );
-    return approxUtcMs - (localMs - approxUtcMs);
-  } catch {
-    return null;
-  }
-}
-
-/**
- * Resolves a `logged_at` value to a UTC ISO string.
- * When the string carries no offset and a user timezone is provided, the
- * wall-clock time is interpreted in that timezone (defensive fallback for when
- * the model omits the offset). Falls back to the current moment if absent/invalid.
- */
-function resolveLoggedAt(raw: unknown, timezone?: string | null): string {
-  if (typeof raw === "string" && raw.trim()) {
-    const s = raw.trim();
-    if (/Z|[+-]\d{2}:\d{2}$/.test(s)) {
-      const ms = new Date(s).getTime();
-      if (Number.isFinite(ms)) return new Date(ms).toISOString();
-    }
-    if (timezone) {
-      const ms = naiveIsoToUtcMs(s, timezone);
-      if (ms !== null) return new Date(ms).toISOString();
-    }
-    const ms = new Date(s).getTime();
-    if (Number.isFinite(ms)) return new Date(ms).toISOString();
-  }
-  return new Date().toISOString();
-}
 
 /**
  * Best-effort CGM snapshot for at-log-time glucose capture.

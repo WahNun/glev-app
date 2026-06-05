@@ -1793,7 +1793,7 @@ async function toolLogBasalEntry(
  * that instant differs from local time in the target timezone to get the offset,
  * then subtract the offset to find the true UTC instant.
  */
-function naiveIsoToUtcMs(naiveIso: string, tz: string): number | null {
+export function naiveIsoToUtcMs(naiveIso: string, tz: string): number | null {
   try {
     const m = naiveIso.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?/);
     if (!m) return null;
@@ -1825,7 +1825,7 @@ function naiveIsoToUtcMs(naiveIso: string, tz: string): number | null {
  * model omits the offset despite preamble instructions).
  * Falls back to the current moment if absent or invalid.
  */
-function resolveLoggedAt(raw: unknown, timezone?: string | null): string {
+export function resolveLoggedAt(raw: unknown, timezone?: string | null): string {
   if (typeof raw === "string" && raw.trim()) {
     const s = raw.trim();
     if (/Z|[+-]\d{2}:\d{2}$/.test(s)) {
@@ -1840,6 +1840,51 @@ function resolveLoggedAt(raw: unknown, timezone?: string | null): string {
     if (Number.isFinite(ms)) return new Date(ms).toISOString();
   }
   return new Date().toISOString();
+}
+
+/**
+ * Returns the current moment as an ISO-8601 string with the UTC offset for
+ * the given IANA timezone, e.g. "2026-06-05T22:00:00+02:00". Injected into
+ * the system preamble so the model can copy the format verbatim for logged_at
+ * fields — ensuring the server always receives an unambiguous timestamp.
+ *
+ * The optional `now` parameter is exposed for unit-testing with a fixed instant;
+ * callers in production always omit it (defaults to `new Date()`).
+ */
+export function nowIsoWithOffset(timezone: string | null, now = new Date()): string {
+  const tz = timezone ?? "Europe/Berlin";
+  try {
+    const parts = new Intl.DateTimeFormat("en-CA", {
+      timeZone: tz,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      hour12: false,
+    }).formatToParts(now);
+    const get = (type: string) =>
+      parseInt(parts.find((p) => p.type === type)?.value ?? "0", 10);
+    const localMs = Date.UTC(
+      get("year"), get("month") - 1, get("day"),
+      get("hour"), get("minute"), get("second"),
+    );
+    const offsetMins = Math.round((localMs - now.getTime()) / 60_000);
+    const sign = offsetMins >= 0 ? "+" : "-";
+    const absOff = Math.abs(offsetMins);
+    const oh = String(Math.floor(absOff / 60)).padStart(2, "0");
+    const om = String(absOff % 60).padStart(2, "0");
+    const year  = String(get("year"));
+    const month = String(get("month")).padStart(2, "0");
+    const day   = String(get("day")).padStart(2, "0");
+    const hour  = String(get("hour")).padStart(2, "0");
+    const min   = String(get("minute")).padStart(2, "0");
+    const sec   = String(get("second")).padStart(2, "0");
+    return `${year}-${month}-${day}T${hour}:${min}:${sec}${sign}${oh}:${om}`;
+  } catch {
+    return now.toISOString();
+  }
 }
 
 /**
