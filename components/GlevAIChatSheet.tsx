@@ -1863,41 +1863,6 @@ export default function GlevAIChatSheet({
           />
         )}
 
-        {/* Meal-nav tap chip — shown after AI confirms one or more meal_prep
-            responses. When multiple meals arrive in one turn (e.g. "Haribo
-            UND Croissant") a count badge shows how many remain so the user
-            knows to come back for the next one after saving in Engine. */}
-        {pendingMealNavQueue && pendingMealNavQueue.length > 0 && (
-          <button
-            onClick={onMealNavTap}
-            style={{
-              margin: "4px 16px 4px",
-              padding: "10px 16px",
-              borderRadius: 12,
-              border: "1.5px solid " + ACCENT,
-              background: "rgba(139,92,246,0.12)",
-              color: ACCENT,
-              fontWeight: 600,
-              fontSize: 14,
-              cursor: "pointer",
-              display: "flex",
-              alignItems: "center",
-              gap: 8,
-              width: "calc(100% - 32px)",
-            }}
-          >
-            <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-              {pendingMealNavQueue[0].label || t.meal_fallback} — {t.open_engine_chip}
-            </span>
-            {pendingMealNavQueue.length > 1 && (
-              <span style={{ fontSize: 12, opacity: 0.65, flexShrink: 0 }}>
-                {t.n_of_total(1, pendingMealNavQueue.length)}
-              </span>
-            )}
-            <span style={{ fontSize: 16, flexShrink: 0 }}>→</span>
-          </button>
-        )}
-
         {/* Input row */}
         <div
           style={{
