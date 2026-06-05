@@ -265,8 +265,6 @@ async function loadUserMemoryBlock(
   return ["Was du über diesen User weißt:", ...lines].join("\n");
 }
 
-const AI_OWNER_EMAIL = "lucas@wahnon-connect.com";
-
 /**
  * Strips system-prompt echoes from assistant history before sending to Mistral.
  * Prevents the feedback loop: model echoes prompt → echo lands in history →
@@ -342,8 +340,14 @@ export async function POST(req: NextRequest) {
   }
   const { user, sb } = auth;
 
-  // 1a. Glev AI is owner-only while under development
-  if (user.email !== AI_OWNER_EMAIL) {
+  // 1a. Feature-flag guard — ai_voice must be enabled for the user
+  const { data: settingsRow } = await sb
+    .from("user_settings")
+    .select("feature_flags")
+    .eq("user_id", user.id)
+    .maybeSingle();
+  const featureFlags = (settingsRow?.feature_flags ?? {}) as Record<string, unknown>;
+  if (featureFlags.ai_voice !== true) {
     return NextResponse.json({ error: "not available" }, { status: 403 });
   }
 
