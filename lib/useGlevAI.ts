@@ -935,11 +935,12 @@ export function useGlevAI(opts?: {
         }
         optsRef.current?.onNavigate?.("/engine");
       }
-      // Resolve the pending_action server-side (the chip state is updated by confirmAction).
-      // Only confirm when we found the meal data; fail closed if the lookup failed
-      // (no phantom server confirm without the expected navigation).
+      // Mark the chip as confirmed locally — no server call, no DB insert.
+      // The actual meal row is created by the Engine save flow. Calling
+      // confirmAction here would trigger execLogMealEntry → duplicate entry.
+      // The ai_pending_actions row expires naturally after its TTL.
       if (match) {
-        await confirmAction(messageId, token);
+        setMessages((prev) => patchAction(prev, messageId, token, { state: "confirmed" }));
       }
     },
   };

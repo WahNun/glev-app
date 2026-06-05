@@ -227,12 +227,15 @@ test("openEngineForMeal navigates to '/engine'", () => {
   expect(fnSlice).toContain('"/engine"');
 });
 
-test("openEngineForMeal calls confirmAction after navigation", () => {
+test("openEngineForMeal marks chip confirmed locally without a server call", () => {
   const fnStart = USE_GLEV_AI_SRC.indexOf("openEngineForMeal:");
   const fnSlice = USE_GLEV_AI_SRC.slice(fnStart, fnStart + 3000);
 
-  // Must call confirmAction so the server-side pending_action is resolved.
-  expect(fnSlice).toContain("confirmAction(messageId, token)");
+  // Must update chip state client-side so the chip shows ✓ immediately.
+  expect(fnSlice).toContain('state: "confirmed"');
+  // Must NOT call confirmAction — that would trigger execLogMealEntry and
+  // create a duplicate meal row (the Engine save already inserts the row).
+  expect(fnSlice).not.toContain("confirmAction(messageId, token)");
 });
 
 test("openEngineForMeal writes macros to sessionStorage under 'glev_pending_meal'", () => {
