@@ -27,6 +27,117 @@ import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
 // keeping a hard ceiling against accidental tool-loop runaways.
 const MAX_TOOL_ROUNDS = 2;
 
+// ── Timeout ───────────────────────────────────────────────────────────
+// Hard ceiling for Mistral round-trips inside the SSE stream.
+// If the stream hasn't produced [DONE] within this window the handler
+// emits a CHAT_TIMEOUT SSE error frame and closes the stream.
+// Kept as a named constant so tests can override it via ChatDeps.timeoutMs.
+const DEFAULT_TIMEOUT_MS = 18_000;
+
+// ── 429 retry ─────────────────────────────────────────────────────────
+// Server-side retry budget. If Retry-After would require waiting longer
+// than this, we surface MISTRAL_RATE_LIMITED to the client immediately
+// (let the client-side retry handle it) rather than burning Vercel
+// function time that would hit the serverless limit.
+const MAX_RETRY_WAIT_MS = 8_000;
+const MAX_MISTRAL_RETRIES = 2;
+
+/**
+ * Thrown by `callMistralWithRetry` when all server-side retry attempts
+ * are exhausted or the Retry-After delay exceeds MAX_RETRY_WAIT_MS.
+ */
+class MistralRateLimitError extends Error {
+  readonly retry_after_sec: number;
+  readonly attempts: number;
+
+  constructor(retry_after_sec: number, attempts: number) {
+    super("MISTRAL_RATE_LIMITED");
+    this.name = "MistralRateLimitError";
+    this.retry_after_sec = retry_after_sec;
+    this.attempts = attempts;
+  }
+}
+
+/**
+ * Returns `true` when the caught error represents a Mistral HTTP 429.
+ * The Mistral SDK surfaces rate-limits as thrown errors with a
+ * `statusCode` or `status` field (SDK v1 uses `statusCode`).
+ */
+function isMistral429Error(e: unknown): boolean {
+  if (!e || typeof e !== "object") return false;
+  const err = e as Record<string, unknown>;
+  return (
+    err.statusCode === 429 ||
+    err.status === 429 ||
+    (typeof err.message === "string" && err.message.includes("429"))
+  );
+}
+
+/**
+ * Parses the `Retry-After` value from a Mistral SDK error.
+ * Supports both the integer-seconds format and the HTTP-date format.
+ * Defaults to 5 s when the header is absent or unparseable.
+ */
+function getRetryAfterSec(e: unknown): number {
+  if (!e || typeof e !== "object") return 5;
+  const err = e as Record<string, unknown>;
+  const headers = err.headers as Record<string, string> | undefined;
+  if (headers) {
+    const ra = headers["retry-after"] ?? headers["Retry-After"];
+    if (ra) {
+      const n = Number(ra);
+      if (!isNaN(n) && n > 0) return Math.ceil(n);
+      const date = Date.parse(ra);
+      if (!isNaN(date)) return Math.max(1, Math.ceil((date - Date.now()) / 1000));
+    }
+  }
+  return 5;
+}
+
+/**
+ * Wraps a Mistral API call with up to `MAX_MISTRAL_RETRIES` server-side
+ * retries on 429 responses. Backs off for the `Retry-After` duration
+ * (default 5 s) between attempts.
+ *
+ * Throws `MistralRateLimitError` when:
+ * - All retries are exhausted, OR
+ * - The Retry-After delay would exceed `MAX_RETRY_WAIT_MS` (prefer
+ *   surfacing a client-side retry over burning Vercel function time).
+ *
+ * All other errors propagate as-is.
+ *
+ * @param fn           - Factory that performs one Mistral API call.
+ * @param _sleep       - Injectable sleep function for unit tests.
+ */
+export async function callMistralWithRetry<T>(
+  fn: () => Promise<T>,
+  _sleep: (ms: number) => Promise<void> = (ms) =>
+    new Promise((r) => setTimeout(r, ms)),
+): Promise<T> {
+  let attempt = 0;
+  while (true) {
+    try {
+      return await fn();
+    } catch (e) {
+      if (!isMistral429Error(e)) throw e;
+
+      const retryAfterSec = getRetryAfterSec(e);
+      attempt++;
+
+      console.warn("[chat] Mistral 429", {
+        attempt,
+        retry_after_sec: retryAfterSec,
+      });
+
+      if (attempt > MAX_MISTRAL_RETRIES || retryAfterSec * 1000 > MAX_RETRY_WAIT_MS) {
+        throw new MistralRateLimitError(retryAfterSec, attempt);
+      }
+
+      await _sleep(retryAfterSec * 1000);
+    }
+  }
+}
+
 /**
  * POST /api/ai/chat
  *
@@ -359,7 +470,7 @@ export async function checkChatFlag(
 }
 
 /**
- * Injectable dependencies for `handleChatPost`. Both fields are optional —
+ * Injectable dependencies for `handleChatPost`. All fields are optional —
  * omitting them falls back to the real production implementations so that
  * the exported `POST` handler needs no changes at the call site.
  *
@@ -368,10 +479,16 @@ export async function checkChatFlag(
  * - `getMistral`: factory that returns a Mistral client. When omitted the
  *   real `getMistralClient()` is used. Tests can pass a spy here to assert
  *   that no Mistral call occurs when the feature-flag gate blocks early.
+ * - `timeoutMs`: stream timeout in milliseconds. Defaults to 18 000. Tests
+ *   can lower this to make timeout scenarios fast.
+ * - `sleep`: injectable sleep for 429-retry back-off. Defaults to real
+ *   `setTimeout`. Tests can pass a no-op to skip the actual wait.
  */
 export type ChatDeps = {
   auth?: AuthOk | AuthErr;
   getMistral?: () => Mistral;
+  timeoutMs?: number;
+  sleep?: (ms: number) => Promise<void>;
 };
 
 /**
@@ -490,22 +607,65 @@ export async function handleChatPost(
   // This keeps the streaming UX intact (tokens still arrive live) while
   // adding the read-only tool layer (Phase 3 / Task 1). Write-tools
   // come in Task 2 behind a UI-confirmation gate.
+
+  const timeoutMs = deps.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+  const _sleep = deps.sleep ?? ((ms: number) => new Promise((r) => setTimeout(r, ms)));
+
   const encoder = new TextEncoder();
   const stream = new ReadableStream({
     async start(controller) {
       const send = (line: string) => controller.enqueue(encoder.encode(`data: ${line}\n\n`));
+
+      // Timeout guard — if the full stream hasn't completed within
+      // `timeoutMs`, emit a CHAT_TIMEOUT SSE frame and close the stream.
+      // We keep a `closed` flag to avoid double-close races when the
+      // timeout fires at the same moment as normal completion.
+      let closed = false;
+      const safeClose = () => {
+        if (closed) return;
+        closed = true;
+        controller.close();
+      };
+
+      const startMs = Date.now();
+      let timedOut = false;
+      const timeoutId = setTimeout(() => {
+        if (closed) return;
+        timedOut = true;
+        const duration_ms = Date.now() - startMs;
+        console.warn("[chat] timeout exceeded", { duration_ms });
+        try {
+          send(JSON.stringify({
+            error_code: "CHAT_TIMEOUT",
+            user_message: getUserFriendlyMessage("CHAT_TIMEOUT", "de"),
+            retry_allowed: true,
+          }));
+          send("[DONE]");
+          safeClose();
+        } catch {
+          /* controller already closed */
+        }
+      }, timeoutMs);
+
       try {
         // ── Phase 1: resolve any tool calls ─────────────────────────
         for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
-          const completion = await client.chat.complete({
-            model: "mistral-small-latest",
-            maxTokens: 300,
-            temperature: 0.4,
-            messages,
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            tools: GLEV_TOOLS as any,
-            toolChoice: "auto",
-          });
+          if (timedOut || closed) return;
+
+          const completion = await callMistralWithRetry(
+            () => client.chat.complete({
+              model: "mistral-small-latest",
+              maxTokens: 300,
+              temperature: 0.4,
+              messages,
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              tools: GLEV_TOOLS as any,
+              toolChoice: "auto",
+            }),
+            _sleep,
+          );
+
+          if (timedOut || closed) return;
 
           const choice = completion?.choices?.[0];
           const toolCalls = choice?.message?.toolCalls ?? [];
@@ -679,16 +839,26 @@ export async function handleChatPost(
               });
             }
           }
+          void pendingEmittedThisRound;
         }
 
+        if (timedOut || closed) return;
+
         // ── Phase 2: stream the final answer ────────────────────────
-        const result = await client.chat.stream({
-          model: "mistral-small-latest",
-          maxTokens: 300,
-          temperature: 0.4,
-          messages,
-        });
+        const result = await callMistralWithRetry(
+          () => client.chat.stream({
+            model: "mistral-small-latest",
+            maxTokens: 300,
+            temperature: 0.4,
+            messages,
+          }),
+          _sleep,
+        );
+
+        if (timedOut || closed) return;
+
         for await (const event of result) {
+          if (timedOut || closed) return;
           const delta = event?.data?.choices?.[0]?.delta?.content;
           if (typeof delta === "string" && delta.length > 0) {
             send(JSON.stringify({ token: delta }));
@@ -701,18 +871,53 @@ export async function handleChatPost(
             }
           }
         }
-        send("[DONE]");
-        controller.close();
+
+        if (!timedOut && !closed) {
+          send("[DONE]");
+          safeClose();
+        }
       } catch (e) {
+        clearTimeout(timeoutId);
+        if (timedOut || closed) return;
+
+        // ── Mistral rate limit (all retries exhausted) ───────────────
+        if (e instanceof MistralRateLimitError) {
+          console.warn("[chat] Mistral rate limit — all retries exhausted", {
+            retry_after_sec: e.retry_after_sec,
+            attempts: e.attempts,
+          });
+          try {
+            send(JSON.stringify({
+              error_code: "MISTRAL_RATE_LIMITED",
+              user_message: getUserFriendlyMessage("MISTRAL_RATE_LIMITED", "de"),
+              retry_allowed: true,
+              retry_after_sec: e.retry_after_sec,
+              attempts: e.attempts,
+            }));
+            send("[DONE]");
+            safeClose();
+          } catch {
+            /* controller already closed */
+          }
+          return;
+        }
+
+        // ── Generic upstream error ───────────────────────────────────
         const cause = e instanceof Error ? e.message : "stream error";
         console.error("[chat]", { code: "UPSTREAM_ERROR", cause });
-        send(JSON.stringify({
-          error_code: "UPSTREAM_ERROR",
-          user_message: getUserFriendlyMessage("UPSTREAM_ERROR", "de"),
-          retry_allowed: true,
-        }));
-        send("[DONE]");
-        controller.close();
+        try {
+          send(JSON.stringify({
+            error_code: "UPSTREAM_ERROR",
+            user_message: getUserFriendlyMessage("UPSTREAM_ERROR", "de"),
+            retry_allowed: true,
+          }));
+          send("[DONE]");
+          safeClose();
+        } catch {
+          /* controller already closed */
+        }
+      } finally {
+        clearTimeout(timeoutId);
       }
     },
   });

@@ -10,6 +10,12 @@ import { readLocaleCookie } from "@/lib/locale";
 import type { AppErrorCode } from "@/lib/ai/errors";
 import { ALL_ERROR_CODES } from "@/lib/ai/errors";
 
+// ── Slow-response UI timer ─────────────────────────────────────────────
+// After this many ms with no streaming response, the hook sets `isSlow`
+// so the chat sheet can show "Glev braucht etwas länger…" while the
+// user waits. Cleared when the stream ends or an error is received.
+const SLOW_WARNING_MS = 15_000;
+
 /**
  * useGlevAI — owns everything the Glev AI button + consent modal +
  * chat sheet need:
@@ -195,6 +201,16 @@ export function useGlevAI(opts?: {
   const [messages, setMessages] = useState<GlevChatMessage[]>([]);
   const [streaming, setStreaming] = useState<boolean>(false);
   const abortRef = useRef<AbortController | null>(null);
+  // Slow-response warning: true after SLOW_WARNING_MS with no stream end.
+  const [isSlow, setIsSlow] = useState<boolean>(false);
+  // Rate-limit countdown: seconds remaining before the auto-retry fires.
+  // null = no countdown active.
+  const [rateLimitCountdown, setRateLimitCountdown] = useState<number | null>(null);
+  // Stores the user message queued for auto-retry after a 429 countdown.
+  const autoRetryMsgRef = useRef<string | null>(null);
+  // Tracks how many auto-retries have been attempted for the current 429
+  // bubble so we show the manual retry button after one failed auto-retry.
+  const autoRetryAttemptRef = useRef<number>(0);
   // Collects meal_prep items that arrive mid-stream. We must NOT write
   // to sessionStorage immediately because multiple meals in one turn
   // (e.g. "Haribo AND Croissant") would overwrite each other. After
@@ -377,6 +393,31 @@ export function useGlevAI(opts?: {
     );
   }, []);
 
+  // ── 429-countdown auto-retry effect ──────────────────────────────────
+  // When rateLimitCountdown is set after the first MISTRAL_RATE_LIMITED
+  // hit, this effect ticks it down every second and fires the auto-retry
+  // once it reaches zero. The retry counter (autoRetryAttemptRef) ensures
+  // we only auto-retry once — a second failure shows the manual button.
+  useEffect(() => {
+    if (rateLimitCountdown === null || rateLimitCountdown <= 0) {
+      if (rateLimitCountdown === 0 && autoRetryMsgRef.current) {
+        const msg = autoRetryMsgRef.current;
+        autoRetryMsgRef.current = null;
+        setRateLimitCountdown(null);
+        sendMessageRef.current(msg);
+      }
+      return;
+    }
+    const id = setTimeout(() => {
+      setRateLimitCountdown((prev) => (prev !== null && prev > 0 ? prev - 1 : 0));
+    }, 1_000);
+    return () => clearTimeout(id);
+  }, [rateLimitCountdown]);
+
+  // Stable ref so the countdown effect can call sendMessage without
+  // being listed as a dependency (avoids infinite loop risk).
+  const sendMessageRef = useRef<(text: string) => void>(() => {});
+
   const sendMessage = useCallback(
     async (text: string) => {
       const trimmed = text.trim();
@@ -404,6 +445,13 @@ export function useGlevAI(opts?: {
 
       setMessages((prev) => [...prev, userMsg, assistantMsg]);
       setStreaming(true);
+      setIsSlow(false);
+      setRateLimitCountdown(null);
+
+      // Start the slow-warning timer. If we haven't finished streaming
+      // within SLOW_WARNING_MS, flip isSlow so the UI can show
+      // "Glev braucht etwas länger…" while the user waits.
+      const slowTimerId = setTimeout(() => setIsSlow(true), SLOW_WARNING_MS);
 
       const ac = new AbortController();
       abortRef.current = ac;
@@ -440,6 +488,10 @@ export function useGlevAI(opts?: {
           const err = Object.assign(new Error(msg), {
             error_code: code,
             retry_allowed: isRetryAllowed(code),
+            // Forward retry_after_sec so the 429-countdown UX can use it.
+            retry_after_sec: typeof errBody.retry_after_sec === "number"
+              ? errBody.retry_after_sec
+              : undefined,
           });
           throw err;
         }
@@ -502,9 +554,14 @@ export function useGlevAI(opts?: {
                 ? rawCode
                 : "UNKNOWN";
               const msg = getUserFriendlyMessage(code, locale);
+              const frame = parsed as Record<string, unknown>;
               throw Object.assign(new Error(msg), {
                 error_code: code,
                 retry_allowed: isRetryAllowed(code),
+                // Forward retry_after_sec for the 429-countdown UX.
+                retry_after_sec: typeof frame.retry_after_sec === "number"
+                  ? frame.retry_after_sec
+                  : undefined,
               });
             }
             if (parsed.navigate) {
@@ -588,12 +645,36 @@ export function useGlevAI(opts?: {
           // Resolve to a typed code — errors thrown by our SSE/HTTP handlers
           // carry error_code; plain network errors (fetch failed, etc.) have
           // none, so they fall back to UNKNOWN. Never surface e.message.
-          const rawCode = (e as Record<string, unknown>)?.error_code as string | undefined;
+          const errMeta = e as Record<string, unknown>;
+          const rawCode = errMeta?.error_code as string | undefined;
           const code: AppErrorCode = (rawCode && ALL_ERROR_CODES.includes(rawCode as AppErrorCode))
             ? rawCode as AppErrorCode
             : "UNKNOWN";
           const msg = getUserFriendlyMessage(code, locale);
           const retry = isRetryAllowed(code);
+
+          // ── 429 auto-retry ──────────────────────────────────────────
+          // On the first MISTRAL_RATE_LIMITED hit: start a countdown and
+          // schedule an auto-retry. On the second hit (auto-retry also
+          // failed): fall through to the manual retry button.
+          const retryAfterSec = typeof errMeta.retry_after_sec === "number"
+            ? errMeta.retry_after_sec
+            : undefined;
+          if (
+            code === "MISTRAL_RATE_LIMITED" &&
+            typeof retryAfterSec === "number" &&
+            autoRetryAttemptRef.current === 0
+          ) {
+            autoRetryAttemptRef.current = 1;
+            autoRetryMsgRef.current = trimmed;
+            setRateLimitCountdown(retryAfterSec);
+          } else {
+            // On a second failure or when no retry_after_sec, reset the
+            // attempt counter so future messages start fresh.
+            autoRetryAttemptRef.current = 0;
+            autoRetryMsgRef.current = null;
+          }
+
           setMessages((prev) =>
             prev.map((m) =>
               m.id === assistantId
@@ -608,6 +689,8 @@ export function useGlevAI(opts?: {
           );
         }
       } finally {
+        clearTimeout(slowTimerId);
+        setIsSlow(false);
         setStreaming(false);
         abortRef.current = null;
         setMessages((prev) =>
@@ -628,6 +711,10 @@ export function useGlevAI(opts?: {
     // opts?.contextSnapshot is read via optsRef.current inside the fn — no dep needed.
     [messages, streaming],
   );
+
+  // Keep the stable ref in sync so the countdown auto-retry always calls
+  // the latest closure (which has the up-to-date messages/streaming deps).
+  sendMessageRef.current = sendMessage;
 
   /**
    * Confirm a pending WRITE-action by posting its token to
@@ -776,6 +863,12 @@ export function useGlevAI(opts?: {
     sheetOpen,
     messages,
     streaming,
+    /** True after SLOW_WARNING_MS of waiting — the chat sheet can show
+     *  "Glev braucht etwas länger…" while the user waits for a response. */
+    isSlow,
+    /** Seconds remaining before the 429-auto-retry fires. null = no
+     *  countdown active. The chat sheet can render a countdown pill. */
+    rateLimitCountdown,
     openFromButton,
     dismissConsent,
     grantConsent,
