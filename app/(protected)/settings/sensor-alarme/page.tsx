@@ -9,6 +9,12 @@ import {
   fetchElevatedAlarmSettingsFromDb, saveElevatedAlarmSettingsToDb, type ElevatedAlarmSettingsDb,
   fetchHighAlarmSettingsFromDb, saveHighAlarmSettingsToDb, type HighAlarmSettingsDb,
 } from "@/lib/userSettings";
+import {
+  fetchCriticalAlertsEnabled,
+  saveCriticalAlertsEnabled,
+  requestCriticalAlertPermission,
+  checkCriticalAlertPermission,
+} from "@/lib/criticalAlerts";
 import { getLowAlarmSettings, persistLowAlarmSettingsLocally } from "@/lib/lowGlucoseAlarm";
 import { persistElevatedAlarmSettingsLocally } from "@/lib/elevatedAlarm";
 import { persistHyperAlarmSettingsLocally } from "@/lib/hyperAlarm";
@@ -46,6 +52,10 @@ export default function SensorAlarmePage() {
   const [highThreshold, setHighThreshold] = useState(200);
   const [draftHigh, setDraftHigh] = useState<{ enabled: boolean; threshold: number } | null>(null);
 
+  const [criticalEnabled, setCriticalEnabled] = useState(false);
+  const [criticalSaving, setCriticalSaving] = useState(false);
+  const [iosPermissionMissing, setIosPermissionMissing] = useState(false);
+
   useEffect(() => {
     const local = getLowAlarmSettings();
     setLowEnabled(local.enabled);
@@ -62,6 +72,12 @@ export default function SensorAlarmePage() {
     }).catch(() => {});
     fetchHighAlarmSettingsFromDb().then((s) => {
       if (!touchedRef.current) { setHighEnabled(s.enabled); setHighThreshold(s.thresholdMgdl); }
+    }).catch(() => {});
+    fetchCriticalAlertsEnabled().then((v) => {
+      if (!touchedRef.current) setCriticalEnabled(v);
+    }).catch(() => {});
+    checkCriticalAlertPermission().then((granted) => {
+      if (!touchedRef.current) setIosPermissionMissing(!granted);
     }).catch(() => {});
   }, []);
 
@@ -93,6 +109,28 @@ export default function SensorAlarmePage() {
   function showErrorToast(msg: string) {
     setErrorToast(msg);
     setTimeout(() => setErrorToast(null), 4000);
+  }
+
+  async function handleCriticalToggle() {
+    if (criticalSaving) return;
+    const next = !criticalEnabled;
+    setCriticalEnabled(next);
+    setCriticalSaving(true);
+    try {
+      if (next) {
+        // Request OS permission when enabling — shows iOS dialog if not yet granted.
+        await requestCriticalAlertPermission();
+        const osGranted = await checkCriticalAlertPermission();
+        setIosPermissionMissing(!osGranted);
+      } else {
+        await saveCriticalAlertsEnabled(false);
+        setIosPermissionMissing(false);
+      }
+    } catch {
+      setCriticalEnabled(!next); // rollback
+    } finally {
+      setCriticalSaving(false);
+    }
   }
 
   async function saveLowAlarm(): Promise<boolean> {
@@ -325,6 +363,59 @@ export default function SensorAlarmePage() {
           ariaLabel={t("row_open_aria", { label: t("row_high_alarm") })}
           onClick={() => openSheetWith("highAlarm")}
         />
+      </SettingsSection>
+
+      {/* Critical Alerts toggle — separate section below the three alarm rows */}
+      <SettingsSection style={{ marginTop: 24 }}>
+        <div style={{ padding: "14px 16px" }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+            <div style={{ flex: 1 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 3 }}>
+                <svg width={15} height={15} viewBox="0 0 24 24" fill="none" stroke="#FF3B30" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>
+                </svg>
+                <span style={{ fontSize: 14, fontWeight: 600, color: "var(--text-strong)" }}>
+                  {locale === "en" ? "Critical Alerts (Hypo + severe Hyper)" : "Critical Alerts (Hypo + schwere Hyper)"}
+                </span>
+              </div>
+              <p style={{ fontSize: 12, color: "var(--text-dim)", lineHeight: 1.45, margin: 0 }}>
+                {locale === "en"
+                  ? "Wakes you even in silent mode or Focus for life-critical hypoglycaemia and severe hyperglycaemia. Only used for Hypo below threshold and severe Hyper."
+                  : "Weckt dich auch bei Stummmodus oder Fokus bei lebenskritischer Hypoglykämie und schwerer Hyperglykämie. Ausschließlich für Hypo unter Schwelle und schwere Hyper."}
+              </p>
+              {criticalEnabled && iosPermissionMissing && (
+                <p style={{ fontSize: 11, color: ORANGE, lineHeight: 1.4, margin: "6px 0 0", display: "flex", alignItems: "flex-start", gap: 4 }}>
+                  <svg width={12} height={12} viewBox="0 0 24 24" fill="none" stroke={ORANGE} strokeWidth={2.5} strokeLinecap="round" style={{ flexShrink: 0, marginTop: 1 }}>
+                    <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+                  </svg>
+                  {locale === "en"
+                    ? "Critical Alerts not allowed in iOS Settings → Notifications → Glev. Please enable there."
+                    : "Critical Alerts in iOS-Einstellungen → Mitteilungen → Glev nicht erlaubt. Bitte dort aktivieren."}
+                </p>
+              )}
+            </div>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={criticalEnabled}
+              disabled={criticalSaving}
+              onClick={handleCriticalToggle}
+              style={{
+                width: 44, height: 26, borderRadius: 13, border: "none",
+                cursor: criticalSaving ? "wait" : "pointer",
+                background: criticalEnabled ? "#FF3B30" : "var(--surface-raised)",
+                position: "relative", transition: "background 0.2s", flexShrink: 0,
+                opacity: criticalSaving ? 0.6 : 1,
+              }}
+            >
+              <span style={{
+                position: "absolute", top: 3, width: 20, height: 20, borderRadius: "50%",
+                background: "white", left: criticalEnabled ? 21 : 3,
+                transition: "left 0.2s", boxShadow: "0 1px 3px rgba(0,0,0,0.2)",
+              }} />
+            </button>
+          </div>
+        </div>
       </SettingsSection>
 
       <BottomSheet open={openSheet !== null} onClose={closeSheet} title={active?.title} footer={active?.footer}>

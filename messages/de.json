@@ -2862,6 +2862,20 @@
       "long_body": "Halte den Button gedrückt, um das Schnell-Menü zu öffnen: Insulin loggen, Fingertest, Training oder Symptome — ohne in die Navigation zu wechseln.",
       "done": "Los geht's"
     },
+    "critical_alerts": {
+      "headline": "Werde geweckt wenn's drauf ankommt",
+      "sub": "Glev kann dich auch im Stummmodus oder Fokus-Modus mit voller Lautstärke wecken — z. B. wenn dein Blutzucker nachts gefährlich tief fällt.",
+      "bullet_hypo_title": "Lebenskritische Hypoglykämie",
+      "bullet_hypo_body": "Alarm unter deiner Hypo-Schwelle ignoriert Stumm und Do Not Disturb komplett.",
+      "bullet_hyper_title": "Schwere Hyperglykämie",
+      "bullet_hyper_body": "Alarm über der Hyper-Schwelle — z. B. nachts verpasste Korrektur.",
+      "bullet_control_title": "Du hast die Kontrolle",
+      "bullet_control_body": "Critical Alerts jederzeit in Einstellungen → Sensor & Alarme deaktivieren.",
+      "activate_btn": "Ja, Critical Alerts aktivieren",
+      "activating": "Aktiviere …",
+      "later_btn": "Später entscheiden",
+      "fine_print": "Ausschließlich für lebenswichtige Hypo- und schwere Hyper-Warnungen — nie für andere Benachrichtigungen."
+    },
     "install": {
       "headline": "Glev zum Homescreen hinzufügen",
       "sub": "Die nativen iOS- und Android-Apps kommen voraussichtlich ab 1. Juli — bis dahin füge Glev als Webapp zum Homescreen hinzu.",
