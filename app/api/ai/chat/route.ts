@@ -20,6 +20,7 @@ import {
   isMealPrepEnvelope,
 } from "@/lib/ai/glevTools";
 import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
+import { callWithRetry, defaultGetRetryAfterSec } from "@/lib/ai/retryWithRateLimit";
 
 // Maximum number of sequential tool-call rounds before we stop calling
 // Mistral with `tools` and force a streamed final answer. Two is enough
@@ -74,27 +75,6 @@ function isMistral429Error(e: unknown): boolean {
 }
 
 /**
- * Parses the `Retry-After` value from a Mistral SDK error.
- * Supports both the integer-seconds format and the HTTP-date format.
- * Defaults to 5 s when the header is absent or unparseable.
- */
-function getRetryAfterSec(e: unknown): number {
-  if (!e || typeof e !== "object") return 5;
-  const err = e as Record<string, unknown>;
-  const headers = err.headers as Record<string, string> | undefined;
-  if (headers) {
-    const ra = headers["retry-after"] ?? headers["Retry-After"];
-    if (ra) {
-      const n = Number(ra);
-      if (!isNaN(n) && n > 0) return Math.ceil(n);
-      const date = Date.parse(ra);
-      if (!isNaN(date)) return Math.max(1, Math.ceil((date - Date.now()) / 1000));
-    }
-  }
-  return 5;
-}
-
-/**
  * Wraps a Mistral API call with up to `MAX_MISTRAL_RETRIES` server-side
  * retries on 429 responses. Backs off for the `Retry-After` duration
  * (default 5 s) between attempts.
@@ -106,36 +86,27 @@ function getRetryAfterSec(e: unknown): number {
  *
  * All other errors propagate as-is.
  *
- * @param fn           - Factory that performs one Mistral API call.
- * @param _sleep       - Injectable sleep function for unit tests.
+ * Delegates to the shared `callWithRetry` helper in
+ * `lib/ai/retryWithRateLimit.ts`; Mistral-specific quirks (statusCode vs
+ * status field) stay isolated here via `isMistral429Error`.
+ *
+ * @param fn     - Factory that performs one Mistral API call.
+ * @param _sleep - Injectable sleep function for unit tests.
  */
 export async function callMistralWithRetry<T>(
   fn: () => Promise<T>,
   _sleep: (ms: number) => Promise<void> = (ms) =>
     new Promise((r) => setTimeout(r, ms)),
 ): Promise<T> {
-  let attempt = 0;
-  while (true) {
-    try {
-      return await fn();
-    } catch (e) {
-      if (!isMistral429Error(e)) throw e;
-
-      const retryAfterSec = getRetryAfterSec(e);
-      attempt++;
-
-      console.warn("[chat] Mistral 429", {
-        attempt,
-        retry_after_sec: retryAfterSec,
-      });
-
-      if (attempt > MAX_MISTRAL_RETRIES || retryAfterSec * 1000 > MAX_RETRY_WAIT_MS) {
-        throw new MistralRateLimitError(retryAfterSec, attempt);
-      }
-
-      await _sleep(retryAfterSec * 1000);
-    }
-  }
+  return callWithRetry(fn, {
+    is429: isMistral429Error,
+    getRetryAfterSec: defaultGetRetryAfterSec,
+    maxRetries: MAX_MISTRAL_RETRIES,
+    maxRetryWaitMs: MAX_RETRY_WAIT_MS,
+    makeRateLimitError: (retryAfterSec, attempts) =>
+      new MistralRateLimitError(retryAfterSec, attempts),
+    logPrefix: "[chat] Mistral",
+  }, _sleep);
 }
 
 /**
