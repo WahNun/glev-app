@@ -13,6 +13,7 @@
 
 export type AppErrorCode =
   | "CHAT_TIMEOUT"
+  | "STT_TIMEOUT"
   | "MISTRAL_RATE_LIMITED"
   | "OPENAI_RATE_LIMITED"
   | "PARSE_FAILED"
@@ -25,6 +26,7 @@ export type AppErrorCode =
 
 export const ALL_ERROR_CODES: readonly AppErrorCode[] = [
   "CHAT_TIMEOUT",
+  "STT_TIMEOUT",
   "MISTRAL_RATE_LIMITED",
   "OPENAI_RATE_LIMITED",
   "PARSE_FAILED",
@@ -40,6 +42,10 @@ export const ERROR_MESSAGES: Record<AppErrorCode, { de: string; en: string }> = 
   CHAT_TIMEOUT: {
     de: "Antwort dauert zu lange — bitte erneut versuchen.",
     en: "Response is taking too long — please try again.",
+  },
+  STT_TIMEOUT: {
+    de: "Spracherkennung dauert zu lange — bitte erneut versuchen.",
+    en: "Speech recognition is taking too long — please try again.",
   },
   MISTRAL_RATE_LIMITED: {
     de: "Zu viele Anfragen — bitte kurz warten und erneut versuchen.",
@@ -85,6 +91,7 @@ export const ERROR_MESSAGES: Record<AppErrorCode, { de: string; en: string }> = 
  */
 export const RETRY_ALLOWED_CODES: ReadonlySet<AppErrorCode> = new Set<AppErrorCode>([
   "CHAT_TIMEOUT",
+  "STT_TIMEOUT",
   "MISTRAL_RATE_LIMITED",
   "OPENAI_RATE_LIMITED",
   "NETWORK_ERROR",

@@ -33,8 +33,24 @@ import { useRef, useState, useCallback, useEffect } from "react";
  *   transcription before starting fresh, so a retry is always clean.
  */
 
+import { ERROR_MESSAGES } from "@/lib/ai/errors";
+
 const STT_STREAM_ROUTE = "/api/transcribe/mistral/stream";
 const STT_REST_ROUTE = "/api/transcribe/mistral";
+
+/**
+ * How long (ms) to wait for Voxtral to return a transcript after the mic
+ * stops before aborting and surfacing STT_TIMEOUT to the user.
+ *
+ * 20 s covers slow network + worst-case Voxtral cold-start. Under normal
+ * conditions the API responds in 1–3 s, so users almost never see this.
+ * Lower than CHAT_TIMEOUT (18 s server-side) would be confusing — keep
+ * the STT timeout at 20 s so the server never races the client.
+ *
+ * Exported so unit tests can override via dependency injection without
+ * monkey-patching the module.
+ */
+export const STT_TIMEOUT_MS = 20_000;
 
 export interface UseVoxtralOptions {
   onTranscript: (text: string) => void;
@@ -202,6 +218,13 @@ export function useVoxtral({ onTranscript, onPartialTranscript, onError }: UseVo
    */
   const transcribeAbortRef = useRef<AbortController | null>(null);
 
+  /**
+   * Handle for the 20s STT timeout. Cleared when transcription completes
+   * normally, when the user manually aborts (new recording start), or when
+   * the timer fires and calls onError itself.
+   */
+  const sttTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   // ── Rate-limit countdown ───────────────────────────────────────────────
   // When Mistral returns a 429, we record the timestamp when the window
   // expires and tick down a countdown every second so the UI can show
@@ -241,6 +264,10 @@ export function useVoxtral({ onTranscript, onPartialTranscript, onError }: UseVo
     // Abort any still-running transcription from a previous attempt.
     // This prevents the old onError from firing after the user has already
     // pressed the mic button again (retry scenario).
+    if (sttTimeoutRef.current !== null) {
+      clearTimeout(sttTimeoutRef.current);
+      sttTimeoutRef.current = null;
+    }
     if (transcribeAbortRef.current) {
       try { transcribeAbortRef.current.abort(); } catch { /* noop */ }
       transcribeAbortRef.current = null;
@@ -288,6 +315,17 @@ export function useVoxtral({ onTranscript, onPartialTranscript, onError }: UseVo
         transcribeAbortRef.current = ac;
         setIsTranscribing(true);
 
+        // 20s safety timeout: if Voxtral never responds, abort and surface a
+        // user-friendly error. The check `!ac.signal.aborted` ensures only one
+        // of (timeout, manual abort, transcribeWithFallback error) fires onError.
+        sttTimeoutRef.current = setTimeout(() => {
+          sttTimeoutRef.current = null;
+          if (!ac.signal.aborted) {
+            ac.abort();
+            onError?.(ERROR_MESSAGES.STT_TIMEOUT.de);
+          }
+        }, STT_TIMEOUT_MS);
+
         void transcribeWithFallback(
           blob,
           mimeTypeRef.current,
@@ -297,6 +335,12 @@ export function useVoxtral({ onTranscript, onPartialTranscript, onError }: UseVo
           ac.signal,
           handleRateLimit,
         ).finally(() => {
+          // Clear the timeout on any outcome (success, error, or abort) so
+          // it can never fire after the transcription has already settled.
+          if (sttTimeoutRef.current !== null) {
+            clearTimeout(sttTimeoutRef.current);
+            sttTimeoutRef.current = null;
+          }
           // Only clear isTranscribing if this is still the active request
           // (not already superseded by a new recording).
           if (transcribeAbortRef.current === ac) {
