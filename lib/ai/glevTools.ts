@@ -46,6 +46,7 @@ import {
 import { aggregateNutrition } from "@/lib/nutrition/aggregate";
 import { getCachedUserHistory } from "@/lib/nutrition/userHistoryCache";
 import type { ParsedFoodItem } from "@/lib/nutrition/types";
+import { applyAlcoholFallback, sumAlcoholG } from "@/lib/ai/alcoholFallback";
 
 // ── Tool definitions (Mistral function-calling schema) ───────────────
 export const GLEV_TOOLS = [
@@ -1509,11 +1510,17 @@ async function toolLogMealEntry(
     process.env.OPTIMISTIC_REFINEMENT === "true" ||
     process.env.NEXT_PUBLIC_OPTIMISTIC_REFINEMENT === "true";
 
-  const rawItems = Array.isArray(args.items)
-    ? (args.items as Array<{ name?: unknown; grams?: unknown }>).filter(
-        (i) => typeof i?.name === "string" && typeof i?.grams === "number" && i.grams > 0,
-      )
-    : [];
+  const rawItems = (
+    Array.isArray(args.items)
+      ? (args.items as Array<{ name?: unknown; grams?: unknown; alcohol_g?: unknown }>).filter(
+          (i) => typeof i?.name === "string" && typeof i?.grams === "number" && i.grams > 0,
+        )
+      : []
+  ) as Array<{ name: string; grams: number; alcohol_g?: unknown }>;
+
+  // Server-side alcohol keyword fallback: enriches rawItems with estimated alcohol_g
+  // when Mistral omits it despite an item clearly being alcoholic (e.g. "Bier", "Rotwein").
+  const enrichedItems = applyAlcoholFallback(rawItems);
 
   const timeLabel = formatInUserTimezone(loggedAtMs, userTimezone);
   const macroBits = [`${carbs}g KH`];
@@ -1602,11 +1609,13 @@ async function toolLogMealEntry(
     ).catch(() => {});
     // Detach — never await this.
     void runAggregator(mealPrepId);
-    // Use Mistral estimates as-is; items get source='estimated' placeholder.
-    resolvedItems = rawItems.length > 0
-      ? rawItems.map((i) => ({
-          name: String(i.name), grams: Number(i.grams),
+    // Use enriched Mistral estimates as placeholders; include alcohol_g so dual-emission
+    // fires immediately even before the aggregator resolves.
+    resolvedItems = enrichedItems.length > 0
+      ? enrichedItems.map((i) => ({
+          name: i.name, grams: i.grams,
           carbs: 0, protein: 0, fat: 0, fiber: 0, source: "estimated" as const,
+          ...(typeof i.alcohol_g === "number" && i.alcohol_g > 0 ? { alcohol_g: i.alcohol_g } : {}),
         }))
       : undefined;
   }
@@ -1615,10 +1624,9 @@ async function toolLogMealEntry(
   // Wenn items[] Alkohol-Gramm tragen: zusätzliche influence_log
   // PendingAction erzeugen und als DualPendingActionEnvelope zurückgeben.
   // Double-Counting-Schutz: alcohol_g wird NIE zu carbs addiert.
-  const totalAlcoholG = (resolvedItems ?? []).reduce(
-    (sum, it) => sum + (typeof it.alcohol_g === "number" && it.alcohol_g > 0 ? it.alcohol_g : 0),
-    0,
-  );
+  // Source: enrichedItems (after server-side fallback), not resolvedItems
+  // (aggregator strips alcohol_g; resolvedItems may be undefined if aggregator is off).
+  const totalAlcoholG = sumAlcoholG(enrichedItems);
 
   const mealParams: import("@/lib/useGlevAI").MealPendingPayload = {
     input_text:     inputText,

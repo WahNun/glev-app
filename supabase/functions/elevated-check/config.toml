@@ -1,4 +1,8 @@
 [functions.elevated-check]
+# No JWT verification — cron-triggered from GitHub Actions without an auth header.
+# Without this, Supabase defaults to verify_jwt = true and returns 401 to the cron curl.
+verify_jwt = false
+
 # Run every 5 minutes — mirrors hypo-check cadence.
 schedule = "*/5 * * * *"
 
