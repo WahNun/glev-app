@@ -1681,7 +1681,7 @@ export default function GlevAIChatSheet({
             </div>
           )}
 
-          {messages.map((m) => (
+          {messages.map((m, mIdx) => (
             <div
               key={m.id}
               style={{
@@ -1770,6 +1770,39 @@ export default function GlevAIChatSheet({
                       <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
                       <path d="M15.54 8.46a5 5 0 0 1 0 7.07"/>
                     </svg>
+                  </button>
+                );
+              })()}
+
+              {/* Retry button — shown below assistant error bubbles when the error
+                  is transient (retryAllowed=true) and a previous user message exists.
+                  Re-sends the last user message that preceded this bubble. */}
+              {m.role === "assistant" && m.retryAllowed && !m.isStreaming && (() => {
+                const prevUser = messages.slice(0, mIdx).reverse().find((p) => p.role === "user");
+                if (!prevUser) return null;
+                return (
+                  <button
+                    type="button"
+                    onClick={() => onSend(prevUser.content)}
+                    style={{
+                      alignSelf: "flex-start",
+                      background: "none",
+                      border: "1px solid var(--border-strong)",
+                      borderRadius: 8,
+                      color: "var(--text-body)",
+                      cursor: "pointer",
+                      fontSize: 12,
+                      padding: "5px 12px",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 5,
+                    }}
+                  >
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                      <polyline points="1 4 1 10 7 10"/>
+                      <path d="M3.51 15a9 9 0 1 0 .49-3.96"/>
+                    </svg>
+                    {t.retry}
                   </button>
                 );
               })()}

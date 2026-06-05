@@ -3134,5 +3134,16 @@
   "hyper_alarm": {
     "notification_title": "Hyper-Alarm",
     "notification_body": "BZ {value} mg/dL — über deinem Hyper-Grenzwert von {threshold} mg/dL. Bitte reagiere jetzt."
+  },
+  "error_code": {
+    "CHAT_TIMEOUT": "Antwort dauert zu lange — bitte erneut versuchen.",
+    "MISTRAL_RATE_LIMITED": "Zu viele Anfragen — bitte kurz warten und erneut versuchen.",
+    "PARSE_FAILED": "Deine Nachricht konnte nicht verarbeitet werden — bitte erneut versuchen.",
+    "VOICE_ERROR": "Spracheingabe fehlgeschlagen — bitte erneut versuchen.",
+    "NETWORK_ERROR": "Verbindung fehlgeschlagen — bitte Internetverbindung prüfen.",
+    "AUTH_ERROR": "Sitzung abgelaufen — bitte neu anmelden.",
+    "PERMISSION_DENIED": "Diese Funktion ist für dein Konto nicht verfügbar.",
+    "UPSTREAM_ERROR": "Ein unerwarteter Fehler ist aufgetreten — bitte kurz warten und erneut versuchen.",
+    "UNKNOWN": "Etwas ist schiefgelaufen — bitte erneut versuchen."
   }
 }

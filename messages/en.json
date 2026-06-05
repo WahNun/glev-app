@@ -3132,5 +3132,16 @@
   "hyper_alarm": {
     "notification_title": "High-glucose alert",
     "notification_body": "BG {value} mg/dL — above your high threshold of {threshold} mg/dL. Please act now."
+  },
+  "error_code": {
+    "CHAT_TIMEOUT": "Response is taking too long — please try again.",
+    "MISTRAL_RATE_LIMITED": "Too many requests — please wait a moment and try again.",
+    "PARSE_FAILED": "Your message could not be processed — please try again.",
+    "VOICE_ERROR": "Voice input failed — please try again.",
+    "NETWORK_ERROR": "Connection failed — please check your internet connection.",
+    "AUTH_ERROR": "Session expired — please sign in again.",
+    "PERMISSION_DENIED": "This feature is not available for your account.",
+    "UPSTREAM_ERROR": "An unexpected error occurred — please wait a moment and try again.",
+    "UNKNOWN": "Something went wrong — please try again."
   }
 }

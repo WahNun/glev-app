@@ -179,10 +179,12 @@ test("consent gate: ai_voice=true + no profile row → 403 'ai consent required'
 
   expect(res.status).toBe(403);
   const json = await res.json();
-  expect(json).toEqual({ error: "ai consent required" });
+  expect(json.error_code).toBe("PERMISSION_DENIED");
+  expect(json.retry_allowed).toBe(false);
+  expect(typeof json.user_message).toBe("string");
 });
 
-test("consent gate: ai_voice=true + ai_consent_at=null → 403 'ai consent required'", async () => {
+test("consent gate: ai_voice=true + ai_consent_at=null → 403 PERMISSION_DENIED", async () => {
   const getMistral = () => {
     throw new Error("should not reach Mistral");
   };
@@ -199,7 +201,9 @@ test("consent gate: ai_voice=true + ai_consent_at=null → 403 'ai consent requi
 
   expect(res.status).toBe(403);
   const json = await res.json();
-  expect(json).toEqual({ error: "ai consent required" });
+  expect(json.error_code).toBe("PERMISSION_DENIED");
+  expect(json.retry_allowed).toBe(false);
+  expect(typeof json.user_message).toBe("string");
 });
 
 test("consent gate: ai_voice=true + ai_consent_at set → passes consent gate (no consent-403)", async () => {
@@ -227,7 +231,7 @@ test("consent gate: ai_voice=true + ai_consent_at set → passes consent gate (n
   // Must NOT be the consent 403 — the request passed the consent gate.
   // (It will fail further in with a 503 or similar from the Mistral stub.)
   const isConsentBlock =
-    res.status === 403 && (await res.json()).error === "ai consent required";
+    res.status === 403 && (await res.json()).error_code === "PERMISSION_DENIED";
   expect(isConsentBlock).toBe(false);
 });
 

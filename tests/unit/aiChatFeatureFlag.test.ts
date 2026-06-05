@@ -123,7 +123,7 @@ test("checkChatFlag: ai_voice = true → returns null (flag passes)", async () =
   expect(result).toBeNull();
 });
 
-test("checkChatFlag: ai_voice = false → returns 403 'not available'", async () => {
+test("checkChatFlag: ai_voice = false → returns 403 PERMISSION_DENIED", async () => {
   const sb = makeClient({ featureFlags: { ai_voice: false } });
 
   const result = await checkChatFlag(sb, TEST_USER_ID);
@@ -131,10 +131,12 @@ test("checkChatFlag: ai_voice = false → returns 403 'not available'", async ()
   expect(result).not.toBeNull();
   expect(result!.status).toBe(403);
   const json = await result!.json();
-  expect(json).toEqual({ error: "not available" });
+  expect(json.error_code).toBe("PERMISSION_DENIED");
+  expect(json.retry_allowed).toBe(false);
+  expect(typeof json.user_message).toBe("string");
 });
 
-test("checkChatFlag: flag key absent → returns 403 'not available'", async () => {
+test("checkChatFlag: flag key absent → returns 403 PERMISSION_DENIED", async () => {
   const sb = makeClient({ featureFlags: {} });
 
   const result = await checkChatFlag(sb, TEST_USER_ID);
@@ -142,10 +144,12 @@ test("checkChatFlag: flag key absent → returns 403 'not available'", async () 
   expect(result).not.toBeNull();
   expect(result!.status).toBe(403);
   const json = await result!.json();
-  expect(json).toEqual({ error: "not available" });
+  expect(json.error_code).toBe("PERMISSION_DENIED");
+  expect(json.retry_allowed).toBe(false);
+  expect(typeof json.user_message).toBe("string");
 });
 
-test("checkChatFlag: no user_settings row → returns 403 'not available'", async () => {
+test("checkChatFlag: no user_settings row → returns 403 PERMISSION_DENIED", async () => {
   const sb = makeClient({ featureFlags: null });
 
   const result = await checkChatFlag(sb, TEST_USER_ID);
@@ -153,14 +157,16 @@ test("checkChatFlag: no user_settings row → returns 403 'not available'", asyn
   expect(result).not.toBeNull();
   expect(result!.status).toBe(403);
   const json = await result!.json();
-  expect(json).toEqual({ error: "not available" });
+  expect(json.error_code).toBe("PERMISSION_DENIED");
+  expect(json.retry_allowed).toBe(false);
+  expect(typeof json.user_message).toBe("string");
 });
 
 // ---------------------------------------------------------------------------
 // Layer 2 — handleChatPost (route-level, dep-injection)
 // ---------------------------------------------------------------------------
 
-test("POST: flag false → 403 'not available' with zero Mistral calls", async () => {
+test("POST: flag false → 403 PERMISSION_DENIED with zero Mistral calls", async () => {
   let mistralCallCount = 0;
   const getMistral = () => {
     mistralCallCount++;
@@ -179,11 +185,13 @@ test("POST: flag false → 403 'not available' with zero Mistral calls", async (
 
   expect(res.status).toBe(403);
   const json = await res.json();
-  expect(json).toEqual({ error: "not available" });
+  expect(json.error_code).toBe("PERMISSION_DENIED");
+  expect(json.retry_allowed).toBe(false);
+  expect(typeof json.user_message).toBe("string");
   expect(mistralCallCount).toBe(0);
 });
 
-test("POST: flag missing → 403 'not available' with zero Mistral calls", async () => {
+test("POST: flag missing → 403 PERMISSION_DENIED with zero Mistral calls", async () => {
   let mistralCallCount = 0;
   const getMistral = () => {
     mistralCallCount++;
@@ -202,7 +210,9 @@ test("POST: flag missing → 403 'not available' with zero Mistral calls", async
 
   expect(res.status).toBe(403);
   const json = await res.json();
-  expect(json).toEqual({ error: "not available" });
+  expect(json.error_code).toBe("PERMISSION_DENIED");
+  expect(json.retry_allowed).toBe(false);
+  expect(typeof json.user_message).toBe("string");
   expect(mistralCallCount).toBe(0);
 });
 
@@ -227,6 +237,6 @@ test("POST: flag true + consent granted → does NOT return flag-403", async () 
   // Must NOT be the feature-flag 403 — the request passed the flag gate.
   // (It will hit a 503 from the Mistral stub, which is expected.)
   const isFlagBlock =
-    res.status === 403 && (await res.json()).error === "not available";
+    res.status === 403 && (await res.json()).error_code === "PERMISSION_DENIED";
   expect(isFlagBlock).toBe(false);
 });

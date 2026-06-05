@@ -2,8 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { Mistral } from "@mistralai/mistralai";
 import { authedClient, type AuthOk, type AuthErr } from "@/app/api/insulin/_helpers";
-import { getMistralClient, mistralConfigError } from "@/lib/ai/mistralClient";
+import { getMistralClient } from "@/lib/ai/mistralClient";
 import { GLEV_CHAT_SYSTEM_PROMPT } from "@/lib/ai/glevChatPrompt";
+import { errorResponse } from "@/lib/api/errorResponse";
+import { getUserFriendlyMessage } from "@/lib/ai/errorMessages";
 import {
   getSystemPromptCache,
   setSystemPromptCache,
@@ -351,7 +353,7 @@ export async function checkChatFlag(
     .maybeSingle();
   const featureFlags = (settingsRow?.feature_flags ?? {}) as Record<string, unknown>;
   if (featureFlags.ai_voice !== true) {
-    return NextResponse.json({ error: "not available" }, { status: 403 });
+    return errorResponse("PERMISSION_DENIED", 403);
   }
   return null;
 }
@@ -386,7 +388,7 @@ export async function handleChatPost(
   // 1. Auth
   const auth = deps.auth ?? await authedClient(req);
   if (!auth.user || !auth.sb) {
-    return NextResponse.json({ error: "not authenticated" }, { status: 401 });
+    return errorResponse("AUTH_ERROR", 401);
   }
   const { user, sb } = auth;
 
@@ -405,10 +407,11 @@ export async function handleChatPost(
     .eq("user_id", user.id)
     .maybeSingle();
   if (profErr) {
-    return NextResponse.json({ error: profErr.message }, { status: 500 });
+    console.error("[chat]", { code: "UPSTREAM_ERROR", cause: profErr.message });
+    return errorResponse("UPSTREAM_ERROR", 500);
   }
   if (!profile?.ai_consent_at) {
-    return NextResponse.json({ error: "ai consent required" }, { status: 403 });
+    return errorResponse("PERMISSION_DENIED", 403);
   }
   const scopes: ContextScopes = {
     glucose: Boolean(profile?.ai_consent_glucose_at),
@@ -418,17 +421,16 @@ export async function handleChatPost(
 
   // 3. Rate limit
   if (await isRateLimited(user.id)) {
-    return NextResponse.json(
-      { error: "rate limit exceeded — max 20 requests per minute" },
-      { status: 429 },
-    );
+    console.error("[chat]", { code: "MISTRAL_RATE_LIMITED", userId: user.id });
+    return errorResponse("MISTRAL_RATE_LIMITED", 429);
   }
 
   // 4. Body
   const raw = await req.json().catch(() => null);
   const v = validateBody(raw);
   if (!v.ok) {
-    return NextResponse.json({ error: v.error }, { status: 400 });
+    console.error("[chat]", { code: "PARSE_FAILED", cause: v.error });
+    return errorResponse("PARSE_FAILED", 400);
   }
   const { message, history, contextSnapshot } = v.body;
   const timezone: string | null = v.body.timezone ?? null;
@@ -438,9 +440,9 @@ export async function handleChatPost(
   let client;
   try {
     client = _getMistral();
-  } catch {
-    const err = mistralConfigError();
-    return NextResponse.json({ error: err.error }, { status: err.status });
+  } catch (e) {
+    console.error("[chat]", { code: "UPSTREAM_ERROR", cause: e instanceof Error ? e.message : String(e) });
+    return errorResponse("UPSTREAM_ERROR", 503);
   }
 
   // Compose messages: system + context preamble + last-10 history + new turn.
@@ -702,8 +704,13 @@ export async function handleChatPost(
         send("[DONE]");
         controller.close();
       } catch (e) {
-        const msg = e instanceof Error ? e.message : "stream error";
-        send(JSON.stringify({ error: msg }));
+        const cause = e instanceof Error ? e.message : "stream error";
+        console.error("[chat]", { code: "UPSTREAM_ERROR", cause });
+        send(JSON.stringify({
+          error_code: "UPSTREAM_ERROR",
+          user_message: getUserFriendlyMessage("UPSTREAM_ERROR", "de"),
+          retry_allowed: true,
+        }));
         send("[DONE]");
         controller.close();
       }

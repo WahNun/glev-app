@@ -5,6 +5,10 @@ import { supabase } from "@/lib/supabase";
 import { scheduleCheckReminder } from "@/lib/mealCheckReminders";
 import { getActionNavConfig } from "@/lib/ai/pendingActions";
 import type { ParsedFood } from "@/lib/meals";
+import { getUserFriendlyMessage, isRetryAllowed } from "@/lib/ai/errorMessages";
+import { readLocaleCookie } from "@/lib/locale";
+import type { AppErrorCode } from "@/lib/ai/errors";
+import { ALL_ERROR_CODES } from "@/lib/ai/errors";
 
 /**
  * useGlevAI — owns everything the Glev AI button + consent modal +
@@ -90,6 +94,9 @@ export type GlevChatMessage = {
   role: "user" | "assistant";
   content: string;
   isStreaming?: boolean;
+  /** Set when this bubble shows an error that the user can retry.
+   *  True only for transient errors (network, rate-limit, upstream). */
+  retryAllowed?: boolean;
   /** Confirm/cancel widgets under the bubble — one per WRITE-tool call.
    *  Multi-entry turns (e.g. exercise + symptom in one message) produce
    *  multiple chips, each confirmed or cancelled independently. */
@@ -422,8 +429,19 @@ export function useGlevAI(opts?: {
           }),
         });
         if (!res.ok || !res.body) {
-          const errBody = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
-          throw new Error(errBody?.error || `HTTP ${res.status}`);
+          const errBody = await res.json().catch(() => ({})) as Record<string, unknown>;
+          const locale = readLocaleCookie() ?? "de";
+          // Always resolve to a typed code — unknown/absent falls back to UNKNOWN.
+          const rawCode = typeof errBody?.error_code === "string" ? errBody.error_code : null;
+          const code: AppErrorCode = (rawCode && ALL_ERROR_CODES.includes(rawCode as AppErrorCode))
+            ? rawCode as AppErrorCode
+            : "UNKNOWN";
+          const msg = getUserFriendlyMessage(code, locale);
+          const err = Object.assign(new Error(msg), {
+            error_code: code,
+            retry_allowed: isRetryAllowed(code),
+          });
+          throw err;
         }
 
         const reader = res.body.getReader();
@@ -443,98 +461,120 @@ export function useGlevAI(opts?: {
             if (!line) continue;
             const payload = line.slice("data:".length).trim();
             if (!payload || payload === "[DONE]") continue;
-            try {
-              const parsed = JSON.parse(payload) as {
-                token?: string;
-                error?: string;
-                navigate?: string;
-                set_macro?: { field: string; value: number };
-                pending_action?: {
-                  token: string;
-                  kind: string;
-                  summary: string;
-                  payload?: unknown;
-                };
-                meal_prep?: {
-                  input_text: string;
-                  carbs: number;
-                  protein: number | null;
-                  fat: number | null;
-                  fiber: number | null;
-                };
+            // Step 1: parse JSON — only malformed-JSON errors are swallowed here.
+            // Semantic errors (error_code frames) are handled OUTSIDE this catch
+            // so their throws propagate to the outer AbortError handler.
+            interface SseFrame {
+              token?: string;
+              error?: string;
+              error_code?: AppErrorCode;
+              user_message?: string;
+              retry_allowed?: boolean;
+              navigate?: string;
+              set_macro?: { field: string; value: number };
+              pending_action?: {
+                token: string;
+                kind: string;
+                summary: string;
+                payload?: unknown;
               };
-              if (parsed.error) throw new Error(parsed.error);
-              if (parsed.navigate) {
-                optsRef.current?.onNavigate?.(parsed.navigate);
-              }
-              if (parsed.meal_prep) {
-                // Collect into the queue ref — do NOT write to sessionStorage
-                // here. Multiple meals in one turn would overwrite each other.
-                // We flush to state after the stream ends and only write the
-                // specific meal's macros when the user taps its chip.
-                const label = (parsed.meal_prep.input_text ?? "").slice(0, 40);
-                pendingMealQueueRef.current = [
-                  ...pendingMealQueueRef.current,
-                  { mealPrep: parsed.meal_prep, label },
-                ];
-              }
-              // Phase 2: set_macro — dispatched as a CustomEvent so the
-              // active engine-macros screen can update its local state
-              // without needing a direct React ref. The tool server-side
-              // emits { set_macro: { field, value } }; here we forward it
-              // to whichever component is listening on the window.
-              if (parsed.set_macro && typeof window !== "undefined") {
-                window.dispatchEvent(
-                  new CustomEvent("glev:set-macro", { detail: parsed.set_macro }),
-                );
-              }
-              if (parsed.pending_action) {
-                // WRITE-tool result: append a confirm/cancel chip to the
-                // currently streaming assistant bubble. Multiple chips can
-                // accumulate in one turn (multi-entry logging).
-                const pa = parsed.pending_action as {
-                  token: string;
-                  kind: string;
-                  summary: string;
-                  payload?: Record<string, unknown>;
-                };
-                const newChip: PendingAction = {
-                  token: pa.token,
-                  kind: pa.kind,
-                  summary: pa.summary,
-                  state: "pending",
-                  payload: pa.payload,
-                };
-                // For log_meal_entry: associate the token with the last
-                // queued meal_prep item so "Engine öffnen" chips can look
-                // up the right macro data without an extra server roundtrip.
-                if (pa.kind === "log_meal_entry" && pendingMealQueueRef.current.length > 0) {
-                  const items = [...pendingMealQueueRef.current];
-                  items[items.length - 1] = { ...items[items.length - 1], token: pa.token };
-                  pendingMealQueueRef.current = items;
-                }
-                setMessages((prev) =>
-                  prev.map((m) =>
-                    m.id === assistantId
-                      ? {
-                          ...m,
-                          pendingActions: [...(m.pendingActions ?? []), newChip],
-                        }
-                      : m,
-                  ),
-                );
-              }
-              if (parsed.token) {
-                setMessages((prev) =>
-                  prev.map((m) =>
-                    m.id === assistantId
-                      ? { ...m, content: m.content + parsed.token }
-                      : m,
-                  ),
-                );
-              }
+              meal_prep?: {
+                input_text: string;
+                carbs: number;
+                protein: number | null;
+                fat: number | null;
+                fiber: number | null;
+              };
+            }
+            let parsed: SseFrame | null = null;
+            try {
+              parsed = JSON.parse(payload) as SseFrame;
             } catch {
-              /* ignore malformed frames */
+              /* ignore malformed JSON frames */
+            }
+            if (!parsed) continue;
+            // Step 2: semantic error frame — throw propagates to outer catch(e).
+            // Always map to a typed code so the UI never shows raw strings.
+            if (parsed.error_code || parsed.error) {
+              const locale = readLocaleCookie() ?? "de";
+              const rawCode = parsed.error_code ?? null;
+              const code: AppErrorCode = (rawCode && ALL_ERROR_CODES.includes(rawCode))
+                ? rawCode
+                : "UNKNOWN";
+              const msg = getUserFriendlyMessage(code, locale);
+              throw Object.assign(new Error(msg), {
+                error_code: code,
+                retry_allowed: isRetryAllowed(code),
+              });
+            }
+            if (parsed.navigate) {
+              optsRef.current?.onNavigate?.(parsed.navigate);
+            }
+            if (parsed.meal_prep) {
+              // Collect into the queue ref — do NOT write to sessionStorage
+              // here. Multiple meals in one turn would overwrite each other.
+              // We flush to state after the stream ends and only write the
+              // specific meal's macros when the user taps its chip.
+              const label = (parsed.meal_prep.input_text ?? "").slice(0, 40);
+              pendingMealQueueRef.current = [
+                ...pendingMealQueueRef.current,
+                { mealPrep: parsed.meal_prep, label },
+              ];
+            }
+            // Phase 2: set_macro — dispatched as a CustomEvent so the
+            // active engine-macros screen can update its local state
+            // without needing a direct React ref. The tool server-side
+            // emits { set_macro: { field, value } }; here we forward it
+            // to whichever component is listening on the window.
+            if (parsed.set_macro && typeof window !== "undefined") {
+              window.dispatchEvent(
+                new CustomEvent("glev:set-macro", { detail: parsed.set_macro }),
+              );
+            }
+            if (parsed.pending_action) {
+              // WRITE-tool result: append a confirm/cancel chip to the
+              // currently streaming assistant bubble. Multiple chips can
+              // accumulate in one turn (multi-entry logging).
+              const pa = parsed.pending_action as {
+                token: string;
+                kind: string;
+                summary: string;
+                payload?: Record<string, unknown>;
+              };
+              const newChip: PendingAction = {
+                token: pa.token,
+                kind: pa.kind,
+                summary: pa.summary,
+                state: "pending",
+                payload: pa.payload,
+              };
+              // For log_meal_entry: associate the token with the last
+              // queued meal_prep item so "Engine öffnen" chips can look
+              // up the right macro data without an extra server roundtrip.
+              if (pa.kind === "log_meal_entry" && pendingMealQueueRef.current.length > 0) {
+                const items = [...pendingMealQueueRef.current];
+                items[items.length - 1] = { ...items[items.length - 1], token: pa.token };
+                pendingMealQueueRef.current = items;
+              }
+              setMessages((prev) =>
+                prev.map((m) =>
+                  m.id === assistantId
+                    ? {
+                        ...m,
+                        pendingActions: [...(m.pendingActions ?? []), newChip],
+                      }
+                    : m,
+                ),
+              );
+            }
+            if (parsed.token) {
+              setMessages((prev) =>
+                prev.map((m) =>
+                  m.id === assistantId
+                    ? { ...m, content: m.content + parsed!.token }
+                    : m,
+                ),
+              );
             }
           }
         }
@@ -544,14 +584,24 @@ export function useGlevAI(opts?: {
         if (e instanceof Error && e.name === "AbortError") {
           // Silent — the navigation/close already handled the UX.
         } else {
-          const msg = e instanceof Error ? e.message : "Anfrage fehlgeschlagen";
+          const locale = readLocaleCookie() ?? "de";
+          // Resolve to a typed code — errors thrown by our SSE/HTTP handlers
+          // carry error_code; plain network errors (fetch failed, etc.) have
+          // none, so they fall back to UNKNOWN. Never surface e.message.
+          const rawCode = (e as Record<string, unknown>)?.error_code as string | undefined;
+          const code: AppErrorCode = (rawCode && ALL_ERROR_CODES.includes(rawCode as AppErrorCode))
+            ? rawCode as AppErrorCode
+            : "UNKNOWN";
+          const msg = getUserFriendlyMessage(code, locale);
+          const retry = isRetryAllowed(code);
           setMessages((prev) =>
             prev.map((m) =>
               m.id === assistantId
                 ? {
                     ...m,
-                    content: m.content || `Da ist etwas schiefgelaufen: ${msg}`,
+                    content: m.content || msg,
                     isStreaming: false,
+                    retryAllowed: retry,
                   }
                 : m,
             ),
