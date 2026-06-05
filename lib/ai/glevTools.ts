@@ -194,7 +194,7 @@ export const GLEV_TOOLS = [
           logged_at: {
             type: "string",
             description:
-              "Optional: Zeitpunkt der Mahlzeit als ISO-8601-String (z. B. '2026-06-04T10:30:00'). Wenn der Nutzer eine Uhrzeit nennt oder die Mahlzeit in der Vergangenheit liegt, hier eintragen; sonst weglassen — das System verwendet dann den aktuellen Zeitpunkt.",
+              "Optional: Zeitpunkt der Mahlzeit als ISO-8601-String MIT UTC-Offset (z. B. '2026-06-05T21:40:00+02:00'). Übernehme immer den Offset aus dem 'Jetzt:'-String im Kontext-Preamble — rechne nur die Uhrzeit zurück, nicht den Offset. Wenn der Nutzer eine Uhrzeit nennt oder die Mahlzeit in der Vergangenheit liegt, hier eintragen; sonst weglassen — das System verwendet dann den aktuellen Zeitpunkt.",
           },
           items: {
             type: "array",
@@ -1471,12 +1471,11 @@ async function toolLogMealEntry(
       ? Number(args.fiber_grams)
       : null;
 
-  // Resolve logged_at: use provided ISO string or default to now.
-  const loggedAtRaw = typeof args.logged_at === "string" ? args.logged_at.trim() : "";
-  const loggedAtMs = loggedAtRaw ? new Date(loggedAtRaw).getTime() : Date.now();
-  const loggedAtIso = Number.isFinite(loggedAtMs)
-    ? new Date(loggedAtMs).toISOString()
+  // Resolve logged_at: use provided ISO string (with offset awareness) or default to now.
+  const loggedAtIso = typeof args.logged_at === "string" && args.logged_at.trim()
+    ? resolveLoggedAt(args.logged_at, userTimezone)
     : new Date().toISOString();
+  const loggedAtMs = new Date(loggedAtIso).getTime();
 
   // Try to find nearest CGM reading ±60 min for glucose_before (best-effort).
   let glucoseBefore: number | null = null;
@@ -1641,9 +1640,11 @@ async function toolLogMealEntry(
     ...(totalAlcoholG > 0 ? { total_alcohol_g: Math.round(totalAlcoholG * 10) / 10 } : {}),
   };
 
+  const tzField = userTimezone ? { _user_timezone: userTimezone } : {};
+
   if (totalAlcoholG > 0) {
     // Create BOTH pending_action rows in the DB atomically.
-    const mealResult = await createPendingAction(sb, userId, "log_meal_entry", mealParams, summary);
+    const mealResult = await createPendingAction(sb, userId, "log_meal_entry", { ...mealParams, ...tzField }, summary);
     if ("error" in mealResult) return mealResult;
 
     const mealToken = mealResult.pending_action.token;
@@ -1656,7 +1657,7 @@ async function toolLogMealEntry(
       logged_at:         loggedAtIso,
     };
     const inflSummary = `Alkohol · ${Math.round(totalAlcoholG)}g · ${timeLabel.timeOnly}`;
-    const inflResult = await createPendingAction(sb, userId, "log_influence_entry", inflParams as unknown as Record<string, unknown>, inflSummary);
+    const inflResult = await createPendingAction(sb, userId, "log_influence_entry", { ...inflParams, ...tzField } as unknown as Record<string, unknown>, inflSummary);
     if ("error" in inflResult) {
       // Influence creation failed — still return the meal alone (non-fatal).
       console.error("[dual-emission] influence pending_action failed:", inflResult.error);
@@ -1675,7 +1676,7 @@ async function toolLogMealEntry(
     } satisfies DualPendingActionEnvelope;
   }
 
-  return await createPendingAction(sb, userId, "log_meal_entry", mealParams, summary);
+  return await createPendingAction(sb, userId, "log_meal_entry", { ...mealParams, ...tzField }, summary);
 }
 
 async function toolLogInsulinEntry(
@@ -1698,7 +1699,7 @@ async function toolLogInsulinEntry(
       ? args.notes.trim().slice(0, 200)
       : null;
 
-  const loggedAt = resolveLoggedAt(args.logged_at);
+  const loggedAt = resolveLoggedAt(args.logged_at, userTimezone);
   const timeLabel = formatLoggedAt(new Date(loggedAt).getTime(), userTimezone);
   const typeLabel = insulinType === "bolus" ? "Bolus" : "Basal";
 
@@ -1708,6 +1709,7 @@ async function toolLogInsulinEntry(
     insulin_type: insulinType,
     notes,
     logged_at: loggedAt,
+    ...(userTimezone ? { _user_timezone: userTimezone } : {}),
   };
   const summary = `${typeLabel}: ${units} IE ${insulinName}${notes ? ` (${notes})` : ""} — ${timeLabel}`;
 
@@ -1733,7 +1735,7 @@ async function toolLogBolusEntry(
       ? args.notes.trim().slice(0, 200)
       : null;
 
-  const loggedAt = resolveLoggedAt(args.logged_at);
+  const loggedAt = resolveLoggedAt(args.logged_at, userTimezone);
   const timeLabel = formatLoggedAt(new Date(loggedAt).getTime(), userTimezone);
 
   const params = {
@@ -1741,6 +1743,7 @@ async function toolLogBolusEntry(
     insulin_name: insulinName,
     notes,
     logged_at: loggedAt,
+    ...(userTimezone ? { _user_timezone: userTimezone } : {}),
   };
   const summary = `Bolus: ${units} IE ${insulinName}${notes ? ` (${notes})` : ""} — ${timeLabel}`;
 
@@ -1766,7 +1769,7 @@ async function toolLogBasalEntry(
       ? args.notes.trim().slice(0, 200)
       : null;
 
-  const loggedAt = resolveLoggedAt(args.logged_at);
+  const loggedAt = resolveLoggedAt(args.logged_at, userTimezone);
   const timeLabel = formatLoggedAt(new Date(loggedAt).getTime(), userTimezone);
 
   const params = {
@@ -1774,6 +1777,7 @@ async function toolLogBasalEntry(
     insulin_name: insulinName,
     notes,
     logged_at: loggedAt,
+    ...(userTimezone ? { _user_timezone: userTimezone } : {}),
   };
   const summary = `Basal: ${units} IE ${insulinName}${notes ? ` (${notes})` : ""} — ${timeLabel}`;
 
@@ -1781,12 +1785,58 @@ async function toolLogBasalEntry(
 }
 
 /**
- * Resolves the `logged_at` arg from a tool call.
- * Accepts an ISO-8601 string; falls back to the current moment if absent or invalid.
+ * Converts a naive ISO-8601 string (no timezone offset, e.g. "2026-06-05T16:30:00")
+ * to a UTC millisecond timestamp, interpreting the wall-clock time in the given
+ * IANA timezone. Defensive fallback for when the model omits the UTC offset.
+ *
+ * Algorithm: treat the naive string as UTC ("approxUtcMs"), measure how much
+ * that instant differs from local time in the target timezone to get the offset,
+ * then subtract the offset to find the true UTC instant.
  */
-function resolveLoggedAt(raw: unknown): string {
+function naiveIsoToUtcMs(naiveIso: string, tz: string): number | null {
+  try {
+    const m = naiveIso.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?/);
+    if (!m) return null;
+    const [, y, mo, d, h, min, s = "00"] = m;
+    const approxUtcMs = Date.UTC(+y, +mo - 1, +d, +h, +min, +s);
+    const parts = new Intl.DateTimeFormat("en-CA", {
+      timeZone: tz,
+      year: "numeric", month: "2-digit", day: "2-digit",
+      hour: "2-digit", minute: "2-digit", second: "2-digit",
+      hour12: false,
+    }).formatToParts(new Date(approxUtcMs));
+    const get = (type: string) =>
+      parseInt(parts.find((p) => p.type === type)?.value ?? "0", 10);
+    const localMs = Date.UTC(
+      get("year"), get("month") - 1, get("day"),
+      get("hour"), get("minute"), get("second"),
+    );
+    return approxUtcMs - (localMs - approxUtcMs);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Resolves the `logged_at` arg from a tool call.
+ * Accepts an ISO-8601 string with or without UTC offset.
+ * When the string has no offset and a timezone is provided, the wall-clock time
+ * is interpreted as local time in that timezone (defensive fallback for when the
+ * model omits the offset despite preamble instructions).
+ * Falls back to the current moment if absent or invalid.
+ */
+function resolveLoggedAt(raw: unknown, timezone?: string | null): string {
   if (typeof raw === "string" && raw.trim()) {
-    const ms = new Date(raw.trim()).getTime();
+    const s = raw.trim();
+    if (/Z|[+-]\d{2}:\d{2}$/.test(s)) {
+      const ms = new Date(s).getTime();
+      if (Number.isFinite(ms)) return new Date(ms).toISOString();
+    }
+    if (timezone) {
+      const ms = naiveIsoToUtcMs(s, timezone);
+      if (ms !== null) return new Date(ms).toISOString();
+    }
+    const ms = new Date(s).getTime();
     if (Number.isFinite(ms)) return new Date(ms).toISOString();
   }
   return new Date().toISOString();
@@ -1964,7 +2014,7 @@ async function toolLogExerciseEntry(
   }
 
   const notes = shorten(typeof args.notes === "string" ? args.notes : null, 200);
-  const loggedAt = resolveLoggedAt(args.logged_at);
+  const loggedAt = resolveLoggedAt(args.logged_at, userTimezone);
   const timeLabel = formatInUserTimezone(new Date(loggedAt).getTime(), userTimezone);
 
   const typeLabel: Record<string, string> = {
@@ -1988,6 +2038,7 @@ async function toolLogExerciseEntry(
     intensity,
     notes,
     logged_at: loggedAt,
+    ...(userTimezone ? { _user_timezone: userTimezone } : {}),
   }, summary);
 }
 
@@ -2029,7 +2080,7 @@ async function toolLogSymptomEntry(
   const severity = Math.round(severityRaw);
 
   const notes = shorten(typeof args.notes === "string" ? args.notes : null, 200);
-  const loggedAt = resolveLoggedAt(args.logged_at);
+  const loggedAt = resolveLoggedAt(args.logged_at, userTimezone);
   const timeLabel = formatInUserTimezone(new Date(loggedAt).getTime(), userTimezone);
 
   // Detect PMS context: if the user has cycle logging enabled and at least
@@ -2057,6 +2108,7 @@ async function toolLogSymptomEntry(
     notes,
     logged_at: loggedAt,
     ...(category ? { category } : {}),
+    ...(userTimezone ? { _user_timezone: userTimezone } : {}),
   }, summary);
 }
 
@@ -2080,7 +2132,7 @@ async function toolLogInfluenceEntry(
   const details = shorten(typeof args.details === "string" ? args.details : null, 200);
   const amount = shorten(typeof args.amount === "string" ? args.amount : null, 100);
   const notes = shorten(typeof args.notes === "string" ? args.notes : null, 200);
-  const loggedAt = resolveLoggedAt(args.logged_at);
+  const loggedAt = resolveLoggedAt(args.logged_at, userTimezone);
   const timeLabel = formatInUserTimezone(new Date(loggedAt).getTime(), userTimezone);
 
   const typeLabel: Record<string, string> = {
@@ -2103,6 +2155,7 @@ async function toolLogInfluenceEntry(
     amount,
     notes,
     logged_at: loggedAt,
+    ...(userTimezone ? { _user_timezone: userTimezone } : {}),
   }, summary);
 }
 

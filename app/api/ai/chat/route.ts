@@ -271,10 +271,14 @@ type ContextScopes = { glucose: boolean; iob: boolean; history: boolean };
 function contextPreamble(
   ctx: ContextSnapshot,
   scopes: ContextScopes,
-  todayLocalDate: string,
+  timezone: string | null,
 ): string {
+  const todayLocalDate = todayInTimezone(timezone);
+  const nowIso = nowIsoWithOffset(timezone);
+  const nowTime = nowIso.slice(11, 16);
   const lines: string[] = [
     `Heute ist ${todayLocalDate} (Datum in der lokalen Zeitzone des Nutzers; für add_appointment relative Angaben wie „nächste Woche" auf das absolute Datum umrechnen).`,
+    `Aktuelle Uhrzeit: ${nowTime} Uhr (Lokalzeit). Jetzt: ${nowIso} — nutze diesen ISO-8601-String mit Offset als Vorlage für logged_at (z. B. für „vor 20 Minuten": Offset übernehmen, Uhrzeit entsprechend zurückrechnen).`,
     "Kontext-Snapshot des Nutzers (kann veraltet oder Platzhalter sein — wenn unklar, vorsichtig formulieren):",
   ];
   if (ctx.screen) lines.push(`- Screen: ${ctx.screen}`);
@@ -299,6 +303,49 @@ function todayInTimezone(timezone: string | null): string {
     }).format(new Date());
   } catch {
     return new Date().toISOString().slice(0, 10);
+  }
+}
+
+/**
+ * Returns the current moment as an ISO-8601 string with the UTC offset for
+ * the given IANA timezone, e.g. "2026-06-05T22:00:00+02:00". Injected into
+ * the system preamble so the model can copy the format verbatim for logged_at
+ * fields — ensuring the server always receives an unambiguous timestamp.
+ */
+function nowIsoWithOffset(timezone: string | null): string {
+  const tz = timezone ?? "Europe/Berlin";
+  const now = new Date();
+  try {
+    const parts = new Intl.DateTimeFormat("en-CA", {
+      timeZone: tz,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      hour12: false,
+    }).formatToParts(now);
+    const get = (type: string) =>
+      parseInt(parts.find((p) => p.type === type)?.value ?? "0", 10);
+    const localMs = Date.UTC(
+      get("year"), get("month") - 1, get("day"),
+      get("hour"), get("minute"), get("second"),
+    );
+    const offsetMins = Math.round((localMs - now.getTime()) / 60_000);
+    const sign = offsetMins >= 0 ? "+" : "-";
+    const absOff = Math.abs(offsetMins);
+    const oh = String(Math.floor(absOff / 60)).padStart(2, "0");
+    const om = String(absOff % 60).padStart(2, "0");
+    const year  = String(get("year"));
+    const month = String(get("month")).padStart(2, "0");
+    const day   = String(get("day")).padStart(2, "0");
+    const hour  = String(get("hour")).padStart(2, "0");
+    const min   = String(get("minute")).padStart(2, "0");
+    const sec   = String(get("second")).padStart(2, "0");
+    return `${year}-${month}-${day}T${hour}:${min}:${sec}${sign}${oh}:${om}`;
+  } catch {
+    return now.toISOString();
   }
 }
 
@@ -556,7 +603,7 @@ export async function handleChatPost(
       content: contextPreamble(
         contextSnapshot,
         scopes,
-        todayInTimezone(timezone),
+        timezone,
       ),
     },
     ...(history ?? []).map((m) => ({

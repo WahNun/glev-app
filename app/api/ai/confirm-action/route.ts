@@ -244,7 +244,8 @@ async function execLogMealEntry(
     typeof p.glucose_before === "number" && Number.isFinite(p.glucose_before)
       ? p.glucose_before
       : null;
-  const createdAt = resolveLoggedAt(p.logged_at);
+  const tz = typeof p._user_timezone === "string" && p._user_timezone ? p._user_timezone : null;
+  const createdAt = resolveLoggedAt(p.logged_at, tz);
 
   const row: Record<string, unknown> = {
     user_id: userId,
@@ -270,9 +271,53 @@ async function execLogMealEntry(
   return { insertedId: data?.id as string | undefined };
 }
 
-function resolveLoggedAt(raw: unknown): string {
+/**
+ * Converts a naive ISO-8601 string (no timezone offset, e.g. "2026-06-05T16:30:00")
+ * to a UTC millisecond timestamp by interpreting the wall-clock time in the given
+ * IANA timezone. Defensive fallback for when the model omits the UTC offset.
+ */
+function naiveIsoToUtcMs(naiveIso: string, tz: string): number | null {
+  try {
+    const m = naiveIso.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?/);
+    if (!m) return null;
+    const [, y, mo, d, h, min, s = "00"] = m;
+    const approxUtcMs = Date.UTC(+y, +mo - 1, +d, +h, +min, +s);
+    const parts = new Intl.DateTimeFormat("en-CA", {
+      timeZone: tz,
+      year: "numeric", month: "2-digit", day: "2-digit",
+      hour: "2-digit", minute: "2-digit", second: "2-digit",
+      hour12: false,
+    }).formatToParts(new Date(approxUtcMs));
+    const get = (type: string) =>
+      parseInt(parts.find((p) => p.type === type)?.value ?? "0", 10);
+    const localMs = Date.UTC(
+      get("year"), get("month") - 1, get("day"),
+      get("hour"), get("minute"), get("second"),
+    );
+    return approxUtcMs - (localMs - approxUtcMs);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Resolves a `logged_at` value to a UTC ISO string.
+ * When the string carries no offset and a user timezone is provided, the
+ * wall-clock time is interpreted in that timezone (defensive fallback for when
+ * the model omits the offset). Falls back to the current moment if absent/invalid.
+ */
+function resolveLoggedAt(raw: unknown, timezone?: string | null): string {
   if (typeof raw === "string" && raw.trim()) {
-    const ms = new Date(raw.trim()).getTime();
+    const s = raw.trim();
+    if (/Z|[+-]\d{2}:\d{2}$/.test(s)) {
+      const ms = new Date(s).getTime();
+      if (Number.isFinite(ms)) return new Date(ms).toISOString();
+    }
+    if (timezone) {
+      const ms = naiveIsoToUtcMs(s, timezone);
+      if (ms !== null) return new Date(ms).toISOString();
+    }
+    const ms = new Date(s).getTime();
     if (Number.isFinite(ms)) return new Date(ms).toISOString();
   }
   return new Date().toISOString();
@@ -320,7 +365,8 @@ async function execLogBolusEntry(
       : "Bolus";
   const notes =
     typeof p.notes === "string" && p.notes.trim() ? p.notes.trim() : null;
-  const createdAt = resolveLoggedAt(p.logged_at);
+  const tz = typeof p._user_timezone === "string" && p._user_timezone ? p._user_timezone : null;
+  const createdAt = resolveLoggedAt(p.logged_at, tz);
 
   if (units === null || !Number.isFinite(units) || units <= 0 || units > 100) {
     throw new Error("units muss zwischen 0 und 100 IE liegen");
@@ -359,7 +405,8 @@ async function execLogBasalEntry(
       : "Basal";
   const notes =
     typeof p.notes === "string" && p.notes.trim() ? p.notes.trim() : null;
-  const createdAt = resolveLoggedAt(p.logged_at);
+  const tz = typeof p._user_timezone === "string" && p._user_timezone ? p._user_timezone : null;
+  const createdAt = resolveLoggedAt(p.logged_at, tz);
 
   if (units === null || !Number.isFinite(units) || units <= 0 || units > 100) {
     throw new Error("units muss zwischen 0 und 100 IE liegen");
@@ -435,7 +482,8 @@ async function execLogExerciseEntry(
 
   const notes =
     typeof p.notes === "string" && p.notes.trim() ? p.notes.trim() : null;
-  const createdAt = resolveLoggedAt(p.logged_at);
+  const tz = typeof p._user_timezone === "string" && p._user_timezone ? p._user_timezone : null;
+  const createdAt = resolveLoggedAt(p.logged_at, tz);
 
   const { data, error } = await sb
     .from("exercise_logs")
@@ -466,7 +514,8 @@ async function execLogSymptomEntry(
   }
   const notes =
     typeof p.notes === "string" && p.notes.trim() ? p.notes.trim() : null;
-  const occurredAt = resolveLoggedAt(p.logged_at);
+  const tz = typeof p._user_timezone === "string" && p._user_timezone ? p._user_timezone : null;
+  const occurredAt = resolveLoggedAt(p.logged_at, tz);
 
   // Build the per-symptom severities JSONB map from the flat severity value.
   const severities: Record<string, number> = {};
@@ -508,7 +557,8 @@ async function execLogInfluenceEntry(
     typeof p.amount === "string" && p.amount.trim() ? p.amount.trim() : null;
   const notes =
     typeof p.notes === "string" && p.notes.trim() ? p.notes.trim() : null;
-  const occurredAt = resolveLoggedAt(p.logged_at);
+  const tz = typeof p._user_timezone === "string" && p._user_timezone ? p._user_timezone : null;
+  const occurredAt = resolveLoggedAt(p.logged_at, tz);
 
   // Dual-Emission linkage: if source_meal_token is present, resolve the
   // meal's DB id so we can store source_meal_id (FK to meals.id).
