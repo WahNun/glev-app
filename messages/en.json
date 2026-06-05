@@ -2868,6 +2868,20 @@
       "long_body": "Hold the button down to open the quick-add menu: log insulin, a fingerstick, exercise or symptoms — without switching tabs.",
       "done": "Let's go"
     },
+    "critical_alerts": {
+      "headline": "Wake up when it counts",
+      "sub": "Glev can alert you at full volume even in silent mode or Focus — for example when your glucose drops dangerously low overnight.",
+      "bullet_hypo_title": "Life-critical hypoglycaemia",
+      "bullet_hypo_body": "Alarm below your hypo threshold bypasses silent mode and Do Not Disturb completely.",
+      "bullet_hyper_title": "Severe hyperglycaemia",
+      "bullet_hyper_body": "Alarm above your hyper threshold — e.g. a missed overnight correction.",
+      "bullet_control_title": "You stay in control",
+      "bullet_control_body": "Critical Alerts can be disabled anytime in Settings → Sensor & Alarms.",
+      "activate_btn": "Yes, enable Critical Alerts",
+      "activating": "Enabling …",
+      "later_btn": "Decide later",
+      "fine_print": "Used exclusively for life-critical hypo and severe hyper warnings — never for other notifications."
+    },
     "install": {
       "headline": "Add Glev to your home screen",
       "sub": "The native iOS & Android apps are arriving around 1 July — until then, add Glev to your home screen.",
