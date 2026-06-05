@@ -65,6 +65,7 @@ const COPY = {
     ai_source_label:       "KI",
     mic_stop:              "Aufnahme stoppen",
     mic_start:             "Spracheingabe starten",
+    mic_rate_limit:        (sec: number) => `Bitte ${sec} Sek. warten`,
     placeholder_listening: "Spreche …",
     placeholder_idle:      "Frag Glev …",
     send:                  "Senden",
@@ -113,6 +114,7 @@ const COPY = {
     ai_source_label:       "AI",
     mic_stop:              "Stop recording",
     mic_start:             "Start voice input",
+    mic_rate_limit:        (sec: number) => `Wait ${sec} sec`,
     placeholder_listening: "Listening …",
     placeholder_idle:      "Ask Glev …",
     send:                  "Send",
@@ -1222,6 +1224,7 @@ export default function GlevAIChatSheet({
     isTranscribing,
     startListening,
     stopListening,
+    voiceCountdown,
     pendingIntent,
     confirmPendingIntent,
     dismissPendingIntent,
@@ -1908,53 +1911,72 @@ export default function GlevAIChatSheet({
             borderTop: "1px solid var(--border-soft)",
           }}
         >
-          {/* Mic button — hold to talk; Glev icon rotates while listening */}
-          <button
-            type="button"
-            data-glev-mic="true"
-            aria-label={isListening ? t.mic_stop : t.mic_start}
-            aria-pressed={isListening}
-            onPointerDown={(e) => {
-              e.preventDefault();
-              setSttError(null);
-              setSttPartial(null);
-              void startListening();
-            }}
-            onPointerUp={() => stopListening()}
-            onPointerLeave={() => { if (isListening) stopListening(); }}
-            style={{
-              flexShrink: 0,
-              width: 36,
-              height: 36,
-              borderRadius: 18,
-              border: isListening ? `1px solid ${ACCENT}` : "1px solid var(--border)",
-              cursor: "pointer",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              background: isListening ? "rgba(139,92,246,0.12)" : "var(--surface-alt)",
-              animation: "none",
-              touchAction: "none",
-              transition: "background 0.15s, border-color 0.15s",
-            }}
-          >
-            <span
+          {/* Mic button — hold to talk; Glev icon rotates while listening.
+              When a STT rate-limit is active, the button is disabled and shows
+              a "Bitte X Sek. warten" countdown label in place of the icon. */}
+          <div style={{ flexShrink: 0, display: "flex", flexDirection: "column", alignItems: "center", gap: 2 }}>
+            <button
+              type="button"
+              data-glev-mic="true"
+              disabled={!!voiceCountdown}
+              aria-label={voiceCountdown ? t.mic_rate_limit(voiceCountdown) : isListening ? t.mic_stop : t.mic_start}
+              aria-pressed={isListening}
+              onPointerDown={(e) => {
+                if (voiceCountdown) return;
+                e.preventDefault();
+                setSttError(null);
+                setSttPartial(null);
+                void startListening();
+              }}
+              onPointerUp={() => { if (!voiceCountdown) stopListening(); }}
+              onPointerLeave={() => { if (isListening && !voiceCountdown) stopListening(); }}
               style={{
+                flexShrink: 0,
+                width: 36,
+                height: 36,
+                borderRadius: 18,
+                border: voiceCountdown
+                  ? "1px solid var(--border-soft)"
+                  : isListening ? `1px solid ${ACCENT}` : "1px solid var(--border)",
+                cursor: voiceCountdown ? "not-allowed" : "pointer",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
-                animation: isListening ? "glevIconSpin 1.6s linear infinite" : "none",
+                background: voiceCountdown
+                  ? "var(--surface-alt)"
+                  : isListening ? "rgba(139,92,246,0.12)" : "var(--surface-alt)",
+                opacity: voiceCountdown ? 0.4 : 1,
+                animation: "none",
+                touchAction: "none",
+                transition: "background 0.15s, border-color 0.15s, opacity 0.15s",
               }}
             >
-              <GlevLogo size={20} color={isListening ? ACCENT : "var(--text-dim)"} bg="transparent" />
-            </span>
-            <style>{`
-              @keyframes glevIconSpin {
-                from { transform: rotate(0deg); }
-                to   { transform: rotate(360deg); }
-              }
-            `}</style>
-          </button>
+              <span
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  animation: isListening ? "glevIconSpin 1.6s linear infinite" : "none",
+                }}
+              >
+                <GlevLogo size={20} color={voiceCountdown ? "var(--text-dim)" : isListening ? ACCENT : "var(--text-dim)"} bg="transparent" />
+              </span>
+              <style>{`
+                @keyframes glevIconSpin {
+                  from { transform: rotate(0deg); }
+                  to   { transform: rotate(360deg); }
+                }
+              `}</style>
+            </button>
+            {voiceCountdown ? (
+              <span
+                data-testid="stt-rate-limit-countdown"
+                style={{ fontSize: 9, color: "var(--text-dim)", lineHeight: 1, whiteSpace: "nowrap" }}
+              >
+                {t.mic_rate_limit(voiceCountdown)}
+              </span>
+            ) : null}
+          </div>
 
           <input
             ref={inputRef}

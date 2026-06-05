@@ -5,6 +5,31 @@ import { authedClient } from "@/app/api/insulin/_helpers";
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
+function isMistral429(e: unknown): boolean {
+  if (!e || typeof e !== "object") return false;
+  const err = e as Record<string, unknown>;
+  return (
+    err.statusCode === 429 ||
+    err.status === 429 ||
+    (typeof err.message === "string" && err.message.includes("429"))
+  );
+}
+
+function getRetryAfterSec(e: unknown): number {
+  if (!e || typeof e !== "object") return 5;
+  const headers = (e as Record<string, unknown>).headers as Record<string, string> | undefined;
+  if (headers) {
+    const ra = headers["retry-after"] ?? headers["Retry-After"];
+    if (ra) {
+      const n = Number(ra);
+      if (!isNaN(n) && n > 0) return Math.ceil(n);
+      const d = Date.parse(ra);
+      if (!isNaN(d)) return Math.max(1, Math.ceil((d - Date.now()) / 1000));
+    }
+  }
+  return 5;
+}
+
 /**
  * Pure accumulation logic for the Mistral transcription event stream.
  * Exported for unit-test access — no I/O, no auth, no Mistral client.
@@ -129,10 +154,15 @@ export async function POST(req: NextRequest) {
         // eslint-disable-next-line no-console
         console.log("[STT stream] done · total:", Date.now() - t0, "ms");
       } catch (e) {
-        const error = e instanceof Error ? e.message : "Transcription failed";
         // eslint-disable-next-line no-console
-        console.log("[STT stream] FAILED after", Date.now() - t0, "ms:", error);
-        sendEvent({ type: "error", error });
+        console.log("[STT stream] FAILED after", Date.now() - t0, "ms:", e instanceof Error ? e.message : e);
+        if (isMistral429(e)) {
+          const retry_after_sec = getRetryAfterSec(e);
+          sendEvent({ type: "error", error: "Zu viele Anfragen. Bitte kurz warten.", retry_after_sec });
+        } else {
+          const error = e instanceof Error ? e.message : "Transcription failed";
+          sendEvent({ type: "error", error });
+        }
       } finally {
         controller.close();
       }

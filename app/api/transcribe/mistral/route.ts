@@ -5,6 +5,31 @@ import { authedClient } from "@/app/api/insulin/_helpers";
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
+function isMistral429(e: unknown): boolean {
+  if (!e || typeof e !== "object") return false;
+  const err = e as Record<string, unknown>;
+  return (
+    err.statusCode === 429 ||
+    err.status === 429 ||
+    (typeof err.message === "string" && err.message.includes("429"))
+  );
+}
+
+function getRetryAfterSec(e: unknown): number {
+  if (!e || typeof e !== "object") return 5;
+  const headers = (e as Record<string, unknown>).headers as Record<string, string> | undefined;
+  if (headers) {
+    const ra = headers["retry-after"] ?? headers["Retry-After"];
+    if (ra) {
+      const n = Number(ra);
+      if (!isNaN(n) && n > 0) return Math.ceil(n);
+      const d = Date.parse(ra);
+      if (!isNaN(d)) return Math.max(1, Math.ceil((d - Date.now()) / 1000));
+    }
+  }
+  return 5;
+}
+
 /**
  * POST /api/transcribe/mistral
  *
@@ -60,6 +85,13 @@ export async function POST(req: NextRequest) {
   } catch (err: unknown) {
     // eslint-disable-next-line no-console
     console.log("[STT mistral] FAILED after", Date.now() - t0, "ms:", err instanceof Error ? err.message : err);
+    if (isMistral429(err)) {
+      const retry_after_sec = getRetryAfterSec(err);
+      return NextResponse.json(
+        { error: "Zu viele Anfragen. Bitte kurz warten.", retry_after_sec },
+        { status: 429 },
+      );
+    }
     const msg = err instanceof Error ? err.message : "Transcription failed";
     return NextResponse.json({ error: msg }, { status: 500 });
   }

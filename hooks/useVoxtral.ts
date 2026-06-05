@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState, useCallback } from "react";
+import { useRef, useState, useCallback, useEffect } from "react";
 
 /**
  * useVoxtral — hold-to-talk hook for GlevAIChatSheet.
@@ -53,6 +53,13 @@ export interface UseVoxtralReturn {
   isTranscribing: boolean;
   startListening: () => Promise<void>;
   stopListening: () => void;
+  /**
+   * Seconds remaining until the Mistral STT rate-limit window expires.
+   * Null when not rate-limited. Ticks down in real time via setInterval.
+   * The mic button should be disabled and show a "Bitte X Sek. warten" label
+   * while this is non-null and greater than 0.
+   */
+  voiceCountdown: number | null;
 }
 
 /**
@@ -71,6 +78,7 @@ export async function transcribeWithFallback(
   onPartialTranscript?: (text: string) => void,
   onError?: (err: string) => void,
   signal?: AbortSignal,
+  onRateLimit?: (retryAfterSec: number) => void,
 ): Promise<void> {
   // If already aborted before we start, exit immediately and silently.
   if (signal?.aborted) return;
@@ -81,6 +89,7 @@ export async function transcribeWithFallback(
   const filename = `recording.${ext}`;
 
   // ── Attempt 1: SSE streaming ────────────────────────────────────────────
+  let ssePropagatedRateLimit = false;
   try {
     const form = new FormData();
     form.append("audio", blob, filename);
@@ -105,7 +114,7 @@ export async function transcribeWithFallback(
 
       for (const line of lines) {
         if (!line.startsWith("data: ")) continue;
-        let event: { type: string; text?: string; error?: string };
+        let event: { type: string; text?: string; error?: string; retry_after_sec?: number };
         try {
           event = JSON.parse(line.slice(6)) as typeof event;
         } catch {
@@ -119,6 +128,11 @@ export async function transcribeWithFallback(
           if (text) onTranscript(text);
           break outer;
         } else if (event.type === "error") {
+          if (typeof event.retry_after_sec === "number") {
+            // Rate-limited: notify the hook and do NOT fall through to REST.
+            onRateLimit?.(event.retry_after_sec);
+            ssePropagatedRateLimit = true;
+          }
           throw new Error(event.error ?? "Streaming transcription failed");
         }
       }
@@ -129,6 +143,8 @@ export async function transcribeWithFallback(
     // AbortError = new recording started — exit silently so the stale
     // in-flight request cannot overwrite the freshly cleared error state.
     if (e instanceof Error && e.name === "AbortError") return;
+    // Rate limit already handled above — don't call onError or fall through.
+    if (ssePropagatedRateLimit) return;
     // Fall through to REST fallback below
   }
 
@@ -142,7 +158,12 @@ export async function transcribeWithFallback(
 
     const res = await fetch(STT_REST_ROUTE, { method: "POST", body: form, signal });
     if (!res.ok) {
-      const body = (await res.json().catch(() => ({}))) as { error?: string };
+      const body = (await res.json().catch(() => ({}))) as { error?: string; retry_after_sec?: number };
+      if (res.status === 429 && typeof body.retry_after_sec === "number") {
+        // Rate-limited: notify the hook and exit cleanly (no onError).
+        onRateLimit?.(body.retry_after_sec);
+        return;
+      }
       throw new Error(body.error ?? `HTTP ${res.status}`);
     }
     const { text } = (await res.json()) as { text: string };
@@ -181,9 +202,41 @@ export function useVoxtral({ onTranscript, onPartialTranscript, onError }: UseVo
    */
   const transcribeAbortRef = useRef<AbortController | null>(null);
 
+  // ── Rate-limit countdown ───────────────────────────────────────────────
+  // When Mistral returns a 429, we record the timestamp when the window
+  // expires and tick down a countdown every second so the UI can show
+  // "Bitte X Sek. warten" and disable the mic button.
+  const [rateLimitUntil, setRateLimitUntil] = useState<number | null>(null);
+  const [voiceCountdown, setVoiceCountdown] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (rateLimitUntil === null) {
+      setVoiceCountdown(null);
+      return;
+    }
+    const tick = () => {
+      const remaining = Math.ceil((rateLimitUntil - Date.now()) / 1000);
+      if (remaining <= 0) {
+        setVoiceCountdown(null);
+        setRateLimitUntil(null);
+      } else {
+        setVoiceCountdown(remaining);
+      }
+    };
+    tick(); // immediate first tick so the UI shows the value instantly
+    const id = setInterval(tick, 1_000);
+    return () => clearInterval(id);
+  }, [rateLimitUntil]);
+
+  const handleRateLimit = useCallback((retryAfterSec: number) => {
+    setRateLimitUntil(Date.now() + retryAfterSec * 1_000);
+  }, []);
+
   const startListening = useCallback(async () => {
     if (typeof window === "undefined") return;
     if (isListening) return;
+    // Block new recordings while a rate-limit countdown is active.
+    if (rateLimitUntil !== null && Date.now() < rateLimitUntil) return;
 
     // Abort any still-running transcription from a previous attempt.
     // This prevents the old onError from firing after the user has already
@@ -242,6 +295,7 @@ export function useVoxtral({ onTranscript, onPartialTranscript, onError }: UseVo
           onPartialTranscript,
           onError,
           ac.signal,
+          handleRateLimit,
         ).finally(() => {
           // Only clear isTranscribing if this is still the active request
           // (not already superseded by a new recording).
@@ -259,7 +313,7 @@ export function useVoxtral({ onTranscript, onPartialTranscript, onError }: UseVo
       const msg = e instanceof Error ? e.message : "Mikrofon nicht verfügbar";
       onError?.(msg);
     }
-  }, [isListening, onTranscript, onPartialTranscript, onError]);
+  }, [isListening, rateLimitUntil, onTranscript, onPartialTranscript, onError, handleRateLimit]);
 
   const stopListening = useCallback(() => {
     if (recorderRef.current && recorderRef.current.state !== "inactive") {
@@ -268,5 +322,5 @@ export function useVoxtral({ onTranscript, onPartialTranscript, onError }: UseVo
     setIsListening(false);
   }, []);
 
-  return { isListening, isTranscribing, startListening, stopListening };
+  return { isListening, isTranscribing, startListening, stopListening, voiceCountdown };
 }
