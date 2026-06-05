@@ -33,7 +33,7 @@ export default function GlevAIButton({ onPress, isListening = false, isSpeaking 
         <span className={`${styles.dot} ${styles.dot3}`} />
       </span>
       <span className={styles.icon} aria-hidden="true">
-        <GlevLogo size={30} color="white" bg="transparent" />
+        <GlevLogo size={30} color="#4F6EF7" bg="transparent" />
       </span>
     </div>
   );

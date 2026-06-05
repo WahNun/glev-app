@@ -92,7 +92,6 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  animation: glevBtnGlow 3.8s ease-in-out infinite;
   -webkit-tap-highlight-color: transparent;
   pointer-events: none;
 }
@@ -114,7 +113,6 @@
   position: absolute;
   inset: 0;
   border-radius: 50%;
-  animation: glevBreath 3.8s ease-in-out infinite;
 }
 
 .frame::before,
@@ -151,21 +149,7 @@
 /* ── Sweep shimmer ───────────────────────────────────────────────── */
 
 .sweep {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  left: -20%;
-  width: 28px;
-  background: linear-gradient(
-    90deg,
-    transparent 0%,
-    rgba(79, 110, 247, 0.14) 35%,
-    rgba(140, 160, 255, 0.26) 60%,
-    transparent 100%
-  );
-  opacity: 0.35;
-  pointer-events: none;
-  animation: glevSweep 5.2s ease-in-out infinite;
+  display: none;
 }
 
 /* Listening: hide sweep */
@@ -226,7 +210,6 @@
   align-items: center;
   justify-content: center;
   pointer-events: none;
-  animation: glevIconPulse 3.8s ease-in-out infinite;
 }
 
 /* Listening: continuous rotation replaces pulse */
