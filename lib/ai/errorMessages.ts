@@ -41,6 +41,7 @@ export function isRetryAllowed(code: AppErrorCode | string | null | undefined): 
   const retryable: string[] = [
     "CHAT_TIMEOUT",
     "MISTRAL_RATE_LIMITED",
+    "OPENAI_RATE_LIMITED",
     "NETWORK_ERROR",
     "UPSTREAM_ERROR",
   ];

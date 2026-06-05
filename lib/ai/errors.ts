@@ -14,6 +14,7 @@
 export type AppErrorCode =
   | "CHAT_TIMEOUT"
   | "MISTRAL_RATE_LIMITED"
+  | "OPENAI_RATE_LIMITED"
   | "PARSE_FAILED"
   | "VOICE_ERROR"
   | "NETWORK_ERROR"
@@ -25,6 +26,7 @@ export type AppErrorCode =
 export const ALL_ERROR_CODES: readonly AppErrorCode[] = [
   "CHAT_TIMEOUT",
   "MISTRAL_RATE_LIMITED",
+  "OPENAI_RATE_LIMITED",
   "PARSE_FAILED",
   "VOICE_ERROR",
   "NETWORK_ERROR",
@@ -40,6 +42,10 @@ export const ERROR_MESSAGES: Record<AppErrorCode, { de: string; en: string }> = 
     en: "Response is taking too long — please try again.",
   },
   MISTRAL_RATE_LIMITED: {
+    de: "Zu viele Anfragen — bitte kurz warten und erneut versuchen.",
+    en: "Too many requests — please wait a moment and try again.",
+  },
+  OPENAI_RATE_LIMITED: {
     de: "Zu viele Anfragen — bitte kurz warten und erneut versuchen.",
     en: "Too many requests — please wait a moment and try again.",
   },
@@ -80,6 +86,7 @@ export const ERROR_MESSAGES: Record<AppErrorCode, { de: string; en: string }> = 
 export const RETRY_ALLOWED_CODES: ReadonlySet<AppErrorCode> = new Set<AppErrorCode>([
   "CHAT_TIMEOUT",
   "MISTRAL_RATE_LIMITED",
+  "OPENAI_RATE_LIMITED",
   "NETWORK_ERROR",
   "UPSTREAM_ERROR",
 ]);
