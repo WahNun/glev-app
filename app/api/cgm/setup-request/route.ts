@@ -108,7 +108,7 @@ export async function POST(req: NextRequest) {
     .update({ last_setup_request_at: now })
     .eq("user_id", user.id);
 
-  // Send email notification to lucas@glev.app
+  // Send email notification to cgm-setup@glev.app
   try {
     const resendKey = process.env.RESEND_API_KEY;
     if (resendKey) {
@@ -126,7 +126,7 @@ export async function POST(req: NextRequest) {
       };
       await resend.emails.send({
         from: "Glev <crm@glev.app>",
-        to: "lucas@glev.app",
+        to: "cgm-setup@glev.app",
         subject: `CGM Setup-Anfrage: ${sensor_brand} (${user.email ?? user.id})`,
         html: cgmSetupRequestHtml(payload),
         text: cgmSetupRequestText(payload),
