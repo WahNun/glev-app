@@ -366,7 +366,8 @@ export default function SensorAlarmePage() {
       </SettingsSection>
 
       {/* Critical Alerts toggle — separate section below the three alarm rows */}
-      <SettingsSection style={{ marginTop: 24 }}>
+      <div style={{ marginTop: 24 }}>
+      <SettingsSection>
         <div style={{ padding: "14px 16px" }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
             <div style={{ flex: 1 }}>
@@ -417,6 +418,7 @@ export default function SensorAlarmePage() {
           </div>
         </div>
       </SettingsSection>
+      </div>
 
       <BottomSheet open={openSheet !== null} onClose={closeSheet} title={active?.title} footer={active?.footer}>
         {active?.body}
