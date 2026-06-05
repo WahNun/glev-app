@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { authedClient } from "@/app/api/insulin/_helpers";
+import { Mistral } from "@mistralai/mistralai";
+import { authedClient, type AuthOk, type AuthErr } from "@/app/api/insulin/_helpers";
 import { getMistralClient, mistralConfigError } from "@/lib/ai/mistralClient";
 import { GLEV_CHAT_SYSTEM_PROMPT } from "@/lib/ai/glevChatPrompt";
 import {
@@ -332,24 +333,66 @@ async function loadActiveSystemPrompt(): Promise<string> {
   return GLEV_CHAT_SYSTEM_PROMPT;
 }
 
-export async function POST(req: NextRequest) {
+/**
+ * Checks whether `user_settings.feature_flags.ai_voice` is `true` for
+ * the given user. Returns a 403 NextResponse when the flag is absent or
+ * false, and `null` when the check passes (request may proceed).
+ *
+ * Exported for unit testing (dependency-injection of the Supabase client).
+ */
+export async function checkChatFlag(
+  sb: SupabaseClient,
+  userId: string,
+): Promise<NextResponse | null> {
+  const { data: settingsRow } = await sb
+    .from("user_settings")
+    .select("feature_flags")
+    .eq("user_id", userId)
+    .maybeSingle();
+  const featureFlags = (settingsRow?.feature_flags ?? {}) as Record<string, unknown>;
+  if (featureFlags.ai_voice !== true) {
+    return NextResponse.json({ error: "not available" }, { status: 403 });
+  }
+  return null;
+}
+
+/**
+ * Injectable dependencies for `handleChatPost`. Both fields are optional —
+ * omitting them falls back to the real production implementations so that
+ * the exported `POST` handler needs no changes at the call site.
+ *
+ * - `auth`: pre-resolved auth result. When omitted `handleChatPost` calls
+ *   `authedClient(req)` itself (production path).
+ * - `getMistral`: factory that returns a Mistral client. When omitted the
+ *   real `getMistralClient()` is used. Tests can pass a spy here to assert
+ *   that no Mistral call occurs when the feature-flag gate blocks early.
+ */
+export type ChatDeps = {
+  auth?: AuthOk | AuthErr;
+  getMistral?: () => Mistral;
+};
+
+/**
+ * Core POST handler extracted from the Next.js route export so it can be
+ * called directly in unit tests with injectable dependencies.
+ *
+ * The exported `POST` function is a thin wrapper that calls this with the
+ * real authedClient result and no Mistral override.
+ */
+export async function handleChatPost(
+  req: NextRequest,
+  deps: ChatDeps = {},
+): Promise<NextResponse> {
   // 1. Auth
-  const auth = await authedClient(req);
+  const auth = deps.auth ?? await authedClient(req);
   if (!auth.user || !auth.sb) {
     return NextResponse.json({ error: "not authenticated" }, { status: 401 });
   }
   const { user, sb } = auth;
 
   // 1a. Feature-flag guard — ai_voice must be enabled for the user
-  const { data: settingsRow } = await sb
-    .from("user_settings")
-    .select("feature_flags")
-    .eq("user_id", user.id)
-    .maybeSingle();
-  const featureFlags = (settingsRow?.feature_flags ?? {}) as Record<string, unknown>;
-  if (featureFlags.ai_voice !== true) {
-    return NextResponse.json({ error: "not available" }, { status: 403 });
-  }
+  const flagBlock = await checkChatFlag(sb, user.id);
+  if (flagBlock) return flagBlock;
 
   // 2. Consent — master flag + granular sub-scopes (Task #664). The
   // sub-scope timestamps gate which fields end up in the contextPreamble
@@ -391,9 +434,10 @@ export async function POST(req: NextRequest) {
   const timezone: string | null = v.body.timezone ?? null;
 
   // 5. Mistral client
+  const _getMistral = deps.getMistral ?? getMistralClient;
   let client;
   try {
-    client = getMistralClient();
+    client = _getMistral();
   } catch {
     const err = mistralConfigError();
     return NextResponse.json({ error: err.error }, { status: err.status });
@@ -674,4 +718,12 @@ export async function POST(req: NextRequest) {
       "X-Accel-Buffering": "no",
     },
   });
+}
+
+/**
+ * Next.js route export — thin wrapper around `handleChatPost` so the
+ * core handler can be tested independently via dependency injection.
+ */
+export async function POST(req: NextRequest): Promise<NextResponse | Response> {
+  return handleChatPost(req);
 }
