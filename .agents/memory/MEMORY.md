@@ -6,3 +6,4 @@
 - [iOS Build Workflow](ios-build-workflow.md) — Lucas baut immer mit Xcode, nie mit Fastlane; lokaler Mac-Pfad: /Users/lucas/Documents/glev-app
 - [Sound Assets Policy](sound-assets-policy.md) — nur 3 Alarm-WAVs erwünscht: hypo/hyper/elevated — KEINE pre_check/post_check WAVs
 - [Implicit Flow PASSWORD_RECOVERY](implicit-flow-recovery.md) — Supabase Implicit Flow sends #access_token=… as hash; /auth/confirm needs onAuthStateChange(PASSWORD_RECOVERY) listener, NOT routing through /auth/callback
+- [Supabase Edge Function verify_jwt](supabase-edge-verify-jwt.md) — cron-triggered functions MUST have verify_jwt=false in config.toml; missing it causes silent 401s after redeploy
