@@ -307,6 +307,48 @@ function todayInTimezone(timezone: string | null): string {
   }
 }
 
+/**
+ * Returns the current moment as an ISO-8601 string with the UTC offset for
+ * the given IANA timezone, e.g. "2026-06-05T22:00:00+02:00". Injected into
+ * the system preamble so the model can copy the format verbatim for logged_at
+ * fields — ensuring the server always receives an unambiguous timestamp.
+ */
+function nowIsoWithOffset(timezone: string | null): string {
+  const tz = timezone ?? "Europe/Berlin";
+  const now = new Date();
+  try {
+    const parts = new Intl.DateTimeFormat("en-CA", {
+      timeZone: tz,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      hour12: false,
+    }).formatToParts(now);
+    const get = (type: string) =>
+      parseInt(parts.find((p) => p.type === type)?.value ?? "0", 10);
+    const localMs = Date.UTC(
+      get("year"), get("month") - 1, get("day"),
+      get("hour"), get("minute"), get("second"),
+    );
+    const offsetMins = Math.round((localMs - now.getTime()) / 60_000);
+    const sign = offsetMins >= 0 ? "+" : "-";
+    const absOff = Math.abs(offsetMins);
+    const oh = String(Math.floor(absOff / 60)).padStart(2, "0");
+    const om = String(absOff % 60).padStart(2, "0");
+    const year  = String(get("year"));
+    const month = String(get("month")).padStart(2, "0");
+    const day   = String(get("day")).padStart(2, "0");
+    const hour  = String(get("hour")).padStart(2, "0");
+    const min   = String(get("minute")).padStart(2, "0");
+    const sec   = String(get("second")).padStart(2, "0");
+    return `${year}-${month}-${day}T${hour}:${min}:${sec}${sign}${oh}:${om}`;
+  } catch {
+    return now.toISOString();
+  }
+}
 
 // Hard cap auf die Anzahl Memory-Einträge, die in den System-Prompt
 // injiziert werden. Bei ~500 Zeichen pro Value + key + Bullet-Padding
