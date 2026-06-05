@@ -366,7 +366,7 @@ export function useGlevAI(opts?: {
     };
   }, []);
 
-  /** Clear the chat history — wipes sessionStorage + in-memory messages. */
+  /** Clear the chat history — wipes sessionStorage + in-memory messages + pending meal queue. */
   const clearMessages = useCallback(() => {
     if (abortRef.current) {
       try { abortRef.current.abort(); } catch { /* noop */ }
@@ -374,6 +374,8 @@ export function useGlevAI(opts?: {
     }
     setStreaming(false);
     setMessages([]);
+    setPendingMealNavQueue([]);
+    pendingMealQueueRef.current = [];
     if (typeof window !== "undefined") {
       try { window.sessionStorage.removeItem(HISTORY_KEY); } catch { /* ignore */ }
     }
