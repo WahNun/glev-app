@@ -929,6 +929,7 @@ export function useGlevAI(opts?: {
         if (typeof window !== "undefined") {
           try {
             sessionStorage.setItem("glev_pending_meal", JSON.stringify(match.mealPrep));
+            sessionStorage.setItem("glev_engine_back_to", "/glev-ai");
           } catch { /* ignore quota / privacy errors */ }
           window.dispatchEvent(new CustomEvent("glev:meal-prefill"));
         }

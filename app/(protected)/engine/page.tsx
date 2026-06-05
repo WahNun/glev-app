@@ -2953,7 +2953,19 @@ export default function EnginePage() {
                   layout around. */}
               <button
                 type="button"
-                onClick={() => setStepIndex(0)}
+                onClick={() => {
+                  try {
+                    const backTo = typeof window !== "undefined"
+                      ? sessionStorage.getItem("glev_engine_back_to")
+                      : null;
+                    if (backTo) {
+                      sessionStorage.removeItem("glev_engine_back_to");
+                      router.back();
+                      return;
+                    }
+                  } catch { /* ignore */ }
+                  setStepIndex(0);
+                }}
                 disabled={confirming || running}
                 aria-label={tEngine("btn_back")}
                 title={tEngine("btn_back")}
