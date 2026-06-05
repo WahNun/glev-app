@@ -33,6 +33,22 @@ ${appUrl}/auth/confirm
 
 ---
 
+### D-002 · Junction-Integration: Entscheidung zurückgestellt bis Q3 2026 (2026-06-05)
+
+**Status:** Code vorhanden, UI frozen, 0 aktive User.
+
+`JUNCTION_API_KEY` wird in zwei Routen referenziert (`/api/cgm/glucose`, `/api/cgm/connect`). Die UI-Oberfläche zeigt „coming soon" und ist bewusst nicht zugänglich. Der Sandbox-Key war beim Credentials-Leak vom 2026-06-05 mit dabei — kein Production-Impact, da 0 User die Integration nutzen.
+
+**Zwei Optionen:**
+1. **Killen** — Code + Env-Var entfernen. Vorteil: weniger Maintenance-Overhead, kein toter Code im Bundle.
+2. **Aktivieren** — wenn Junction klaren Mehrwert gegenüber den bestehenden CGM-Quellen (LibreLinkUp, Nightscout, Apple Health) bietet, z. B. durch Sensor-Support für Medtronic Guardian oder Eversense, die keiner der drei anderen Kanäle abdeckt.
+
+**Entscheidung:** Bis Q3 2026 oder unmittelbar vor Live-Launch treffen. Bis dahin: kein Aufwand, Sandbox-Key bleibt als no-op in `.env.example` (nie in Production gesetzt).
+
+**Nicht wieder öffnen:** Kein Agent soll Junction-Code aktivieren, erweitern oder den Key in Vercel setzen, bevor diese Entscheidung explizit getroffen und dieser Eintrag aktualisiert wurde.
+
+---
+
 ## Fix Log
 
 | Date | Title | Task | Summary |
