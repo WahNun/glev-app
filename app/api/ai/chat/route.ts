@@ -382,7 +382,7 @@ export type ChatDeps = {
 export async function handleChatPost(
   req: NextRequest,
   deps: ChatDeps = {},
-): Promise<NextResponse> {
+): Promise<NextResponse | Response> {
   // 1. Auth
   const auth = deps.auth ?? await authedClient(req);
   if (!auth.user || !auth.sb) {
