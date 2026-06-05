@@ -40,7 +40,7 @@ export default async function AdminUserDetailPage({
   }
   const email = (authUser.email ?? "").toLowerCase();
 
-  const [profileRes, cgmRes, proRes, betaRes, mealCountRes, insulinCountRes, settingsRes] =
+  const [profileRes, cgmRes, proRes, betaRes, mealCountRes, insulinCountRes, settingsRes, setupReqRes] =
     await Promise.all([
       sb.from("profiles").select("*").eq("user_id", id).maybeSingle(),
       sb.from("cgm_credentials").select("*").eq("user_id", id).maybeSingle(),
@@ -53,6 +53,7 @@ export default async function AdminUserDetailPage({
       sb.from("meals").select("id", { count: "exact", head: true }).eq("user_id", id),
       sb.from("insulin_logs").select("id", { count: "exact", head: true }).eq("user_id", id),
       sb.from("user_settings").select("feature_flags").eq("user_id", id).maybeSingle(),
+      sb.from("cgm_setup_requests").select("sensor_brand, created_at").eq("user_id", id).order("created_at", { ascending: false }).limit(1).maybeSingle(),
     ]);
 
   const featureFlags = (settingsRes.data?.feature_flags ?? {}) as Record<string, unknown>;
@@ -82,6 +83,10 @@ export default async function AdminUserDetailPage({
         created_at?: string;
         fulfilled_at?: string;
       }
+    | null;
+
+  const setupReq = (setupReqRes.data ?? null) as
+    | { sensor_brand?: string; created_at?: string }
     | null;
 
   const effective = computeEffectivePlan({
@@ -148,6 +153,21 @@ export default async function AdminUserDetailPage({
             }}
           >
             🎁 {profile.gift_label as string}
+          </span>
+        ) : null}
+        {setupReq?.created_at ? (
+          <span
+            style={{
+              background: "#ede9fe",
+              color: "#5b21b6",
+              border: "1px solid #c4b5fd",
+              padding: "3px 10px",
+              borderRadius: 999,
+              fontWeight: 600,
+              fontSize: 13,
+            }}
+          >
+            🔧 Setup-Anfrage am {fmtDate(setupReq.created_at)}{setupReq.sensor_brand ? ` — ${setupReq.sensor_brand}` : ""}
           </span>
         ) : null}
       </div>
@@ -373,6 +393,12 @@ function fmtDateTime(s: string | null | undefined): string {
   const d = new Date(s);
   if (Number.isNaN(d.getTime())) return "—";
   return d.toISOString().slice(0, 16).replace("T", " ");
+}
+function fmtDate(s: string | null | undefined): string {
+  if (!s) return "—";
+  const d = new Date(s);
+  if (Number.isNaN(d.getTime())) return "—";
+  return `${String(d.getDate()).padStart(2, "0")}.${String(d.getMonth() + 1).padStart(2, "0")}.${d.getFullYear()}`;
 }
 function fmtMoney(cents: number | null | undefined, ccy: string | null | undefined): string {
   if (cents == null) return "—";

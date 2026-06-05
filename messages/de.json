@@ -1516,7 +1516,9 @@
     "ai_page_subtitle": "Datenzugriff, Sprache und Verhalten deines KI-Assistenten.",
     "ai_settings_row_subtitle": "Datenzugriff & Verhalten",
     "ai_settings_back": "Einstellungen",
-    "clamp_notice": "Auf {value} korrigiert — erlaubter Bereich {min}–{max}"
+    "clamp_notice": "Auf {value} korrigiert — erlaubter Bereich {min}–{max}",
+    "row_setup_request_label": "Sensor nicht dabei? Setup-Hilfe anfragen",
+    "row_setup_request_sub": "Pilot-Liste für künftigen Setup-Support"
   },
   "cgmSettings": {
     "appleHealth": {
@@ -1570,7 +1572,7 @@
       "bg_delivery_label": "Hintergrund-Lieferung:",
       "bg_delivery_never": "noch nie empfangen",
       "bg_warn_title": "Hintergrund-Sync hat gestoppt",
-      "bg_warn_body": "Seit mehr als 6 Stunden kam keine Lieferung vom Hintergrund-Observer. Das kann passieren, wenn iOS die Berechtigung widerrufen hat, deine Session abgelaufen ist oder die App neu gestartet werden muss. Tippe \u201eNeu einrichten\u201c, um die Berechtigung zu erneuern, und öffne die App danach erneut.",
+      "bg_warn_body": "Seit mehr als 6 Stunden kam keine Lieferung vom Hintergrund-Observer. Das kann passieren, wenn iOS die Berechtigung widerrufen hat, deine Session abgelaufen ist oder die App neu gestartet werden muss. Tippe „Neu einrichten“, um die Berechtigung zu erneuern, und öffne die App danach erneut.",
       "bg_rearm_btn": "Neu einrichten",
       "bg_rearm_success": "Berechtigung aktualisiert — schließe die App einmal und öffne sie wieder, damit der Hintergrund-Observer sich neu registriert."
     },
@@ -2851,7 +2853,11 @@
       "method_medtronic_apple_health_body": "Wenn die MiniMed Mobile App nach Apple Health synct (iOS).",
       "method_medtronic_nightscout_body": "Über CareLink-Uploader in deine Nightscout-Instanz.",
       "method_other_apple_health_body": "Funktioniert mit jedem CGM, das nach Apple Health synct (iOS).",
-      "method_other_nightscout_body": "Wenn dein CGM Werte in eine Nightscout-Instanz schreibt."
+      "method_other_nightscout_body": "Wenn dein CGM Werte in eine Nightscout-Instanz schreibt.",
+      "help_option_title": "Mein Sensor ist nicht dabei oder ich brauche Hilfe",
+      "help_option_body": "Setup-Unterstützung anfragen — wir kommen auf dich zu.",
+      "help_modal_title": "Setup-Hilfe anfragen",
+      "help_modal_after": "Weiter ohne CGM-Verbindung"
     },
     "glevButton": {
       "headline": "Dein zentraler Button",
@@ -3145,5 +3151,31 @@
     "PERMISSION_DENIED": "Diese Funktion ist für dein Konto nicht verfügbar.",
     "UPSTREAM_ERROR": "Ein unerwarteter Fehler ist aufgetreten — bitte kurz warten und erneut versuchen.",
     "UNKNOWN": "Etwas ist schiefgelaufen — bitte erneut versuchen."
+  },
+  "cgmSetupRequest": {
+    "intro_title": "Setup-Unterstützung anfragen",
+    "intro_body": "Füll das Formular aus — wir nehmen dich in unsere Pilot-Liste auf und melden uns, wenn wir konkrete Setup-Hilfe anbieten können. Keine Versprechen, kein Automatismus.",
+    "label_brand": "Sensor-Hersteller",
+    "brand_placeholder": "Hersteller auswählen …",
+    "brand_other": "Anderer Hersteller",
+    "label_model": "Sensor-Modell (optional)",
+    "model_placeholder": "z.B. G7, Guardian 4 …",
+    "label_os": "Smartphone-Betriebssystem",
+    "os_placeholder": "OS auswählen …",
+    "os_both": "Beides (iOS + Android)",
+    "label_nightscout": "Nightscout-Erfahrung",
+    "nightscout_placeholder": "Auswählen …",
+    "nightscout_none": "Noch nie gehört",
+    "nightscout_heard_of_it": "Kenne ich, habe es nicht versucht",
+    "nightscout_tried_it": "Habe es versucht, funktioniert nicht",
+    "nightscout_running_it": "Nightscout läuft bereits",
+    "label_note": "Ergänzende Notiz (optional)",
+    "note_placeholder": "Was hast du schon versucht? Welche App nutzt du?",
+    "submit_idle": "Anfrage senden",
+    "submit_busy": "Sende …",
+    "error_required": "Bitte Sensor-Hersteller, Betriebssystem und Nightscout-Erfahrung ausfüllen.",
+    "error_generic": "Anfrage konnte nicht gesendet werden. Bitte erneut versuchen.",
+    "success_title": "Anfrage erhalten",
+    "success_body": "Wir haben deine Anfrage gespeichert und melden uns, sobald wir Setup-Unterstützung für deinen Sensor anbieten können."
   }
 }

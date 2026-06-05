@@ -1516,7 +1516,9 @@
     "ai_page_subtitle": "Data access, voice, and chat assistant behaviour.",
     "ai_settings_row_subtitle": "Data access & behaviour",
     "ai_settings_back": "Settings",
-    "clamp_notice": "Adjusted to {value} — allowed range {min}–{max}"
+    "clamp_notice": "Adjusted to {value} — allowed range {min}–{max}",
+    "row_setup_request_label": "Sensor not listed? Request setup help",
+    "row_setup_request_sub": "Pilot list for future setup support"
   },
   "cgmSettings": {
     "appleHealth": {
@@ -2851,7 +2853,11 @@
       "method_medtronic_apple_health_body": "If the MiniMed Mobile app syncs to Apple Health (iOS).",
       "method_medtronic_nightscout_body": "Via CareLink uploader into your Nightscout instance.",
       "method_other_apple_health_body": "Works with any CGM that syncs to Apple Health (iOS).",
-      "method_other_nightscout_body": "If your CGM writes readings into a Nightscout instance."
+      "method_other_nightscout_body": "If your CGM writes readings into a Nightscout instance.",
+      "help_option_title": "My sensor isn't listed or I need help",
+      "help_option_body": "Request setup support — we'll reach out when ready.",
+      "help_modal_title": "Request setup help",
+      "help_modal_after": "Continue without CGM connection"
     },
     "glevButton": {
       "headline": "Your central button",
@@ -3143,5 +3149,31 @@
     "PERMISSION_DENIED": "This feature is not available for your account.",
     "UPSTREAM_ERROR": "An unexpected error occurred — please wait a moment and try again.",
     "UNKNOWN": "Something went wrong — please try again."
+  },
+  "cgmSetupRequest": {
+    "intro_title": "Request setup support",
+    "intro_body": "Fill in the form — we will add you to our pilot list and reach out when we have concrete setup help available. No promises, no automatic follow-up.",
+    "label_brand": "Sensor brand",
+    "brand_placeholder": "Select brand …",
+    "brand_other": "Other brand",
+    "label_model": "Sensor model (optional)",
+    "model_placeholder": "e.g. G7, Guardian 4 …",
+    "label_os": "Smartphone OS",
+    "os_placeholder": "Select OS …",
+    "os_both": "Both (iOS + Android)",
+    "label_nightscout": "Nightscout experience",
+    "nightscout_placeholder": "Select …",
+    "nightscout_none": "Never heard of it",
+    "nightscout_heard_of_it": "I know of it, haven't tried it",
+    "nightscout_tried_it": "Tried it, didn't work for me",
+    "nightscout_running_it": "Already running Nightscout",
+    "label_note": "Additional note (optional)",
+    "note_placeholder": "What have you tried? Which app do you use?",
+    "submit_idle": "Send request",
+    "submit_busy": "Sending …",
+    "error_required": "Please fill in sensor brand, OS, and Nightscout experience.",
+    "error_generic": "Could not send request. Please try again.",
+    "success_title": "Request received",
+    "success_body": "We have saved your request and will reach out when we can offer setup support for your sensor."
   }
 }

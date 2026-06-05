@@ -20,6 +20,10 @@
  * gate stops triggering) and deep-link into /settings?cgmSetup=<m>.
  * The settings page reads the param and auto-opens the matching
  * sheet, where the existing CgmSettingsCard does the real work.
+ *
+ * The "❓ help" option opens an inline modal with the setup-request
+ * lead-capture form (CgmSetupRequestForm). After submit the user can
+ * continue to the manual-input onboarding path via onSkip.
  */
 
 import { useState } from "react";
@@ -36,6 +40,7 @@ import {
   TEXT,
   TEXT_DIM,
 } from "./_shared";
+import CgmSetupRequestForm from "@/components/CgmSetupRequestForm";
 
 type Vendor = "dexcom" | "libre" | "medtronic" | "other";
 type Method = "apple_health" | "librelinkup" | "nightscout";
@@ -76,6 +81,8 @@ export default function CgmStep({
   const router = useRouter();
   const [vendor, setVendor] = useState<Vendor | null>(null);
   const [busy, setBusy] = useState(false);
+  const [showHelp, setShowHelp] = useState(false);
+  const [helpSubmitted, setHelpSubmitted] = useState(false);
 
   // Method click — complete onboarding first (so the gate stops
   // bouncing the user back here), THEN deep-link to settings with
@@ -102,8 +109,64 @@ export default function CgmStep({
   // Stage-internal back: from method-picker, going back returns to
   // the vendor-picker rather than to the previous onboarding step.
   function back() {
+    if (showHelp) { setShowHelp(false); return; }
     if (vendor != null) setVendor(null);
     else onBack();
+  }
+
+  // Help modal: after successful submit the user can either wait or
+  // continue to manual-input onboarding path.
+  if (showHelp) {
+    return (
+      <Shell
+        step={6}
+        onNext={onSkip}
+        onBack={back}
+        onSkip={onSkip}
+        primaryDisabled={primaryDisabled || busy}
+        hidePrimary
+      >
+        <div>
+          <h1
+            style={{
+              fontSize: 22,
+              fontWeight: 800,
+              margin: 0,
+              letterSpacing: "-0.02em",
+              marginBottom: 6,
+              lineHeight: 1.2,
+            }}
+          >
+            {t("help_modal_title")}
+          </h1>
+        </div>
+
+        <CgmSetupRequestForm onSuccess={() => setHelpSubmitted(true)} />
+
+        {helpSubmitted && (
+          <button
+            onClick={onSkip}
+            disabled={busy}
+            style={{
+              background: "transparent",
+              border: `1px solid ${BORDER}`,
+              color: TEXT_DIM,
+              fontSize: 13,
+              fontWeight: 600,
+              cursor: busy ? "wait" : "pointer",
+              textAlign: "center",
+              padding: "10px 14px",
+              fontFamily: "inherit",
+              borderRadius: 10,
+              opacity: busy ? 0.5 : 1,
+              marginTop: 4,
+            }}
+          >
+            {t("help_modal_after")}
+          </button>
+        )}
+      </Shell>
+    );
   }
 
   return (
@@ -134,7 +197,7 @@ export default function CgmStep({
       </div>
 
       {vendor == null ? (
-        <VendorList onPick={setVendor} t={t} />
+        <VendorList onPick={setVendor} onHelp={() => setShowHelp(true)} t={t} />
       ) : (
         <MethodList
           vendor={vendor}
@@ -176,9 +239,11 @@ export default function CgmStep({
 // ─── Vendor picker ──────────────────────────────────────────────
 function VendorList({
   onPick,
+  onHelp,
   t,
 }: {
   onPick: (v: Vendor) => void;
+  onHelp: () => void;
   t: ReturnType<typeof useTranslations>;
 }) {
   const vendors: Vendor[] = ["dexcom", "libre", "medtronic", "other"];
@@ -194,6 +259,14 @@ function VendorList({
           chevron
         />
       ))}
+      {/* Help / unsupported sensor option */}
+      <Card
+        color="rgba(255,255,255,0.14)"
+        title={`❓ ${t("help_option_title")}`}
+        body={t("help_option_body")}
+        onClick={onHelp}
+        chevron
+      />
     </div>
   );
 }

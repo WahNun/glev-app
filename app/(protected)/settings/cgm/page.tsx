@@ -5,6 +5,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { useTranslations } from "next-intl";
 import CgmSettingsCard from "@/components/CgmSettingsCard";
 import NightscoutSettingsCard from "@/components/NightscoutSettingsCard";
+import CgmSetupRequestForm from "@/components/CgmSetupRequestForm";
 import BottomSheet from "@/components/BottomSheet";
 import { SettingsSection, SettingsRow, ConnectedDot } from "@/components/SettingsRow";
 
@@ -37,10 +38,11 @@ function useNightscoutConnected(): boolean {
   return connected;
 }
 
-type SheetKey = "libre2" | "nightscout" | "dexcom";
+type SheetKey = "libre2" | "nightscout" | "dexcom" | "setup_request";
 
 export default function CgmSettingsPage() {
   const t = useTranslations("settings");
+  const tReq = useTranslations("cgmSetupRequest");
   const [openSheet, setOpenSheet] = useState<SheetKey | null>(null);
   const cgmConnected = useCgmConnected();
   const nightscoutConnected = useNightscoutConnected();
@@ -72,9 +74,10 @@ export default function CgmSettingsPage() {
   );
 
   const sheetMap: Record<SheetKey, { title: string; body: React.ReactNode }> = {
-    libre2:    { title: t("row_libre2"),        body: <CgmSettingsCard /> },
-    nightscout:{ title: t("row_nightscout"),    body: <NightscoutSettingsCard /> },
-    dexcom:    { title: t("sheet_dexcom_title"), body: <p style={{ fontSize: 14, color: "var(--text-body)", lineHeight: 1.55, margin: 0 }}>{t("sheet_dexcom_body")}</p> },
+    libre2:        { title: t("row_libre2"),        body: <CgmSettingsCard /> },
+    nightscout:    { title: t("row_nightscout"),    body: <NightscoutSettingsCard /> },
+    dexcom:        { title: t("sheet_dexcom_title"), body: <p style={{ fontSize: 14, color: "var(--text-body)", lineHeight: 1.55, margin: 0 }}>{t("sheet_dexcom_body")}</p> },
+    setup_request: { title: tReq("intro_title"),    body: <CgmSetupRequestForm onSuccess={closeSheet} /> },
   };
   const active = openSheet ? sheetMap[openSheet] : null;
 
@@ -113,6 +116,29 @@ export default function CgmSettingsPage() {
           onClick={() => setOpenSheet("dexcom")}
         />
       </SettingsSection>
+
+      {/* Setup support request — for sensors not directly supported */}
+      <div style={{ marginTop: 28 }}>
+        <p style={{ fontSize: 12, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", color: "var(--text-dim)", margin: "0 0 10px 2px" }}>
+          {t("group_cgm")} — Hilfe
+        </p>
+        <SettingsSection>
+          <SettingsRow
+            iconColor="#8B5CF6"
+            icon={
+              <svg {...iconProps}>
+                <circle cx="12" cy="12" r="10" />
+                <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
+                <line x1="12" y1="17" x2="12.01" y2="17" />
+              </svg>
+            }
+            label={t("row_setup_request_label") ?? "Sensor nicht dabei? Setup-Hilfe anfragen"}
+            subtitle={t("row_setup_request_sub") ?? "Pilot-Liste für künftigen Setup-Support"}
+            ariaLabel="CGM Setup-Hilfe anfragen"
+            onClick={() => setOpenSheet("setup_request")}
+          />
+        </SettingsSection>
+      </div>
 
       <BottomSheet open={openSheet !== null} onClose={closeSheet} title={active?.title} footer={closeFooter}>
         {active?.body}
