@@ -22,7 +22,11 @@ export type TaskStatus =
   | "generating_code"
   | "code_ready"
   | "code_failed"
-  | "preview_ready"
+  // ── Phase 7 — Preview Pipeline ──
+  | "creating_preview"  // GitHub branch + commit creation in progress
+  | "preview_building"  // Branch pushed; Vercel deployment running
+  | "preview_ready"     // Vercel deployment ready; preview_url set
+  | "preview_failed"    // Branch push or Vercel deployment failed
   | "applied"
   | "rejected"
   | "cancelled"
@@ -45,6 +49,10 @@ export interface DevTask {
   generated_at: string | null;
   diff_summary: string | null;
   changed_files: unknown[];
+  // Phase 7 — Preview Pipeline fields.
+  preview_status: PreviewDeploymentStatus | null;
+  preview_commit_sha: string | null;
+  preview_created_at: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -253,6 +261,30 @@ export interface DevCodeGeneration {
 export const CODEGEN_COLUMNS =
   "id, task_id, version, status, summary, files_to_create, files_to_modify, implementation_steps, generated_code_blocks, risks, estimated_change_size, created_at, updated_at";
 
+// ── Preview Deployment (Phase 7 — Preview Pipeline) ──────────────────────────
+
+export type PreviewDeploymentStatus = "queued" | "building" | "ready" | "failed";
+
+/** One immutable preview attempt stored in dev_cockpit_previews. */
+export interface DevPreview {
+  id: string;
+  task_id: string;
+  build_id: string | null;
+  code_generation_id: string | null;
+  preview_version: number;
+  branch_name: string;
+  commit_sha: string | null;
+  commit_message: string | null;
+  deployment_status: PreviewDeploymentStatus;
+  github_deployment_id: number | null;
+  preview_url: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export const PREVIEW_COLUMNS =
+  "id, task_id, build_id, code_generation_id, preview_version, branch_name, commit_sha, commit_message, deployment_status, github_deployment_id, preview_url, created_at, updated_at";
+
 // ── Sidebar filters ─────────────────────────────────────────────────────────
 
 export type TaskFilter =
@@ -282,7 +314,10 @@ export const ACTIVE_STATUSES: TaskStatus[] = [
   "generating_code",
   "code_ready",
   "code_failed",
+  "creating_preview",
+  "preview_building",
   "preview_ready",
+  "preview_failed",
 ];
 
 /** Which DB statuses each sidebar filter resolves to (null = no status filter). */
@@ -331,7 +366,10 @@ export const STATUS_LABEL: Record<TaskStatus, string> = {
   generating_code: "Code-Generierung",
   code_ready: "Code-Draft bereit",
   code_failed: "Code fehlgeschlagen",
+  creating_preview: "Preview erstellen …",
+  preview_building: "Preview baut …",
   preview_ready: "Preview bereit",
+  preview_failed: "Preview fehlgeschlagen",
   applied: "Angewendet",
   rejected: "Abgelehnt",
   cancelled: "Abgebrochen",
@@ -352,7 +390,10 @@ export const STATUS_STYLE: Record<TaskStatus, React.CSSProperties> = {
   generating_code: { background: "#e0e7ff", color: "#3730a3", border: "1px solid #a5b4fc" },
   code_ready: { background: "#dcfce7", color: "#166534", border: "1px solid #86efac" },
   code_failed: { background: "#fee2e2", color: "#991b1b", border: "1px solid #fca5a5" },
+  creating_preview: { background: "#f3e8ff", color: "#6b21a8", border: "1px solid #d8b4fe" },
+  preview_building: { background: "#fdf4ff", color: "#7e22ce", border: "1px solid #e9d5ff" },
   preview_ready: { background: "#f3e8ff", color: "#6b21a8", border: "1px solid #d8b4fe" },
+  preview_failed: { background: "#fee2e2", color: "#991b1b", border: "1px solid #fca5a5" },
   applied: { background: "#dcfce7", color: "#166534", border: "1px solid #86efac" },
   rejected: { background: "#fee2e2", color: "#991b1b", border: "1px solid #fca5a5" },
   cancelled: { background: "#f3f4f6", color: "#6b7280", border: "1px solid #d1d5db" },
@@ -362,4 +403,4 @@ export const STATUS_STYLE: Record<TaskStatus, React.CSSProperties> = {
 
 // Column list used by every task SELECT so the shape always matches DevTask.
 export const TASK_COLUMNS =
-  "id, title, prompt, status, branch_name, preview_url, plan_text, build_plan, generated_code, code_generation_version, generated_at, diff_summary, changed_files, created_at, updated_at";
+  "id, title, prompt, status, branch_name, preview_url, plan_text, build_plan, generated_code, code_generation_version, generated_at, diff_summary, changed_files, preview_status, preview_commit_sha, preview_created_at, created_at, updated_at";

@@ -39,10 +39,12 @@ import { performGenerateCode } from "@/lib/devCockpit/performGenerateCode";
 import {
   BUILD_COLUMNS,
   CODEGEN_COLUMNS,
+  PREVIEW_COLUMNS,
   type BuildExecutionPlan,
   type DevBuild,
   type CodeGenerationDraft,
   type DevCodeGeneration,
+  type DevPreview,
 } from "./types";
 
 // ── Result envelope ─────────────────────────────────────────────────────────
@@ -523,6 +525,67 @@ export async function listAttachments(
   if (error) return fail(error.message);
   return { ok: true, data: (data ?? []) as DevAttachment[] };
 }
+
+// ── Phase 7 — Preview Pipeline ───────────────────────────────────────────────
+
+/**
+ * Trigger preview creation for a task.
+ * Delegates to the /api/create-preview route handler (long-running GitHub calls
+ * must not block the Server Action queue). Returns immediately with the initial
+ * preview record; the client polls listPreviews / pollPreviewStatus for updates.
+ */
+export async function createPreview(taskId: string): Promise<Result<{ previewId: string }>> {
+  if (!(await requireAdmin())) return fail("auth");
+  if (!taskId) return fail("missing-id");
+
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://glev.app";
+  const res = await fetch(`${appUrl}/glev-ops/dev-cockpit/api/create-preview`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ taskId }),
+    cache: "no-store",
+  });
+  const json = (await res.json().catch(() => ({}))) as { ok?: boolean; preview?: { id: string }; error?: string };
+  if (!json.ok) return fail(json.error ?? "create-preview-failed");
+  const previewId = json.preview?.id ?? "";
+  return { ok: true, data: { previewId } };
+}
+
+/** List all previews for a task (newest first). */
+export async function listPreviews(taskId: string): Promise<Result<DevPreview[]>> {
+  if (!(await requireAdmin())) return fail("auth");
+  if (!taskId) return fail("missing-id");
+
+  const sb = getSupabaseAdmin();
+  const { data, error } = await sb
+    .from("dev_cockpit_previews")
+    .select(PREVIEW_COLUMNS)
+    .eq("task_id", taskId)
+    .order("preview_version", { ascending: false });
+
+  if (error) return fail(error.message);
+  return { ok: true, data: (data ?? []) as DevPreview[] };
+}
+
+/**
+ * Poll the GitHub Deployments API for the Vercel preview URL.
+ * Routes through the /api/poll-preview route so Octokit runs in Node.js runtime.
+ */
+export async function pollPreviewStatus(previewId: string): Promise<Result<DevPreview>> {
+  if (!(await requireAdmin())) return fail("auth");
+  if (!previewId) return fail("missing-id");
+
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://glev.app";
+  const res = await fetch(
+    `${appUrl}/glev-ops/dev-cockpit/api/poll-preview?previewId=${encodeURIComponent(previewId)}`,
+    { cache: "no-store" },
+  );
+  const json = (await res.json().catch(() => ({}))) as { ok?: boolean; preview?: DevPreview; error?: string };
+  if (!json.ok) return fail(json.error ?? "poll-failed");
+  return { ok: true, data: json.preview as DevPreview };
+}
+
+// ── Attachments ───────────────────────────────────────────────────────────────
 
 /**
  * Create an attachment METADATA placeholder. This does NOT upload a file —

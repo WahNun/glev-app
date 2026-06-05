@@ -33,6 +33,9 @@ import {
   listBuilds,
   listCodeGenerations,
   addMessage,
+  createPreview,
+  listPreviews,
+  pollPreviewStatus,
 } from "./actions";
 import {
   STATUS_LABEL,
@@ -51,6 +54,7 @@ import {
   type CodeGenerationDraft,
   type DevCodeGeneration,
   type CodeBlock,
+  type DevPreview,
 } from "./types";
 
 // Parse a task's stored plan_text (JSON) into a BuildPlan, or null if none/invalid.
@@ -535,6 +539,11 @@ export default function DevCockpit({ initialTasks }: { initialTasks: DevTask[] }
   const [buildingTaskIds, setBuildingTaskIds] = useState<Set<string>>(() => new Set());
   // Phase 6 — tasks whose code draft is being generated (parallel allowed).
   const [generatingCodeIds, setGeneratingCodeIds] = useState<Set<string>>(() => new Set());
+  // Phase 7 — Preview Pipeline state.
+  const [previews, setPreviews] = useState<DevPreview[]>([]);
+  const [creatingPreviewIds, setCreatingPreviewIds] = useState<Set<string>>(() => new Set());
+  // Active polling interval ref — cleared when task changes or preview settles.
+  const previewPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [actionPendingByTaskId, setActionPendingByTaskId] = useState<
     Record<string, "cancel" | "archive" | "backlog">
   >({});
@@ -604,22 +613,22 @@ export default function DevCockpit({ initialTasks }: { initialTasks: DevTask[] }
 
   function loadTaskDetail(taskId: string) {
     run(async () => {
-      const [m, q, a, b, c] = await Promise.all([
+      const [m, q, a, b, c, p] = await Promise.all([
         listMessages(taskId),
         listQueueNotes(taskId),
         listAttachments(taskId),
         listBuilds(taskId),
         listCodeGenerations(taskId),
+        listPreviews(taskId),
       ]);
       // Discard stale responses: only apply if this task is still selected.
-      // Without this, a slow load for an earlier task can land after a newer
-      // one and overwrite the current task's messages/queue (cross-task leak).
       if (activeTaskIdRef.current !== taskId) return;
       if (m.ok) setMessages(m.data);
       if (q.ok) setQueue(q.data);
       if (a.ok) setAttachments(a.data);
       if (b.ok) setBuilds(b.data);
       if (c.ok) setCodeDrafts(c.data);
+      if (p.ok) setPreviews(p.data);
     });
   }
 
@@ -635,6 +644,8 @@ export default function DevCockpit({ initialTasks }: { initialTasks: DevTask[] }
     setAttachments([]);
     setBuilds([]);
     setCodeDrafts([]);
+    setPreviews([]);
+    if (previewPollRef.current) { clearInterval(previewPollRef.current); previewPollRef.current = null; }
     if (!selectedId) return;
     loadTaskDetail(selectedId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -853,6 +864,55 @@ export default function DevCockpit({ initialTasks }: { initialTasks: DevTask[] }
           next.delete(id);
           return next;
         });
+      }
+    });
+  }
+
+  // Phase 7 — Create Preview: GitHub branch + commit + Vercel auto-deploy.
+  function handleCreatePreview() {
+    if (!selectedTask) { setError("Erst eine Task auswählen."); return; }
+    const id = selectedTask.id;
+    if (creatingPreviewIds.has(id)) return;
+    setCreatingPreviewIds((prev) => new Set(prev).add(id));
+    setTasks((prev) => prev.map((t) => (t.id === id ? { ...t, status: "creating_preview" } : t)));
+    setNotice("Erstelle Preview-Branch auf GitHub …");
+    run(async () => {
+      try {
+        const r = await createPreview(id);
+        if (!r.ok) {
+          setError(`Preview-Fehler: ${r.error}`);
+          const t = await getTask(id);
+          if (t.ok) setTasks((prev) => prev.map((x) => (x.id === id ? t.data : x)));
+          return;
+        }
+        const previewId = r.data.previewId;
+        // Refresh task + previews list.
+        const [t, p] = await Promise.all([getTask(id), listPreviews(id)]);
+        if (t.ok) setTasks((prev) => prev.map((x) => (x.id === id ? t.data : x)));
+        if (p.ok) setPreviews(p.data);
+        setNotice("Branch gepusht — Vercel baut …");
+        // Poll every 4 s until settled.
+        if (previewPollRef.current) clearInterval(previewPollRef.current);
+        previewPollRef.current = setInterval(async () => {
+          if (activeTaskIdRef.current !== id) {
+            clearInterval(previewPollRef.current!);
+            previewPollRef.current = null;
+            return;
+          }
+          const pr = await pollPreviewStatus(previewId);
+          if (!pr.ok) return;
+          const updated = pr.data;
+          setPreviews((prev) => prev.map((x) => (x.id === previewId ? updated : x)));
+          if (updated.deployment_status === "ready" || updated.deployment_status === "failed") {
+            clearInterval(previewPollRef.current!);
+            previewPollRef.current = null;
+            const t2 = await getTask(id);
+            if (t2.ok) setTasks((prev) => prev.map((x) => (x.id === id ? t2.data : x)));
+            setNotice(updated.deployment_status === "ready" ? "Preview bereit! 🎉" : "Preview-Deployment fehlgeschlagen.");
+          }
+        }, 4000);
+      } finally {
+        setCreatingPreviewIds((prev) => { const n = new Set(prev); n.delete(id); return n; });
       }
     });
   }
@@ -1359,6 +1419,20 @@ export default function DevCockpit({ initialTasks }: { initialTasks: DevTask[] }
                             : "Generate Code"}
                       </button>
                     )}
+                    {/* Create Preview — Phase 7, only when code_ready. */}
+                    {selectedTask.status === "code_ready" && (
+                      <button
+                        style={{
+                          ...btnPrimaryStyle,
+                          background: creatingPreviewIds.has(selectedTask.id) ? "#7c3aed88" : "#7c3aed",
+                        }}
+                        onClick={handleCreatePreview}
+                        disabled={creatingPreviewIds.has(selectedTask.id)}
+                        title="GitHub-Branch erstellen + Vercel Preview Deployment starten"
+                      >
+                        {creatingPreviewIds.has(selectedTask.id) ? "Erstelle…" : "Create Preview"}
+                      </button>
+                    )}
                   </div>
                 </div>
               </>
@@ -1651,6 +1725,104 @@ export default function DevCockpit({ initialTasks }: { initialTasks: DevTask[] }
             </section>
           )}
 
+          {/* Preview Deployment card (Phase 7) — latest preview for this task. */}
+          {selectedTask && previews.length > 0 && (() => {
+            const latest = previews[0];
+            const isBuilding = latest.deployment_status === "queued" || latest.deployment_status === "building";
+            const isReady    = latest.deployment_status === "ready";
+            const isFailed   = latest.deployment_status === "failed";
+            const statusColor = isReady ? "#166534" : isFailed ? "#991b1b" : "#6b21a8";
+            const statusBg    = isReady ? "#dcfce7" : isFailed ? "#fee2e2" : "#f3e8ff";
+            const statusBorder = isReady ? "#86efac" : isFailed ? "#fca5a5" : "#d8b4fe";
+            return (
+              <section style={cardStyle}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12, paddingBottom: 10, borderBottom: "1px solid #f3f4f6" }}>
+                  <h2 style={{ ...cardTitleStyle, margin: 0, padding: 0, border: "none" }}>
+                    Preview Deployment
+                    <span style={{ fontWeight: 400, color: "#9ca3af", fontSize: 13, marginLeft: 8 }}>
+                      #{latest.preview_version}
+                    </span>
+                  </h2>
+                  <span style={{ fontSize: 11, fontWeight: 700, padding: "3px 10px", borderRadius: 99, background: statusBg, color: statusColor, border: `1px solid ${statusBorder}`, textTransform: "uppercase" as const, letterSpacing: "0.04em" }}>
+                    {isBuilding ? "Building …" : isReady ? "Ready" : "Failed"}
+                  </span>
+                </div>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 10 }}>
+                  {evalBadge({ background: "#f3f4f6", color: "#374151", border: "1px solid #e5e7eb" }, `Branch: ${latest.branch_name}`)}
+                  {latest.commit_sha && evalBadge({ background: "#eff6ff", color: "#1e40af", border: "1px solid #bfdbfe" }, `Commit: ${latest.commit_sha.slice(0, 7)}`)}
+                  {evalBadge({ background: "#f9fafb", color: "#6b7280", border: "1px solid #e5e7eb" }, `Erstellt: ${fmtDateTime(latest.created_at)}`)}
+                </div>
+                {isReady && latest.preview_url && (
+                  <a
+                    href={latest.preview_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 14px", background: "#7c3aed", color: "#fff", borderRadius: 7, fontSize: 13, fontWeight: 600, textDecoration: "none", marginBottom: 8 }}
+                  >
+                    ↗ Open Preview
+                  </a>
+                )}
+                {isBuilding && (
+                  <p style={{ margin: 0, fontSize: 12, color: "#6b21a8" }}>
+                    Vercel baut das Preview-Deployment … (wird automatisch aktualisiert)
+                  </p>
+                )}
+                {isFailed && (
+                  <p style={{ margin: 0, fontSize: 12, color: "#991b1b" }}>
+                    Deployment fehlgeschlagen. Prüfe den Vercel-Log oder erstelle ein neues Preview.
+                  </p>
+                )}
+              </section>
+            );
+          })()}
+
+          {/* Preview History (Phase 7) — all previews for this task, newest first. */}
+          {selectedTask && previews.length > 1 && (
+            <section style={cardStyle}>
+              <h2 style={{ ...cardTitleStyle, marginBottom: 10 }}>
+                Preview History
+                <span style={{ fontWeight: 400, color: "#9ca3af", fontSize: 13, marginLeft: 8 }}>
+                  {previews.length} Previews
+                </span>
+              </h2>
+              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                {previews.map((pv, idx) => {
+                  const isCurrent = idx === 0;
+                  const statusColors: Record<string, { bg: string; color: string; border: string }> = {
+                    ready:    { bg: "#dcfce7", color: "#166534", border: "#86efac" },
+                    failed:   { bg: "#fee2e2", color: "#991b1b", border: "#fca5a5" },
+                    building: { bg: "#f3e8ff", color: "#6b21a8", border: "#d8b4fe" },
+                    queued:   { bg: "#f3e8ff", color: "#6b21a8", border: "#d8b4fe" },
+                  };
+                  const sc = statusColors[pv.deployment_status] ?? statusColors.queued;
+                  return (
+                    <div key={pv.id} style={{ display: "flex", flexDirection: "column", gap: 4, padding: "8px 12px", background: isCurrent ? "#f5f3ff" : "#f9fafb", border: `1px solid ${isCurrent ? "#c4b5fd" : "#e5e7eb"}`, borderRadius: 8, fontSize: 12 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                        <span style={{ fontWeight: 700, color: isCurrent ? "#5b21b6" : "#111", minWidth: 90 }}>
+                          Preview #{pv.preview_version}
+                          {isCurrent && <span style={{ marginLeft: 6, fontWeight: 600, fontSize: 10, background: "#5b21b6", color: "#fff", borderRadius: 4, padding: "1px 5px" }}>AKTUELL</span>}
+                        </span>
+                        <span style={{ fontSize: 10, fontWeight: 700, padding: "1px 7px", borderRadius: 99, background: sc.bg, color: sc.color, border: `1px solid ${sc.border}` }}>
+                          {pv.deployment_status}
+                        </span>
+                        <span style={{ color: "#9ca3af", marginLeft: "auto", whiteSpace: "nowrap" }}>{fmtDateTime(pv.created_at)}</span>
+                      </div>
+                      <div style={{ color: "#6b7280", fontSize: 11, fontFamily: "monospace" }}>
+                        {pv.branch_name}
+                        {pv.commit_sha && ` · ${pv.commit_sha.slice(0, 7)}`}
+                      </div>
+                      {pv.preview_url && (
+                        <a href={pv.preview_url} target="_blank" rel="noopener noreferrer" style={{ color: "#7c3aed", fontSize: 11, textDecoration: "underline" }}>
+                          {pv.preview_url}
+                        </a>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </section>
+          )}
+
           {/* Prompt area */}
           <section style={cardStyle}>
             <h2 style={cardTitleStyle}>Prompt</h2>
@@ -1873,31 +2045,60 @@ export default function DevCockpit({ initialTasks }: { initialTasks: DevTask[] }
           </section>
         </main>
 
-        {/* Right panel — Preview placeholder (unchanged, Phase 3+) */}
+        {/* Right panel — Preview (live iframe when URL available, Phase 7) */}
         <aside style={rightPanelStyle}>
           <h2 style={cardTitleStyle}>Preview</h2>
-          <div style={previewPlaceholderStyle}>
-            <span style={{ fontSize: 36, marginBottom: 10 }}>🖥️</span>
-            <p style={{ margin: 0, fontSize: 13, color: "#6b7280", textAlign: "center", lineHeight: 1.5 }}>
-              Vercel Preview will appear here
-            </p>
-          </div>
-          <div style={{ marginTop: 14, display: "flex", flexDirection: "column", gap: 6 }}>
-            <div style={previewControlGroupStyle}>
-              {["Desktop", "Tablet", "Mobile"].map((label) => (
-                <button key={label} style={previewCtrlBtnStyle} disabled>
-                  {label}
-                </button>
-              ))}
-            </div>
-            <div style={previewControlGroupStyle}>
-              {["Open Preview", "Close Preview", "Reload"].map((label) => (
-                <button key={label} style={previewCtrlBtnStyle} disabled>
-                  {label}
-                </button>
-              ))}
-            </div>
-          </div>
+          {(() => {
+            const activePreview = previews.find((p) => p.deployment_status === "ready" && p.preview_url);
+            const buildingPreview = !activePreview && previews.find((p) => p.deployment_status === "queued" || p.deployment_status === "building");
+            if (activePreview?.preview_url) {
+              return (
+                <>
+                  <div style={{ marginBottom: 8, display: "flex", gap: 6 }}>
+                    <a href={activePreview.preview_url} target="_blank" rel="noopener noreferrer"
+                      style={{ flex: 1, padding: "7px 10px", background: "#7c3aed", color: "#fff", borderRadius: 6, fontSize: 12, fontWeight: 600, textDecoration: "none", textAlign: "center" as const }}>
+                      ↗ Open Preview
+                    </a>
+                    <button style={previewCtrlBtnStyle} onClick={() => {
+                      const iframe = document.getElementById("dev-cockpit-preview-iframe") as HTMLIFrameElement | null;
+                      if (iframe) iframe.src = iframe.src;
+                    }}>Reload</button>
+                  </div>
+                  <iframe
+                    id="dev-cockpit-preview-iframe"
+                    src={activePreview.preview_url}
+                    title="Vercel Preview"
+                    style={{ width: "100%", height: 520, border: "1px solid #e5e7eb", borderRadius: 8, background: "#fff" }}
+                    sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
+                  />
+                  <p style={{ margin: "6px 0 0", fontSize: 10, color: "#9ca3af" }}>
+                    Branch: <code style={{ fontSize: 10 }}>{activePreview.branch_name}</code>
+                  </p>
+                </>
+              );
+            }
+            if (buildingPreview) {
+              return (
+                <div style={previewPlaceholderStyle}>
+                  <span style={{ fontSize: 28, marginBottom: 8 }}>⚙️</span>
+                  <p style={{ margin: 0, fontSize: 13, color: "#6b21a8", textAlign: "center" as const, lineHeight: 1.5 }}>
+                    Vercel baut Preview …
+                  </p>
+                  <p style={{ margin: "4px 0 0", fontSize: 11, color: "#9ca3af", textAlign: "center" as const }}>
+                    {buildingPreview.branch_name}
+                  </p>
+                </div>
+              );
+            }
+            return (
+              <div style={previewPlaceholderStyle}>
+                <span style={{ fontSize: 36, marginBottom: 10 }}>🖥️</span>
+                <p style={{ margin: 0, fontSize: 13, color: "#6b7280", textAlign: "center" as const, lineHeight: 1.5 }}>
+                  Vercel Preview erscheint hier nach &quot;Create Preview&quot;
+                </p>
+              </div>
+            );
+          })()}
         </aside>
       </div>
 
