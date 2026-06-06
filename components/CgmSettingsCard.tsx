@@ -219,6 +219,10 @@ export default function CgmSettingsCard() {
       setShowForm(!data.connected);
     } catch (e) {
       setStatusError(e instanceof Error ? e.message : t("errors.unknown"));
+      // Show the form even when the status API errors so the user can still
+      // enter / correct credentials — without this they are completely locked
+      // out whenever the endpoint returns 5xx (safety-critical: no CGM access).
+      setShowForm(true);
     } finally {
       setLoadingStatus(false);
     }

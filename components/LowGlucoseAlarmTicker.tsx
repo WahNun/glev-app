@@ -4,6 +4,7 @@ import { useEffect, useRef, useCallback } from "react";
 import { supabase } from "@/lib/supabase";
 import {
   getLowAlarmSettings,
+  persistLowAlarmSettingsLocally,
   checkAndFireIfLow,
   registerAlarmActionTypes,
   snoozeLowAlarm,
@@ -13,7 +14,7 @@ import {
 } from "@/lib/lowGlucoseAlarm";
 import { getElevatedAlarmSettings, checkAndFireIfElevated, persistElevatedAlarmSettingsLocally } from "@/lib/elevatedAlarm";
 import { getHyperAlarmSettings, checkAndFireIfHyper, persistHyperAlarmSettingsLocally } from "@/lib/hyperAlarm";
-import { fetchElevatedAlarmSettingsFromDb, fetchHighAlarmSettingsFromDb } from "@/lib/userSettings";
+import { fetchLowAlarmSettingsFromDb, fetchElevatedAlarmSettingsFromDb, fetchHighAlarmSettingsFromDb } from "@/lib/userSettings";
 import { useTranslations } from "next-intl";
 
 const TICK_MS = 60 * 1000;
@@ -97,8 +98,48 @@ export default function LowGlucoseAlarmTicker() {
 
       if (latestValue == null) return;
 
-      // --- Hypo alarm ---
-      const lowSettings = getLowAlarmSettings();
+      // ── Settings: DB-authoritative on every tick, localStorage as fallback ──
+      //
+      // BUG FIX (2026-06-06): The previous code relied on a one-time fire-and-
+      // forget DB sync at Ticker mount + localStorage for all subsequent ticks.
+      // If the mount sync failed silently (network error, cold connection) AND
+      // the user had never saved settings from the Settings page, localStorage
+      // had { enabled: false } (default), so the alarm was silently skipped on
+      // EVERY tick — even hours later. This is a safety-critical silent miss.
+      //
+      // Fix: read from DB on every tick via Promise.allSettled (never throws,
+      // gracefully falls back to localStorage on failure). Also persist the DB
+      // result to localStorage so it's available for the fallback.
+      const [lowDbResult, elevatedDbResult, hyperDbResult] = await Promise.allSettled([
+        fetchLowAlarmSettingsFromDb(),
+        fetchElevatedAlarmSettingsFromDb(),
+        fetchHighAlarmSettingsFromDb(),
+      ]);
+
+      const lowSettings = lowDbResult.status === "fulfilled"
+        ? { enabled: lowDbResult.value.enabled, thresholdMgdl: lowDbResult.value.thresholdMgdl }
+        : getLowAlarmSettings();
+      const elevatedSettings = elevatedDbResult.status === "fulfilled"
+        ? { enabled: elevatedDbResult.value.enabled, thresholdMgdl: elevatedDbResult.value.thresholdMgdl }
+        : getElevatedAlarmSettings();
+      const hyperSettings = hyperDbResult.status === "fulfilled"
+        ? { enabled: hyperDbResult.value.enabled, thresholdMgdl: hyperDbResult.value.thresholdMgdl }
+        : getHyperAlarmSettings();
+
+      // Keep localStorage in sync as cache for offline fallback.
+      if (lowDbResult.status === "fulfilled") persistLowAlarmSettingsLocally(lowSettings);
+      if (elevatedDbResult.status === "fulfilled") persistElevatedAlarmSettingsLocally(elevatedSettings);
+      if (hyperDbResult.status === "fulfilled") persistHyperAlarmSettingsLocally(hyperSettings);
+
+      // ── Alarm checks — Hypo FIRST (safety-critical, no hierarchy block) ──
+      //
+      // Rule: each alarm type is checked independently in its own block.
+      // Hypo runs first because it is life-threatening and must never be
+      // delayed by an Elevated/Hyper check, even if both thresholds are
+      // crossed simultaneously. Each type has its own cooldown in localStorage
+      // so they cannot block each other.
+
+      // --- Hypo alarm (PRIORITY — runs first, independently) ---
       if (lowSettings.enabled) {
         const body = isInSnoozeRecurrence()
           ? t("snooze_notification_body", { value: latestValue, threshold: lowSettings.thresholdMgdl })
@@ -109,8 +150,7 @@ export default function LowGlucoseAlarmTicker() {
         });
       }
 
-      // --- Elevated alarm ---
-      const elevatedSettings = getElevatedAlarmSettings();
+      // --- Elevated alarm (independent of Hypo result above) ---
       if (elevatedSettings.enabled) {
         await checkAndFireIfElevated(latestValue, elevatedSettings.thresholdMgdl, {
           title: tHigh("notification_title"),
@@ -118,8 +158,7 @@ export default function LowGlucoseAlarmTicker() {
         });
       }
 
-      // --- Hyper alarm ---
-      const hyperSettings = getHyperAlarmSettings();
+      // --- Hyper alarm (independent of Hypo and Elevated results above) ---
       if (hyperSettings.enabled) {
         await checkAndFireIfHyper(latestValue, hyperSettings.thresholdMgdl, {
           title: tHyper("notification_title"),
@@ -140,15 +179,8 @@ export default function LowGlucoseAlarmTicker() {
 
     registerAlarmActionTypes(snoozeTitle).catch(() => { /* ignore */ });
 
-    // One-time DB sync: populate localStorage with the user's saved
-    // elevated/hyper thresholds so the ticker has correct settings even
-    // before the user visits the sensor-alarme settings page.
-    fetchElevatedAlarmSettingsFromDb()
-      .then((s) => persistElevatedAlarmSettingsLocally({ enabled: s.enabled, thresholdMgdl: s.thresholdMgdl }))
-      .catch(() => { /* ignore — defaults used until next sync */ });
-    fetchHighAlarmSettingsFromDb()
-      .then((s) => persistHyperAlarmSettingsLocally({ enabled: s.enabled, thresholdMgdl: s.thresholdMgdl }))
-      .catch(() => { /* ignore */ });
+    // Settings are now read from DB on every tick inside checkLatestCgm()
+    // via Promise.allSettled — no separate one-time sync needed here.
 
     import("@capacitor/local-notifications")
       .then(({ LocalNotifications }) => {
