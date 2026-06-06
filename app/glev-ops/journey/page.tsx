@@ -1153,6 +1153,279 @@ export default async function JourneyPage() {
           />
         </PhaseSection>
 
+        {/* ── Phase 6: Abo-Verwaltung & Retention-Flow ───────────────────── */}
+        <PhaseSection
+          title="Phase 6 – Abo-Verwaltung & Kündigung (Pro-User)"
+          subtitle="Account-Sheet für aktive Pro-User — Abo-Info, 3-stufiger Retention-Flow, Kündigungs-Bestätigung."
+        >
+          <PhoneFrame label="Account · Pro aktiv" readonly>
+            <AccountSheetScreen variant="active" />
+          </PhoneFrame>
+          <PhoneFrame label="Retention Step 1 · 20 % Rabatt" readonly>
+            <AccountSheetScreen variant="retention1" />
+          </PhoneFrame>
+          <PhoneFrame label="Retention Step 2 · 90 Tage gratis" readonly>
+            <AccountSheetScreen variant="retention2" />
+          </PhoneFrame>
+          <PhoneFrame label="Retention Step 3 · Kündigungsgrund" readonly>
+            <AccountSheetScreen variant="retention3" />
+          </PhoneFrame>
+          <PhoneFrame label="Gekündigt · Bestätigung" readonly>
+            <AccountSheetScreen variant="cancelled" />
+          </PhoneFrame>
+        </PhaseSection>
+
+      </div>
+    </div>
+  );
+}
+
+// ─── Account-Sheet Screens (Phase 6) ─────────────────────────────────────────
+
+function AccountSheetScreen({
+  variant,
+}: {
+  variant: "active" | "retention1" | "retention2" | "retention3" | "cancelled";
+}) {
+  const SHEET_BG    = "#141418";
+  const SHEET_SURF  = "#1c1c22";
+  const SHEET_BDR   = "rgba(255,255,255,0.08)";
+  const LABEL_COLOR = "rgba(255,255,255,0.38)";
+  const PURPLE      = "#7B61FF";
+  const CANCEL_RED  = "#FF2D78";
+
+  const showModal = variant !== "active";
+
+  return (
+    <div
+      style={{
+        minHeight: 780,
+        background: "#09090B",
+        fontFamily: "-apple-system, BlinkMacSystemFont, 'Inter', sans-serif",
+        color: OB_TEXT,
+        position: "relative",
+        overflow: "hidden",
+      }}
+    >
+      {/* Blurred dashboard content behind */}
+      <div style={{ padding: "16px 20px 0", filter: showModal ? "blur(2px)" : "none", opacity: showModal ? 0.4 : 1 }}>
+        <div style={{ fontSize: 17, fontWeight: 700, marginBottom: 16 }}>Dashboard</div>
+        {[120, 80, 60].map((h, i) => (
+          <div key={i} style={{ background: OB_SURFACE, border: `1px solid ${OB_BORDER}`, borderRadius: 14, height: h, marginBottom: 10 }} />
+        ))}
+      </div>
+
+      {/* Overlay */}
+      {showModal && (
+        <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.55)" }} />
+      )}
+
+      {/* Bottom Sheet */}
+      <div
+        style={{
+          position: "absolute",
+          bottom: 0,
+          left: 0,
+          right: 0,
+          background: SHEET_BG,
+          borderRadius: "20px 20px 0 0",
+          padding: "12px 20px 32px",
+          display: "flex",
+          flexDirection: "column",
+          gap: 0,
+        }}
+      >
+        {/* Handle */}
+        <div style={{ width: 36, height: 4, borderRadius: 99, background: "rgba(255,255,255,0.2)", margin: "0 auto 16px" }} />
+
+        {/* Header */}
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+          <span style={{ fontSize: 18, fontWeight: 800, letterSpacing: "-0.02em" }}>Account</span>
+          <div style={{ width: 28, height: 28, borderRadius: "50%", background: SHEET_SURF, border: `1px solid ${SHEET_BDR}`, display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <span style={{ fontSize: 14, color: OB_DIM }}>×</span>
+          </div>
+        </div>
+
+        {/* User row */}
+        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 18 }}>
+          <div style={{ width: 44, height: 44, borderRadius: "50%", background: ACCENT, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, fontWeight: 800, flexShrink: 0 }}>
+            L
+          </div>
+          <div style={{ minWidth: 0 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 3 }}>
+              <span style={{ fontSize: 16, fontWeight: 700 }}>lucas</span>
+              <span style={{ fontSize: 10, fontWeight: 700, color: "#fff", background: PURPLE, borderRadius: 99, padding: "2px 8px", letterSpacing: "0.04em" }}>GLEV PRO</span>
+            </div>
+            <div style={{ fontSize: 12, color: OB_DIM, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>lucas@wahnon-connect.com</div>
+          </div>
+        </div>
+
+        {/* Stats grid */}
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, marginBottom: 14 }}>
+          {[
+            { l: "Mahlzeiten", v: "270" },
+            { l: "Mitglied seit", v: "22. Apr 2026" },
+            { l: "Version", v: "v0.4.0" },
+          ].map(({ l, v }) => (
+            <div key={l} style={{ background: SHEET_SURF, border: `1px solid ${SHEET_BDR}`, borderRadius: 10, padding: "10px 10px" }}>
+              <div style={{ fontSize: 10, color: LABEL_COLOR, fontWeight: 600, marginBottom: 4, letterSpacing: "0.06em" }}>{l}</div>
+              <div style={{ fontSize: 12, fontWeight: 700 }}>{v}</div>
+            </div>
+          ))}
+        </div>
+
+        {/* Abo section */}
+        <div style={{ background: SHEET_SURF, border: `1px solid ${SHEET_BDR}`, borderRadius: 12, padding: "12px 14px", marginBottom: 10 }}>
+          <div style={{ fontSize: 10, fontWeight: 700, color: LABEL_COLOR, letterSpacing: "0.08em", marginBottom: 8 }}>MEIN ABO</div>
+          {variant === "active" && (
+            <>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 2 }}>Glev Pro · monatlich</div>
+                  <div style={{ fontSize: 12, color: OB_DIM }}>Nächste Abrechnung: 6. Juli 2026</div>
+                </div>
+                <span style={{ fontSize: 13, fontWeight: 700, color: GREEN }}>8,99 €</span>
+              </div>
+              <div style={{ height: 1, background: SHEET_BDR, margin: "0 -2px 10px" }} />
+              <div style={{ fontSize: 12, color: CANCEL_RED, fontWeight: 600, textAlign: "center" }}>Abo kündigen</div>
+            </>
+          )}
+          {variant === "cancelled" && (
+            <>
+              <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 4 }}>Glev Pro · monatlich</div>
+              <div style={{ fontSize: 12, color: CANCEL_RED }}>Kündigt zum 6. Juli 2026</div>
+            </>
+          )}
+          {(variant === "retention1" || variant === "retention2" || variant === "retention3") && (
+            <>
+              <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 2 }}>Glev Pro · monatlich</div>
+              <div style={{ fontSize: 12, color: OB_DIM }}>Nächste Abrechnung: 6. Juli 2026</div>
+            </>
+          )}
+        </div>
+
+        {/* Passwort row */}
+        <div style={{ background: SHEET_SURF, border: `1px solid ${SHEET_BDR}`, borderRadius: 12, padding: "14px", display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
+          <div>
+            <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 2 }}>Passwort ändern</div>
+            <div style={{ fontSize: 12, color: OB_DIM }}>Wir senden dir einen Reset-Link per E-Mail.</div>
+          </div>
+          <span style={{ color: OB_FAINT, fontSize: 16 }}>›</span>
+        </div>
+
+        {/* Abmelden */}
+        <div style={{ background: `${CANCEL_RED}18`, border: `1px solid ${CANCEL_RED}44`, borderRadius: 12, padding: "14px", textAlign: "center" }}>
+          <span style={{ fontSize: 14, fontWeight: 700, color: CANCEL_RED }}>Abmelden</span>
+        </div>
+      </div>
+
+      {/* Retention / cancelled overlay modals */}
+      {variant === "retention1" && <RetentionModal1 />}
+      {variant === "retention2" && <RetentionModal2 />}
+      {variant === "retention3" && <RetentionModal3 />}
+      {variant === "cancelled"  && <CancelledModal />}
+    </div>
+  );
+}
+
+function RetentionModal1() {
+  return (
+    <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 20px" }}>
+      <div style={{ background: "#1a1a22", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 20, padding: "24px 20px", width: "100%", maxWidth: 340 }}>
+        <div style={{ fontSize: 32, textAlign: "center", marginBottom: 10 }}>🎁</div>
+        <div style={{ fontSize: 18, fontWeight: 800, textAlign: "center", letterSpacing: "-0.02em", marginBottom: 8 }}>Warte kurz!</div>
+        <div style={{ fontSize: 13, color: OB_DIM, textAlign: "center", lineHeight: 1.5, marginBottom: 20 }}>
+          Bevor du kündigst — wie wäre es mit <strong style={{ color: OB_TEXT }}>20 % Rabatt</strong> auf die nächsten 3 Monate?
+        </div>
+        <div style={{ background: `${ACCENT}18`, border: `1px solid ${ACCENT}44`, borderRadius: 12, padding: "14px 16px", marginBottom: 14, textAlign: "center" }}>
+          <div style={{ fontSize: 22, fontWeight: 800, color: ACCENT, marginBottom: 2 }}>7,19 € / Monat</div>
+          <div style={{ fontSize: 11, color: OB_DIM }}>statt 8,99 € — 3 Monate lang</div>
+        </div>
+        <div style={{ background: ACCENT, borderRadius: 12, padding: "14px", textAlign: "center", marginBottom: 10 }}>
+          <span style={{ fontSize: 14, fontWeight: 700, color: "#fff" }}>20 % Rabatt aktivieren →</span>
+        </div>
+        <div style={{ textAlign: "center", fontSize: 12, color: OB_FAINT }}>Nein danke, weiter zur Kündigung</div>
+      </div>
+    </div>
+  );
+}
+
+function RetentionModal2() {
+  return (
+    <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 20px" }}>
+      <div style={{ background: "#1a1a22", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 20, padding: "24px 20px", width: "100%", maxWidth: 340 }}>
+        <div style={{ fontSize: 32, textAlign: "center", marginBottom: 10 }}>⏸️</div>
+        <div style={{ fontSize: 18, fontWeight: 800, textAlign: "center", letterSpacing: "-0.02em", marginBottom: 8 }}>Brauchst du eine Pause?</div>
+        <div style={{ fontSize: 13, color: OB_DIM, textAlign: "center", lineHeight: 1.5, marginBottom: 20 }}>
+          Kein Problem — wir verlängern deinen Pro-Zugang um <strong style={{ color: OB_TEXT }}>90 Tage kostenlos</strong>. Kein Risiko.
+        </div>
+        <div style={{ background: `${GREEN}18`, border: `1px solid ${GREEN}44`, borderRadius: 12, padding: "14px 16px", marginBottom: 14, display: "flex", alignItems: "center", gap: 12 }}>
+          <div style={{ fontSize: 24, flexShrink: 0 }}>✅</div>
+          <div>
+            <div style={{ fontSize: 13, fontWeight: 700, color: GREEN, marginBottom: 2 }}>90 Tage gratis</div>
+            <div style={{ fontSize: 11, color: OB_DIM }}>Danach läuft das Abo normal weiter — jederzeit kündbar.</div>
+          </div>
+        </div>
+        <div style={{ background: GREEN, borderRadius: 12, padding: "14px", textAlign: "center", marginBottom: 10 }}>
+          <span style={{ fontSize: 14, fontWeight: 700, color: "#000" }}>90 Tage gratis aktivieren →</span>
+        </div>
+        <div style={{ textAlign: "center", fontSize: 12, color: OB_FAINT }}>Nein danke, weiter zur Kündigung</div>
+      </div>
+    </div>
+  );
+}
+
+function RetentionModal3() {
+  const CANCEL_RED = "#FF2D78";
+  const reasons = [
+    "Zu teuer",
+    "Ich nutze Glev nicht oft genug",
+    "Fehlende Funktionen",
+    "Technische Probleme",
+    "Ich wechsle zu einer anderen App",
+  ];
+  return (
+    <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 20px" }}>
+      <div style={{ background: "#1a1a22", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 20, padding: "24px 20px", width: "100%", maxWidth: 340 }}>
+        <div style={{ fontSize: 16, fontWeight: 800, letterSpacing: "-0.02em", marginBottom: 4 }}>Was hat dich enttäuscht?</div>
+        <div style={{ fontSize: 12, color: OB_DIM, marginBottom: 16, lineHeight: 1.4 }}>Optional — hilft uns, Glev zu verbessern.</div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 16 }}>
+          {reasons.map((r, i) => (
+            <div key={r} style={{ display: "flex", alignItems: "center", gap: 10, background: OB_SURFACE, border: `1px solid ${i === 0 ? ACCENT + "88" : OB_BORDER}`, borderRadius: 10, padding: "10px 12px" }}>
+              <div style={{ width: 16, height: 16, borderRadius: 4, border: `2px solid ${i === 0 ? ACCENT : "rgba(255,255,255,0.3)"}`, background: i === 0 ? ACCENT : "transparent", flexShrink: 0 }} />
+              <span style={{ fontSize: 12, color: i === 0 ? OB_TEXT : OB_DIM }}>{r}</span>
+            </div>
+          ))}
+        </div>
+        <div style={{ background: "#1e1e28", border: `1px solid ${OB_BORDER}`, borderRadius: 10, padding: "10px 12px", marginBottom: 16, fontSize: 12, color: OB_FAINT }}>
+          Sonstiges (optional)…
+        </div>
+        <div style={{ background: `${CANCEL_RED}22`, border: `1px solid ${CANCEL_RED}55`, borderRadius: 12, padding: "13px", textAlign: "center" }}>
+          <span style={{ fontSize: 13, fontWeight: 700, color: CANCEL_RED }}>Trotzdem kündigen</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function CancelledModal() {
+  const CANCEL_RED = "#FF2D78";
+  return (
+    <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 20px" }}>
+      <div style={{ background: "#1a1a22", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 20, padding: "28px 20px", width: "100%", maxWidth: 340, textAlign: "center" }}>
+        <div style={{ fontSize: 40, marginBottom: 12 }}>😔</div>
+        <div style={{ fontSize: 17, fontWeight: 800, letterSpacing: "-0.02em", marginBottom: 8 }}>Schade, dass du gehst.</div>
+        <div style={{ fontSize: 13, color: OB_DIM, lineHeight: 1.5, marginBottom: 20 }}>
+          Dein Abo läuft noch bis zum <strong style={{ color: OB_TEXT }}>6. Juli 2026</strong> — bis dahin hast du weiter vollen Pro-Zugang.
+        </div>
+        <div style={{ background: `${CANCEL_RED}15`, border: `1px solid ${CANCEL_RED}33`, borderRadius: 12, padding: "12px 14px", marginBottom: 20, textAlign: "left" }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: CANCEL_RED, letterSpacing: "0.06em", marginBottom: 4 }}>DEIN ABO</div>
+          <div style={{ fontSize: 13, fontWeight: 600 }}>Glev Pro · monatlich</div>
+          <div style={{ fontSize: 12, color: OB_DIM }}>Kündigt zum 6. Juli 2026</div>
+        </div>
+        <div style={{ background: OB_SURFACE, border: `1px solid ${OB_BORDER}`, borderRadius: 12, padding: "13px", textAlign: "center" }}>
+          <span style={{ fontSize: 13, fontWeight: 600, color: OB_TEXT }}>Schließen</span>
+        </div>
       </div>
     </div>
   );
