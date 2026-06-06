@@ -150,23 +150,24 @@ export async function verifyMarketerCredentials(
  * Backward-compat: old plain-hex cookies (no role prefix) are treated as "admin".
  */
 export async function getSessionRole(): Promise<"admin" | "marketer" | null> {
-  const adminSecret = process.env.ADMIN_API_SECRET ?? "";
-  if (!adminSecret || adminSecret.length < 16) return null;
-
   const store = await cookies();
   const tok   = store.get(ADMIN_COOKIE)?.value ?? "";
   if (!tok) return null;
-
-  if (tok.startsWith("admin:")) {
-    const expected = "admin:" + computeAdminHmac();
-    return safeEqual(tok, expected) ? "admin" : null;
-  }
 
   if (tok.startsWith("marketer:")) {
     const marketerPw = process.env.MARKETER_PASSWORD ?? "";
     if (!marketerPw || marketerPw.length < 8) return null;
     const expected = "marketer:" + computeMarketerHmac();
     return safeEqual(tok, expected) ? "marketer" : null;
+  }
+
+  // Admin branches require ADMIN_API_SECRET
+  const adminSecret = process.env.ADMIN_API_SECRET ?? "";
+  if (!adminSecret || adminSecret.length < 16) return null;
+
+  if (tok.startsWith("admin:")) {
+    const expected = "admin:" + computeAdminHmac();
+    return safeEqual(tok, expected) ? "admin" : null;
   }
 
   // Backward-compat: old plain-hex admin token (no role prefix)
