@@ -25,6 +25,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { create, getNumericDate } from "https://deno.land/x/djwt@v3.0.2/mod.ts";
 import { fetchLiveReading } from "../_shared/cgm-live.ts";
+import { pingHealthcheck } from "../_shared/healthcheck.ts";
 
 const COOLDOWN_MINUTES = 15;
 const COOLDOWN_MS = COOLDOWN_MINUTES * 60 * 1000;
@@ -207,6 +208,7 @@ Deno.serve(async (_req: Request) => {
   }
   if (!alarmRows || alarmRows.length === 0) {
     console.log("[elevated-check] no users with elevated alarm enabled");
+    await pingHealthcheck("HEALTHCHECK_ELEVATED_URL");
     return new Response(JSON.stringify({ checked: 0, sent: 0 }), { status: 200 });
   }
 
@@ -226,6 +228,7 @@ Deno.serve(async (_req: Request) => {
     return new Response(JSON.stringify({ error: tokenError.message }), { status: 500 });
   }
   if (!tokenRows || tokenRows.length === 0) {
+    await pingHealthcheck("HEALTHCHECK_ELEVATED_URL");
     return new Response(JSON.stringify({ checked: 0, sent: 0 }), { status: 200 });
   }
 
@@ -357,6 +360,7 @@ Deno.serve(async (_req: Request) => {
   }
 
   console.log(`[elevated-check] done: checked=${users.length}, sent=${sent}, errors=${errors.length}`);
+  await pingHealthcheck("HEALTHCHECK_ELEVATED_URL");
   return new Response(JSON.stringify({ checked: users.length, sent, errors }), {
     status: 200, headers: { "Content-Type": "application/json" },
   });
