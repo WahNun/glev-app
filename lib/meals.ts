@@ -176,7 +176,7 @@ export function classifyMeal(
   // HIGH_FIBER: mind. 7g Ballaststoffe UND mind. 20% der KH-Menge.
   // Kommt nach Fett/Protein damit Fettdominanz und Proteindominanz
   // Vorrang behalten — HIGH_FIBER greift nur bei echter Fasermahlzeit.
-  if (carbs > 0 && fiber >= 7 && fiber / carbs >= 0.20) return "HIGH_FIBER";
+  if (carbs > 0 && fiber !== null && fiber >= 7 && fiber / carbs >= 0.20) return "HIGH_FIBER";
   return "BALANCED";
 }
 
