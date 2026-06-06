@@ -11,6 +11,7 @@ import ActivatePendingButton from "../buyers/ActivatePendingButton";
 import ReminderButton from "../buyers/ReminderButton";
 import BulkSmsButton from "../buyers/BulkSmsButton";
 import TestLeadInjector from "./TestLeadInjector";
+import CsvImporter from "./CsvImporter";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -327,6 +328,7 @@ export default async function CrmPage({
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(340px, 1fr))", gap: 12, marginBottom: 24 }}>
         <TestLeadInjector />
+        <CsvImporter />
 
         <section style={panelStyle}>
           <h2 style={panelTitle}>Meta-Lead anlegen — 7-Tage Trial</h2>
