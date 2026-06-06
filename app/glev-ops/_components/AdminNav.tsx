@@ -27,6 +27,7 @@ const ALL_GROUPS: ReadonlyArray<NavGroup> = [
       { href: "/glev-ops/praxis", label: "Praxen" },
       { href: "/glev-ops/sms", label: "SMS Test" },
       { href: "/glev-ops/settings", label: "Einstellungen" },
+      { href: "/glev-ops/team", label: "Team-Zugänge" },
     ],
   },
   {

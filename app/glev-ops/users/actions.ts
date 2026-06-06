@@ -3,7 +3,8 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { cookies } from "next/headers";
-import { verifyAdminCredentials, setAdminCookie, clearAdminCookie, isAdminAuthed, ADMIN_COOKIE } from "@/lib/adminAuth";
+import { verifyAdminCredentials, verifyMarketerCredentials, setAdminCookie, setMarketerCookie, setTeamCookie, clearAdminCookie, isAdminAuthed, ADMIN_COOKIE } from "@/lib/adminAuth";
+import { verifyTeamMember } from "@/lib/admin/teamUsers";
 
 import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
 import { getStripe } from "@/lib/stripeServer";
@@ -39,10 +40,34 @@ export async function loginAction(formData: FormData): Promise<void> {
   const email    = String(formData.get("email")    ?? "");
   const password = String(formData.get("password") ?? "");
   const totp     = String(formData.get("totp")     ?? "");
-  const ok = await verifyAdminCredentials(email, password, totp);
-  if (!ok) redirect("/glev-ops/users?err=bad");
-  await setAdminCookie();
-  redirect("/glev-ops/users");
+
+  // Master admin (env vars) — full access
+  const isAdmin = await verifyAdminCredentials(email, password, totp);
+  if (isAdmin) {
+    await setAdminCookie();
+    redirect("/glev-ops/users");
+  }
+
+  // Marketer (env vars) — CRM access
+  const isMarketer = await verifyMarketerCredentials(email, password);
+  if (isMarketer) {
+    await setMarketerCookie();
+    redirect("/glev-ops/crm");
+  }
+
+  // Team member (Supabase-based)
+  const teamMember = await verifyTeamMember(email, password);
+  if (teamMember) {
+    await setTeamCookie(teamMember.id, teamMember.role);
+    const dest = teamMember.must_change_pw
+      ? "/glev-ops/team/change-password"
+      : teamMember.role === "admin"
+        ? "/glev-ops/users"
+        : "/glev-ops/crm";
+    redirect(dest);
+  }
+
+  redirect("/glev-ops/users?err=bad");
 }
 
 export async function logoutAction(): Promise<void> {

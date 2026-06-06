@@ -18,7 +18,10 @@
  */
 
 import { cookies } from "next/headers";
-import { createHmac, timingSafeEqual } from "crypto";
+import { createHmac, timingSafeEqual, scrypt, randomBytes } from "crypto";
+import { promisify } from "util";
+
+const scryptAsync = promisify(scrypt);
 
 export const ADMIN_COOKIE = "glev_ops_token";
 const COOKIE_PATH       = "/";
@@ -81,6 +84,38 @@ function computeAdminHmac(): string {
 function computeMarketerHmac(): string {
   const secret = process.env.MARKETER_PASSWORD ?? "";
   return createHmac("sha256", secret).update(SESSION_HMAC_KEY).digest("hex");
+}
+
+function computeTeamHmac(userId: string, role: string): string {
+  const secret = process.env.ADMIN_API_SECRET ?? "";
+  return createHmac("sha256", secret)
+    .update(`team-member-v1:${userId}:${role}`)
+    .digest("hex");
+}
+
+// ---------------------------------------------------------------------------
+// Password hashing (scrypt) — used for glev_ops_users table
+// ---------------------------------------------------------------------------
+
+/** Hash a plain-text password for storage. Returns "salt:derivedKey" (hex). */
+export async function hashPassword(password: string): Promise<string> {
+  const salt    = randomBytes(16).toString("hex");
+  const derived = (await scryptAsync(password, salt, 64)) as Buffer;
+  return `${salt}:${derived.toString("hex")}`;
+}
+
+/** Verify a plain-text password against a stored hash. Constant-time. */
+export async function verifyPassword(
+  password: string,
+  stored: string,
+): Promise<boolean> {
+  try {
+    const [salt, key] = stored.split(":");
+    const derived     = (await scryptAsync(password, salt, 64)) as Buffer;
+    return timingSafeEqual(derived, Buffer.from(key, "hex"));
+  } catch {
+    return false;
+  }
 }
 
 function safeEqual(a: string, b: string): boolean {
@@ -147,12 +182,28 @@ export async function verifyMarketerCredentials(
  * Read the session role from the current request cookie.
  * Returns "admin" | "marketer" | null.
  *
+ * Cookie formats:
+ *   admin:${hmac}
+ *   marketer:${hmac}
+ *   team:{userId}:{role}:{hmac}   ← Supabase-based team members
+ *
  * Backward-compat: old plain-hex cookies (no role prefix) are treated as "admin".
  */
 export async function getSessionRole(): Promise<"admin" | "marketer" | null> {
   const store = await cookies();
   const tok   = store.get(ADMIN_COOKIE)?.value ?? "";
   if (!tok) return null;
+
+  // Supabase-based team member
+  if (tok.startsWith("team:")) {
+    const parts = tok.split(":");
+    // format: team:{userId}:{role}:{hmac}
+    if (parts.length !== 4) return null;
+    const [, userId, role, hmac] = parts;
+    if (role !== "admin" && role !== "marketer") return null;
+    const expected = computeTeamHmac(userId, role);
+    return safeEqual(hmac, expected) ? (role as "admin" | "marketer") : null;
+  }
 
   if (tok.startsWith("marketer:")) {
     const marketerPw = process.env.MARKETER_PASSWORD ?? "";
@@ -209,6 +260,19 @@ export async function setAdminCookie(): Promise<void> {
 export async function setMarketerCookie(): Promise<void> {
   const store = await cookies();
   store.set(ADMIN_COOKIE, "marketer:" + computeMarketerHmac(), {
+    httpOnly: true,
+    sameSite: "strict",
+    secure:   process.env.NODE_ENV === "production",
+    path:     COOKIE_PATH,
+    maxAge:   60 * 60 * 8,
+  });
+}
+
+/** Write a team-member session cookie (Supabase-backed glev_ops_users). */
+export async function setTeamCookie(userId: string, role: "admin" | "marketer"): Promise<void> {
+  const store = await cookies();
+  const hmac  = computeTeamHmac(userId, role);
+  store.set(ADMIN_COOKIE, `team:${userId}:${role}:${hmac}`, {
     httpOnly: true,
     sameSite: "strict",
     secure:   process.env.NODE_ENV === "production",
