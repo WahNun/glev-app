@@ -7,21 +7,43 @@ import { parseLluTs as _parseLluTs, parseDbTs } from "@/lib/time";
 
 const STORAGE_KEY_BASE = "glev:scheduled-cgm-fills";
 /**
- * Tolerance window (minutes) around the 1h / 2h target when picking the
- * closest CGM reading to populate bg_1h / bg_2h. Wide on purpose: per
- * user spec, ANY post-meal reading near the 2-hour mark should flip the
- * outcome chip to GOOD / HIGH / LOW. Sparse-data CGMs (Libre 14d at
+ * Tolerance window (minutes) around each target when picking the
+ * closest CGM reading. Wide on purpose: sparse-data CGMs (Libre 14d at
  * 15-min cadence with occasional gaps) and users who scan late often
- * have no value within ±15 min of the exact target. 60 min covers
- * 30–90 min after meal for the "1h" slot and 60–180 min for the "2h"
- * slot — wide enough to never strand a meal in "VORLÄUFIG" forever
- * just because the closest scan was 25 min off, narrow enough to not
- * grab a reading from the middle of the next meal.
+ * have no value within ±15 min of the exact target. 60 min covers a
+ * broad window — narrow enough to not grab a reading from the middle of
+ * the next meal.
  */
 const MATCH_WINDOW_MIN = 60;
-const ONE_HOUR_MS = 60 * 60 * 1000;
-const TWO_HOURS_MS = 2 * ONE_HOUR_MS;
+const ONE_HOUR_MS      = 60 * 60 * 1000;
+const TWO_HOURS_MS     = 2 * ONE_HOUR_MS;
 const HISTORY_HORIZON_MS = 12 * ONE_HOUR_MS;
+
+const THIRTY_MIN_MS  =  30 * 60 * 1000;
+const NINETY_MIN_MS  =  90 * 60 * 1000;
+const THREE_HOURS_MS = 180 * 60 * 1000;
+
+type SlotKey = "30min" | "1h" | "90min" | "2h" | "3h";
+
+interface SlotCfg {
+  offsetMs: number;
+  /** Primary column written (new glucose_* family). */
+  valueCol: string;
+  atCol: string;
+  /** Legacy bg_* column written in parallel while the old columns coexist. */
+  legacyValueCol?: string;
+  legacyAtCol?: string;
+}
+
+const SLOT_CONFIG: Record<SlotKey, SlotCfg> = {
+  "30min": { offsetMs: THIRTY_MIN_MS,  valueCol: "glucose_30min", atCol: "glucose_30min_at" },
+  "1h":    { offsetMs: ONE_HOUR_MS,    valueCol: "glucose_1h",    atCol: "glucose_1h_at",    legacyValueCol: "bg_1h", legacyAtCol: "bg_1h_at" },
+  "90min": { offsetMs: NINETY_MIN_MS,  valueCol: "glucose_90min", atCol: "glucose_90min_at" },
+  "2h":    { offsetMs: TWO_HOURS_MS,   valueCol: "glucose_2h",    atCol: "glucose_2h_at",    legacyValueCol: "bg_2h", legacyAtCol: "bg_2h_at" },
+  "3h":    { offsetMs: THREE_HOURS_MS, valueCol: "glucose_3h",    atCol: "glucose_3h_at" },
+};
+
+const ALL_SLOTS: SlotKey[] = ["30min", "1h", "90min", "2h", "3h"];
 
 interface CgmReading { value: number | null; timestamp: string | null; }
 interface CgmHistoryResponse { current: CgmReading | null; history: CgmReading[]; }
@@ -132,52 +154,57 @@ async function removeScheduled(mealId: string) {
   await saveScheduled((await loadScheduled()).filter((s) => s.mealId !== mealId));
 }
 
-/** Conditionally write the autofill value only if the column is still null in
- *  the DB. This prevents a background timer/reconciliation from clobbering a
- *  reading the user has manually entered in the Entry Log meanwhile. */
+/**
+ * Conditionally write the autofill value only if the primary column is
+ * still null in the DB. This prevents a background timer from clobbering
+ * a reading the user has manually entered in the Entry Log meanwhile.
+ *
+ * For slots with a legacy bg_* column (1h, 2h) we also write that column
+ * so the CgmCountdownPair + lifecycle engine continue to work without schema
+ * changes while the old columns are being deprecated.
+ */
 async function fillSlot(
   mealId: string,
   mealTimeMs: number,
-  slot: "1h" | "2h",
+  slot: SlotKey,
   history: CgmReading[],
 ): Promise<boolean> {
-  const targetMs = mealTimeMs + (slot === "1h" ? ONE_HOUR_MS : TWO_HOURS_MS);
+  const cfg = SLOT_CONFIG[slot];
+  const targetMs = mealTimeMs + cfg.offsetMs;
   if (Date.now() < targetMs) return false;
   const match = nearestReading(history, targetMs);
   if (!match) return false;
   if (!supabase) return false;
 
-  const valueCol = slot === "1h" ? "bg_1h" : "bg_2h";
-  const atCol    = slot === "1h" ? "bg_1h_at" : "bg_2h_at";
+  const nowIso = new Date().toISOString();
   const patch: Record<string, unknown> = {
-    [valueCol]: match.value,
-    [atCol]:    new Date().toISOString(),
+    [cfg.valueCol]: match.value,
+    [cfg.atCol]:    nowIso,
   };
+  // Also write legacy bg_* columns so CgmCountdownPair + lifecycle keep working.
+  if (cfg.legacyValueCol) {
+    patch[cfg.legacyValueCol] = match.value;
+    patch[cfg.legacyAtCol!]   = nowIso;
+  }
 
   const { data, error } = await supabase
     .from("meals")
     .update(patch)
     .eq("id", mealId)
-    .is(valueCol, null)            // never overwrite a manually-entered reading
+    .is(cfg.valueCol, null)            // never overwrite a manually-entered reading
     .select("id");
 
   if (error) {
-    // Schema-cache: column missing → nothing we can do from the autofiller; the
-    // user can still record readings via the Entry Log fallback path. Log + bail.
     logDebug("CGM_AUTOFILL_DB_ERROR", { mealId, slot, message: error.message });
     return false;
   }
   const rows = (data ?? []).length;
-  if (rows === 0) return false;     // already filled (manual entry won the race)
+  if (rows === 0) return false;        // already filled (manual entry won the race)
   logDebug("CGM_AUTOFILL", { mealId, slot, value: match.value, ageMin: Math.round(match.ageMin) });
 
   // When the 2h slot was just populated, give the row a chance to flip
-  // `evaluation` from null → final. Same logic the manual readings path
-  // runs (lib/meals.updateMealReadings + components/ManualEntryModal),
-  // so the dashboard Control Score sees the new outcome on its next
-  // refresh without waiting for an explicit user save. Non-fatal — the
-  // lifecycle recomputes on read so a failure here just delays the
-  // cached column update.
+  // `evaluation` from null → final. Non-fatal — the lifecycle recomputes
+  // on read so a failure here just delays the cached column update.
   if (slot === "2h") {
     try {
       const { data: row } = await supabase
@@ -186,9 +213,6 @@ async function fillSlot(
         .eq("id", mealId)
         .single();
       if (row) {
-        // Personal ICR/CF/target come from the DB-backed user_settings
-        // helper so the lifecycle's no-bgAfter fallback uses the user's
-        // real ratios — same source as updateMealReadings + manual save.
         const [{ lifecycleFor }, { fetchInsulinSettings }] = await Promise.all([
           import("./engine/lifecycle"),
           import("./userSettings"),
@@ -212,9 +236,11 @@ function armTimers(mealId: string, mealMs: number) {
   if (existing) clearTimeout(existing);
 
   const now = Date.now();
-  const delay1 = mealMs + ONE_HOUR_MS - now;
-  const delay2 = mealMs + TWO_HOURS_MS - now;
-  const candidates = [delay1, delay2].filter((d) => d > 0);
+  // Find the delay to the next slot that hasn't fired yet.
+  const candidates = ALL_SLOTS
+    .map(slot => mealMs + SLOT_CONFIG[slot].offsetMs - now)
+    .filter(d => d > 0);
+
   if (candidates.length === 0) {
     void removeScheduled(mealId);
     return;
@@ -233,12 +259,15 @@ function armTimers(mealId: string, mealMs: number) {
       return;
     }
     let filled = false;
-    if (await fillSlot(mealId, mealMs, "1h", hist.history)) filled = true;
-    if (await fillSlot(mealId, mealMs, "2h", hist.history)) filled = true;
+    for (const slot of ALL_SLOTS) {
+      if (await fillSlot(mealId, mealMs, slot, hist.history)) filled = true;
+    }
     if (filled && typeof window !== "undefined") {
       window.dispatchEvent(new CustomEvent("glev:meals-updated", { detail: { source: "cgm-autofill-timer" } }));
     }
-    if (Date.now() >= mealMs + TWO_HOURS_MS) {
+    // Keep rescheduling until all slots are past.
+    const allSlotsDone = ALL_SLOTS.every(s => Date.now() >= mealMs + SLOT_CONFIG[s].offsetMs);
+    if (allSlotsDone) {
       void removeScheduled(mealId);
     } else {
       armTimers(mealId, mealMs);
@@ -252,7 +281,7 @@ function armTimers(mealId: string, mealMs: number) {
 export function scheduleAutoFillForMeal(mealId: string, mealTimeIso: string): void {
   const ms = Date.parse(mealTimeIso);
   if (!isFinite(ms)) return;
-  if (Date.now() >= ms + TWO_HOURS_MS) return;
+  if (Date.now() >= ms + THREE_HOURS_MS) return;
   void addScheduled(mealId, mealTimeIso);
   armTimers(mealId, ms);
 }
@@ -261,7 +290,7 @@ export function scheduleAutoFillForMeal(mealId: string, mealTimeIso: string): vo
 export async function restoreScheduledTimers(): Promise<void> {
   for (const item of await loadScheduled()) {
     const ms = Date.parse(item.mealTimeIso);
-    if (!isFinite(ms) || Date.now() >= ms + TWO_HOURS_MS) {
+    if (!isFinite(ms) || Date.now() >= ms + THREE_HOURS_MS) {
       void removeScheduled(item.mealId);
       continue;
     }
@@ -269,17 +298,19 @@ export async function restoreScheduledTimers(): Promise<void> {
   }
 }
 
-/** Backfill any meal whose 1h or 2h slot is past-due and still null using
- *  the LLU graph history. Skips rows older than the CGM history horizon. */
+/** Backfill any meal whose slots are past-due and still null using
+ *  the CGM history. Skips rows older than the CGM history horizon (12h). */
 export async function reconcilePendingMealsCgm(meals: Meal[]): Promise<{ filled: number }> {
   const now = Date.now();
   const candidates = meals.filter((m) => {
     const t = m.meal_time ? parseDbTs(m.meal_time) : parseDbTs(m.created_at);
     if (!isFinite(t)) return false;
     if (now - t > HISTORY_HORIZON_MS) return false;
-    const need1h = m.bg_1h == null && now >= t + ONE_HOUR_MS;
-    const need2h = m.bg_2h == null && now >= t + TWO_HOURS_MS;
-    return need1h || need2h;
+    // Needs at least one slot past-due and unfilled.
+    return ALL_SLOTS.some(slot => {
+      const col = SLOT_CONFIG[slot].valueCol as keyof Meal;
+      return (m[col] == null) && now >= t + SLOT_CONFIG[slot].offsetMs;
+    });
   });
   if (candidates.length === 0) return { filled: 0 };
 
@@ -289,15 +320,15 @@ export async function reconcilePendingMealsCgm(meals: Meal[]): Promise<{ filled:
   let filled = 0;
   for (const m of candidates) {
     const t = m.meal_time ? parseDbTs(m.meal_time) : parseDbTs(m.created_at);
-    try {
-      if (m.bg_1h == null && now >= t + ONE_HOUR_MS) {
-        if (await fillSlot(m.id, t, "1h", hist.history)) filled++;
+    for (const slot of ALL_SLOTS) {
+      const col = SLOT_CONFIG[slot].valueCol as keyof Meal;
+      if (m[col] == null && now >= t + SLOT_CONFIG[slot].offsetMs) {
+        try {
+          if (await fillSlot(m.id, t, slot, hist.history)) filled++;
+        } catch (e) {
+          logDebug("CGM_AUTOFILL_ERROR", { mealId: m.id, slot, message: e instanceof Error ? e.message : String(e) });
+        }
       }
-      if (m.bg_2h == null && now >= t + TWO_HOURS_MS) {
-        if (await fillSlot(m.id, t, "2h", hist.history)) filled++;
-      }
-    } catch (e) {
-      logDebug("CGM_AUTOFILL_ERROR", { mealId: m.id, message: e instanceof Error ? e.message : String(e) });
     }
   }
   return { filled };
