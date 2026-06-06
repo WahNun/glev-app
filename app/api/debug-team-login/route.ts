@@ -13,13 +13,15 @@ export async function GET(req: NextRequest) {
 
   const results: Record<string, unknown> = {};
 
-  results.supabase_url_set = !!process.env.SUPABASE_URL || !!process.env.NEXT_PUBLIC_SUPABASE_URL;
+  // Env vars
+  results.marketer_email = process.env.MARKETER_EMAIL ?? "MISSING";
+  results.marketer_pw_len = (process.env.MARKETER_PASSWORD ?? "").length;
+  results.marketer_pw_set = !!process.env.MARKETER_PASSWORD;
   results.service_role_key_set = !!process.env.SUPABASE_SERVICE_ROLE_KEY;
-  results.service_role_key_preview = (process.env.SUPABASE_SERVICE_ROLE_KEY ?? "").slice(0, 10) || "MISSING";
 
+  // Supabase query
   try {
     const sb = getSupabaseAdmin();
-
     const { data, error } = await sb
       .from("glev_ops_users")
       .select("id, email, role, password_hash")
@@ -32,12 +34,12 @@ export async function GET(req: NextRequest) {
     if (data) {
       const row = data as { id: string; email: string; role: string; password_hash: string };
       results.db_hash_len = row.password_hash?.length ?? null;
-      results.db_hash_has_colon = row.password_hash?.includes(":") ?? false;
 
+      // Test Glev2026!
       try {
         const [salt, key] = row.password_hash.split(":");
-        const derived = (await scryptAsync("GlevTest2026!", salt, 64)) as Buffer;
-        results.scrypt_verify = timingSafeEqual(derived, Buffer.from(key, "hex"));
+        const derived = (await scryptAsync("Glev2026!", salt, 64)) as Buffer;
+        results.glev2026_matches = timingSafeEqual(derived, Buffer.from(key, "hex"));
       } catch (e) {
         results.scrypt_error = String(e);
       }
