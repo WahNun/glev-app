@@ -246,7 +246,7 @@ function VendorList({
   onHelp: () => void;
   t: ReturnType<typeof useTranslations>;
 }) {
-  const vendors: Vendor[] = ["dexcom", "libre", "medtronic", "other"];
+  const vendors: Vendor[] = ["libre", "dexcom", "medtronic", "other"];
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
       {vendors.map((v) => (

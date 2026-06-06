@@ -656,8 +656,8 @@ function ObStep6Cgm() {
       </p>
 
       {[
-        { name: "Dexcom", devices: "G6, G7, One+", recommended: true },
-        { name: "FreeStyle Libre", devices: "Libre 2, Libre 3, Libre 3 Plus", recommended: false },
+        { name: "FreeStyle Libre", devices: "Libre 2, Libre 3, Libre 3 Plus", recommended: true },
+        { name: "Dexcom", devices: "G6, G7, One+", recommended: false },
         { name: "Medtronic", devices: "MiniMed Guardian, Simplera", recommended: false },
         { name: "Andere / Apple Health", devices: "Eversense, Sibionics u. a.", recommended: false },
       ].map((v) => (

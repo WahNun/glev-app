@@ -55,7 +55,7 @@ const VENDOR_COLOR: Record<string, string> = {
 // surface stays predictable — if a vendor genuinely needs 3 or 5
 // steps later, prefer collapsing/splitting copy rather than
 // changing the loop count, so the JSON shape stays uniform.
-const VENDORS = ["dexcom", "libre", "medtronic", "apple_health", "nightscout"] as const;
+const VENDORS = ["libre", "dexcom", "medtronic", "apple_health", "nightscout"] as const;
 const STEPS_PER_VENDOR = 4;
 
 export default function SetupPage() {
