@@ -3,7 +3,7 @@
   "crons": [
     {
       "path": "/api/cron/flush-outbox",
-      "schedule": "*/2 * * * *"
+      "schedule": "* * * * *"
     },
     {
       "path": "/api/cron/drip",
