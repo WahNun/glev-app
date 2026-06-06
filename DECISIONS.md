@@ -137,6 +137,26 @@ Reine Prompt-Compliance für `alcohol_g` in Mistral-Tool-Calls ist unzuverlässi
 
 **Nicht wieder öffnen:** Der Master-Admin-Login via `ADMIN_EMAIL` + `ADMIN_API_SECRET` (Env-Vars) ist vollständig unabhängig von dieser Tabelle und braucht nie darin zu stehen. HMAC-Key für Team-Cookies ist `ADMIN_API_SECRET` — bei Rotation dieses Secrets werden alle Team-Sessions ungültig (gewollt).
 
+### D-031 · Cancellation-Feedback-Schema: user_id-keyed, RLS-gesichert, service-role INSERT (2026-06-06)
+
+Neue Tabelle `public.cancellation_feedback` speichert die strukturierten Kündigungs-Gründe (text[] + optional free-text) aus Step 3 des AccountSheet-Retention-Flows. Wird von `POST /api/me/subscription/cancel` best-effort beschrieben (Fehler blocken die eigentliche Kündigung nicht).
+
+**Schema:** `id uuid PK, user_id uuid → auth.users, reasons text[], custom_text text, created_at timestamptz`. RLS enabled: `INSERT … with check (auth.uid() = user_id)`, `SELECT … using (auth.uid() = user_id)`. Server-Route schreibt via Supabase Admin Client (service-role key), wodurch RLS greift — kein Bypass.
+
+**Nicht wieder öffnen:** Kein `stripe_subscription_id` in diesem Table (vermeidet Duplikation und PII-Kopplung). Wenn Analytics über Kündigungsgründe nötig: via Supabase Dashboard oder `glev-ops` Admin-Panel lesen, nicht über API zurückgeben.
+
+**Migration:** `supabase/migrations/20260606_cancellation_feedback.sql`.
+
+---
+
+### D-030 · Supabase-basiertes Team-User-System für /glev-ops (2026-06-06)
+
+Neue Tabelle `public.glev_ops_users` (id, email, password_hash, role, name, must_change_pw, last_login_at) mit RLS enabled, service-role-only Policy. Passwort-Hashing via Node `crypto.scrypt`. Cookie-Format für Team-Member: `team:{userId}:{role}:{hmac}` — HMAC über ADMIN_API_SECRET, kein DB-Lookup bei Session-Validierung. Beim ersten Login Redirect auf `/glev-ops/team/change-password` (must_change_pw=true). Admin verwaltet Team unter `/glev-ops/team`.
+
+**Nicht wieder öffnen:** Master-Admin via Env-Vars läuft vollständig unabhängig von Supabase — kein Outage-Risiko bei DB-Problemen.
+
+---
+
 ### D-029 · Foreground Alarm Ticker: DB-autoritativer Settings-Read pro Tick, Hypo immer first, kein Cross-Cooldown (2026-06-06)
 
 **Anlass:** Safety-Critical Bug — Hyper-Alarm feuerte nicht trotz Wert 183 bei Threshold 180 (7+ Minuten App offen). Root Cause: fire-and-forget DB-Sync bei Mount + swallowed catch → localStorage blieb auf Default `{ enabled: false }` → stumme Miss.
@@ -161,6 +181,7 @@ Reine Prompt-Compliance für `alcohol_g` in Mistral-Tool-Calls ist unzuverlässi
 
 | Date | Title | Task | Summary |
 | :--- | :--- | :--- | :--- |
+| 2026-06-06 | AccountSheet — Naming Fix + Flicker Fix + Pro Subscription Management + Retention Flow | 1279 | **3 Änderungen:** (1) **Naming:** `account.title` + `settings.row_account` + `settings.account_sheet_title` in `de.json` von "Konto" → "Account". (2) **Flicker-Fix:** `AccountSheet.tsx` initialisiert `plan` mit `null` statt `"free"` — Skeleton-Pill (graue Kapsel) wird angezeigt bis `/api/me/plan` antwortet. Kein FREE→PRO-Sprung mehr. (3) **Abo-Management + Retention:** Pro/Plus-Nutzer sehen Sektion "Mein Abo" mit Abrechnungsdatum + "Abo kündigen"-Button. Klick öffnet 3-stufigen Retention-Flow: Step 1 = 20%-Rabatt via `POST /api/me/subscription/apply-retention-discount` (Coupon `GLEV_RETENTION_20` — manuell in Stripe anlegen), Step 2 = 90 Tage gratis via `POST /api/me/subscription/apply-retention-trial` (**One-time guard:** `metadata.retention_trial_granted = "1"` wird nach erstem Aufruf auf die Stripe-Subscription gesetzt; wiederholte Aufrufe geben `already_applied: true` zurück), Step 3 = Feedback-Checkboxen + Freitext (optional, nicht erzwungen) + tatsächliche Kündigung via `POST /api/me/subscription/cancel` (sets cancel_at_period_end, speichert Feedback best-effort in neuer `cancellation_feedback`-Tabelle). Subscription-Fetch-Fehler setzen State auf `false` (Fallback statt ewiger Lade-Spinner). Alle Mutations schreiben ins Audit-Log. Neue `lib/api/authedClient.ts` — Cookie + Bearer-Token Auth, von allen 4 Routen geteilt. **D-031** für `cancellation_feedback`-Schema. |
 | 2026-06-06 | FIX: check-schema-drift.mjs — COLS-Pfad nach Task-1265-Merge angepasst | — | **Post-Merge-Warnung:** Task #1265 entfernte `COLS` aus `lib/exercise.ts` (schreibt jetzt über API-Route). `scripts/check-schema-drift.mjs` suchte noch nach `COLS` in `lib/exercise.ts` → rc=2. **Fix:** Pfad auf `app/api/exercise/_validate.ts` umgestellt, `writes`-Array um `app/api/exercise/route.ts` erweitert. Script läuft wieder sauber durch (8 Spalten ✓). |
 | 2026-06-06 | FIX: Admin-Panel „Sofort kündigen"-Button — falsches Auth-Cookie | — | **Root Cause:** `lib/admin/stripeActions.ts` prüfte noch das alte Cookie `glev_admin_token` (direkter Vergleich mit `ADMIN_API_SECRET`). Das Auth-System wurde auf `glev_ops_token` mit HMAC umgestellt (`lib/adminAuth.ts`), aber `stripeActions.ts` wurde beim Refactor vergessen. `isAdminAuthed()` auf der Seite schlug an, `requireAdminToken()` in den Server Actions warf „nicht eingeloggt". **Fix:** `requireAdminToken()` auf `isAdminAuthed()` aus `lib/adminAuth` umgestellt; alle 4 `writeAuditLog`-Aufrufe auf `adminToken: process.env.ADMIN_API_SECRET ?? ""` (identischer Hash wie vorher). Kein D-XXX-Eintrag nötig. |
 | 2026-06-06 | HOTFIX: flush-outbox Cron nach Vercel gebracht | — | **Problem:** GitHub Actions `flush-outbox.yml` lieferte HTTP 403 — Vercel blockiert externe Requests (Deployment Protection). Alle Mails blieben `pending`. **Fix:** `/api/cron/flush-outbox` in `vercel.json` als Vercel-internen Cron eingetragen (`*/2 * * * *`). Vercel sendet automatisch `Authorization: Bearer {CRON_SECRET}` — kein Code-Change nötig. GitHub Actions Workflow bleibt als manueller Backup erhalten. Kein D-XXX-Eintrag nötig. |
