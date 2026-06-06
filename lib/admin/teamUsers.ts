@@ -1,5 +1,3 @@
-"use server";
-
 import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
 import { hashPassword, verifyPassword } from "@/lib/adminAuth";
 

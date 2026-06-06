@@ -56,7 +56,12 @@ export async function loginAction(formData: FormData): Promise<void> {
   }
 
   // Team member (Supabase-based)
-  const teamMember = await verifyTeamMember(email, password);
+  let teamMember = null;
+  try {
+    teamMember = await verifyTeamMember(email, password);
+  } catch (err) {
+    console.error("[loginAction] verifyTeamMember error:", err);
+  }
   if (teamMember) {
     await setTeamCookie(teamMember.id, teamMember.role);
     const dest = teamMember.must_change_pw
