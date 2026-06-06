@@ -67,6 +67,8 @@ export type CrmUserRow = {
   email_clicked: boolean;
   reminder_sent_at: string | null;
   sms_opted_out: boolean;
+  lead_status: string | null;
+  lead_comment: string | null;
 };
 
 export type CrmBetaRow = {
@@ -466,6 +468,132 @@ function AlleTab({ users, pageSize }: { users: CrmUserRow[]; pageSize: number })
 
 type ContextMenuState = { x: number; y: number; userId: string; email: string } | null;
 
+
+function LeadStatusCell({ email, initial }: { email: string; initial: string | null }) {
+  const [value, setValue] = useState<string | null>(initial);
+  const [saving, setSaving] = useState(false);
+
+  async function handleChange(next: string | null) {
+    setValue(next);
+    setSaving(true);
+    try {
+      await fetch("/api/admin/meta/lead-annotation", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, lead_status: next }),
+      });
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const chipStyle: React.CSSProperties =
+    value === "dq"
+      ? { background: "#fef2f2", color: "#991b1b", border: "1px solid #fecaca", borderRadius: 4, padding: "2px 7px", fontSize: 11, fontWeight: 600, whiteSpace: "nowrap" }
+      : value === "in_review"
+      ? { background: "#fffbeb", color: "#b45309", border: "1px solid #fde68a", borderRadius: 4, padding: "2px 7px", fontSize: 11, fontWeight: 600, whiteSpace: "nowrap" }
+      : value === "qualified"
+      ? { background: "#dcfce7", color: "#166534", border: "1px solid #bbf7d0", borderRadius: 4, padding: "2px 7px", fontSize: 11, fontWeight: 600, whiteSpace: "nowrap" }
+      : { background: "#f3f4f6", color: "#9ca3af", borderRadius: 4, padding: "2px 7px", fontSize: 11, whiteSpace: "nowrap" };
+
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 4, minWidth: 110 }}>
+      {value && <span style={chipStyle}>{value === "dq" ? "🔴 DQ" : value === "in_review" ? "🟡 In Prüfung" : "🟢 Qualifiziert"}</span>}
+      <select
+        value={value ?? ""}
+        disabled={saving}
+        onChange={(e) => handleChange(e.target.value === "" ? null : e.target.value)}
+        style={{ fontSize: 11, padding: "2px 4px", border: "1px solid #d1d5db", borderRadius: 4, background: "#fff", color: "#374151", cursor: "pointer", opacity: saving ? 0.5 : 1, minWidth: 24 }}
+        title="Lead-Status setzen"
+      >
+        <option value="">—</option>
+        <option value="in_review">🟡 In Prüfung</option>
+        <option value="qualified">🟢 Qualifiziert</option>
+        <option value="dq">🔴 DQ</option>
+      </select>
+    </div>
+  );
+}
+
+function LeadCommentCell({ email, initial }: { email: string; initial: string | null }) {
+  const [saved, setSaved] = useState<string | null>(initial);
+  const [draft, setDraft] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [confirmed, setConfirmed] = useState(false);
+
+  const isEditing = draft !== null;
+
+  function openEditor() {
+    setDraft(saved ?? "");
+    setConfirmed(false);
+  }
+
+  async function save() {
+    if (draft === null) return;
+    setSaving(true);
+    try {
+      await fetch("/api/admin/meta/lead-annotation", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, lead_comment: draft.trim() || null }),
+      });
+      setSaved(draft.trim() || null);
+      setDraft(null);
+      setConfirmed(true);
+      setTimeout(() => setConfirmed(false), 2000);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (confirmed) {
+    return <span style={{ color: "#059669", fontSize: 12, fontWeight: 600 }}>✓ Gespeichert</span>;
+  }
+
+  if (isEditing) {
+    return (
+      <div style={{ display: "flex", flexDirection: "column", gap: 4, minWidth: 180 }}>
+        <textarea
+          autoFocus
+          rows={3}
+          value={draft ?? ""}
+          onChange={(e) => setDraft(e.target.value)}
+          style={{ fontSize: 12, padding: "4px 6px", border: "1px solid #93c5fd", borderRadius: 4, resize: "vertical", fontFamily: "inherit", width: 180 }}
+          onKeyDown={(e) => { if (e.key === "Escape") { setDraft(null); } }}
+        />
+        <div style={{ display: "flex", gap: 4 }}>
+          <button
+            type="button"
+            disabled={saving}
+            onClick={save}
+            style={{ fontSize: 11, padding: "3px 8px", background: "#111", color: "#fff", border: "none", borderRadius: 4, cursor: "pointer", fontFamily: "inherit" }}
+          >
+            {saving ? "…" : "Speichern"}
+          </button>
+          <button
+            type="button"
+            onClick={() => setDraft(null)}
+            style={{ fontSize: 11, padding: "3px 8px", background: "#f3f4f6", color: "#6b7280", border: "none", borderRadius: 4, cursor: "pointer", fontFamily: "inherit" }}
+          >
+            Abbrechen
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={openEditor}
+      title={saved ?? "Kommentar hinzufügen"}
+      style={{ background: "none", border: "1px dashed #d1d5db", borderRadius: 4, padding: "3px 7px", fontSize: 12, color: saved ? "#374151" : "#9ca3af", cursor: "pointer", maxWidth: 180, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", display: "block", textAlign: "left", fontFamily: "inherit" }}
+    >
+      {saved ? (saved.length > 40 ? `${saved.slice(0, 40)}…` : saved) : "+ Notiz"}
+    </button>
+  );
+}
+
 function TrialTab({ users }: { users: CrmUserRow[] }) {
   const [q, setQ] = useState("");
   const [hideOptedOut, setHideOptedOut] = useState(false);
@@ -625,6 +753,8 @@ function TrialTab({ users }: { users: CrmUserRow[] }) {
                   trial_end: u.profile_trial_end_at ?? "",
                   days_left: daysLeft != null ? String(daysLeft) : "",
                   status,
+                  lead_status: u.lead_status ?? "",
+                  lead_comment: u.lead_comment ?? "",
                   reminder: u.reminder_sent_at ?? "",
                   onboarding: u.onboarding_completed_at ? "Abgeschlossen" : u.profile_trial_start_at ? "Ausstehend" : "",
                   link_clicks: [u.sms_clicked ? "SMS" : null, u.email_clicked ? "Email" : null].filter(Boolean).join("; "),
@@ -639,7 +769,9 @@ function TrialTab({ users }: { users: CrmUserRow[] }) {
                 { key: "trial_start", header: "Trial gestartet" },
                 { key: "trial_end", header: "Trial endet" },
                 { key: "days_left", header: "Tage übrig" },
-                { key: "status", header: "Status" },
+                { key: "status", header: "Trial-Status" },
+                { key: "lead_status", header: "Lead-Status" },
+                { key: "lead_comment", header: "Kommentar" },
                 { key: "reminder", header: "Reminder" },
                 { key: "onboarding", header: "Onboarding" },
                 { key: "link_clicks", header: "Link-Klicks" },
@@ -673,7 +805,9 @@ function TrialTab({ users }: { users: CrmUserRow[] }) {
               <Th>Trial gestartet</Th>
               <Th>Trial endet</Th>
               <Th>Tage übrig</Th>
-              <Th>Status</Th>
+              <Th>Trial-Status</Th>
+              <Th>Lead-Status</Th>
+              <Th>Kommentar</Th>
               <Th>Link-Klicks</Th>
               <Th>Reminder</Th>
               <Th>Onboarding</Th>
@@ -742,6 +876,12 @@ function TrialTab({ users }: { users: CrmUserRow[] }) {
                       : expired ? <span style={badgeExpired}>Abgelaufen</span>
                       : <span style={badgeActive}>Aktiv</span>}
                   </Td>
+                  <td style={{ padding: "8px 12px", verticalAlign: "middle" }}>
+                    <LeadStatusCell email={u.email} initial={u.lead_status} />
+                  </td>
+                  <td style={{ padding: "8px 12px", verticalAlign: "middle" }}>
+                    <LeadCommentCell email={u.email} initial={u.lead_comment} />
+                  </td>
                   <Td>
                     {(u.sms_clicked || u.email_clicked) ? (
                       <span style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
@@ -773,7 +913,7 @@ function TrialTab({ users }: { users: CrmUserRow[] }) {
               );
             })}
             {filtered.length === 0 && (
-              <tr><td colSpan={14} style={{ padding: 32, textAlign: "center", color: "#999" }}>Keine Trial-Nutzer.</td></tr>
+              <tr><td colSpan={16} style={{ padding: 32, textAlign: "center", color: "#999" }}>Keine Trial-Nutzer.</td></tr>
             )}
           </tbody>
         </table>

@@ -89,7 +89,7 @@ export default async function CrmPage({
         .not("owner_email", "is", null)
         .not("clicked_at", "is", null),
       sb.from("meta_leads")
-        .select("email, reminder_sent_at")
+        .select("email, reminder_sent_at, lead_status, lead_comment")
         .not("email", "is", null),
     ]);
 
@@ -186,10 +186,19 @@ export default async function CrmPage({
     (trialProfilesRes.data ?? []).map((p) => [p.user_id as string, p]),
   );
 
-  const reminderByEmail = new Map(
+  type MetaLeadMeta = {
+    reminder_sent_at: string | null;
+    lead_status: string | null;
+    lead_comment: string | null;
+  };
+  const metaLeadByEmail = new Map<string, MetaLeadMeta>(
     (metaLeadsRes.data ?? []).map((r) => [
       (r.email as string).toLowerCase(),
-      (r.reminder_sent_at as string | null) ?? null,
+      {
+        reminder_sent_at: (r.reminder_sent_at as string | null) ?? null,
+        lead_status: (r.lead_status as string | null) ?? null,
+        lead_comment: (r.lead_comment as string | null) ?? null,
+      },
     ]),
   );
 
@@ -256,8 +265,10 @@ export default async function CrmPage({
       onboarding_completed_at: trialP?.onboarding_completed_at as string | null ?? null,
       sms_clicked: clicks?.sms ?? false,
       email_clicked: clicks?.email ?? false,
-      reminder_sent_at: reminderByEmail.get(u.email.toLowerCase()) ?? null,
+      reminder_sent_at: metaLeadByEmail.get(u.email.toLowerCase())?.reminder_sent_at ?? null,
       sms_opted_out: opt?.sms_opted_out ?? false,
+      lead_status: metaLeadByEmail.get(u.email.toLowerCase())?.lead_status ?? null,
+      lead_comment: metaLeadByEmail.get(u.email.toLowerCase())?.lead_comment ?? null,
     };
   });
 
