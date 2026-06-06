@@ -99,3 +99,9 @@ grep_conflicts.sh
 
 # Supabase CLI local state
 supabase/.temp/
+
+# Claude Code local settings (contains secrets)
+.claude/settings.local.json
+
+# Xcode SPM workspace state (user-specific, not needed in repo)
+*/xcshareddata/swiftpm/
