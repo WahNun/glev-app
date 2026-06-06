@@ -92,8 +92,8 @@ const CHECKS = [
   {
     table: 'exercise_logs',
     sources: [
-      { kind: 'const', file: 'lib/exercise.ts', constName: 'COLS' },
-      { kind: 'writes', files: ['lib/exercise.ts'] },
+      { kind: 'const', file: 'app/api/exercise/_validate.ts', constName: 'COLS' },
+      { kind: 'writes', files: ['app/api/exercise/route.ts', 'lib/exercise.ts'] },
     ],
   },
   {
