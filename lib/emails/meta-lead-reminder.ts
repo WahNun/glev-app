@@ -37,7 +37,7 @@ export function metaLeadReminderHtml(
     <tr><td align="center">
       <table width="100%" cellpadding="0" cellspacing="0" style="max-width:480px;">
         <tr><td style="padding-bottom:28px;text-align:center;">
-          <span style="font-size:13px;font-weight:700;letter-spacing:0.18em;color:rgba(255,255,255,0.35);">GLEV</span>
+          <img src="${baseUrl}/glev-wordmark-white.png" alt="Glev" width="72" height="auto" style="display:block;margin:0 auto;" />
         </td></tr>
         <tr><td style="background:#1a1a1f;border-radius:16px;padding:36px 32px;">
           <p style="margin:0 0 8px;font-size:22px;font-weight:700;color:#fff;letter-spacing:-0.01em;">
