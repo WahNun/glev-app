@@ -6,6 +6,7 @@ import {
   deleteTeamMemberAction,
   resetPasswordAction,
 } from "./actions";
+import PasswordInput from "./PasswordInput";
 
 const page:   React.CSSProperties = { fontFamily: "system-ui, -apple-system, sans-serif", padding: 24, maxWidth: 700, margin: "0 auto", color: "#111" };
 const h1:     React.CSSProperties = { fontSize: 22, margin: "0 0 4px" };
@@ -125,8 +126,7 @@ export default async function TeamPage({
         </div>
         <div>
           <label style={label}>Passwort * (mind. 8 Zeichen)</label>
-          <input type="text" name="password" required minLength={8} style={input} autoComplete="off" />
-          <span style={{ fontSize: 11, color: "#aaa" }}>Wird als Klartext angezeigt — du kennst es, die Person loggt sich damit ein.</span>
+          <PasswordInput />
         </div>
         <div>
           <label style={label}>Rolle</label>
