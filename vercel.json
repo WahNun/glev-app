@@ -2,6 +2,18 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "crons": [
     {
+      "path": "/api/cron/hypo-check",
+      "schedule": "* * * * *"
+    },
+    {
+      "path": "/api/cron/elevated-check",
+      "schedule": "* * * * *"
+    },
+    {
+      "path": "/api/cron/hyper-check",
+      "schedule": "* * * * *"
+    },
+    {
       "path": "/api/cron/flush-outbox",
       "schedule": "* * * * *"
     },
