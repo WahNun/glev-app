@@ -35,6 +35,10 @@ import {
   passwordResetHtml,
   passwordResetSubject,
 } from "@/lib/emails/password-reset";
+import {
+  subscriptionCancelledHtml,
+  subscriptionCancelledSubject,
+} from "@/lib/emails/subscription-cancelled";
 
 // ---- Tunables -------------------------------------------------------------
 
@@ -108,7 +112,9 @@ export type EmailTemplate =
   | "plus-welcome"
   | "beta-free-year-welcome"
   | "password-reset"
-  | "trial-welcome";
+  | "trial-welcome"
+  | "pro-cancelled"
+  | "plus-cancelled";
 
 /**
  * Payload shape per template. Stored as jsonb in the outbox so the
@@ -207,13 +213,28 @@ export interface TrialWelcomePayload {
   locale?: EmailLocale;
 }
 
+/**
+ * Kündigungsbestätigung für Pro- und Plus-Abonnements. Wird vom
+ * `customer.subscription.deleted`-Handler im jeweiligen Stripe-Webhook
+ * enqueued. `accessEndsAt` ist das `current_period_end` des Stripe-
+ * Subscriptions-Objekts (als ISO-String), damit die Mail dem/der
+ * Käufer:in sagt, bis wann der Zugang noch aktiv bleibt.
+ */
+export interface SubscriptionCancelledPayload {
+  name?: string | null;
+  accessEndsAt?: string | null;
+  locale?: EmailLocale;
+  appUrl?: string | null;
+}
+
 export type EmailPayload =
   | BetaWelcomePayload
   | ProWelcomePayload
   | PlusWelcomePayload
   | BetaFreeYearWelcomePayload
   | PasswordResetPayload
-  | TrialWelcomePayload;
+  | TrialWelcomePayload
+  | SubscriptionCancelledPayload;
 
 /**
  * Compile-time mapping from template name → payload shape. The
@@ -236,6 +257,8 @@ export interface PayloadByTemplate {
   "beta-free-year-welcome": BetaFreeYearWelcomePayload;
   "password-reset": PasswordResetPayload;
   "trial-welcome": TrialWelcomePayload;
+  "pro-cancelled": SubscriptionCancelledPayload;
+  "plus-cancelled": SubscriptionCancelledPayload;
 }
 
 interface RenderedEmail {
@@ -340,6 +363,24 @@ function renderTemplate(
           p.trialEndsAt ?? null,
           p.appUrl ?? null,
           locale,
+          recipientEmail ?? null,
+        ),
+      };
+    }
+    case "pro-cancelled":
+    case "plus-cancelled": {
+      const p = payload as SubscriptionCancelledPayload;
+      const locale: EmailLocale = p.locale === "en" ? "en" : "de";
+      const plan: "pro" | "plus" = template === "plus-cancelled" ? "plus" : "pro";
+      return {
+        from: "Glev <info@glev.app>",
+        subject: subscriptionCancelledSubject(p.name ?? null, plan, locale),
+        html: subscriptionCancelledHtml(
+          p.name ?? null,
+          plan,
+          locale,
+          p.accessEndsAt ?? null,
+          p.appUrl ?? null,
           recipientEmail ?? null,
         ),
       };

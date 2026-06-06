@@ -579,7 +579,7 @@ export async function POST(req: NextRequest) {
           .from("pro_subscriptions")
           .update({ status: "cancelled" })
           .eq("stripe_subscription_id", sub.id)
-          .select("id, email");
+          .select("id, email, full_name, currency");
 
         if (updErr) {
           // eslint-disable-next-line no-console
@@ -605,7 +605,8 @@ export async function POST(req: NextRequest) {
           );
         }
 
-        const rowEmail = (data[0] as { email?: string | null }).email ?? null;
+        const row = data[0] as { email?: string | null; full_name?: string | null; currency?: string | null };
+        const rowEmail = row.email ?? null;
 
         // Drop plan back to free
         await syncProfilePlanByEmail(sb, rowEmail, null);
@@ -613,6 +614,35 @@ export async function POST(req: NextRequest) {
         // Clear the Plus tier marker (only if currently 'plus'; leaves other
         // values like 'beta' untouched)
         await clearSubscriptionStatusPlus(sb, rowEmail);
+
+        // Bestätigungsmail an Käufer:in — best-effort, non-fatal.
+        // Locale aus Währung ableiten (EUR → de, USD → en).
+        if (rowEmail) {
+          try {
+            const locale =
+              (row.currency ?? "").toUpperCase() === "USD" ? "en" : "de";
+            const cpe = (sub as unknown as { current_period_end?: number }).current_period_end;
+            const accessEndsAt = cpe ? new Date(cpe * 1000).toISOString() : null;
+            await enqueueEmail({
+              recipient: rowEmail,
+              template: "plus-cancelled",
+              payload: {
+                name: row.full_name ?? null,
+                accessEndsAt,
+                locale,
+              },
+              dedupeKey: `cancelled-${sub.id}`,
+            });
+            // eslint-disable-next-line no-console
+            console.log("[plus/webhook] cancellation email enqueued:", { email: rowEmail });
+          } catch (e) {
+            // eslint-disable-next-line no-console
+            console.warn("[plus/webhook] cancellation email enqueue failed (non-fatal):", {
+              email: rowEmail,
+              err: e instanceof Error ? e.message : String(e),
+            });
+          }
+        }
 
         // eslint-disable-next-line no-console
         console.log("[plus/webhook] subscription cancelled:", {

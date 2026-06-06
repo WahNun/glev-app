@@ -34,6 +34,10 @@ import {
   metaLeadInviteSubject,
 } from "@/lib/emails/meta-lead-invite";
 import {
+  subscriptionCancelledHtml,
+  subscriptionCancelledSubject,
+} from "@/lib/emails/subscription-cancelled";
+import {
   metaLeadReminderHtml,
   metaLeadReminderSubject,
 } from "@/lib/emails/meta-lead-reminder";
@@ -223,6 +227,40 @@ function buildTemplates(
         : "Sofort nach Glev+-Abo (€29/Monat Lifetime-Lock)",
       subject: plusWelcomeSubject(name, locale),
       html: plusWelcomeHtml(name, DEFAULT_SESSION_ID, appUrl, null, locale, email),
+    },
+    {
+      key: "pro-cancelled",
+      label: isEn ? "Pro — Cancellation Confirmation" : "Pro — Kündigungsbestätigung",
+      campaign: "welcome",
+      whenSent: isEn
+        ? "On customer.subscription.deleted Stripe event (Pro webhook)"
+        : "Bei customer.subscription.deleted im Pro-Stripe-Webhook",
+      subject: subscriptionCancelledSubject(name, "pro", locale),
+      html: subscriptionCancelledHtml(
+        name,
+        "pro",
+        locale,
+        new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+        appUrl,
+        email,
+      ),
+    },
+    {
+      key: "plus-cancelled",
+      label: isEn ? "Plus — Cancellation Confirmation" : "Plus — Kündigungsbestätigung",
+      campaign: "welcome",
+      whenSent: isEn
+        ? "On customer.subscription.deleted Stripe event (Plus webhook)"
+        : "Bei customer.subscription.deleted im Plus-Stripe-Webhook",
+      subject: subscriptionCancelledSubject(name, "plus", locale),
+      html: subscriptionCancelledHtml(
+        name,
+        "plus",
+        locale,
+        new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+        appUrl,
+        email,
+      ),
     },
     {
       key: "beta-free-year-welcome-existing",

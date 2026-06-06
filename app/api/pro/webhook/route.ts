@@ -569,7 +569,7 @@ export async function POST(req: NextRequest) {
           .from("pro_subscriptions")
           .update({ status: "cancelled" })
           .eq("stripe_subscription_id", sub.id)
-          .select("id, email");
+          .select("id, email, full_name, currency");
 
         if (updErr) {
           // eslint-disable-next-line no-console
@@ -585,7 +585,8 @@ export async function POST(req: NextRequest) {
 
         // Subscription terminated → drop `profiles.plan` back to free so the
         // user immediately loses Pro access on next page load.
-        const rowEmail = (data[0] as { email?: string | null }).email ?? null;
+        const row = data[0] as { email?: string | null; full_name?: string | null; currency?: string | null };
+        const rowEmail = row.email ?? null;
         await syncProfilePlanByEmail(sb, rowEmail, null);
 
         // Zusätzlich: falls der/die User:in als Glev+ markiert war
@@ -621,6 +622,34 @@ export async function POST(req: NextRequest) {
           } catch (e) {
             // eslint-disable-next-line no-console
             console.warn("[pro/webhook plus] subscription_status clear threw (non-fatal):", {
+              email: rowEmail,
+              err: e instanceof Error ? e.message : String(e),
+            });
+          }
+        }
+        // Bestätigungsmail an Käufer:in — best-effort, non-fatal.
+        // Locale aus Währung ableiten (EUR → de, USD → en).
+        if (rowEmail) {
+          try {
+            const locale =
+              (row.currency ?? "").toUpperCase() === "USD" ? "en" : "de";
+            const cpe = (sub as unknown as { current_period_end?: number }).current_period_end;
+            const accessEndsAt = cpe ? new Date(cpe * 1000).toISOString() : null;
+            await enqueueEmail({
+              recipient: rowEmail,
+              template: "pro-cancelled",
+              payload: {
+                name: row.full_name ?? null,
+                accessEndsAt,
+                locale,
+              },
+              dedupeKey: `cancelled-${sub.id}`,
+            });
+            // eslint-disable-next-line no-console
+            console.log("[pro/webhook] cancellation email enqueued:", { email: rowEmail });
+          } catch (e) {
+            // eslint-disable-next-line no-console
+            console.warn("[pro/webhook] cancellation email enqueue failed (non-fatal):", {
               email: rowEmail,
               err: e instanceof Error ? e.message : String(e),
             });
