@@ -14,44 +14,22 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
 import { generateUnsubscribeToken } from "@/lib/sms/unsubscribeToken";
+import { isAdminAuthed } from "@/lib/adminAuth";
 import crypto from "crypto";
 
 export const runtime = "nodejs";
 
 const APP_URL = (process.env.NEXT_PUBLIC_APP_URL || "https://glev.app").replace(/\/$/, "");
 
-function isAdminAuthedFromRequest(req: NextRequest): boolean {
-  const secret = process.env.ADMIN_API_SECRET ?? "";
-  if (!secret || secret.length < 16) return false;
-
-  const tok = req.cookies.get("glev_ops_token")?.value ?? "";
-  if (tok) {
-    const expected = crypto
-      .createHmac("sha256", secret)
-      .update("glev-ops-session-v2")
-      .digest("hex");
-    const aBuf = Buffer.from(tok);
-    const bBuf = Buffer.from(expected);
-    if (aBuf.length === bBuf.length && crypto.timingSafeEqual(aBuf, bBuf)) {
-      return true;
-    }
-  }
-
-  const bearer = req.headers.get("authorization") ?? "";
-  if (bearer.startsWith("Bearer ")) {
-    const provided = bearer.slice(7);
-    const aBuf = Buffer.from(provided);
-    const bBuf = Buffer.from(secret);
-    if (aBuf.length === bBuf.length && crypto.timingSafeEqual(aBuf, bBuf)) {
-      return true;
-    }
-  }
-
-  return false;
-}
-
 export async function POST(req: NextRequest) {
-  if (!isAdminAuthedFromRequest(req)) {
+  const sessionOk = await isAdminAuthed();
+  const bearer = req.headers.get("authorization") ?? "";
+  const bearerSecret = bearer.startsWith("Bearer ") ? bearer.slice(7) : "";
+  const adminSecret = process.env.ADMIN_API_SECRET ?? "";
+  const bearerOk = bearerSecret.length > 0 && adminSecret.length >= 16 &&
+    bearerSecret.length === adminSecret.length &&
+    crypto.timingSafeEqual(Buffer.from(bearerSecret), Buffer.from(adminSecret));
+  if (!sessionOk && !bearerOk) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

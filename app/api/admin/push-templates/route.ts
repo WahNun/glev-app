@@ -2,25 +2,13 @@ export const runtime = "nodejs";
 
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
-import crypto from "crypto";
+import { isAdminAuthed } from "@/lib/adminAuth";
 
 const PUSH_KEYS = ["push_hypo", "push_hyper", "push_elevated"] as const;
 type PushKey = typeof PUSH_KEYS[number];
 
-function isAdminAuthedFromRequest(req: NextRequest): boolean {
-  const secret = process.env.ADMIN_API_SECRET ?? "";
-  if (!secret || secret.length < 16) return false;
-  const tok = req.cookies.get("glev_ops_token")?.value ?? "";
-  if (!tok) return false;
-  const expected = crypto.createHmac("sha256", secret).update("glev-ops-session-v2").digest("hex");
-  const aBuf = Buffer.from(tok);
-  const bBuf = Buffer.from(expected);
-  if (aBuf.length !== bBuf.length) return false;
-  return crypto.timingSafeEqual(aBuf, bBuf);
-}
-
 export async function GET(req: NextRequest) {
-  if (!isAdminAuthedFromRequest(req)) {
+  if (!await isAdminAuthed()) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -54,7 +42,7 @@ export async function GET(req: NextRequest) {
 }
 
 export async function PUT(req: NextRequest) {
-  if (!isAdminAuthedFromRequest(req)) {
+  if (!await isAdminAuthed()) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
