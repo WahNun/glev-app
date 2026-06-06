@@ -87,37 +87,36 @@ export interface ExerciseLogInput {
   start_at?: string;
 }
 
-const COLS =
-  "id,user_id,created_at,exercise_type,duration_minutes,intensity,cgm_glucose_at_log,notes";
-
 export async function insertExerciseLog(input: ExerciseLogInput): Promise<ExerciseLog> {
-  if (!supabase) throw new Error("Supabase is not configured");
-  const { data: { user }, error: authErr } = await supabase.auth.getUser();
-  if (authErr || !user) throw authErr || new Error("Not authenticated");
-
-  const row: Record<string, unknown> = {
-    user_id: user.id,
+  const body: Record<string, unknown> = {
     exercise_type: input.exercise_type,
     duration_minutes: input.duration_minutes,
     intensity: input.intensity,
     cgm_glucose_at_log: input.cgm_glucose_at_log ?? null,
     notes: input.notes?.trim() || null,
   };
-  // Only override created_at when the caller explicitly provides a
-  // past start time (retroactive logging). Otherwise the DB default
-  // `now()` is used, which keeps live submissions backwards-compatible.
+  // Pass the actual workout start time for retroactive logs so the server
+  // sets created_at correctly AND anchors the CGM historical lookup to
+  // the real start instant (not the submit moment).
   if (input.start_at) {
-    row.created_at = input.start_at;
+    body.started_at = input.start_at;
   }
 
-  const { data, error } = await supabase
-    .from("exercise_logs")
-    .insert(row)
-    .select(COLS)
-    .single();
-
-  if (error) throw error;
-  return data as ExerciseLog;
+  const r = await fetch("/api/exercise", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!r.ok) {
+    let msg = `HTTP ${r.status}`;
+    try {
+      const j = await r.json();
+      if (j && typeof j.error === "string") msg = j.error;
+    } catch { /* ignore */ }
+    throw new Error(msg);
+  }
+  const j = await r.json();
+  return j.log as ExerciseLog;
 }
 
 /**

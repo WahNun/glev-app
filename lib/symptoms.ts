@@ -151,44 +151,30 @@ export function avgSeverity(log: Pick<SymptomLog, "severities">): number | null 
 }
 
 export async function insertSymptomLog(input: SymptomLogInput): Promise<SymptomLog> {
-  if (!supabase) throw new Error("Supabase is not configured");
-  const { data: { user }, error: authErr } = await supabase.auth.getUser();
-  if (authErr || !user) {
-    throw new Error(authErr?.message || "Nicht angemeldet — bitte erneut einloggen.");
-  }
-
-  const types = (input.symptom_types || []).filter(isSymptomType);
-  if (types.length === 0) throw new Error("Mindestens ein Symptom erforderlich.");
-  const severities = validateSeverities(types, input.severities);
-  if (!severities) {
-    throw new Error("Schweregrad pro Symptom muss zwischen 1 und 5 liegen.");
-  }
-
-  const cat: SymptomCategory = isSymptomCategory(input.category)
-    ? input.category
-    : "general";
-
-  const row: Record<string, unknown> = {
-    user_id: user.id,
-    symptom_types: types,
-    severities,
+  const body: Record<string, unknown> = {
+    symptom_types: input.symptom_types,
+    severities: input.severities,
     occurred_at: input.occurred_at ?? new Date().toISOString(),
     cgm_glucose_at_log: input.cgm_glucose_at_log ?? null,
-    category: cat,
+    category: input.category ?? "general",
     notes: input.notes?.trim() || null,
   };
 
-  const { data, error } = await supabase
-    .from("symptom_logs")
-    .insert(row)
-    .select(COLS)
-    .single();
-
-  if (error) {
-    const code = error.code ? ` [${error.code}]` : "";
-    throw new Error(`${error.message}${code}`);
+  const r = await fetch("/api/symptoms", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!r.ok) {
+    let msg = `HTTP ${r.status}`;
+    try {
+      const j = await r.json();
+      if (j && typeof j.error === "string") msg = j.error;
+    } catch { /* ignore */ }
+    throw new Error(msg);
   }
-  return data as SymptomLog;
+  const j = await r.json();
+  return j.log as SymptomLog;
 }
 
 export async function fetchSymptomLogs(

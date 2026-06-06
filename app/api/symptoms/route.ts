@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { authedClient, isMissingTable } from "../insulin/_helpers";
+import { findGlucoseAt } from "@/lib/cgm/historicalLookup";
 import {
   SYMPTOM_TYPES,
   SYMPTOM_CATEGORIES,
@@ -134,6 +135,25 @@ export async function handleSymptomsPost(
     }
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
+
+  // Server-side BG lookup: if the client didn't supply a live snapshot (the
+  // common case for retroactive entries), find the nearest CGM sample ±15 min
+  // around occurred_at so "BG VORHER" is never blank for historical logs.
+  if (data.cgm_glucose_at_log == null && data.occurred_at) {
+    const hit = await findGlucoseAt(userId, data.occurred_at);
+    if (hit != null) {
+      const { data: updated, error: updateErr } = await sb
+        .from("symptom_logs")
+        .update({ cgm_glucose_at_log: hit.value })
+        .eq("id", data.id)
+        .select(COLS)
+        .single();
+      if (!updateErr && updated) {
+        return NextResponse.json({ log: updated }, { status: 201 });
+      }
+    }
+  }
+
   return NextResponse.json({ log: data }, { status: 201 });
 }
 
