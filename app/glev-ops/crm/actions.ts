@@ -1,32 +1,17 @@
 "use server";
 
 import { redirect } from "next/navigation";
-import {
-  verifyAdminCredentials,
-  verifyMarketerCredentials,
-  setAdminCookie,
-  setMarketerCookie,
-  clearAdminCookie,
-} from "@/lib/adminAuth";
+import { clearAdminCookie } from "@/lib/adminAuth";
+import { sharedLogin } from "@/lib/admin/sharedLogin";
 
 export async function loginAction(formData: FormData): Promise<void> {
   const email    = String(formData.get("email")    ?? "");
   const password = String(formData.get("password") ?? "");
   const totp     = String(formData.get("totp")     ?? "");
 
-  const marketerOk = await verifyMarketerCredentials(email, password);
-  if (marketerOk) {
-    await setMarketerCookie();
-    redirect("/glev-ops/crm");
-  }
-
-  const adminOk = await verifyAdminCredentials(email, password, totp);
-  if (adminOk) {
-    await setAdminCookie();
-    redirect("/glev-ops/crm");
-  }
-
-  redirect("/glev-ops/crm?err=bad");
+  const result = await sharedLogin(email, password, totp, "/glev-ops/crm");
+  if (!result) redirect("/glev-ops/crm?err=bad");
+  redirect(result.dest);
 }
 
 export async function logoutAction(): Promise<void> {
