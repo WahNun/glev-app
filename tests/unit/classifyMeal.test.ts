@@ -196,3 +196,29 @@ test("classifyMeal: zero macros across the board → BALANCED (no division by ze
   // totalKcal = 0 → HIGH_FAT branch is gated by `totalKcal > 0`.
   expect(classifyMeal(0, 0, 0, 0)).toBe("BALANCED");
 });
+
+/* ──────────────────────────────────────────────────────────────────
+   NULL fiber — unknown fiber data (AI did not report it).
+   When fiber is null we do NOT assume 0 → no FAST_CARBS false-positive.
+   Bug 2026-06-06: null was being treated as 0 via JS null<5=true.
+   ────────────────────────────────────────────────────────────────── */
+
+test("classifyMeal: 45c/35p/25f + null fiber → BALANCED (not FAST_CARBS)", () => {
+  // Vollkorntoast + Eier + Käse + Joghurt + Blaubeeren: klassisch ausgewogen.
+  // KI liefert keinen Faserwert → fiber=null. Ohne Fix: null<5=true → FAST_CARBS.
+  // Mit Fix: fiber unbekannt → fiber-Branch übersprungen → BALANCED.
+  // Protein(35) < Carbs(45) → kein HIGH_PROTEIN.
+  // Fat-kcal: 25*9=225 / (45*4+35*4+25*9)=545 ≈ 41% < 45% → kein HIGH_FAT.
+  expect(classifyMeal(45, 35, 25, null)).toBe("BALANCED");
+});
+
+test("classifyMeal: 60c/5p/5f + null fiber + no sugars → BALANCED (fiber branch skipped)", () => {
+  // Kein Faserwert, kein Zuckerwert → beide FAST_CARBS-Sub-Conditions false.
+  // Macht diese Mahlzeit defensiv zu BALANCED statt fälschlich FAST_CARBS.
+  expect(classifyMeal(60, 5, 5, null)).toBe("BALANCED");
+});
+
+test("classifyMeal: 45c/5p/5f + explicit fiber=2 → still FAST_CARBS (known low fiber)", () => {
+  // Wenn KI explizit fiber=2 liefert, greift FAST_CARBS weiterhin korrekt.
+  expect(classifyMeal(45, 5, 5, 2)).toBe("FAST_CARBS");
+});

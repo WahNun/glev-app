@@ -151,11 +151,14 @@ export function classifyMeal(
   carbs: number,
   protein: number,
   fat: number,
-  fiber: number = 0,
+  fiber: number | null = null,
   sugars: number | null = null,
 ): string {
   const sugarShare = sugars != null && carbs > 0 ? sugars / carbs : null;
-  if (carbs >= 45 && ((sugarShare != null && sugarShare > 0.5) || fiber < 5)) return "FAST_CARBS";
+  // fiber < 5 only fires when fiber is *explicitly known* — null means the AI
+  // did not report fiber data (common for mixed meals like toast+eggs+yogurt).
+  // Treating null as 0 caused false FAST_CARBS for balanced meals (bug 2026-06-06).
+  if (carbs >= 45 && ((sugarShare != null && sugarShare > 0.5) || (fiber !== null && fiber < 5))) return "FAST_CARBS";
   // Pure-sugar snack: jegliche KH-Menge mit nahezu null Fett & Protein —
   // Gummibärchen, Traubenzucker, halbes Glas Saft, Bonbon, Apfel.
   // Bewusst VOR den Macro-Tests, weil ein 11g-Gummibärchen-Snack sonst

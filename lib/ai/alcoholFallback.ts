@@ -51,11 +51,17 @@ export const ALCOHOL_MATCH_TABLE: Array<{ re: RegExp; abv: number; label: string
  * Processes a list of raw items from Mistral's tool response and fills in
  * missing `alcohol_g` values for items whose names match alcohol keywords.
  *
- * Rules:
- * - If Mistral already set `alcohol_g > 0` → keep it unchanged.
- * - If item name contains a non-alcoholic keyword → force `alcohol_g = 0`.
- * - If item name matches an alcohol keyword → estimate from abv × grams.
- * - Otherwise → no `alcohol_g` field set.
+ * Rules (in order):
+ * 1. Non-alcoholic keyword in name → force alcohol_g = 0.
+ * 2. Name matches alcohol keyword table:
+ *    - If Mistral already set alcohol_g > 0 → keep Mistral's value.
+ *    - Otherwise → estimate from abv × grams.
+ * 3. Name does NOT match any alcohol keyword:
+ *    - If Mistral set alcohol_g > 0 → REJECT (hallucination), override to 0.
+ *    - Otherwise → no alcohol_g field.
+ *
+ * Rule 3 prevents Mistral from hallucinating alcohol on non-alcoholic items
+ * like "Butter", "Joghurt", "Tomate" — the name must justify the value.
  */
 export function applyAlcoholFallback(
   items: Array<{ name: string; grams: number; alcohol_g?: unknown }>,
@@ -63,13 +69,9 @@ export function applyAlcoholFallback(
   return items.map((item) => {
     const { name, grams } = item;
     const existing = typeof item.alcohol_g === "number" ? item.alcohol_g : null;
-
-    if (existing !== null && existing > 0) {
-      return { name, grams, alcohol_g: existing };
-    }
-
     const nameLower = name.toLowerCase();
 
+    // ── 1. Exempt (non-alcoholic keyword) → always 0 ──────────────────────
     const isExempt = EXEMPT_KEYWORDS.some((kw) => nameLower.includes(kw));
     if (isExempt) {
       if (existing !== null && existing !== 0) {
@@ -80,14 +82,29 @@ export function applyAlcoholFallback(
       return { name, grams, alcohol_g: 0 };
     }
 
+    // ── 2. Name matches alcohol keyword → accept or estimate ───────────────
     for (const { re, abv, label } of ALCOHOL_MATCH_TABLE) {
       if (re.test(name)) {
+        if (existing !== null && existing > 0) {
+          // Trust Mistral's value — name confirms it's alcoholic.
+          return { name, grams, alcohol_g: existing };
+        }
         const estimated = Math.round(grams * abv * 10) / 10;
         console.log(
           `[alcohol-fallback] auto-set alcohol_g=${estimated} for item='${name}' (${label}, ${(abv * 100).toFixed(1)}% ABW × ${grams}g)`,
         );
         return { name, grams, alcohol_g: estimated };
       }
+    }
+
+    // ── 3. No keyword match ────────────────────────────────────────────────
+    if (existing !== null && existing > 0) {
+      // Mistral set alcohol_g but the item name is not recognizably alcoholic.
+      // Treat this as a hallucination and suppress it.
+      console.warn(
+        `[alcohol-fallback] rejected hallucinated alcohol_g=${existing} for item='${name}' (no keyword match)`,
+      );
+      return { name, grams, alcohol_g: 0 };
     }
 
     return { name, grams };
