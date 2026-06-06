@@ -1,17 +1,16 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { cookies } from "next/headers";
-import { timingSafeEqual } from "node:crypto";
 import type Stripe from "stripe";
 
 import { getStripe } from "@/lib/stripeServer";
 import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
 import { writeAuditLog } from "@/lib/admin/audit";
+import { isAdminAuthed } from "@/lib/adminAuth";
 
 /**
  * Server actions that *write* to Stripe. Every call:
- *   1. Re-authenticates against ADMIN_API_SECRET via the shared cookie.
+ *   1. Re-authenticates via the shared glev_ops_token cookie (lib/adminAuth).
  *   2. Fires the Stripe SDK call (live mode in production!).
  *   3. Best-effort syncs the local Supabase row so the UI reflects the
  *      change immediately (the official source of truth is still the
@@ -30,26 +29,10 @@ import { writeAuditLog } from "@/lib/admin/audit";
 
 export type ActionResult = { ok: true } | { ok: false; error: string };
 
-const COOKIE = "glev_admin_token";
-
-function constantTimeEqual(a: string, b: string): boolean {
-  const aBuf = Buffer.from(a);
-  const bBuf = Buffer.from(b);
-  if (aBuf.length !== bBuf.length) return false;
-  return timingSafeEqual(aBuf, bBuf);
-}
-
-async function requireAdminToken(): Promise<string> {
-  const expected = process.env.ADMIN_API_SECRET ?? "";
-  if (!expected || expected.length < 16) {
-    throw new Error("ADMIN_API_SECRET nicht konfiguriert");
-  }
-  const store = await cookies();
-  const tok = store.get(COOKIE)?.value ?? "";
-  if (!tok || !constantTimeEqual(tok, expected)) {
+async function requireAdminToken(): Promise<void> {
+  if (!(await isAdminAuthed())) {
     throw new Error("nicht eingeloggt");
   }
-  return tok;
 }
 
 function revalidateAdminPaths(): void {
@@ -66,7 +49,7 @@ function revalidateAdminPaths(): void {
  */
 export async function cancelStripeSubAction(formData: FormData): Promise<ActionResult> {
   try {
-    const adminToken = await requireAdminToken();
+    await requireAdminToken();
     const subId = String(formData.get("subscriptionId") ?? "").trim();
     const mode = String(formData.get("mode") ?? "now");
     const email = String(formData.get("email") ?? "").trim().toLowerCase() || null;
@@ -102,7 +85,7 @@ export async function cancelStripeSubAction(formData: FormData): Promise<ActionR
       before: { id: before.id, status: before.status, cancel_at_period_end: before.cancel_at_period_end },
       after: { id: after.id, status: after.status, cancel_at_period_end: after.cancel_at_period_end },
       note: mode === "now" ? "sofort gekündigt" : "kündigt zum Periodenende",
-      adminToken,
+      adminToken: process.env.ADMIN_API_SECRET ?? "",
     });
 
     revalidateAdminPaths();
@@ -124,7 +107,7 @@ export async function cancelStripeSubAction(formData: FormData): Promise<ActionR
  */
 export async function deleteStripeCustomerAction(formData: FormData): Promise<ActionResult> {
   try {
-    const adminToken = await requireAdminToken();
+    await requireAdminToken();
     const customerId = String(formData.get("customerId") ?? "").trim();
     const email = String(formData.get("email") ?? "").trim().toLowerCase() || null;
     if (!customerId) return { ok: false, error: "customerId fehlt" };
@@ -137,7 +120,7 @@ export async function deleteStripeCustomerAction(formData: FormData): Promise<Ac
       targetEmail: email,
       before: { id: customerId },
       after: { deleted: result.deleted },
-      adminToken,
+      adminToken: process.env.ADMIN_API_SECRET ?? "",
     });
 
     revalidateAdminPaths();
@@ -156,7 +139,7 @@ export async function deleteStripeCustomerAction(formData: FormData): Promise<Ac
  */
 export async function refundLatestInvoiceAction(formData: FormData): Promise<ActionResult> {
   try {
-    const adminToken = await requireAdminToken();
+    await requireAdminToken();
     const subId = String(formData.get("subscriptionId") ?? "").trim();
     const email = String(formData.get("email") ?? "").trim().toLowerCase() || null;
     const amountStr = String(formData.get("amountCents") ?? "").trim();
@@ -225,7 +208,7 @@ export async function refundLatestInvoiceAction(formData: FormData): Promise<Act
       note: amountCents
         ? `Teilrefund ${(amountCents / 100).toFixed(2)}€ auf Invoice ${invoice.id}`
         : `Voll-Refund (${(amountPaid / 100).toFixed(2)}€) auf Invoice ${invoice.id}`,
-      adminToken,
+      adminToken: process.env.ADMIN_API_SECRET ?? "",
     });
 
     revalidateAdminPaths();
@@ -242,7 +225,7 @@ export async function refundLatestInvoiceAction(formData: FormData): Promise<Act
  */
 export async function extendStripeTrialAction(formData: FormData): Promise<ActionResult> {
   try {
-    const adminToken = await requireAdminToken();
+    await requireAdminToken();
     const subId = String(formData.get("subscriptionId") ?? "").trim();
     const days = Number(String(formData.get("days") ?? "0"));
     const email = String(formData.get("email") ?? "").trim().toLowerCase() || null;
@@ -279,7 +262,7 @@ export async function extendStripeTrialAction(formData: FormData): Promise<Actio
       before: { trial_end: before.trial_end },
       after: { trial_end: after.trial_end },
       note: `+${days} Tage`,
-      adminToken,
+      adminToken: process.env.ADMIN_API_SECRET ?? "",
     });
 
     revalidateAdminPaths();
