@@ -58,6 +58,7 @@ export async function createTeamMember(
   plainPassword: string,
   role: "admin" | "marketer",
   name?: string,
+  mustChangePw = false,
 ): Promise<GlevOpsUser> {
   const supabase     = getSupabaseAdmin();
   const passwordHash = await hashPassword(plainPassword);
@@ -69,7 +70,7 @@ export async function createTeamMember(
       password_hash: passwordHash,
       role,
       name:          name ?? null,
-      must_change_pw: true,
+      must_change_pw: mustChangePw,
     })
     .select("id, email, role, name, must_change_pw, created_at, last_login_at")
     .single();

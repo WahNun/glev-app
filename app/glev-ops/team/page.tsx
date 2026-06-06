@@ -124,8 +124,9 @@ export default async function TeamPage({
           <input type="email" name="email" required placeholder="name@example.com" style={input} />
         </div>
         <div>
-          <label style={label}>Initiales Passwort * (mind. 8 Zeichen)</label>
-          <input type="password" name="password" required minLength={8} style={input} />
+          <label style={label}>Passwort * (mind. 8 Zeichen)</label>
+          <input type="text" name="password" required minLength={8} style={input} autoComplete="off" />
+          <span style={{ fontSize: 11, color: "#aaa" }}>Wird als Klartext angezeigt — du kennst es, die Person loggt sich damit ein.</span>
         </div>
         <div>
           <label style={label}>Rolle</label>
@@ -134,12 +135,18 @@ export default async function TeamPage({
             <option value="admin">admin — Voller Zugang</option>
           </select>
         </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <input type="checkbox" name="mustChange" id="mustChange" />
+          <label htmlFor="mustChange" style={{ fontSize: 13, cursor: "pointer" }}>
+            Passwort-Änderung beim ersten Login erzwingen
+          </label>
+        </div>
         <button type="submit" style={{ ...btn, marginTop: 4 }}>Hinzufügen</button>
       </form>
 
       <p style={{ fontSize: 12, color: "#aaa", marginTop: 24 }}>
-        Beim ersten Login wird die Person direkt zur Passwort-Änderungs-Seite weitergeleitet.
-        Danach loggt sie sich normal unter /glev-ops/users ein.
+        Login immer unter /glev-ops/users. Wenn „Passwort-Änderung erzwingen" aktiviert,
+        landet die Person beim ersten Login auf einer Änderungs-Seite — sonst direkt im CRM.
       </p>
     </main>
   );

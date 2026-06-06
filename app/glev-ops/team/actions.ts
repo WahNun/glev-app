@@ -37,7 +37,8 @@ export async function addTeamMemberAction(formData: FormData): Promise<void> {
     redirect("/glev-ops/team?err=invalid");
   }
 
-  await createTeamMember(email, password, role, name);
+  const mustChange = formData.get("mustChange") === "on";
+  await createTeamMember(email, password, role, name, mustChange);
   revalidatePath("/glev-ops/team");
   redirect("/glev-ops/team?ok=added");
 }
