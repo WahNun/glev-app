@@ -221,7 +221,7 @@ export async function provisionMetaLead(
           from: FROM,
           to: email,
           subject: metaLeadInviteSubject(first, effectiveLocale),
-          html: metaLeadInviteHtml(first, await shortenUrl(inviteUrl, "email", email), effectiveLocale, APP_URL),
+          html: metaLeadInviteHtml(first, await shortenUrl(inviteUrl, "email", email), effectiveLocale, APP_URL, email),
         })
         .then(() => {
           // eslint-disable-next-line no-console

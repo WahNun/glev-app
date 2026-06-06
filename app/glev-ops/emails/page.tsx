@@ -101,7 +101,7 @@ function buildTemplates(
         ? "On webhook receipt — branded invite via Resend"
         : "Beim Webhook-Eingang — gebrandete Einladung via Resend",
       subject: metaLeadInviteSubject(name, locale),
-      html: metaLeadInviteHtml(name, previewLink, locale, appUrl),
+      html: metaLeadInviteHtml(name, previewLink, locale, appUrl, email),
     },
     {
       key: "meta-lead-reminder",

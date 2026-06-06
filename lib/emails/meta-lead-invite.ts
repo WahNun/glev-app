@@ -4,6 +4,8 @@
  * Versand via POST /api/admin/meta/resend-invite (Resend, direkt — kein Outbox).
  */
 
+import { buildUnsubscribeUrl } from "@/lib/emails/unsubscribeToken";
+
 const APP_URL = (
   process.env.NEXT_PUBLIC_APP_URL || "https://glev.app"
 ).replace(/\/$/, "");
@@ -29,6 +31,7 @@ export function metaLeadInviteHtml(
   setupUrl: string,
   locale: MetaLeadInviteLocale,
   _appUrl?: string,
+  email?: string | null,
 ): string {
   const de = locale !== "en";
   const greeting = first
@@ -53,6 +56,11 @@ export function metaLeadInviteHtml(
   const disclaimer = de
     ? `<strong>Hinweis:</strong> Glev ist ein Dokumentations- und Auswertungstool und ersetzt keine ärztliche Beratung. Therapieentscheidungen triffst du gemeinsam mit deinem Behandlungsteam.`
     : `<strong>Note:</strong> Glev is a documentation and analysis tool and does not replace medical advice. Treatment decisions should be made together with your care team.`;
+
+  const unsubUrl = email ? buildUnsubscribeUrl(APP_URL, email) : null;
+  const unsubHtml = unsubUrl
+    ? `<p style="margin:8px 0 0;font-size:11px;color:#3F3F46;text-align:center;"><a href="${unsubUrl}" style="color:#3F3F46;text-decoration:underline;">${de ? "Von diesen E-Mails abmelden" : "Unsubscribe from these emails"}</a></p>`
+    : "";
 
   return `<!DOCTYPE html>
 <html lang="${de ? "de" : "en"}">
@@ -104,6 +112,7 @@ export function metaLeadInviteHtml(
             <p style="margin:8px 0 0;font-size:11px;color:#52525B;text-align:center;">
               Glev · <a href="mailto:info@glev.app" style="color:#52525B;">info@glev.app</a>
             </p>
+            ${unsubHtml}
           </td>
         </tr>
       </table>

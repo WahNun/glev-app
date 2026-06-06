@@ -79,7 +79,7 @@ export async function POST(req: NextRequest) {
     from: FROM,
     to: email,
     subject: metaLeadInviteSubject(first, locale),
-    html: metaLeadInviteHtml(first, setupUrl, locale, APP_URL),
+    html: metaLeadInviteHtml(first, setupUrl, locale, APP_URL, email),
   });
 
   if (sendError) {
