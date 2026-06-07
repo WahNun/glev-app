@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { isAdminAuthed } from "@/lib/adminAuth";
+import { isAnyAuthed } from "@/lib/adminAuth";
 import PhoneFrame from "./_components/PhoneFrame";
 import PhaseSection from "./_components/PhaseSection";
 import CookieBanner from "@/components/CookieBanner";
@@ -979,7 +979,7 @@ function EmailCard({
 // ─── Page ────────────────────────────────────────────────────────────────────
 
 export default async function JourneyPage() {
-  const authed = await isAdminAuthed();
+  const authed = await isAnyAuthed();
   if (!authed) redirect("/glev-ops/buyers");
 
   return (

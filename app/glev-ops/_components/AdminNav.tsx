@@ -78,6 +78,13 @@ const MARKETER_GROUPS: ReadonlyArray<NavGroup> = [
       { href: "/glev-ops/outbox", label: "Outbox" },
     ],
   },
+  {
+    label: "App",
+    items: [
+      { href: "/glev-ops/trial-ui", label: "Trial-UI" },
+      { href: "/glev-ops/journey", label: "Journey" },
+    ],
+  },
 ];
 
 function isItemActive(pathname: string, href: string) {

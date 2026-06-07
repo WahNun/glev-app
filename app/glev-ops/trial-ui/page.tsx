@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { isAdminAuthed } from "@/lib/adminAuth";
+import { isAnyAuthed } from "@/lib/adminAuth";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -14,7 +14,7 @@ const TEXT_MUTED = "#8888a8";
 const TEXT_FAINT = "#55556a";
 
 export default async function TrialUiPreviewPage() {
-  const authed = await isAdminAuthed();
+  const authed = await isAnyAuthed();
   if (!authed) redirect("/glev-ops/buyers");
 
   return (
