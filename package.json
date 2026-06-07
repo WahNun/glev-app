@@ -12,6 +12,7 @@
     "db:migrate:baseline": "node scripts/apply-migration.mjs --baseline",
     "db:migrate:all": "node scripts/apply-migration.mjs --all",
     "db:check-schema": "node scripts/check-schema-drift.mjs",
+    "migrations:check": "node scripts/check-migrations.mjs",
     "test": "playwright test --config playwright.unit.config.ts && playwright test --config playwright.e2e.config.ts",
     "test:unit": "playwright test --config playwright.unit.config.ts",
     "test:e2e": "playwright test --config playwright.e2e.config.ts",
