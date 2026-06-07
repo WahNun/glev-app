@@ -9,7 +9,7 @@
  *   2. Find the most recent `pro_subscriptions` row with a stripe_subscription_id.
  *   3. Retrieve the live subscription object from Stripe (no caching — always fresh).
  *
- * Returns 404 when no subscription is found (free / beta users).
+ * Returns 404 when no subscription is found (free users without a Stripe subscription).
  * Returns 502 if the Stripe retrieve call fails.
  *
  * Note: In Stripe v22 (API 2025-06-30) `current_period_end` is no longer a

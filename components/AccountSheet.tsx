@@ -118,10 +118,10 @@ export default function AccountSheet({ open, onClose }: AccountSheetProps) {
                       : "free";
                   setPlan(resolved);
 
-                  // Fetch live subscription data for pro/plus users.
+                  // Fetch live subscription data for pro/plus/beta users.
                   // On any failure (network or non-OK response), set to false
                   // so the UI shows a non-loading fallback instead of spinning.
-                  if ((resolved === "pro" || resolved === "plus") && !cancelled) {
+                  if ((resolved === "pro" || resolved === "plus" || resolved === "beta") && !cancelled) {
                     fetch("/api/me/subscription", { credentials: "include" })
                       .then(async (subRes) => {
                         if (!cancelled) {
@@ -606,8 +606,8 @@ export default function AccountSheet({ open, onClose }: AccountSheetProps) {
             </div>
           </div>
 
-          {/* Subscription section — Pro / Plus users only */}
-          {(plan === "pro" || plan === "plus") && (
+          {/* Subscription section — Pro / Plus / Smart (beta) users */}
+          {(plan === "pro" || plan === "plus" || plan === "beta") && (
             <div style={{
               background: "var(--surface)", border: `1px solid ${BORDER}`,
               borderRadius: 14, padding: "14px 16px", marginBottom: 18,
@@ -628,7 +628,7 @@ export default function AccountSheet({ open, onClose }: AccountSheetProps) {
                 <>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 6 }}>
                     <span style={{ fontSize: 14, fontWeight: 600, color: "var(--text-strong)" }}>
-                      {plan === "plus" ? t("plan_plus") : t("plan_pro")}
+                      {plan === "plus" ? t("plan_plus") : plan === "beta" ? t("plan_beta") : t("plan_pro")}
                     </span>
                     {subscription.cancel_at_period_end ? (
                       <span style={{ fontSize: 13, color: PINK, fontWeight: 600 }}>
@@ -659,9 +659,8 @@ export default function AccountSheet({ open, onClose }: AccountSheetProps) {
             </div>
           )}
 
-          {/* Upgrade card — only shown when NOT already on Pro/Plus.
-              Beta users still see it (Beta is the reservation tier). */}
-          {plan !== null && plan !== "pro" && plan !== "plus" && (
+          {/* Upgrade card — only shown for free users (not pro/plus/beta). */}
+          {plan !== null && plan !== "pro" && plan !== "plus" && plan !== "beta" && (
             <button
               onClick={() => { onClose(); router.push("/pro"); }}
               style={{
