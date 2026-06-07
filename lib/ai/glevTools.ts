@@ -772,6 +772,12 @@ export type PendingActionEnvelope = {
      *  via sessionStorage without an extra server round-trip. */
     payload?: Record<string, unknown>;
   };
+  /**
+   * Phase 3 only: background aggregation task that must be scheduled
+   * with Next.js `after()` in the route handler so it survives after
+   * the streaming response closes (fire-and-forget gets killed by Vercel).
+   */
+  backgroundTask?: () => Promise<void>;
 };
 
 /**
@@ -788,6 +794,8 @@ export type DualPendingActionEnvelope = {
     /** Secondary: the alcohol influence log (log_influence_entry). */
     PendingActionEnvelope["pending_action"],
   ];
+  /** Phase 3 only — same contract as PendingActionEnvelope.backgroundTask. */
+  backgroundTask?: () => Promise<void>;
 };
 
 export function isDualPendingActionEnvelope(v: unknown): v is DualPendingActionEnvelope {
@@ -1646,6 +1654,7 @@ async function toolLogMealEntry(
   let resolvedProtein = protein;
   let resolvedFat     = fat;
   let resolvedFiber   = fiber;
+  let backgroundTask: (() => Promise<void>) | undefined;
 
   if (aggregatorEnabled && !optimisticEnabled) {
     // Synchronous path (Phase 2): await aggregator before returning.
@@ -1661,14 +1670,17 @@ async function toolLogMealEntry(
       resolvedFiber   = Math.round(totals.fiber    * 10) / 10;
     }
   } else if (optimisticEnabled && aggregatorEnabled) {
-    // Optimistic path (Phase 3): return immediately, run aggregator detached.
-    // Pre-insert a 'pending' row so the client can subscribe before results arrive.
-    void Promise.resolve(
+    // Optimistic path (Phase 3): return immediately, run aggregator via after().
+    // Pre-insert a 'pending' row synchronously so the client can subscribe before
+    // the background task writes 'completed'. The aggregator itself is returned as
+    // a `backgroundTask` closure — the route handler schedules it with Next.js
+    // `after()` so Vercel keeps the process alive after the stream closes.
+    await Promise.resolve(
       sb.from("meal_prep_refinements")
         .insert({ id: mealPrepId, user_id: userId, status: "pending" })
     ).catch(() => {});
-    // Detach — never await this.
-    void runAggregator(mealPrepId);
+    // Capture as a closure — do NOT call here. The chat route calls after(backgroundTask).
+    backgroundTask = async () => { await runAggregator(mealPrepId); };
     // Use enriched Mistral estimates as placeholders; include alcohol_g so dual-emission
     // fires immediately even before the aggregator resolves.
     resolvedItems = enrichedItems.length > 0
@@ -1739,10 +1751,13 @@ async function toolLogMealEntry(
         { ...mealResult.pending_action, total_alcohol_g: totalAlcoholG, linked_influence_token: inflToken } as DualPendingActionEnvelope["dual_pending_actions"][0],
         inflResult.pending_action,
       ],
+      ...(backgroundTask ? { backgroundTask } : {}),
     } satisfies DualPendingActionEnvelope;
   }
 
-  return await createPendingAction(sb, userId, "log_meal_entry", { ...mealParams, ...tzField }, summary);
+  const singleResult = await createPendingAction(sb, userId, "log_meal_entry", { ...mealParams, ...tzField }, summary);
+  if ("error" in singleResult || !backgroundTask) return singleResult;
+  return { ...singleResult, backgroundTask };
 }
 
 async function toolLogInsulinEntry(

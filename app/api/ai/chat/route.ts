@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse, after } from "next/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { Mistral } from "@mistralai/mistralai";
 import { authedClient, type AuthOk, type AuthErr } from "@/app/api/insulin/_helpers";
@@ -714,6 +714,7 @@ export async function handleChatPost(
               }
               send(JSON.stringify({ pending_action: mealAction }));
               send(JSON.stringify({ pending_action: inflAction }));
+              if (result.backgroundTask) after(result.backgroundTask);
               messages.push({
                 role: "tool",
                 name: fn?.name ?? "",
@@ -749,6 +750,7 @@ export async function handleChatPost(
                 );
               }
               send(JSON.stringify({ pending_action: result.pending_action }));
+              if (result.backgroundTask) after(result.backgroundTask);
               messages.push({
                 role: "tool",
                 name: fn?.name ?? "",
