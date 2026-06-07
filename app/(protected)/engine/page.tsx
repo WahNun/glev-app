@@ -664,6 +664,7 @@ export default function EnginePage() {
         protein?: number | null;
         fat?: number | null;
         fiber?: number | null;
+        meal_time?: string;
       };
       if (typeof mp.input_text === "string" && mp.input_text) setDesc(mp.input_text);
       if (typeof mp.carbs === "number" && Number.isFinite(mp.carbs)) {
@@ -677,6 +678,16 @@ export default function EnginePage() {
       }
       if (typeof mp.fiber === "number" && Number.isFinite(mp.fiber)) {
         setFiber(String(Math.round(mp.fiber * 10) / 10));
+      }
+      // If the AI resolved a historical meal time (e.g. "vor 3 Minuten"),
+      // apply it so the wizard and the historical CGM auto-fill effect use
+      // the correct reference point — not the stale mount-time "now".
+      if (typeof mp.meal_time === "string" && mp.meal_time) {
+        const d = new Date(mp.meal_time);
+        if (Number.isFinite(d.getTime())) {
+          const off = d.getTimezoneOffset() * 60_000;
+          setMealTime(new Date(d.getTime() - off).toISOString().slice(0, 16));
+        }
       }
       // Stay on the engine tab and advance to step 1 (macros review) so the
       // macro cards are immediately visible on both mobile and desktop.
@@ -700,6 +711,7 @@ export default function EnginePage() {
         const mp = JSON.parse(raw) as {
           input_text?: string; carbs?: number;
           protein?: number | null; fat?: number | null; fiber?: number | null;
+          meal_time?: string;
         };
         if (typeof mp.input_text === "string" && mp.input_text) setDesc(mp.input_text);
         if (typeof mp.carbs === "number" && Number.isFinite(mp.carbs))
@@ -710,6 +722,15 @@ export default function EnginePage() {
           setFat(String(Math.round(mp.fat * 10) / 10));
         if (typeof mp.fiber === "number" && Number.isFinite(mp.fiber))
           setFiber(String(Math.round(mp.fiber * 10) / 10));
+        // Apply historical meal time so the wizard shows the correct time and
+        // the historical CGM auto-fill effect can look up the right BG value.
+        if (typeof mp.meal_time === "string" && mp.meal_time) {
+          const d = new Date(mp.meal_time);
+          if (Number.isFinite(d.getTime())) {
+            const off = d.getTimezoneOffset() * 60_000;
+            setMealTime(new Date(d.getTime() - off).toISOString().slice(0, 16));
+          }
+        }
         // Same as mount handler — engine tab + step 1 (macros), not "log".
         setTab("engine");
         setStepIndex(1);
@@ -1005,13 +1026,15 @@ export default function EnginePage() {
   }, [trendSamples, mealTime]);
 
   // Historical glucose auto-fill: when the user changes mealTime to a past
-  // time (more than 5 min ago), look up the closest CGM sample and auto-
+  // time (more than 2 min ago), look up the closest CGM sample and auto-
   // populate the glucose field — so logging a past meal starts with the
   // actual historical BZ value, not whatever the current CGM shows.
   //
   // Rules:
   //  - Never overwrites a value the user typed themselves (provenance="manual").
-  //  - Past = mealTime is > 5 min before now (avoids jitter on "now" changes).
+  //  - Past = mealTime is > 2 min before now — lowered from 5 min so that
+  //    AI-prefilled times like "vor drei Minuten" (3 min ago) correctly trigger
+  //    historical lookup instead of keeping the live CGM value.
   //  - Fast path: searches cached trendSamples within ±15 min (synchronous).
   //  - Fallback path: calls findCgmReadingNearTime (±60 min, async) when the
   //    fast path finds nothing — this handles meal times shifted more than
@@ -1021,7 +1044,7 @@ export default function EnginePage() {
     const mealMs = Date.parse(mealTime);
     if (!Number.isFinite(mealMs)) return;
     const nowMs = Date.now();
-    const PAST_THRESHOLD_MS = 5 * 60_000;       // 5 min
+    const PAST_THRESHOLD_MS = 2 * 60_000;       // 2 min (covers "vor 3 Minuten" and up)
     const MAX_SAMPLE_DELTA_MS = 15 * 60_000;    // ±15 min tolerance for fast path
 
     if (nowMs - mealMs < PAST_THRESHOLD_MS) return; // "now" or future — skip

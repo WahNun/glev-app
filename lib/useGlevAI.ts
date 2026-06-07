@@ -83,6 +83,14 @@ export type MealPendingPayload = {
   total_alcohol_g?: number;
   /** Token of the linked influence PendingAction (if Dual-Emission fired). */
   linked_influence_token?: string;
+  /**
+   * True when the AI was given an explicit time by the user ("vor 3 Minuten",
+   * "um 13:30", etc.) and resolved it to a non-now logged_at.
+   * False / absent = meal was logged at the current moment — the Engine wizard
+   * must NOT treat the fixed timestamp as historical even if the chip is tapped
+   * more than 2 minutes after the message was created.
+   */
+  meal_time_explicit?: boolean;
 };
 
 /** Payload for an auto-generated alcohol influence PendingAction. */
@@ -119,6 +127,9 @@ export type MealQueueItem = {
     protein: number | null;
     fat: number | null;
     fiber: number | null;
+    /** ISO-8601 meal time (with UTC offset) set by the AI when the user
+     *  named a historical time ("vor 3 Minuten"). Absent = treat as now. */
+    meal_time?: string;
   };
   /** Display label derived from input_text (max 40 chars). */
   label: string;

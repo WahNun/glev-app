@@ -807,6 +807,10 @@ export type MealPrepEnvelope = {
     protein: number | null;
     fat: number | null;
     fiber: number | null;
+    /** ISO-8601 string (with UTC offset) of the meal time resolved by the AI.
+     *  Present whenever the user named a specific time ("vor 3 Minuten").
+     *  Absent / undefined = treat as "now". */
+    meal_time?: string;
   };
 };
 
@@ -1472,7 +1476,13 @@ async function toolLogMealEntry(
       : null;
 
   // Resolve logged_at: use provided ISO string (with offset awareness) or default to now.
-  const loggedAtIso = typeof args.logged_at === "string" && args.logged_at.trim()
+  // Track whether the AI explicitly provided a time — only explicit times should be
+  // forwarded as `meal_time` in the meal_prep SSE frame so the Engine wizard can use
+  // the historical CGM value. "Now" meals (no args.logged_at) must not carry a fixed
+  // timestamp, otherwise opening the chip >2 min later would trigger historical lookup
+  // on a meal that was actually logged at the current moment.
+  const loggedAtExplicit = typeof args.logged_at === "string" && args.logged_at.trim().length > 0;
+  const loggedAtIso = loggedAtExplicit
     ? resolveLoggedAt(args.logged_at, userTimezone)
     : new Date().toISOString();
   const loggedAtMs = new Date(loggedAtIso).getTime();
@@ -1628,14 +1638,19 @@ async function toolLogMealEntry(
   const totalAlcoholG = sumAlcoholG(enrichedItems);
 
   const mealParams: import("@/lib/useGlevAI").MealPendingPayload = {
-    input_text:     inputText,
-    carbs_grams:    resolvedCarbs,
-    protein_grams:  resolvedProtein,
-    fat_grams:      resolvedFat,
-    fiber_grams:    resolvedFiber,
-    logged_at:      loggedAtIso,
-    glucose_before: glucoseBefore,
-    meal_prep_id:   mealPrepId,
+    input_text:          inputText,
+    carbs_grams:         resolvedCarbs,
+    protein_grams:       resolvedProtein,
+    fat_grams:           resolvedFat,
+    fiber_grams:         resolvedFiber,
+    logged_at:           loggedAtIso,
+    // Flag consumed by the chat route when building the meal_prep SSE frame.
+    // Only true when the AI was given an explicit logged_at from the user ("vor 3 Minuten").
+    // False = "now" meal — must NOT carry a fixed timestamp through to the Engine wizard
+    // because the user might tap the chip >2 minutes later and trigger historical CGM fill.
+    meal_time_explicit:  loggedAtExplicit,
+    glucose_before:      glucoseBefore,
+    meal_prep_id:        mealPrepId,
     ...(resolvedItems ? { items: resolvedItems } : {}),
     ...(totalAlcoholG > 0 ? { total_alcohol_g: Math.round(totalAlcoholG * 10) / 10 } : {}),
   };

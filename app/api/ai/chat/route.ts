@@ -708,6 +708,7 @@ export async function handleChatPost(
                     protein: typeof mp.protein_grams === "number" ? mp.protein_grams : null,
                     fat:     typeof mp.fat_grams     === "number" ? mp.fat_grams     : null,
                     fiber:   typeof mp.fiber_grams   === "number" ? mp.fiber_grams   : null,
+                    ...(mp.meal_time_explicit === true && typeof mp.logged_at === "string" && mp.logged_at ? { meal_time: mp.logged_at } : {}),
                   },
                 }));
               }
@@ -742,6 +743,7 @@ export async function handleChatPost(
                       protein: typeof p.protein_grams === "number" ? p.protein_grams : null,
                       fat: typeof p.fat_grams === "number" ? p.fat_grams : null,
                       fiber: typeof p.fiber_grams === "number" ? p.fiber_grams : null,
+                      ...(p.meal_time_explicit === true && typeof p.logged_at === "string" && p.logged_at ? { meal_time: p.logged_at } : {}),
                     },
                   }),
                 );
