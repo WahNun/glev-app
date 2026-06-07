@@ -49,7 +49,7 @@ type UIStrings = {
 };
 
 const UI_DE: UIStrings = {
-  tagline: "Insulin-Entscheidungsunterstützung",
+  tagline: "T1D-Management, das zuhört",
   recommendedBy: "Empfohlen von",
   cta: "Glev starten",
   ctaSub: "Kostenlos registrieren · Keine Kreditkarte",
@@ -69,7 +69,7 @@ const UI_EN: UIStrings = {
   footerLearnMore: "Learn more about Glev",
   footerPrivacy: "Privacy",
   disclaimer:
-    "Glev is a decision-support tool and does not replace medical advice. All insulin assessments are a basis for discussion with your diabetes care team.",
+    "Glev is a documentation tool and does not replace medical advice. All logs are a basis for discussion with your diabetes care team.",
   openingQuote: "“",
   closingQuote: "”",
 };

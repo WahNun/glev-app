@@ -1307,8 +1307,8 @@ function EngineStepResult({ meal, confirmed, onBack, onConfirm }: {
   const carbDose     = fmtNum(locale, 4.1);
   const corrDose     = fmtNum(locale, 0.1);
   const disclaimerBody = pickCopy(locale, {
-    de: "Glev Engine ist nur eine Entscheidungshilfe. Bitte konsultiere immer deinen Diabetologen.",
-    en: "Glev Engine provides decision support only. Always consult your diabetologist.",
+    de: "Glev Engine ist ein Dokumentations-Werkzeug, kein Medizinprodukt. Bitte konsultiere immer deinen Diabetologen.",
+    en: "Glev Engine is a documentation tool, not a medical device. Always consult your diabetologist.",
   });
   const savedLabel = pickCopy(locale, {
     de: "✓ Gespeichert — öffne Einträge…",
