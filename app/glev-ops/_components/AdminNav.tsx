@@ -43,6 +43,7 @@ const ALL_GROUPS: ReadonlyArray<NavGroup> = [
     label: "KI",
     items: [
       { href: "/glev-ops/mistral", label: "Mistral TTS" },
+      { href: "/glev-ops/feedback", label: "Feedback" },
     ],
   },
   {

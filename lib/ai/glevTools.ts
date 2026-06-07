@@ -661,6 +661,54 @@ Wenn der Nutzer einen Markennamen nennt, leite insulin_type automatisch aus der 
   {
     type: "function" as const,
     function: {
+      name: "submit_structured_feedback",
+      description:
+        "Speichert User-Feedback strukturiert im Backend. Nutze NUR wenn der User Feedback geben will (z. B. Bug-Report, Feature-Wunsch, Beschwerde, Lob). Erst nach den strukturierten Nachfragen aufrufen — nicht beim ersten Hinweis, sondern nachdem du what_noticed, where_noticed, what_broken und what_wished erfragt hast.",
+      parameters: {
+        type: "object",
+        properties: {
+          what_noticed: {
+            type: "string",
+            description: "Was hat der User beobachtet?",
+          },
+          where_noticed: {
+            type: "string",
+            description: "Wo in der App? (z. B. Dashboard, Engine, Settings, Chat)",
+          },
+          what_broken: {
+            type: "string",
+            description: "Was funktioniert nicht? Optional wenn Feature-Request oder Lob.",
+          },
+          what_wished: {
+            type: "string",
+            description: "Was würde sich der User wünschen?",
+          },
+          category: {
+            type: "string",
+            enum: ["bug", "feature_request", "complaint", "praise", "question", "other"],
+            description: "Klassifikation des Feedbacks.",
+          },
+          severity: {
+            type: "string",
+            enum: ["low", "medium", "high", "critical"],
+            description: "'critical' nur bei sicherheitsrelevanten Bugs (z. B. Alarm-Pipeline). 'high' für alles was User blockiert. 'medium' für störende aber umgehbare Probleme. 'low' für Lob/Kleinigkeiten.",
+          },
+          free_text: {
+            type: "string",
+            description: "Der ursprüngliche User-Input (erster Satz des Users verbatim).",
+          },
+          ai_summary: {
+            type: "string",
+            description: "Kurz-Zusammenfassung in 1-2 Sätzen für Admin-Übersicht.",
+          },
+        },
+        required: ["what_noticed", "category", "severity", "free_text", "ai_summary"],
+      },
+    },
+  },
+  {
+    type: "function" as const,
+    function: {
       name: "navigate_to",
       description:
         "Navigiert den Nutzer zu einem bestimmten Screen in der App. Aufrufen, wenn der Nutzer explizit darum bittet (z. B. 'Zeig mir das Dashboard', 'Geh zu den Einstellungen', 'Öffne Insights'). Nicht proaktiv aufrufen.",
@@ -703,7 +751,8 @@ export type GlevToolName =
   | "add_timeline_check"
   | "set_macro"
   | "update_setting"
-  | "navigate_to";
+  | "navigate_to"
+  | "submit_structured_feedback";
 
 /**
  * Marker shape returned by every WRITE-tool. The chat-route handler
@@ -905,6 +954,8 @@ export async function executeGlevTool(
         return await toolAddTimelineCheck(sb, userId, args, userTimezone);
       case "update_setting":
         return await toolUpdateSetting(sb, userId, args);
+      case "submit_structured_feedback":
+        return await toolSubmitStructuredFeedback(sb, userId, args);
       case "set_macro": {
         // Server just validates + returns the envelope — the actual state
         // update happens client-side via the glev:set-macro CustomEvent
@@ -2464,6 +2515,46 @@ async function toolUpdateSetting(
     { setting, value: rawValue },
     summary,
   );
+}
+
+async function toolSubmitStructuredFeedback(
+  sb: SupabaseClient,
+  userId: string,
+  args: Record<string, unknown>,
+): Promise<unknown> {
+  const what_noticed = typeof args.what_noticed === "string" ? args.what_noticed.trim() : "";
+  if (!what_noticed) return { error: "what_noticed darf nicht leer sein." };
+
+  const validCategories = ["bug", "feature_request", "complaint", "praise", "question", "other"];
+  const validSeverities = ["low", "medium", "high", "critical"];
+  const category = typeof args.category === "string" && validCategories.includes(args.category)
+    ? args.category : "other";
+  const severity = typeof args.severity === "string" && validSeverities.includes(args.severity)
+    ? args.severity : "medium";
+
+  const { data, error } = await sb
+    .from("user_feedback")
+    .insert({
+      user_id: userId,
+      source: "chat_ai",
+      what_noticed,
+      where_noticed: typeof args.where_noticed === "string" ? args.where_noticed : null,
+      what_broken: typeof args.what_broken === "string" ? args.what_broken : null,
+      what_wished: typeof args.what_wished === "string" ? args.what_wished : null,
+      category,
+      severity,
+      free_text: typeof args.free_text === "string" ? args.free_text : what_noticed,
+      ai_summary: typeof args.ai_summary === "string" ? args.ai_summary : null,
+    })
+    .select("id")
+    .single();
+
+  if (error) return { error: error.message };
+  return {
+    ok: true,
+    feedback_id: data.id,
+    message: "Danke! Dein Feedback ist bei mir angekommen. Lucas und das Team kümmern sich drum.",
+  };
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────
