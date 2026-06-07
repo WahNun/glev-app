@@ -72,11 +72,14 @@ function sendAPNs(
   body: string,
   sandbox: boolean,
   soundName?: string,
+  criticalAlert?: boolean,
 ): Promise<{ status: number; responseBody: string }> {
   return new Promise((resolve, reject) => {
     const host = sandbox ? "api.sandbox.push.apple.com" : "api.push.apple.com";
+    const isCritical = criticalAlert === true && !!soundName && soundName !== "default";
+    const sound = isCritical ? { critical: 1, name: soundName, volume: 1.0 } : (soundName ?? "default");
     const payload = JSON.stringify({
-      aps: { alert: { title, body }, sound: soundName ?? "default", badge: 1, "interruption-level": "time-sensitive" },
+      aps: { alert: { title, body }, sound, badge: 1, "interruption-level": isCritical ? "critical" : "time-sensitive" },
     });
     const client = http2.connect(`https://${host}`);
     client.on("error", (err) => { try { client.close(); } catch { /* ignore */ } reject(err); });
@@ -273,6 +276,15 @@ export async function POST(req: NextRequest) {
   console.log("[push-test] S3 platform=" + platform + " tokenLen=" + token.length);
   if (debugStep === 3) return NextResponse.json({ step: 3, ok: true, platform, tokenLen: token.length });
 
+  const { data: userSettingsRow } = await admin
+    .from("user_settings")
+    .select("notif_critical_alerts")
+    .eq("user_id", resolvedUserId)
+    .maybeSingle();
+  const notifCriticalAlerts = userSettingsRow?.notif_critical_alerts === true;
+  const isCriticalAlarm = notifCriticalAlerts && (alertType === "hypo" || alertType === "hyper");
+  console.log("[push-test] S3 notif_critical_alerts=" + notifCriticalAlerts + " isCriticalAlarm=" + isCriticalAlarm);
+
   // Resolve title/body:
   // 1. If customTitle/customBody provided, use those.
   // 2. If alertType is set (and not generic), load template from DB.
@@ -352,7 +364,7 @@ export async function POST(req: NextRequest) {
       let _apnsTimer: ReturnType<typeof setTimeout> | undefined;
       try {
         const { status, responseBody } = await Promise.race([
-          sendAPNs(token, jwt, bundleId, title, body, sandbox as boolean, soundCfg.apnsSound),
+          sendAPNs(token, jwt, bundleId, title, body, sandbox as boolean, soundCfg.apnsSound, isCriticalAlarm),
           new Promise<never>((_, rej) => {
             _apnsTimer = setTimeout(() => rej(new Error("APNs timeout nach 10s")), 10000);
           }),
