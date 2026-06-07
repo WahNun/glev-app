@@ -153,7 +153,7 @@ export async function requestAuthorization(): Promise<{ ok: boolean; error?: str
     // Also request `workouts` so syncRecentWorkouts() can read
     // HKWorkout sessions without a second permission round-trip.
     await plugin.requestAuthorization({
-      read: ["bloodGlucose", "stepCount", "activeEnergyBurned", "workouts"],
+      read: ["bloodGlucose", "steps", "calories", "workouts"],
     });
     return { ok: true };
   } catch (e) {
@@ -214,7 +214,7 @@ export async function syncRecentSteps(): Promise<StepsSyncResult> {
   let samples: PluginSample[] = [];
   try {
     const res = await plugin.readSamples({
-      dataType: "stepCount",
+      dataType: "steps",
       startDate,
       endDate,
       limit: 5000,
@@ -769,7 +769,7 @@ export async function backfillSteps(opts?: {
     let samples: PluginSample[] = [];
     try {
       const res = await plugin.readSamples({
-        dataType: "stepCount",
+        dataType: "steps",
         startDate: chunkStartIso,
         endDate: chunkEndIso,
         limit: STEPS_BACKFILL_READ_LIMIT,

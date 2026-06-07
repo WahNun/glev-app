@@ -188,6 +188,21 @@ export async function initPushNotifications(): Promise<void> {
     try { window.localStorage.setItem(key, value); } catch { /* non-fatal */ }
   }
 
+  // Guard: skip all push registration on Android when Firebase is not
+  // configured. Without google-services.json, FirebaseApp is never
+  // initialized and FirebaseMessaging.getInstance() throws
+  // IllegalStateException on the native CapacitorPlugins HandlerThread —
+  // a fatal crash that bypasses any JS-level try/catch.
+  // Re-enable by setting NEXT_PUBLIC_FIREBASE_ANDROID_ENABLED=true after
+  // bundling google-services.json and rebuilding the Android APK.
+  if (
+    detectPlatform() === "android" &&
+    process.env.NEXT_PUBLIC_FIREBASE_ANDROID_ENABLED !== "true"
+  ) {
+    writeDebug("glev_push_step", "android_skipped_no_firebase");
+    return;
+  }
+
   try {
     writeDebug("glev_push_step", "checkPermissions");
     let perm = await PushNotifications.checkPermissions();
