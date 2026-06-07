@@ -1133,23 +1133,26 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
           if (!aiVoiceEnabled || glevAi.sheetOpen) return;
           const AI_TABS = ["/dashboard", "/entries", "/insights"];
           if (!AI_TABS.some(t => pathname.startsWith(t))) return;
-          (e.currentTarget as HTMLElement & { _aiSwipeY?: number })._aiSwipeY = e.touches[0].clientY;
+          const el = e.currentTarget as HTMLElement & { _aiSwipeY?: number; _aiSwipeT?: number };
+          el._aiSwipeY = e.touches[0].clientY;
+          el._aiSwipeT = Date.now();
         }}
         onTouchEnd={(e) => {
-          const el = e.currentTarget as HTMLElement & { _aiSwipeY?: number };
+          const el = e.currentTarget as HTMLElement & { _aiSwipeY?: number; _aiSwipeT?: number };
           const startY = el._aiSwipeY;
+          const startT = el._aiSwipeT;
           el._aiSwipeY = undefined;
-          if (startY == null || !aiVoiceEnabled || glevAi.sheetOpen) return;
+          el._aiSwipeT = undefined;
+          if (startY == null || startT == null || !aiVoiceEnabled || glevAi.sheetOpen) return;
           const AI_TABS = ["/dashboard", "/entries", "/insights"];
           if (!AI_TABS.some(t => pathname.startsWith(t))) return;
           const dy = startY - e.changedTouches[0].clientY;
-          // Open the AI chat when swiping up ≥ 60 px AND the touch
-          // started in the bottom 30 % of the viewport. This bottom-
-          // edge zone is always reachable regardless of scroll position
-          // ("jederzeit per Hochswipe") while avoiding false triggers
-          // for regular page-scroll gestures that start higher up.
-          const bottomZoneStart = typeof window !== "undefined" ? window.innerHeight * 0.7 : 0;
-          if (dy >= 60 && startY >= bottomZoneStart) {
+          // Open the AI chat when swiping up ≥ 90 px AND the touch
+          // started in the bottom ~18 % of the viewport AND the gesture
+          // completed in under 450 ms. This prevents slow scroll from
+          // triggering the sheet while keeping intentional fast swipes reliable.
+          const bottomZoneStart = typeof window !== "undefined" ? window.innerHeight * 0.82 : 0;
+          if (dy >= 90 && startY >= bottomZoneStart && Date.now() - startT <= 450) {
             glevAi.openFromButton();
           }
         }}
@@ -1173,19 +1176,24 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
           bottom-nav tap stays a single decisive gesture. */}
       <nav className="glev-mobile-nav"
         onTouchStart={(e) => {
-          (e.currentTarget as HTMLElement & { _swipeStartY?: number })._swipeStartY = e.touches[0].clientY;
+          const el = e.currentTarget as HTMLElement & { _swipeStartY?: number; _swipeStartT?: number };
+          el._swipeStartY = e.touches[0].clientY;
+          el._swipeStartT = Date.now();
         }}
         onTouchEnd={(e) => {
-          const el = e.currentTarget as HTMLElement & { _swipeStartY?: number };
+          const el = e.currentTarget as HTMLElement & { _swipeStartY?: number; _swipeStartT?: number };
           const startY = el._swipeStartY;
-          if (startY == null) return;
+          const startT = el._swipeStartT;
+          if (startY == null || startT == null) return;
           el._swipeStartY = undefined;
+          el._swipeStartT = undefined;
           const dy = startY - e.changedTouches[0].clientY;
           // Only open the AI chat sheet when on allowed tabs (Dashboard /
           // Entries / Insights). Engine has its own EngineChatPanel and
-          // Settings should never surface the AI overlay.
+          // Settings should never surface the AI overlay. Velocity check
+          // (≤ 450 ms) prevents slow scroll from triggering the sheet.
           const AI_TABS = ["/dashboard", "/entries", "/insights"];
-          if (dy >= 60 && aiVoiceEnabled && !glevAi.sheetOpen && AI_TABS.some(t => pathname.startsWith(t))) {
+          if (dy >= 90 && aiVoiceEnabled && !glevAi.sheetOpen && AI_TABS.some(t => pathname.startsWith(t)) && Date.now() - startT <= 450) {
             glevAi.openFromButton();
           }
         }}
