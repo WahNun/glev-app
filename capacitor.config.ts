@@ -77,23 +77,6 @@ const config: CapacitorConfig = {
     // this value is a no-op, but harmless to keep.
     backgroundColor: "#09090B",
   },
-  // 2026-06-07: explicit iOS plugin class registration for Capacitor 8.
-  // Without this list, native plugins compiled into the App target
-  // are not auto-discovered by the bridge and JS calls return
-  // {"code":"UNIMPLEMENTED"}. Order is irrelevant. ALL native plugins
-  // used by Glev — both standard Capacitor plugins AND our custom
-  // inline plugin (GlevCriticalAlertsPlugin in ios/App/App/) — must be
-  // listed here. Adding a new native plugin without an entry here
-  // results in silent failure on iOS.
-  packageClassList: [
-    "HapticsPlugin",
-    "LocalNotificationsPlugin",
-    "PushNotificationsPlugin",
-    "ScreenOrientationPlugin",
-    "SharePlugin",
-    "HealthPlugin",
-    "GlevCriticalAlertsPlugin",
-  ],
 };
 
 export default config;
