@@ -456,6 +456,117 @@ test.describe("LandscapeGlucoseOverlay — fingerstick override chip and chart d
       "Blood-drop chip should NOT appear for a 90-min-old fingerstick",
     ).not.toBeVisible({ timeout: 3_000 });
   });
+
+  // ── Test C: FS override active but FS timestamp is older than latest CGM ─
+  //
+  // This is the key regression-guard for the landscape chart's smarter default
+  // crosshair selection. When:
+  //   - FS was measured 3 min ago (within the 5-min FS_OVERRIDE_WINDOW_MS)
+  //   - But the latest CGM reading is only 1 min old (newer than the FS)
+  //
+  // The hero number shows the FS value (138) because of the override rule.
+  // But without the "closest to current.t" default crosshair fix,
+  // `injectCurrentPoint` would not inject the FS (its timestamp is NOT newer
+  // than the last CGM point), and the default crosshair would land on the CGM
+  // point showing 142 mg/dL — mismatching the hero.
+  //
+  // With the fix, LandscapeChart finds the crosshair point whose x-position is
+  // closest to `current.t` (the FS at 3 min ago) and uses that as the default.
+  // The tooltip then shows "138 mg/dL", matching the hero number above.
+  //
+  // Assertion strategy:
+  //   • "138 mg/dL" as a combined string only appears in the CrosshairTooltip
+  //     (the hero renders "138" and "mg/dL" as separate sibling spans).
+  //     So `getByText("138 mg/dL", { exact: true })` uniquely targets the tooltip.
+  //   • "142 mg/dL" must NOT be visible — that would mean the crosshair defaulted
+  //     to the CGM point, which is the wrong behavior.
+  test("crosshair tooltip matches hero value when FS override is active but FS is older than latest CGM", async ({ page }) => {
+    const now = Date.now();
+    const mkTs = (minsAgo: number) => new Date(now - minsAgo * 60_000).toISOString();
+
+    const CGM_VALUE = 142; // newest CGM — 1 min ago (NEWER than FS)
+    const FS_VALUE  = 138; // FS — 3 min ago (within override window, OLDER than CGM)
+
+    await page.route("/api/cgm/history", (route) => {
+      route.fulfill({
+        status:      200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          current: {
+            value:     CGM_VALUE,
+            unit:      "mg/dL",
+            timestamp: mkTs(1),
+            trend:     "flat",
+          },
+          history: [
+            { value: 110, timestamp: mkTs(120), trend: "flat" },
+            { value: 125, timestamp: mkTs(60),  trend: "up"   },
+            { value: 135, timestamp: mkTs(20),  trend: "up"   },
+            { value: CGM_VALUE, timestamp: mkTs(1), trend: "flat" }, // newest CGM
+          ],
+        }),
+      });
+    });
+
+    // FS measured 3 min ago — inside override window (< 5 min) but OLDER than CGM.
+    await page.route("**/rest/v1/fingerstick_readings**", (route) => {
+      route.fulfill({
+        status:      200,
+        contentType: "application/json",
+        body: JSON.stringify([
+          {
+            id:          "mock-fs-older-001",
+            user_id:     "mock-user",
+            measured_at: mkTs(3),
+            value_mg_dl: FS_VALUE,
+            notes:       null,
+            created_at:  mkTs(3),
+          },
+        ]),
+      });
+    });
+
+    await page.goto("/login");
+    await page.waitForLoadState("domcontentloaded");
+    await page.setViewportSize(LANDSCAPE);
+
+    await expect(
+      page.locator(OVERLAY_SELECTOR),
+      "Overlay should be visible in landscape",
+    ).toBeVisible({ timeout: 8_000 });
+
+    // ── C-1. Hero must show FS value (override is active) ────────────────────
+    await expect(
+      page.locator(OVERLAY_SELECTOR).getByText(String(FS_VALUE), { exact: true }),
+      `Hero should show FS value ${FS_VALUE} (not CGM value ${CGM_VALUE})`,
+    ).toBeVisible({ timeout: 8_000 });
+
+    // ── C-2. 🩸 chip must be visible (confirms FS override is active) ─────────
+    const mgDlColumn = page
+      .locator(OVERLAY_SELECTOR)
+      .getByText("mg/dL")
+      .locator("..");
+    await expect(
+      mgDlColumn.getByText("🩸"),
+      "Blood-drop chip should be visible (FS override active)",
+    ).toBeVisible({ timeout: 8_000 });
+
+    // ── C-3. Default crosshair tooltip must show FS value ────────────────────
+    // "138 mg/dL" as a combined string is unique to the CrosshairTooltip
+    // (the hero renders the number and unit as separate sibling elements).
+    await expect(
+      page.locator(OVERLAY_SELECTOR).getByText(`${FS_VALUE} mg/dL`, { exact: true }),
+      `Crosshair tooltip should show "${FS_VALUE} mg/dL" (aligned with hero value)`,
+    ).toBeVisible({ timeout: 8_000 });
+
+    // ── C-4. The raw CGM value must NOT appear in the tooltip ─────────────────
+    // If the crosshair defaulted to the newer CGM point (a regression),
+    // this assertion would fail because "142 mg/dL" would be visible.
+    await expect(
+      page.locator(OVERLAY_SELECTOR).getByText(`${CGM_VALUE} mg/dL`, { exact: true }),
+      `Crosshair tooltip should NOT show "${CGM_VALUE} mg/dL" while FS override is active`,
+    ).not.toBeVisible({ timeout: 3_000 });
+  });
 });
 
 // ── 4. ScreenOrientation API calls (Task #1068) ────────────────────────────

@@ -27,6 +27,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import { fetchCgmHistory, invalidateCgmCache } from "@/lib/cgm/clientCache";
+import { injectCurrentPoint } from "@/lib/cgm/cgmDotHelpers";
 import { parseLluTs as _parseLluTs } from "@/lib/time";
 import {
   useCrosshair,
@@ -404,7 +405,7 @@ export default function LandscapeGlucoseOverlay() {
         boxSizing:  "border-box",
       }}>
         {(history.length > 0 || fingersticks.length > 0)
-          ? <LandscapeChart history={history} fingersticks={fingersticks} />
+          ? <LandscapeChart history={history} fingersticks={fingersticks} current={current} />
           : null
         }
       </div>
@@ -422,7 +423,7 @@ const RANGE_LOW  = 70;
 const RANGE_HIGH = 180;
 const Y_TICKS    = [70, 180, 250];
 
-function LandscapeChart({ history, fingersticks = [] }: { history: CgmPoint[]; fingersticks?: CgmPoint[] }) {
+function LandscapeChart({ history, fingersticks = [], current = null }: { history: CgmPoint[]; fingersticks?: CgmPoint[]; current?: CgmPoint | null }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState<{ w: number; h: number }>({ w: 640, h: 160 });
 
@@ -436,6 +437,16 @@ function LandscapeChart({ history, fingersticks = [] }: { history: CgmPoint[]; f
     ro.observe(el);
     return () => ro.disconnect();
   }, []);
+
+  // Inject the live "current" CGM point at the right edge of the chart,
+  // mirroring the portrait CurrentDayGlucoseCard injectCurrentPoint call.
+  // If current.t is already the last history entry's timestamp, no duplicate
+  // is added. This ensures the crosshair default lands on the actual latest
+  // reading shown in the large hero number above.
+  const historyWithCurrent = useMemo(
+    () => injectCurrentPoint(history, current),
+    [history, current],
+  );
 
   const { w: W, h: H } = size;
   const padL = 28, padR = 10, padT = 6, padB = 20;
@@ -453,9 +464,9 @@ function LandscapeChart({ history, fingersticks = [] }: { history: CgmPoint[]; f
 
   const winStart = now - winSpan;
   const visible  = useMemo(
-    () => history.filter((r) => r.t >= winStart && r.t <= now),
+    () => historyWithCurrent.filter((r) => r.t >= winStart && r.t <= now),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [history, winStart],
+    [historyWithCurrent, winStart],
   );
   const visibleFs = useMemo(
     () => fingersticks.filter((r) => r.t >= winStart && r.t <= now),
@@ -514,11 +525,26 @@ function LandscapeChart({ history, fingersticks = [] }: { history: CgmPoint[]; f
   }, [visible, visibleFs, W, H]);
 
   const { active: rawActive, handlers } = useCrosshair(crosshairPoints);
-  // Always show crosshair on the latest point; touch snaps to any point.
-  const lastCrosshairPt = crosshairPoints.length > 0
-    ? crosshairPoints[crosshairPoints.length - 1]
-    : null;
-  const active = rawActive ?? lastCrosshairPt;
+
+  // Default crosshair point (no touch): pick the crosshair entry whose
+  // x-position is closest to the effective `current.t`. This ensures the
+  // no-touch tooltip always aligns with the hero value — including the case
+  // where FS override is active but the FS timestamp is older than the
+  // latest CGM point (in that case `injectCurrentPoint` won't append it,
+  // so the rightmost chart point would be the newer CGM, not the FS).
+  const defaultCrosshairPt: CrosshairPoint | null = (() => {
+    if (crosshairPoints.length === 0) return null;
+    if (!current || W <= 0) return crosshairPoints[crosshairPoints.length - 1];
+    const targetX = toX(current.t);
+    let best = crosshairPoints[0];
+    let bestDist = Math.abs(best.x - targetX);
+    for (const pt of crosshairPoints) {
+      const dist = Math.abs(pt.x - targetX);
+      if (dist < bestDist) { bestDist = dist; best = pt; }
+    }
+    return best;
+  })();
+  const active = rawActive ?? defaultCrosshairPt;
 
   return (
     <div
