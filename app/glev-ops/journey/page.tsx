@@ -1284,7 +1284,7 @@ function AccountSheetScreen({
                   <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 2 }}>Glev Pro · monatlich</div>
                   <div style={{ fontSize: 12, color: OB_DIM }}>Nächste Abrechnung: 6. Juli 2026</div>
                 </div>
-                <span style={{ fontSize: 13, fontWeight: 700, color: GREEN }}>8,99 €</span>
+                <span style={{ fontSize: 13, fontWeight: 700, color: GREEN }}>14,90 €</span>
               </div>
               <div style={{ height: 1, background: SHEET_BDR, margin: "0 -2px 10px" }} />
               <div style={{ fontSize: 12, color: CANCEL_RED, fontWeight: 600, textAlign: "center" }}>Abo kündigen</div>
@@ -1338,8 +1338,8 @@ function RetentionModal1() {
           Bevor du kündigst — wie wäre es mit <strong style={{ color: OB_TEXT }}>20 % Rabatt</strong> auf die nächsten 3 Monate?
         </div>
         <div style={{ background: `${ACCENT}18`, border: `1px solid ${ACCENT}44`, borderRadius: 12, padding: "14px 16px", marginBottom: 14, textAlign: "center" }}>
-          <div style={{ fontSize: 22, fontWeight: 800, color: ACCENT, marginBottom: 2 }}>7,19 € / Monat</div>
-          <div style={{ fontSize: 11, color: OB_DIM }}>statt 8,99 € — 3 Monate lang</div>
+          <div style={{ fontSize: 22, fontWeight: 800, color: ACCENT, marginBottom: 2 }}>11,92 € / Monat</div>
+          <div style={{ fontSize: 11, color: OB_DIM }}>statt 14,90 € — 3 Monate lang</div>
         </div>
         <div style={{ background: ACCENT, borderRadius: 12, padding: "14px", textAlign: "center", marginBottom: 10 }}>
           <span style={{ fontSize: 14, fontWeight: 700, color: "#fff" }}>20 % Rabatt aktivieren →</span>
