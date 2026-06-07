@@ -1,0 +1,48 @@
+name: Migration check
+
+# Catches unapplied Supabase migrations before they reach production traffic.
+# The script exits 1 if any local .sql file in supabase/migrations/ has not
+# yet been recorded in the production schema_migrations table — blocking the
+# Vercel deploy that would otherwise follow the push to main.
+#
+# Setup (one-time):
+#   GitHub repo → Settings → Secrets and variables → Actions → New repository secret
+#   1. SUPABASE_ACCESS_TOKEN  — personal access token from
+#      https://supabase.com/dashboard/account/tokens
+#   2. NEXT_PUBLIC_SUPABASE_URL — production project URL, e.g.
+#      https://<ref>.supabase.co
+#
+# If either secret is absent the step fails loudly with a clear message.
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: migration-check-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  migration-check:
+    name: Check unapplied migrations
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Run migration check
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+        run: node scripts/check-migrations.mjs
