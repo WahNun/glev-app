@@ -449,69 +449,75 @@ export async function grantBetaFreeYearAction(formData: FormData): Promise<void>
  * Status zu verändern" — z.B. wenn jemand sein Geld zurückerhalten hat
  * und wir den Zugang sofort sperren wollen.
  */
-export async function setManualPlanAction(formData: FormData): Promise<void> {
-  const adminToken = await requireAdminToken();
-  const userId = String(formData.get("userId") ?? "");
-  const plan = String(formData.get("plan") ?? "");
-  const note = String(formData.get("note") ?? "").trim() || null;
+export type SetPlanResult =
+  | { ok: true; plan: string; label?: string }
+  | { ok: false; error: string };
 
-  const durationDays = parseInt(String(formData.get("durationDays") ?? "0"), 10);
+export async function setManualPlanAction(formData: FormData): Promise<SetPlanResult> {
+  try {
+    const adminToken = await requireAdminToken();
+    const userId = String(formData.get("userId") ?? "");
+    const plan = String(formData.get("plan") ?? "");
+    const note = String(formData.get("note") ?? "").trim() || null;
 
-  if (!userId) redirect("/glev-ops/users?err=action_failed&msg=" + encodeURIComponent("userId fehlt"));
-  if (!["free", "beta", "pro", "plus"].includes(plan)) redirect(`/glev-ops/users/${userId}?err=action_failed&msg=` + encodeURIComponent("ungültiger plan"));
+    const durationDays = parseInt(String(formData.get("durationDays") ?? "0"), 10);
 
-  const now = new Date();
-  const expiresAt =
-    durationDays > 0
-      ? new Date(now.getTime() + durationDays * 24 * 60 * 60 * 1000).toISOString()
-      : null;
+    if (!userId) return { ok: false, error: "userId fehlt" };
+    if (!["free", "beta", "pro", "plus"].includes(plan)) return { ok: false, error: "ungültiger plan" };
 
-  const sb = getSupabaseAdmin();
-  const { data: before } = await sb
-    .from("profiles")
-    .select("user_id, manual_plan_override, manual_plan_note, plan, subscription_status")
-    .eq("user_id", userId)
-    .maybeSingle();
+    const now = new Date();
+    const expiresAt =
+      durationDays > 0
+        ? new Date(now.getTime() + durationDays * 24 * 60 * 60 * 1000).toISOString()
+        : null;
 
-  // Auto-Gift-Label: 1 Jahr + beta oder pro → "1 Jahr kostenlos" automatisch setzen
-  const autoGiftLabel =
-    durationDays === 365 && (plan === "beta" || plan === "pro")
-      ? "1 Jahr kostenlos"
-      : null;
+    const sb = getSupabaseAdmin();
+    const { data: before } = await sb
+      .from("profiles")
+      .select("user_id, manual_plan_override, manual_plan_note, plan, subscription_status")
+      .eq("user_id", userId)
+      .maybeSingle();
 
-  const patch: Record<string, unknown> = {
-    manual_plan_override: plan,
-    manual_plan_note: note,
-    manual_plan_set_at: now.toISOString(),
-    manual_plan_expires_at: expiresAt,
-  };
-  if (autoGiftLabel) patch.gift_label = autoGiftLabel;
+    // Auto-Gift-Label: 1 Jahr + beta oder pro → "1 Jahr kostenlos" automatisch setzen
+    const autoGiftLabel =
+      durationDays === 365 && (plan === "beta" || plan === "pro")
+        ? "1 Jahr kostenlos"
+        : null;
 
-  const { error } = await sb
-    .from("profiles")
-    .update(patch)
-    .eq("user_id", userId);
+    const patch: Record<string, unknown> = {
+      manual_plan_override: plan,
+      manual_plan_note: note,
+      manual_plan_set_at: now.toISOString(),
+      manual_plan_expires_at: expiresAt,
+    };
+    if (autoGiftLabel) patch.gift_label = autoGiftLabel;
 
-  if (error) {
-    if (isSchemaMissingError(error)) {
-      redirect(`/glev-ops/users/${userId}?err=migration`);
+    const { error } = await sb
+      .from("profiles")
+      .update(patch)
+      .eq("user_id", userId);
+
+    if (error) {
+      if (isSchemaMissingError(error)) {
+        return { ok: false, error: "Migration fehlt: Spalte gift_label existiert noch nicht in der Datenbank." };
+      }
+      return { ok: false, error: error.message };
     }
-    redirect(`/glev-ops/users/${userId}?err=action_failed&msg=` + encodeURIComponent(error.message));
-  }
 
-  await writeAuditLog({
-    action: "set_manual_plan",
-    targetUserId: userId,
-    before,
-    after: { manual_plan_override: plan, manual_plan_note: note, gift_label: autoGiftLabel ?? undefined },
-    note: `${(before as { manual_plan_override?: string } | null)?.manual_plan_override ?? "—"} → ${plan}${autoGiftLabel ? ` (Gift-Label: ${autoGiftLabel})` : ""}`,
-    adminToken,
-  });
+    await writeAuditLog({
+      action: "set_manual_plan",
+      targetUserId: userId,
+      before,
+      after: { manual_plan_override: plan, manual_plan_note: note, gift_label: autoGiftLabel ?? undefined },
+      note: `${(before as { manual_plan_override?: string } | null)?.manual_plan_override ?? "—"} → ${plan}${autoGiftLabel ? ` (Gift-Label: ${autoGiftLabel})` : ""}`,
+      adminToken,
+    });
 
-  if (autoGiftLabel) {
-    redirect(`/glev-ops/users/${userId}?plan_ok=${encodeURIComponent(`${plan} — ${autoGiftLabel}`)}`);
+    revalidateUserPaths(userId);
+    return { ok: true, plan, ...(autoGiftLabel ? { label: autoGiftLabel } : {}) };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : String(e) };
   }
-  revalidateUserPaths(userId);
 }
 
 /**

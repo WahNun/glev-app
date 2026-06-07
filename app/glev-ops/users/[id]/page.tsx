@@ -19,7 +19,6 @@ export default async function AdminUserDetailPage({
   const { id } = await params;
   const sp = await searchParams;
   const giftOk  = Array.isArray(sp.gift_ok)  ? sp.gift_ok[0]  : sp.gift_ok;
-  const planOk  = Array.isArray(sp.plan_ok)  ? sp.plan_ok[0]  : sp.plan_ok;
   const errParam = Array.isArray(sp.err) ? sp.err[0] : sp.err;
   const msgParam = Array.isArray(sp.msg) ? sp.msg[0] : sp.msg;
   const authed = await isAdminAuthed();
@@ -194,11 +193,6 @@ export default async function AdminUserDetailPage({
       {giftOk ? (
         <div style={{ background: "#f0fdf4", border: "1px solid #86efac", color: "#166534", padding: "10px 14px", borderRadius: 8, fontSize: 14, marginBottom: 20 }}>
           ✓ Gift-Label gesetzt: <strong>🎁 {decodeURIComponent(giftOk)}</strong>
-        </div>
-      ) : null}
-      {planOk ? (
-        <div style={{ background: "#f0fdf4", border: "1px solid #86efac", color: "#166534", padding: "10px 14px", borderRadius: 8, fontSize: 14, marginBottom: 20 }}>
-          ✓ Plan gesetzt{planOk !== "1" ? `: ${decodeURIComponent(planOk)}` : ""} — Gift-Label wurde automatisch ergänzt.
         </div>
       ) : null}
 

@@ -19,6 +19,7 @@ import {
   setAiVoiceFlagAction,
   grantAiConsentAction,
 } from "../actions";
+import type { SetPlanResult } from "../actions";
 
 function readAdminToken(): string {
   return (
@@ -103,6 +104,47 @@ export default function UserActions({
   const [consentAt, setConsentAt] = useState(aiConsentAt);
   const [consentPending, setConsentPending] = useState(false);
   const [consentResult, setConsentResult] = useState<{ ok: boolean; msg: string } | null>(null);
+
+  // Plan setzen
+  const [planPending, setPlanPending] = useState(false);
+  const [planResult, setPlanResult] = useState<{ ok: boolean; msg: string } | null>(null);
+  const [selectedPlan, setSelectedPlan] = useState(currentManualPlan ?? "pro");
+  const [selectedDuration, setSelectedDuration] = useState("7");
+  const [planNote, setPlanNote] = useState(currentManualPlanNote ?? "");
+
+  function runSetPlan(): void {
+    if (planPending) return;
+    setPlanPending(true);
+    setPlanResult(null);
+    startTransition(async () => {
+      try {
+        const fd = new FormData();
+        fd.set("userId", userId);
+        fd.set("plan", selectedPlan);
+        fd.set("durationDays", selectedDuration);
+        fd.set("note", planNote);
+        const result: SetPlanResult = await setManualPlanAction(fd);
+        if (result.ok) {
+          const durationLabel = selectedDuration === "0" ? "∞" : `${selectedDuration} Tage`;
+          const planNames: Record<string, string> = {
+            free: "⛔ Free",
+            beta: "Smart S (Beta)",
+            pro: "Pro M",
+            plus: "Plus L",
+          };
+          const planName = planNames[result.plan] ?? result.plan;
+          const labelPart = result.label ? ` — Gift-Label: ${result.label}` : "";
+          setPlanResult({ ok: true, msg: `✅ Plan gesetzt: ${planName} (${durationLabel})${labelPart}` });
+        } else {
+          setPlanResult({ ok: false, msg: `❌ ${result.error}` });
+        }
+      } catch (e) {
+        setPlanResult({ ok: false, msg: `❌ ${String(e)}` });
+      } finally {
+        setPlanPending(false);
+      }
+    });
+  }
 
   async function sendRelink() {
     if (relinkPending) return;
@@ -202,16 +244,23 @@ export default function UserActions({
       <section style={section}>
         <h2 style={h2}>Plan & Rolle</h2>
 
-        <form action={setManualPlanAction} style={row}>
-          <input type="hidden" name="userId" value={userId} />
+        <div style={row}>
           <span style={lbl}>Manuellen Plan setzen:</span>
-          <select name="plan" defaultValue={currentManualPlan ?? "pro"} style={input}>
+          <select
+            value={selectedPlan}
+            onChange={(e) => setSelectedPlan(e.target.value)}
+            style={input}
+          >
             <option value="free">⛔ Free — Zugang entziehen</option>
             <option value="beta">Smart S (Beta)</option>
             <option value="pro">Pro M</option>
             <option value="plus">Plus L</option>
           </select>
-          <select name="durationDays" defaultValue="7" style={input}>
+          <select
+            value={selectedDuration}
+            onChange={(e) => setSelectedDuration(e.target.value)}
+            style={input}
+          >
             <option value="0">∞ Kein Ablauf</option>
             <option value="7">7 Tage</option>
             <option value="14">14 Tage</option>
@@ -220,16 +269,26 @@ export default function UserActions({
             <option value="365">1 Jahr</option>
           </select>
           <input
-            name="note"
             type="text"
             placeholder={'Notiz (z.B. „Schwester, Lifetime Free")'}
-            defaultValue={currentManualPlanNote ?? ""}
+            value={planNote}
+            onChange={(e) => setPlanNote(e.target.value)}
             style={{ ...input, flex: 1, minWidth: 200 }}
           />
-          <button type="submit" style={btnPrimary}>
-            Plan setzen
+          <button
+            type="button"
+            onClick={runSetPlan}
+            disabled={planPending}
+            style={{ ...btnPrimary, opacity: planPending ? 0.6 : 1 }}
+          >
+            {planPending ? "…" : "Plan setzen"}
           </button>
-        </form>
+        </div>
+        {planResult && (
+          <p style={{ margin: "6px 0 0", fontSize: 13, color: planResult.ok ? "#15803d" : "#991b1b" }}>
+            {planResult.msg}
+          </p>
+        )}
 
         {currentManualPlan ? (
           <form action={clearManualPlanAction} style={{ ...row, marginTop: 8 }}>
