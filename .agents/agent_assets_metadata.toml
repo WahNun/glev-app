@@ -210,3 +210,9 @@ id = "QtxI6mDUJsqdees3KoNab"
 uri = "file://docs/macro-pipeline-report.md"
 type = "text"
 title = "Makro-Pipeline: Legacy vs. AI-Chat vs. Future"
+
+[[outputs]]
+id = "mAURkiOcjLenmGczB47ha"
+uri = "file://public/sitemap-download.xml"
+type = "unspecified"
+title = "sitemap.xml – glev.app (9 URLs)"
