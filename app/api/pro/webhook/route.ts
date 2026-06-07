@@ -7,6 +7,7 @@ import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
 import { enqueueEmail } from "@/lib/emails/outbox";
 import { scheduleDripEmails } from "@/lib/emails/drip-scheduler";
 import { sendCapiEvent } from "@/lib/fb-capi-server";
+import { isPlusPriceId } from "@/lib/stripeWebhookHelpers";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -522,6 +523,20 @@ export async function POST(req: NextRequest) {
 
       case "customer.subscription.updated": {
         const sub = event.data.object as Stripe.Subscription;
+
+        // Guard: skip Plus-subscription events that Stripe fan-outs to this
+        // endpoint. The Plus webhook owns those rows; processing them here
+        // would write incorrect status or trigger the wrong email template.
+        const updatedPriceId = sub.items?.data?.[0]?.price?.id ?? null;
+        if (isPlusPriceId(updatedPriceId)) {
+          // eslint-disable-next-line no-console
+          console.log("[pro/webhook] subscription.updated: ignoring Plus price ID", {
+            subId: sub.id,
+            priceId: updatedPriceId,
+          });
+          return NextResponse.json({ received: true, ignored: "plus subscription" });
+        }
+
         const cpe = (sub as unknown as { current_period_end?: number }).current_period_end;
         const update: Record<string, unknown> = {
           status: mapStripeStatus(sub.status) ?? "active",
@@ -565,6 +580,21 @@ export async function POST(req: NextRequest) {
 
       case "customer.subscription.deleted": {
         const sub = event.data.object as Stripe.Subscription;
+
+        // Guard: skip Plus-subscription events that Stripe fan-outs to this
+        // endpoint. The Plus webhook owns the cancellation flow for Plus rows
+        // (subscription_status clear, plus-cancelled email). Processing them
+        // here would clobber profiles incorrectly.
+        const deletedPriceId = sub.items?.data?.[0]?.price?.id ?? null;
+        if (isPlusPriceId(deletedPriceId)) {
+          // eslint-disable-next-line no-console
+          console.log("[pro/webhook] subscription.deleted: ignoring Plus price ID", {
+            subId: sub.id,
+            priceId: deletedPriceId,
+          });
+          return NextResponse.json({ received: true, ignored: "plus subscription" });
+        }
+
         const { data, error: updErr } = await sb
           .from("pro_subscriptions")
           .update({ status: "cancelled" })
