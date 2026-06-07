@@ -137,6 +137,18 @@ Reine Prompt-Compliance für `alcohol_g` in Mistral-Tool-Calls ist unzuverlässi
 
 **Nicht wieder öffnen:** Der Master-Admin-Login via `ADMIN_EMAIL` + `ADMIN_API_SECRET` (Env-Vars) ist vollständig unabhängig von dieser Tabelle und braucht nie darin zu stehen. HMAC-Key für Team-Cookies ist `ADMIN_API_SECRET` — bei Rotation dieses Secrets werden alle Team-Sessions ungültig (gewollt).
 
+### D-032 · Capacitor 8 Custom-Plugin-Registrierung via packageClassList (2026-06-07)
+
+Inline-Plugins (Swift-Klassen im App-Target, nicht über ein separates SPM-Package eingebunden) werden von Capacitor 8 **nicht** auto-discovered. Sie müssen explizit in `capacitor.config.ts` (Repo-Root) und `ios/App/App/capacitor.config.json` (synced) unter dem root-level Array `packageClassList` gelistet sein. Fehlt der Eintrag, returnt jeder JS→Native-Call sofort `{"code":"UNIMPLEMENTED"}`, und die Capacitor-Bridge fällt silently auf die in `registerPlugin(name, { web: {...} })` definierte Web-Implementation zurück. Auf iOS äußert sich das als: kein Permission-Dialog, kein System-Toggle in Einstellungen → Mitteilungen → Glev, granted=false.
+
+**Konkrete Falle (GlevCriticalAlertsPlugin, 2026-06-07):** `App.entitlements` hatte `com.apple.developer.usernotifications.critical-alerts=true`, Apple-Approval (Request X4854X3M8P) lag seit 2026-06-06 00:46 vor, das Provisioning-Profile vom 2026-06-06 01:21 sowie das signierte Binary enthielten das Entitlement (verifiziert mit `codesign -d --entitlements :- App.app`). Die Plugin-Klasse war `@objc(GlevCriticalAlertsPlugin) public class … : CAPPlugin, CAPBridgedPlugin` mit korrektem `jsName = "GlevCriticalAlerts"`. Trotzdem kein Dialog — weil `packageClassList` den Eintrag `"GlevCriticalAlertsPlugin"` nicht enthielt. Symptom im Xcode-Console-Log war eindeutig: `[criticalAlerts] native requestPermission failed: {"code":"UNIMPLEMENTED"}`.
+
+**Fix:** In `capacitor.config.ts` UND `ios/App/App/capacitor.config.json` ALLE iOS-Native-Plugin-Klassennamen explizit listen — Standard-Capacitor-Plugins (HapticsPlugin, PushNotificationsPlugin, LocalNotificationsPlugin, ScreenOrientationPlugin, SharePlugin, HealthPlugin) UND Custom-Inline-Plugins (GlevCriticalAlertsPlugin). Reihenfolge irrelevant. Beide Files müssen konsistent sein, sonst überschreibt `npx cap sync ios` die JSON-Version mit dem (möglicherweise unvollständigen) TS-Stand.
+
+**Nicht wieder öffnen:** Jedes neue native iOS-Plugin braucht einen `packageClassList`-Eintrag in BEIDEN Configs. Wenn ein Custom-Plugin auf iOS silent fehlschlägt (kein Dialog, kein Error, granted=false), erst `grep -c '<PluginName>' capacitor.config.ts ios/App/App/capacitor.config.json` prüfen — beide müssen 1 zurückgeben. Entitlements, Provisioning, Code-Signing und Swift-Class-Aufbau sind erst NACH dieser Prüfung verdächtig.
+
+---
+
 ### D-031 · Cancellation-Feedback-Schema: user_id-keyed, RLS-gesichert, service-role INSERT (2026-06-06)
 
 Neue Tabelle `public.cancellation_feedback` speichert die strukturierten Kündigungs-Gründe (text[] + optional free-text) aus Step 3 des AccountSheet-Retention-Flows. Wird von `POST /api/me/subscription/cancel` best-effort beschrieben (Fehler blocken die eigentliche Kündigung nicht).
