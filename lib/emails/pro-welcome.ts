@@ -89,7 +89,8 @@ function proWelcomeHtmlDe(
                 Ab dem <strong>${trialEndDisplay}</strong> startet dann deine
                 reguläre Mitgliedschaft für <strong>14,90&nbsp;€/Monat</strong>,
                 automatisch über die hinterlegte Karte. Bis dahin: keine
-                Abbuchung, keine Reminder.
+                Abbuchung. Kurz vor Ende deiner Testphase erinnern wir dich
+                einmalig.
               </p>
 
               <table cellpadding="0" cellspacing="0" style="margin:0 auto 16px;">
@@ -199,7 +200,8 @@ function proWelcomeHtmlEn(
               <p style="margin:0 0 24px;font-size:15px;line-height:1.7;color:#374151;">
                 On <strong>${trialEndDisplay}</strong> your regular membership
                 kicks in at <strong>$14.90/month</strong>, billed automatically
-                to the card on file. Until then: no charges, no reminders.
+                to the card on file. Until then: no charges. We'll send you
+                one reminder just before your trial ends.
               </p>
 
               <table cellpadding="0" cellspacing="0" style="margin:0 auto 16px;">
