@@ -8,11 +8,13 @@
 // Testing surface:
 //   - mapStripeStatus()      : Stripe status → pro_subscriptions.status
 //   - mapStripeStatusToPlan(): Stripe status → profiles.plan
+//   - isPlusPriceId()        : price ID guard — core of the Pro-filter fix
 
 import { test, expect } from "@playwright/test";
 import {
   mapStripeStatus,
   mapStripeStatusToPlan,
+  isPlusPriceId,
 } from "@/lib/stripeWebhookHelpers";
 
 // ── mapStripeStatus ──────────────────────────────────────────────────────────
@@ -126,3 +128,113 @@ for (const status of TRANSIENT_STATUSES) {
     expect(mapStripeStatusToPlan(status)).toBeUndefined();
   });
 }
+
+// ── isPlusPriceId ─────────────────────────────────────────────────────────────
+// This is the core guard that prevents the Plus webhook from sending a wrong
+// "plus-cancelled" email when Stripe delivers a Pro-subscription event to it.
+//
+// Tests set process.env.STRIPE_PLUS_PRICE_ID / STRIPE_PLUS_PRICE_ID_US
+// directly and restore them afterwards so they don't leak between tests.
+
+const FAKE_EUR_PRICE = "price_eur_plus_test_001";
+const FAKE_USD_PRICE = "price_usd_plus_test_002";
+const FAKE_PRO_PRICE = "price_pro_trial_test_999";
+
+test("isPlusPriceId: null → false (always ignored)", () => {
+  expect(isPlusPriceId(null)).toBe(false);
+});
+
+test("isPlusPriceId: undefined → false (always ignored)", () => {
+  expect(isPlusPriceId(undefined)).toBe(false);
+});
+
+test("isPlusPriceId: empty string → false", () => {
+  expect(isPlusPriceId("")).toBe(false);
+});
+
+test("isPlusPriceId: unknown price ID → false (not a Plus price)", () => {
+  const prev = process.env.STRIPE_PLUS_PRICE_ID;
+  process.env.STRIPE_PLUS_PRICE_ID = FAKE_EUR_PRICE;
+  try {
+    expect(isPlusPriceId(FAKE_PRO_PRICE)).toBe(false);
+  } finally {
+    if (prev === undefined) delete process.env.STRIPE_PLUS_PRICE_ID;
+    else process.env.STRIPE_PLUS_PRICE_ID = prev;
+  }
+});
+
+test("isPlusPriceId: EUR Plus price ID → true", () => {
+  const prev = process.env.STRIPE_PLUS_PRICE_ID;
+  process.env.STRIPE_PLUS_PRICE_ID = FAKE_EUR_PRICE;
+  try {
+    expect(isPlusPriceId(FAKE_EUR_PRICE)).toBe(true);
+  } finally {
+    if (prev === undefined) delete process.env.STRIPE_PLUS_PRICE_ID;
+    else process.env.STRIPE_PLUS_PRICE_ID = prev;
+  }
+});
+
+test("isPlusPriceId: USD Plus price ID → true", () => {
+  const prev = process.env.STRIPE_PLUS_PRICE_ID_US;
+  process.env.STRIPE_PLUS_PRICE_ID_US = FAKE_USD_PRICE;
+  try {
+    expect(isPlusPriceId(FAKE_USD_PRICE)).toBe(true);
+  } finally {
+    if (prev === undefined) delete process.env.STRIPE_PLUS_PRICE_ID_US;
+    else process.env.STRIPE_PLUS_PRICE_ID_US = prev;
+  }
+});
+
+test("isPlusPriceId: both EUR and USD Plus prices recognised simultaneously", () => {
+  const prevEur = process.env.STRIPE_PLUS_PRICE_ID;
+  const prevUsd = process.env.STRIPE_PLUS_PRICE_ID_US;
+  process.env.STRIPE_PLUS_PRICE_ID = FAKE_EUR_PRICE;
+  process.env.STRIPE_PLUS_PRICE_ID_US = FAKE_USD_PRICE;
+  try {
+    expect(isPlusPriceId(FAKE_EUR_PRICE)).toBe(true);
+    expect(isPlusPriceId(FAKE_USD_PRICE)).toBe(true);
+    expect(isPlusPriceId(FAKE_PRO_PRICE)).toBe(false);
+  } finally {
+    if (prevEur === undefined) delete process.env.STRIPE_PLUS_PRICE_ID;
+    else process.env.STRIPE_PLUS_PRICE_ID = prevEur;
+    if (prevUsd === undefined) delete process.env.STRIPE_PLUS_PRICE_ID_US;
+    else process.env.STRIPE_PLUS_PRICE_ID_US = prevUsd;
+  }
+});
+
+test("isPlusPriceId: no env vars set → every price ID returns false (safe default)", () => {
+  const prevEur = process.env.STRIPE_PLUS_PRICE_ID;
+  const prevUsd = process.env.STRIPE_PLUS_PRICE_ID_US;
+  delete process.env.STRIPE_PLUS_PRICE_ID;
+  delete process.env.STRIPE_PLUS_PRICE_ID_US;
+  try {
+    expect(isPlusPriceId(FAKE_EUR_PRICE)).toBe(false);
+    expect(isPlusPriceId(FAKE_USD_PRICE)).toBe(false);
+    expect(isPlusPriceId(FAKE_PRO_PRICE)).toBe(false);
+  } finally {
+    if (prevEur !== undefined) process.env.STRIPE_PLUS_PRICE_ID = prevEur;
+    if (prevUsd !== undefined) process.env.STRIPE_PLUS_PRICE_ID_US = prevUsd;
+  }
+});
+
+// ── Business-rule invariants for isPlusPriceId ────────────────────────────────
+// These encode the guard contract that must never regress:
+//   • A recognised Plus price ID always passes through.
+//   • A Pro price ID (or any other unknown price) is always blocked.
+//   • Null/undefined price IDs are always blocked (no subscription object
+//     available → treat as non-Plus rather than leaking a wrong email).
+
+test("isPlusPriceId invariant: Pro-price-ID never triggers Plus cancellation mail", () => {
+  const prev = process.env.STRIPE_PLUS_PRICE_ID;
+  process.env.STRIPE_PLUS_PRICE_ID = FAKE_EUR_PRICE;
+  try {
+    // Simulates: Pro-Trial user cancels → Stripe sends subscription.deleted
+    // with the Pro price ID to the Plus webhook endpoint.
+    // isPlusPriceId must return false so the handler ACKs without enqueuing
+    // a "plus-cancelled" email or touching profiles.subscription_status.
+    expect(isPlusPriceId(FAKE_PRO_PRICE)).toBe(false);
+  } finally {
+    if (prev === undefined) delete process.env.STRIPE_PLUS_PRICE_ID;
+    else process.env.STRIPE_PLUS_PRICE_ID = prev;
+  }
+});

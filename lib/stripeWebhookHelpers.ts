@@ -32,6 +32,38 @@ export function mapStripeStatus(s: string | null | undefined): string | null {
 }
 
 /**
+ * Returns the set of known Stripe Price IDs for Plus subscriptions.
+ *
+ * Price IDs are read from env vars at call time so the function works both in
+ * production (real IDs) and in unit tests (override via process.env). Any
+ * undefined env var is simply excluded from the set — the empty set means no
+ * price ID will ever be considered a Plus price.
+ *
+ * - STRIPE_PLUS_PRICE_ID    — EUR monthly (e.g. price_1Abc…)
+ * - STRIPE_PLUS_PRICE_ID_US — USD monthly (e.g. price_1Def…)
+ */
+export function plusPriceIds(): string[] {
+  const ids: string[] = [];
+  if (process.env.STRIPE_PLUS_PRICE_ID) ids.push(process.env.STRIPE_PLUS_PRICE_ID);
+  if (process.env.STRIPE_PLUS_PRICE_ID_US) ids.push(process.env.STRIPE_PLUS_PRICE_ID_US);
+  return ids;
+}
+
+/**
+ * Returns true when `priceId` belongs to a Glev+ subscription price.
+ *
+ * Use this as a guard in `customer.subscription.*` handlers in the Plus
+ * webhook to filter out Pro-Trial (or any other) subscriptions whose events
+ * Stripe also delivers to the Plus webhook endpoint.
+ *
+ * Returns false for null / undefined / unknown price IDs.
+ */
+export function isPlusPriceId(priceId: string | null | undefined): boolean {
+  if (!priceId) return false;
+  return plusPriceIds().includes(priceId);
+}
+
+/**
  * Map a Stripe subscription status to `profiles.plan`.
  *
  * "trialing" / "active" / "past_due" → "pro" (Plus grants the same gated

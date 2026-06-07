@@ -9,6 +9,7 @@ import { scheduleDripEmails } from "@/lib/emails/drip-scheduler";
 import {
   mapStripeStatus,
   mapStripeStatusToPlan,
+  isPlusPriceId,
 } from "@/lib/stripeWebhookHelpers";
 
 export const runtime = "nodejs";
@@ -486,6 +487,26 @@ export async function POST(req: NextRequest) {
       // completed-event can't leave a paying Plus user on "free".
       case "customer.subscription.created": {
         const sub = event.data.object as Stripe.Subscription;
+
+        // Guard: ignore subscriptions that don't belong to a Plus price.
+        // Stripe delivers customer.subscription.created to every webhook
+        // endpoint that subscribes to this event type — including Pro-Trial
+        // subscriptions. Without this filter the handler would look up the
+        // customer email from Stripe and incorrectly set
+        // profiles.subscription_status = 'plus' for Pro buyers.
+        const createdPriceId = sub.items?.data?.[0]?.price?.id ?? null;
+        if (!isPlusPriceId(createdPriceId)) {
+          // eslint-disable-next-line no-console
+          console.warn(
+            "[plus/webhook] subscription.created ignored: not a plus subscription",
+            { subId: sub.id, priceId: createdPriceId },
+          );
+          return NextResponse.json({
+            received: true,
+            ignored: "not_a_plus_subscription",
+          });
+        }
+
         const planFromStatus = mapStripeStatusToPlan(sub.status);
         if (planFromStatus !== undefined) {
           const { data: row } = await sb
@@ -521,6 +542,25 @@ export async function POST(req: NextRequest) {
       // ── customer.subscription.updated ──────────────────────────────────────
       case "customer.subscription.updated": {
         const sub = event.data.object as Stripe.Subscription;
+
+        // Guard: ignore non-Plus subscriptions. The updated event is delivered
+        // to all webhook endpoints. A Pro subscription update would attempt to
+        // update a pro_subscriptions row (it won't find one bound by this
+        // endpoint's checkout, so it would return a 500 "row_not_yet_bound"
+        // and trigger a Stripe retry loop). Early-ACK prevents that.
+        const updatedPriceId = sub.items?.data?.[0]?.price?.id ?? null;
+        if (!isPlusPriceId(updatedPriceId)) {
+          // eslint-disable-next-line no-console
+          console.warn(
+            "[plus/webhook] subscription.updated ignored: not a plus subscription",
+            { subId: sub.id, priceId: updatedPriceId },
+          );
+          return NextResponse.json({
+            received: true,
+            ignored: "not_a_plus_subscription",
+          });
+        }
+
         const cpe = (sub as unknown as { current_period_end?: number })
           .current_period_end;
         const update: Record<string, unknown> = {
@@ -575,6 +615,31 @@ export async function POST(req: NextRequest) {
       // ── customer.subscription.deleted ──────────────────────────────────────
       case "customer.subscription.deleted": {
         const sub = event.data.object as Stripe.Subscription;
+
+        // Guard: ignore non-Plus subscriptions to prevent a wrong
+        // "plus-cancelled" email being sent to Pro-Trial users.
+        //
+        // Stripe delivers customer.subscription.deleted to ALL registered
+        // webhook endpoints. Without this filter, every Pro cancellation also
+        // triggers this handler and enqueues a "plus-cancelled" mail that says
+        // "Glev+ €29/Monat Lifetime-Lock" — wrong plan, wrong price.
+        //
+        // The authoritative price ID is on the subscription object itself
+        // (sub.items.data[0].price.id), which Stripe always includes in
+        // customer.subscription.deleted events.
+        const deletedPriceId = sub.items?.data?.[0]?.price?.id ?? null;
+        if (!isPlusPriceId(deletedPriceId)) {
+          // eslint-disable-next-line no-console
+          console.warn(
+            "[plus/webhook] subscription.deleted ignored: not a plus subscription",
+            { subId: sub.id, priceId: deletedPriceId },
+          );
+          return NextResponse.json({
+            received: true,
+            ignored: "not_a_plus_subscription",
+          });
+        }
+
         const { data, error: updErr } = await sb
           .from("pro_subscriptions")
           .update({ status: "cancelled" })
