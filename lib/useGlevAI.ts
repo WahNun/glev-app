@@ -305,6 +305,11 @@ export function useGlevAI(opts?: {
         headers: { "Content-Type": "application/json" },
       });
       if (!res.ok) throw new Error(`consent failed: ${res.status}`);
+      // Notify other instances (e.g. Settings page) that consent was granted,
+      // mirroring the existing "glev:ai-consent-revoked" pattern.
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new CustomEvent("glev:ai-consent-granted"));
+      }
     } catch (e) {
       // Roll back the local flip on failure so the next tap retries.
       // eslint-disable-next-line no-console

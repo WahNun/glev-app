@@ -149,8 +149,18 @@ export default function AiSettingsPage() {
         setAiScopeHistory(Boolean(data?.ai_consent_history_at));
       } catch { /* keep previous */ }
     };
+    // Re-sync when the window regains focus (e.g. user switches tabs).
     window.addEventListener("focus", refresh);
-    return () => window.removeEventListener("focus", refresh);
+    // Re-sync when the consent modal in Layout confirms a grant — this fires
+    // after the user re-enables AI via the toggle (OFF → ON path dispatched
+    // "glev:ai-open-consent-modal", user accepted, grantConsent() succeeded).
+    // Without this listener the Settings page state stays stuck at false and
+    // the toggle appears unresponsive until the next app restart.
+    window.addEventListener("glev:ai-consent-granted", refresh);
+    return () => {
+      window.removeEventListener("focus", refresh);
+      window.removeEventListener("glev:ai-consent-granted", refresh);
+    };
   }, []);
 
   const toggleAiConsent = useCallback(async (next: boolean) => {
