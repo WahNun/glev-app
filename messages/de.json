@@ -1347,6 +1347,8 @@
     "alarm_saved_toast": "Alarm-Einstellung gespeichert",
     "row_libre2": "FreeStyle Libre 2 / 3",
     "row_nightscout": "Nightscout",
+    "row_apple_health": "Apple Health",
+    "subtitle_only_iphone": "Nur iPhone",
     "row_historical_reload": "Historische Daten neu auswerten",
     "status_connected": "Verbunden",
     "subtitle_target_range": "{min} – {max} mg/dL",

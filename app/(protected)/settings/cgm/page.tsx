@@ -5,6 +5,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { useTranslations } from "next-intl";
 import CgmSettingsCard from "@/components/CgmSettingsCard";
 import NightscoutSettingsCard from "@/components/NightscoutSettingsCard";
+import AppleHealthSettingsCard from "@/components/AppleHealthSettingsCard";
 import CgmSetupRequestForm from "@/components/CgmSetupRequestForm";
 import BottomSheet from "@/components/BottomSheet";
 import { SettingsSection, SettingsRow, ConnectedDot } from "@/components/SettingsRow";
@@ -38,7 +39,20 @@ function useNightscoutConnected(): boolean {
   return connected;
 }
 
-type SheetKey = "libre2" | "nightscout" | "dexcom" | "setup_request";
+function useAppleHealthConnected(): boolean {
+  const [connected, setConnected] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/cgm/source", { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : Promise.reject()))
+      .then((data) => { if (!cancelled) setConnected(data?.source === "apple_health"); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, []);
+  return connected;
+}
+
+type SheetKey = "libre2" | "nightscout" | "dexcom" | "apple_health" | "setup_request";
 
 export default function CgmSettingsPage() {
   const t = useTranslations("settings");
@@ -46,7 +60,24 @@ export default function CgmSettingsPage() {
   const [openSheet, setOpenSheet] = useState<SheetKey | null>(null);
   const cgmConnected = useCgmConnected();
   const nightscoutConnected = useNightscoutConnected();
+  const appleHealthConnected = useAppleHealthConnected();
+  const [isNativePlatform, setIsNativePlatform] = useState(false);
   const cgmSetupHandledRef = useRef(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const mod = (await import("@capacitor/core")) as unknown as {
+          Capacitor?: { isNativePlatform?: () => boolean };
+        };
+        if (!cancelled) setIsNativePlatform(!!mod.Capacitor?.isNativePlatform?.());
+      } catch {
+        if (!cancelled) setIsNativePlatform(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
 
   useEffect(() => {
     if (cgmSetupHandledRef.current) return;
@@ -56,9 +87,9 @@ export default function CgmSettingsPage() {
     if (!setup) return;
     cgmSetupHandledRef.current = true;
     const sheet: SheetKey | null =
-      setup === "librelinkup"  ? "libre2"     :
-      setup === "apple_health" ? "libre2"     :
-      setup === "nightscout"   ? "nightscout" :
+      setup === "librelinkup"  ? "libre2"        :
+      setup === "apple_health" ? "apple_health"  :
+      setup === "nightscout"   ? "nightscout"    :
       null;
     url.searchParams.delete("cgmSetup");
     window.history.replaceState({}, "", url.toString());
@@ -74,10 +105,11 @@ export default function CgmSettingsPage() {
   );
 
   const sheetMap: Record<SheetKey, { title: string; body: React.ReactNode }> = {
-    libre2:        { title: t("row_libre2"),        body: <CgmSettingsCard /> },
-    nightscout:    { title: t("row_nightscout"),    body: <NightscoutSettingsCard /> },
-    dexcom:        { title: t("sheet_dexcom_title"), body: <p style={{ fontSize: 14, color: "var(--text-body)", lineHeight: 1.55, margin: 0 }}>{t("sheet_dexcom_body")}</p> },
-    setup_request: { title: tReq("intro_title"),    body: <CgmSetupRequestForm onSuccess={closeSheet} /> },
+    libre2:        { title: t("row_libre2"),              body: <CgmSettingsCard /> },
+    nightscout:    { title: t("row_nightscout"),          body: <NightscoutSettingsCard /> },
+    dexcom:        { title: t("sheet_dexcom_title"),      body: <p style={{ fontSize: 14, color: "var(--text-body)", lineHeight: 1.55, margin: 0 }}>{t("sheet_dexcom_body")}</p> },
+    apple_health:  { title: t("row_apple_health"),        body: <AppleHealthSettingsCard /> },
+    setup_request: { title: tReq("intro_title"),          body: <CgmSetupRequestForm onSuccess={closeSheet} /> },
   };
   const active = openSheet ? sheetMap[openSheet] : null;
 
@@ -106,6 +138,19 @@ export default function CgmSettingsPage() {
           rightAdornment={nightscoutConnected ? <ConnectedDot label={t("status_connected")} /> : undefined}
           ariaLabel={t("row_open_aria", { label: t("row_nightscout") })}
           onClick={() => setOpenSheet("nightscout")}
+        />
+        <SettingsRow
+          iconColor="#FF2D55"
+          icon={
+            <svg {...iconProps}>
+              <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
+            </svg>
+          }
+          label={t("row_apple_health")}
+          subtitle={isNativePlatform ? undefined : t("subtitle_only_iphone")}
+          rightAdornment={appleHealthConnected ? <ConnectedDot label={t("status_connected")} /> : undefined}
+          ariaLabel={t("row_open_aria", { label: t("row_apple_health") })}
+          onClick={() => setOpenSheet("apple_health")}
         />
         <SettingsRow
           iconColor={ACCENT}
