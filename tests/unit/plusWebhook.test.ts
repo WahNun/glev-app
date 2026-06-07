@@ -15,6 +15,7 @@ import {
   mapStripeStatus,
   mapStripeStatusToPlan,
   isPlusPriceId,
+  warnIfPlusPriceIdsAbsent,
 } from "@/lib/stripeWebhookHelpers";
 
 // ── mapStripeStatus ──────────────────────────────────────────────────────────
@@ -236,5 +237,95 @@ test("isPlusPriceId invariant: Pro-price-ID never triggers Plus cancellation mai
   } finally {
     if (prev === undefined) delete process.env.STRIPE_PLUS_PRICE_ID;
     else process.env.STRIPE_PLUS_PRICE_ID = prev;
+  }
+});
+
+// ── warnIfPlusPriceIdsAbsent ──────────────────────────────────────────────────
+// Validates the startup misconfiguration guard introduced in Task #1291.
+// When NEITHER env var is set, console.error must be called exactly once with
+// a message that contains the key alert phrase so Vercel / Datadog alerting
+// rules can match on it.  When at least one env var is present, console.error
+// must NOT be called (no false-positive noise in a correctly configured env).
+
+test("warnIfPlusPriceIdsAbsent: emits console.error when both env vars are missing", () => {
+  const prevEur = process.env.STRIPE_PLUS_PRICE_ID;
+  const prevUsd = process.env.STRIPE_PLUS_PRICE_ID_US;
+  delete process.env.STRIPE_PLUS_PRICE_ID;
+  delete process.env.STRIPE_PLUS_PRICE_ID_US;
+
+  const errors: unknown[] = [];
+  const orig = console.error;
+  console.error = (...args: unknown[]) => errors.push(args);
+  try {
+    warnIfPlusPriceIdsAbsent();
+    expect(errors).toHaveLength(1);
+    const msg = String((errors[0] as unknown[])[0]);
+    expect(msg).toContain("MISCONFIGURATION");
+    expect(msg).toContain("STRIPE_PLUS_PRICE_ID");
+  } finally {
+    console.error = orig;
+    if (prevEur !== undefined) process.env.STRIPE_PLUS_PRICE_ID = prevEur;
+    if (prevUsd !== undefined) process.env.STRIPE_PLUS_PRICE_ID_US = prevUsd;
+  }
+});
+
+test("warnIfPlusPriceIdsAbsent: silent when EUR env var is set", () => {
+  const prevEur = process.env.STRIPE_PLUS_PRICE_ID;
+  const prevUsd = process.env.STRIPE_PLUS_PRICE_ID_US;
+  process.env.STRIPE_PLUS_PRICE_ID = FAKE_EUR_PRICE;
+  delete process.env.STRIPE_PLUS_PRICE_ID_US;
+
+  const errors: unknown[] = [];
+  const orig = console.error;
+  console.error = (...args: unknown[]) => errors.push(args);
+  try {
+    warnIfPlusPriceIdsAbsent();
+    expect(errors).toHaveLength(0);
+  } finally {
+    console.error = orig;
+    if (prevEur === undefined) delete process.env.STRIPE_PLUS_PRICE_ID;
+    else process.env.STRIPE_PLUS_PRICE_ID = prevEur;
+    if (prevUsd !== undefined) process.env.STRIPE_PLUS_PRICE_ID_US = prevUsd;
+  }
+});
+
+test("warnIfPlusPriceIdsAbsent: silent when USD env var is set", () => {
+  const prevEur = process.env.STRIPE_PLUS_PRICE_ID;
+  const prevUsd = process.env.STRIPE_PLUS_PRICE_ID_US;
+  delete process.env.STRIPE_PLUS_PRICE_ID;
+  process.env.STRIPE_PLUS_PRICE_ID_US = FAKE_USD_PRICE;
+
+  const errors: unknown[] = [];
+  const orig = console.error;
+  console.error = (...args: unknown[]) => errors.push(args);
+  try {
+    warnIfPlusPriceIdsAbsent();
+    expect(errors).toHaveLength(0);
+  } finally {
+    console.error = orig;
+    if (prevEur !== undefined) process.env.STRIPE_PLUS_PRICE_ID = prevEur;
+    if (prevUsd === undefined) delete process.env.STRIPE_PLUS_PRICE_ID_US;
+    else process.env.STRIPE_PLUS_PRICE_ID_US = prevUsd;
+  }
+});
+
+test("warnIfPlusPriceIdsAbsent: silent when both env vars are set", () => {
+  const prevEur = process.env.STRIPE_PLUS_PRICE_ID;
+  const prevUsd = process.env.STRIPE_PLUS_PRICE_ID_US;
+  process.env.STRIPE_PLUS_PRICE_ID = FAKE_EUR_PRICE;
+  process.env.STRIPE_PLUS_PRICE_ID_US = FAKE_USD_PRICE;
+
+  const errors: unknown[] = [];
+  const orig = console.error;
+  console.error = (...args: unknown[]) => errors.push(args);
+  try {
+    warnIfPlusPriceIdsAbsent();
+    expect(errors).toHaveLength(0);
+  } finally {
+    console.error = orig;
+    if (prevEur === undefined) delete process.env.STRIPE_PLUS_PRICE_ID;
+    else process.env.STRIPE_PLUS_PRICE_ID = prevEur;
+    if (prevUsd === undefined) delete process.env.STRIPE_PLUS_PRICE_ID_US;
+    else process.env.STRIPE_PLUS_PRICE_ID_US = prevUsd;
   }
 });

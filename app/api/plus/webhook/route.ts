@@ -10,7 +10,16 @@ import {
   mapStripeStatus,
   mapStripeStatusToPlan,
   isPlusPriceId,
+  plusPriceIds,
+  warnIfPlusPriceIdsAbsent,
 } from "@/lib/stripeWebhookHelpers";
+
+// Validate env var presence at module load time (cold-start / first request).
+// If STRIPE_PLUS_PRICE_ID is absent, every Plus subscription event is silently
+// ACK'd and no cancellation email can ever be sent.  console.error fires on
+// cold-start so Vercel log alerts / Datadog catch the misconfiguration before
+// any real customer event arrives.
+warnIfPlusPriceIdsAbsent();
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -629,10 +638,39 @@ export async function POST(req: NextRequest) {
         // customer.subscription.deleted events.
         const deletedPriceId = sub.items?.data?.[0]?.price?.id ?? null;
         if (!isPlusPriceId(deletedPriceId)) {
+          // ALERT: upgrade to console.error so Vercel log alerts / Datadog fire.
+          //
+          // A subscription.deleted event with an unrecognised price ID is almost
+          // always one of two scenarios:
+          //   (A) A non-Plus subscription (e.g. Pro-Trial) cancelled — expected
+          //       and harmless; Stripe routes all subscription events to every
+          //       registered endpoint.
+          //   (B) A real Plus cancellation whose price ID is missing from
+          //       STRIPE_PLUS_PRICE_ID / STRIPE_PLUS_PRICE_ID_US — the env var
+          //       is wrong or was never set.  In this case the customer's status
+          //       will NOT be updated to "cancelled" and NO cancellation email
+          //       will be sent.
+          //
+          // We cannot distinguish (A) from (B) at runtime, so we always log at
+          // error level.  False-positive noise from scenario (A) is acceptable
+          // because missing a real Plus cancellation (B) is a billing integrity
+          // failure.  If scenario (A) noise becomes excessive in practice, add
+          // the Pro price IDs to an explicit allow-list of "known non-Plus" IDs
+          // so they can be silently ACK'd.
           // eslint-disable-next-line no-console
-          console.warn(
-            "[plus/webhook] subscription.deleted ignored: not a plus subscription",
-            { subId: sub.id, priceId: deletedPriceId },
+          console.error(
+            "[plus/webhook] ALERT: subscription.deleted ignored — price ID not recognised as a Plus price. " +
+              "If this is a real Plus cancellation, the customer's status was NOT updated and " +
+              "NO cancellation email was sent. Verify STRIPE_PLUS_PRICE_ID / STRIPE_PLUS_PRICE_ID_US in Vercel.",
+            {
+              subId: sub.id,
+              priceId: deletedPriceId,
+              knownPlusPriceCount: plusPriceIds().length,
+              stripeEnvVarSet: {
+                STRIPE_PLUS_PRICE_ID: !!process.env.STRIPE_PLUS_PRICE_ID,
+                STRIPE_PLUS_PRICE_ID_US: !!process.env.STRIPE_PLUS_PRICE_ID_US,
+              },
+            },
           );
           return NextResponse.json({
             received: true,
