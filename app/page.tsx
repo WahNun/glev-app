@@ -33,6 +33,20 @@ const BG      = "var(--bg)";
 const SURFACE = "var(--surface)";
 const BORDER  = "var(--border)";
 
+// Single source of truth for the FAQ — render order matches the visible
+// accordion. Used both for the JSX list below AND the FAQPage JSON-LD so the
+// two never drift apart. faq_a5 gets a special-cased /setup link in the JSX.
+const FAQ_KEYS = [
+  { q: "faq_q1", a: "faq_a1" },
+  { q: "faq_q2", a: "faq_a2" },
+  { q: "faq_q5", a: "faq_a5" },
+  { q: "faq_q6", a: "faq_a6" },
+  { q: "faq_q7", a: "faq_a7" },
+  { q: "faq_q3", a: "faq_a3" },
+  { q: "faq_q4", a: "faq_a4" },
+  { q: "faq_q8", a: "faq_a8" },
+] as const;
+
 export default function PreviewHome() {
   const t  = useTranslations("marketing");
   const tp = useTranslations("preview");
@@ -974,12 +988,10 @@ export default function PreviewHome() {
           {t("faq_title")}
         </h2>
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-          {([
-            { q: t("faq_q1"), a: t("faq_a1") },
-            { q: t("faq_q2"), a: t("faq_a2") },
-            {
-              q: t("faq_q5"),
-              a: (
+          {FAQ_KEYS.map(({ q, a }) => {
+            const question = t(q);
+            const answer =
+              a === "faq_a5" ? (
                 <>
                   {t("faq_a5").split("/setup")[0]}
                   <Link
@@ -990,45 +1002,58 @@ export default function PreviewHome() {
                   </Link>
                   {t("faq_a5").split("/setup")[1] ?? ""}
                 </>
-              ),
-            },
-            { q: t("faq_q6"), a: t("faq_a6") },
-            { q: t("faq_q7"), a: t("faq_a7") },
-            { q: t("faq_q3"), a: t("faq_a3") },
-            { q: t("faq_q4"), a: t("faq_a4") },
-            { q: t("faq_q8"), a: t("faq_a8") },
-          ] as { q: string; a: React.ReactNode }[]).map((item) => (
-            <details
-              key={item.q}
-              style={{
-                background: SURFACE,
-                border: `1px solid ${BORDER}`,
-                borderRadius: 12,
-                padding: "14px 16px",
-              }}
-            >
-              <summary
+              ) : (
+                t(a)
+              );
+            return (
+              <details
+                key={q}
                 style={{
-                  listStyle: "none",
-                  cursor: "pointer",
-                  fontSize: 15,
-                  fontWeight: 600,
-                  color: "var(--text)",
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                  gap: 12,
+                  background: SURFACE,
+                  border: `1px solid ${BORDER}`,
+                  borderRadius: 12,
+                  padding: "14px 16px",
                 }}
               >
-                <span>{item.q}</span>
-                <span aria-hidden style={{ color: "var(--text-dim)", fontFamily: "var(--font-mono), JetBrains Mono, monospace" }}>+</span>
-              </summary>
-              <div style={{ fontSize: 14, color: "var(--text-body)", lineHeight: 1.55, marginTop: 10 }}>
-                {item.a}
-              </div>
-            </details>
-          ))}
+                <summary
+                  style={{
+                    listStyle: "none",
+                    cursor: "pointer",
+                    fontSize: 15,
+                    fontWeight: 600,
+                    color: "var(--text)",
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    gap: 12,
+                  }}
+                >
+                  <span>{question}</span>
+                  <span aria-hidden style={{ color: "var(--text-dim)", fontFamily: "var(--font-mono), JetBrains Mono, monospace" }}>+</span>
+                </summary>
+                <div style={{ fontSize: 14, color: "var(--text-body)", lineHeight: 1.55, marginTop: 10 }}>
+                  {answer}
+                </div>
+              </details>
+            );
+          })}
         </div>
+        {/* FAQPage JSON-LD — generated from the same FAQ_KEYS as the visible
+            list above so the two stay in sync. Plain-text answers via t(). */}
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify({
+              "@context": "https://schema.org",
+              "@type": "FAQPage",
+              mainEntity: FAQ_KEYS.map(({ q, a }) => ({
+                "@type": "Question",
+                name: t(q),
+                acceptedAnswer: { "@type": "Answer", text: t(a) },
+              })),
+            }),
+          }}
+        />
       </section>
 
       {/* COMPLIANCE — kleiner muted Hinweis, bewusst KEIN Fettdruck.

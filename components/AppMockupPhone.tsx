@@ -942,7 +942,7 @@ function EngineScreen({ onLogged }: { onLogged: () => void }) {
       <div>
         <div style={{ display:"flex", alignItems:"center", gap:6, marginBottom:3 }}>
           <GlevLogo size={18}/>
-          <h1 style={{ fontSize:14, fontWeight:800, letterSpacing:"-0.03em", margin:0 }}>{tEng("title")}</h1>
+          <h2 style={{ fontSize:14, fontWeight:800, letterSpacing:"-0.03em", margin:0 }}>{tEng("title")}</h2>
         </div>
         <p style={{ color:"rgba(255,255,255,0.35)", fontSize:9.5, margin:0, lineHeight:1.4 }}>
           {subtitleEng}

@@ -102,9 +102,78 @@ const jetbrainsMono = JetBrains_Mono({
   display: "swap",
 });
 
+// Site-wide structured data (WebSite + SoftwareApplication + Organization).
+// SoftwareApplication uses applicationCategory "HealthApplication" (the schema
+// type health apps use) WITHOUT MedicalDevice/MedicalApplication, and repeats
+// the "Kein Medizinprodukt" disclaimer in the description — deliberate, to keep
+// Glev's documentation-tool positioning intact.
+const STRUCTURED_DATA = {
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "WebSite",
+      "@id": "https://glev.app/#website",
+      url: "https://glev.app",
+      name: "Glev",
+      description:
+        "Dokumentations-App für Typ-1-Diabetes: Mahlzeiten per Sprache, CGM-Daten, Muster im Verlauf",
+      inLanguage: "de-DE",
+    },
+    {
+      "@type": "SoftwareApplication",
+      "@id": "https://glev.app/#app",
+      name: "Glev",
+      applicationCategory: "HealthApplication",
+      operatingSystem: "iOS, Android, Web",
+      description:
+        "Dokumentations-Werkzeug für Typ-1-Diabetes. Mahlzeiten per Sprache loggen, CGM-Daten zusammenführen, Muster erkennen. Kein Medizinprodukt.",
+      inLanguage: "de-DE",
+    },
+    {
+      "@type": "Organization",
+      "@id": "https://glev.app/#organization",
+      name: "Glev",
+      url: "https://glev.app",
+      logo: "https://glev.app/icon.svg",
+    },
+  ],
+};
+
 export const metadata: Metadata = {
-  title: "Glev",
-  description: "Type 1 Diabetes insulin decision-support app",
+  metadataBase: new URL("https://glev.app"),
+  title: {
+    default: "Glev – Diabetes-Tagebuch per Sprache | Typ-1",
+    template: "%s | Glev",
+  },
+  description:
+    "Glev ist die Dokumentations-App für Typ-1-Diabetiker. Mahlzeiten per Sprache loggen, CGM-Daten zusammenführen, Muster im Verlauf erkennen. Kein Medizinprodukt.",
+  alternates: {
+    canonical: "https://glev.app",
+  },
+  openGraph: {
+    title: "Glev – Diabetes-Tagebuch per Sprache",
+    description:
+      "Mahlzeiten loggen · CGM-Daten · Muster erkennen. Glev ist ein Dokumentations-Werkzeug, kein Medizinprodukt.",
+    url: "https://glev.app",
+    siteName: "Glev",
+    locale: "de_DE",
+    type: "website",
+    images: [
+      {
+        url: "https://glev.app/og-image.png",
+        width: 1200,
+        height: 630,
+        alt: "Glev — Diabetes-Tagebuch per Sprache",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Glev – Diabetes-Tagebuch per Sprache",
+    description:
+      "Mahlzeiten loggen · CGM-Daten · Muster erkennen. Kein Medizinprodukt.",
+    images: ["https://glev.app/og-image.png"],
+  },
   manifest: "/site.webmanifest",
   applicationName: "Glev",
   appleWebApp: {
@@ -140,6 +209,12 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   const locale = await getLocale();
   const messages = await getMessages();
 
+  // Normalise the i18n locale ("de" | "en") to a BCP-47 lang attribute.
+  // German is the primary/default market (and the canonical), so anything
+  // that isn't explicitly English resolves to de-DE — bots without a cookie
+  // therefore see de-DE rather than a bare "en".
+  const htmlLang = locale === "en" ? "en-US" : "de-DE";
+
   // Theme is honoured on all routes (Task #134 — Light Mode is wired up
   // across all public pages). SSR default is dark unless the cookie says
   // "light"; "system" is resolved client-side in the bootstrap script
@@ -150,7 +225,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
 
   return (
     <html
-      lang={locale}
+      lang={htmlLang}
       className={`${inter.variable} ${jetbrainsMono.variable}`}
       data-theme={initialTheme}
       // The pre-hydration script may switch data-theme between SSR and
@@ -194,6 +269,12 @@ export default async function RootLayout({ children }: { children: React.ReactNo
             <link rel="dns-prefetch" href={process.env.NEXT_PUBLIC_SUPABASE_URL} />
           </>
         ) : null}
+        {/* Site-wide JSON-LD (WebSite / SoftwareApplication / Organization).
+            Compliance-safe wording — see STRUCTURED_DATA above. */}
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(STRUCTURED_DATA) }}
+        />
       </head>
       <body>
         {/* Meta Pixel — fires PageView on every route. Loaded with
