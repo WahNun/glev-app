@@ -103,3 +103,14 @@ jobs:
           # On push events github.event.inputs is empty → default to "all"
           MIGRATION_MODE: ${{ github.event.inputs.mode || 'all' }}
         run: node scripts/apply-migration.mjs --$MIGRATION_MODE
+
+      - name: Verify tracking table is up to date
+        if: ${{ github.event.inputs.mode != 'baseline' }}
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+        run: |
+          # Confirm every local .sql file is recorded in schema_migrations.
+          # Exits 1 if anything is missing → aborts this job and blocks the
+          # GitHub Actions status check so the unapplied migration is visible.
+          node scripts/check-migrations.mjs
