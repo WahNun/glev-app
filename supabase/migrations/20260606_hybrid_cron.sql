@@ -24,7 +24,7 @@ select cron.schedule(
   'glev-hypo-check',
   '* * * * *',
   $$ select net.http_post(
-    url:='YOUR_SUPABASE_URL_HERE/functions/v1/hypo-check',
+    url:='https://zalpwyhlijbjyspjzbvn.supabase.co/functions/v1/hypo-check',
     headers:='{"Content-Type":"application/json"}'::jsonb,
     body:=('{"source":"pg_cron","ts":' || extract(epoch from now())::bigint || '}')::jsonb
   ); $$
@@ -34,7 +34,7 @@ select cron.schedule(
   'glev-elevated-check',
   '* * * * *',
   $$ select net.http_post(
-    url:='YOUR_SUPABASE_URL_HERE/functions/v1/elevated-check',
+    url:='https://zalpwyhlijbjyspjzbvn.supabase.co/functions/v1/elevated-check',
     headers:='{"Content-Type":"application/json"}'::jsonb,
     body:=('{"source":"pg_cron","ts":' || extract(epoch from now())::bigint || '}')::jsonb
   ); $$
@@ -44,7 +44,7 @@ select cron.schedule(
   'glev-hyper-check',
   '* * * * *',
   $$ select net.http_post(
-    url:='YOUR_SUPABASE_URL_HERE/functions/v1/hyper-check',
+    url:='https://zalpwyhlijbjyspjzbvn.supabase.co/functions/v1/hyper-check',
     headers:='{"Content-Type":"application/json"}'::jsonb,
     body:=('{"source":"pg_cron","ts":' || extract(epoch from now())::bigint || '}')::jsonb
   ); $$
