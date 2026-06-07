@@ -41,6 +41,14 @@ Quantity defaults when vague:
 banana 120g · apple 180g · slice of bread 30g · handful of nuts 28g ·
 glass of juice 200ml · cup of rice 150g (cooked) · tbsp/EL 15g · tsp/TL 5g.
 
+Bilingual search term examples (pure translations only — no macros or advice):
+- "Banane" → search_term_en: "banana", search_term_de: "banane"
+- "Apfel" → search_term_en: "apple", search_term_de: "apfel"
+- "Joghurt" → search_term_en: "yogurt", search_term_de: "joghurt"
+- "Vollkornbrot" → search_term_en: "whole grain bread", search_term_de: "vollkornbrot"
+- "Karotte" → search_term_en: "carrot", search_term_de: "karotte"
+- "Hähnchenbrust" → search_term_en: "chicken breast", search_term_de: "hähnchenbrust"
+
 description: comma-separated "<grams>g <name>" for the FULL meal, ml for
 liquids, lowercase names, no leading/trailing punctuation.`;
 
@@ -85,6 +93,10 @@ export interface ParseFoodResult {
 // in ~1.5s; allowing 6s still covers gpt-4o-mini's tail without
 // holding the whole pipeline hostage when OpenAI is degraded.
 const PARSE_TIMEOUT_MS = 6000;
+
+// Detects German umlauts/ß in search_term_en — these cause the USDA
+// word-boundary scorer to reject the lookup (regex \b fails on ä/ö/ü).
+const GERMAN_CHAR_RE = /[äöüÄÖÜß]/;
 
 export async function parseFoodText(
   text: string,
@@ -170,6 +182,24 @@ export async function parseFoodText(
       };
     })
     .filter((x): x is ParsedFoodItem => x !== null);
+
+  // Validation: if search_term_en contains German umlauts/ß the USDA
+  // word-boundary scorer rejects it. Transliterate in-place and warn.
+  for (let i = 0; i < items.length; i++) {
+    const it = items[i];
+    if (GERMAN_CHAR_RE.test(it.search_term_en)) {
+      const fixed = it.search_term_en
+        .replace(/ä/g, "ae").replace(/ö/g, "oe").replace(/ü/g, "ue")
+        .replace(/Ä/g, "Ae").replace(/Ö/g, "Oe").replace(/Ü/g, "Ue")
+        .replace(/ß/g, "ss");
+      console.warn(`[parseFood] German chars in search_term_en "${it.search_term_en}" → "${fixed}" (${it.name})`);
+      items[i] = { ...it, search_term_en: fixed };
+    }
+  }
+  // Structured logging per item — helps diagnose EN/DE lookup failures.
+  for (const it of items) {
+    console.log(`[parseFood] item="${it.name}" en="${it.search_term_en}" de="${it.search_term_de}" g=${it.grams} branded=${it.is_branded}`);
+  }
 
   const synthDescription = items
     .map((it) => `${it.grams}g ${it.name}`)

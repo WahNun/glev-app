@@ -217,9 +217,16 @@ export async function aggregateNutrition(
   );
   const calories = Math.round(totals.carbs * 4 + totals.protein * 4 + totals.fat * 9);
 
+  const nutritionSource = topLevelSource(finalItems);
+  const srcCounts = finalItems.reduce<Record<string, number>>((acc, it) => {
+    acc[it.source] = (acc[it.source] ?? 0) + 1;
+    return acc;
+  }, {});
+  console.log(`[nutritionMetrics] items=${finalItems.length} sources=${JSON.stringify(srcCounts)} topLevel=${nutritionSource}`);
+
   return {
     items: finalItems,
     totals: { ...totals, calories },
-    nutritionSource: topLevelSource(finalItems),
+    nutritionSource,
   };
 }
