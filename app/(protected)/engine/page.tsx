@@ -3280,6 +3280,11 @@ export default function EnginePage() {
                           placeholder="—"
                           value={glucose}
                           onChange={(e) => {
+                            // isTrusted=false → programmatic React state update (WebKit
+                            // fires onChange for controlled inputs after setGlucose).
+                            // Ignore these so a historical auto-fill never locks provenance
+                            // to "manual" and blocks future time-change lookups.
+                            if (!e.isTrusted) return;
                             setGlucose(e.target.value);
                             glucoseProvenanceRef.current = "manual";
                             setGlucoseProvenance("manual");
