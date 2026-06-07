@@ -41,6 +41,7 @@ import {
   metaLeadReminderHtml,
   metaLeadReminderSubject,
 } from "@/lib/emails/meta-lead-reminder";
+import { giftAccessHtml, giftAccessSubject } from "@/lib/emails/gift-access";
 import { getAllTemplates } from "@/lib/messageTemplates";
 import { isAdminAuthed } from "@/lib/adminAuth";
 import { loginAction } from "./actions";
@@ -301,6 +302,27 @@ function buildTemplates(
         : "Admin schaltet 1 Jahr Pro frei — neuer User, kriegt Login-Link",
       subject: betaFreeYearWelcomeSubject(name, locale, "pro"),
       html: betaFreeYearWelcomeHtml(name, appUrl, bfyExpiresAt, locale, bfySignupUrl, "pro", email),
+    },
+    // ── Gift ───────────────────────────────────────────────────────────
+    {
+      key: "gift-access",
+      label: isEn ? "Gift — Pro Access" : "Gift — Pro-Zugang",
+      campaign: "welcome",
+      whenSent: isEn
+        ? "When admin sets manual plan to 'pro' or 'plus' via setManualPlanAction"
+        : "Wenn Admin 'pro' oder 'plus' manuell via Plan-setzen-Aktion setzt",
+      subject: giftAccessSubject(name, "pro", new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(), locale),
+      html: giftAccessHtml(name, "pro", new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(), locale, appUrl, email),
+    },
+    {
+      key: "gift-access-plus",
+      label: isEn ? "Gift — Plus Access" : "Gift — Plus-Zugang",
+      campaign: "welcome",
+      whenSent: isEn
+        ? "When admin sets manual plan to 'plus' via setManualPlanAction"
+        : "Wenn Admin 'plus' manuell via Plan-setzen-Aktion setzt",
+      subject: giftAccessSubject(name, "plus", new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(), locale),
+      html: giftAccessHtml(name, "plus", new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(), locale, appUrl, email),
     },
     // ── System ─────────────────────────────────────────────────────────
     {

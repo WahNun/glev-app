@@ -39,6 +39,10 @@ import {
   subscriptionCancelledHtml,
   subscriptionCancelledSubject,
 } from "@/lib/emails/subscription-cancelled";
+import {
+  giftAccessHtml,
+  giftAccessSubject,
+} from "@/lib/emails/gift-access";
 
 // ---- Tunables -------------------------------------------------------------
 
@@ -114,7 +118,8 @@ export type EmailTemplate =
   | "password-reset"
   | "trial-welcome"
   | "pro-cancelled"
-  | "plus-cancelled";
+  | "plus-cancelled"
+  | "gift-access";
 
 /**
  * Payload shape per template. Stored as jsonb in the outbox so the
@@ -214,6 +219,20 @@ export interface TrialWelcomePayload {
 }
 
 /**
+ * Admin-granted gift access. Sent when an admin manually sets a user's
+ * plan to "pro" or "plus" via `setManualPlanAction`. No billing framing.
+ * `expiresAt` is the ISO end date (from manual_plan_expires_at), or null
+ * when the override has no expiry (lifetime grant).
+ */
+export interface GiftAccessPayload {
+  name?: string | null;
+  plan: "pro" | "plus";
+  expiresAt?: string | null;
+  appUrl?: string | null;
+  locale?: EmailLocale;
+}
+
+/**
  * Kündigungsbestätigung für Pro- und Plus-Abonnements. Wird vom
  * `customer.subscription.deleted`-Handler im jeweiligen Stripe-Webhook
  * enqueued. `accessEndsAt` ist das `current_period_end` des Stripe-
@@ -234,7 +253,8 @@ export type EmailPayload =
   | BetaFreeYearWelcomePayload
   | PasswordResetPayload
   | TrialWelcomePayload
-  | SubscriptionCancelledPayload;
+  | SubscriptionCancelledPayload
+  | GiftAccessPayload;
 
 /**
  * Compile-time mapping from template name → payload shape. The
@@ -259,6 +279,7 @@ export interface PayloadByTemplate {
   "trial-welcome": TrialWelcomePayload;
   "pro-cancelled": SubscriptionCancelledPayload;
   "plus-cancelled": SubscriptionCancelledPayload;
+  "gift-access": GiftAccessPayload;
 }
 
 interface RenderedEmail {
@@ -380,6 +401,23 @@ function renderTemplate(
           plan,
           locale,
           p.accessEndsAt ?? null,
+          p.appUrl ?? null,
+          recipientEmail ?? null,
+        ),
+      };
+    }
+    case "gift-access": {
+      const p = payload as GiftAccessPayload;
+      const locale: EmailLocale = p.locale === "en" ? "en" : "de";
+      const plan: "pro" | "plus" = p.plan === "plus" ? "plus" : "pro";
+      return {
+        from: "Glev <info@glev.app>",
+        subject: giftAccessSubject(p.name ?? null, plan, p.expiresAt ?? null, locale),
+        html: giftAccessHtml(
+          p.name ?? null,
+          plan,
+          p.expiresAt ?? null,
+          locale,
           p.appUrl ?? null,
           recipientEmail ?? null,
         ),

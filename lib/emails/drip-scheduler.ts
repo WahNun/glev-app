@@ -142,6 +142,27 @@ export async function scheduleTrialEmails(
   }
 }
 
+/**
+ * Plant die drei Drip-Mails für einen Gift-User ein (Tag 7, 14, 30).
+ *
+ * Identisch zu `scheduleDripEmails`, aber explizit für admin-granted
+ * Zugänge — kein Trial-Reminder-Slot, kein Upgrade-Druck in den Mails.
+ * Verwendet denselben Drip-Cadence und dieselbe `ignoreDuplicates`-Semantik.
+ *
+ * @param email  Pflichtfeld.
+ * @param name   Vollständiger Name des Users aus dem Profil (kann null sein).
+ * @param tier   "pro" | "plus" — steuert den `tier`-Wert in der DB.
+ * @param locale Locale für die Drip-Templates (Fallback: "de").
+ */
+export async function scheduleGiftDripEmails(
+  email: string,
+  name: string | null | undefined,
+  tier: "pro" | "plus",
+  locale: EmailLocale = "de",
+): Promise<void> {
+  return scheduleDripEmails(email, name, tier, locale);
+}
+
 export async function scheduleDripEmails(
   email: string,
   name: string | null | undefined,

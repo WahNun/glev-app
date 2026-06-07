@@ -10,7 +10,7 @@ import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
 import { getStripe } from "@/lib/stripeServer";
 import { writeAuditLog, isSchemaMissingError } from "@/lib/admin/audit";
 import { enqueueEmail } from "@/lib/emails/outbox";
-import { scheduleDripEmails } from "@/lib/emails/drip-scheduler";
+import { scheduleDripEmails, scheduleGiftDripEmails } from "@/lib/emails/drip-scheduler";
 import type { EmailLocale } from "@/lib/emails/beta-welcome";
 
 /**
@@ -512,6 +512,48 @@ export async function setManualPlanAction(formData: FormData): Promise<SetPlanRe
       note: `${(before as { manual_plan_override?: string } | null)?.manual_plan_override ?? "—"} → ${plan}${autoGiftLabel ? ` (Gift-Label: ${autoGiftLabel})` : ""}`,
       adminToken,
     });
+
+  // Gift-Mail + Drip: nur für Pro/Plus-Overrides, best-effort / non-fatal
+  if (plan === "pro" || plan === "plus") {
+    try {
+      const [authUser, profile] = await Promise.all([
+        sb.auth.admin.getUserById(userId),
+        sb.from("profiles").select("full_name, language").eq("user_id", userId).maybeSingle(),
+      ]);
+      const userEmail = authUser.data?.user?.email ?? null;
+      const userName = (profile.data as { full_name?: string | null } | null)?.full_name ?? null;
+      const langRaw = (profile.data as { language?: string | null } | null)?.language ?? "de";
+      const locale: EmailLocale = langRaw === "en" ? "en" : "de";
+      const appUrl = process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "") ?? "https://glev.app";
+
+      if (userEmail) {
+        const dedupeKey = `gift-${userId}-${plan}-${expiresAt ?? "lifetime"}`;
+        await enqueueEmail({
+          recipient: userEmail,
+          template: "gift-access",
+          payload: {
+            name: userName,
+            plan,
+            expiresAt: expiresAt ?? null,
+            appUrl,
+            locale,
+          },
+          dedupeKey,
+        });
+        await scheduleGiftDripEmails(userEmail, userName, plan, locale);
+      } else {
+        // eslint-disable-next-line no-console
+        console.warn("[setManualPlanAction] gift email skipped — no email found for userId:", userId);
+      }
+    } catch (emailErr) {
+      // Non-fatal: log loudly but do not block the admin redirect
+      // eslint-disable-next-line no-console
+      console.error("[setManualPlanAction] gift email/drip failed (non-fatal):", {
+        userId, plan,
+        err: emailErr instanceof Error ? emailErr.message : String(emailErr),
+      });
+    }
+  }
 
     revalidateUserPaths(userId);
     return { ok: true, plan, ...(autoGiftLabel ? { label: autoGiftLabel } : {}) };
