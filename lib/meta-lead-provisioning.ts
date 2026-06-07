@@ -177,11 +177,12 @@ export async function provisionMetaLead(
 
   // Trial-Zeiten NICHT hier setzen — sie werden erst bei Aktivierung gesetzt
   // (POST /api/auth/activate-trial nach erfolgreichem verifyOtp).
+  // Für bestehende User (created=false) trial-Zeiten NICHT überschreiben —
+  // sie könnten bereits einen aktiven Trial oder ein Abo haben.
   await sb.from("profiles").upsert(
     {
       user_id: userId,
-      trial_start_at: null,
-      trial_end_at: null,
+      ...(created ? { trial_start_at: null, trial_end_at: null } : {}),
       signup_source: "meta_lead",
       ...(name ? { display_name: name } : {}),
     },

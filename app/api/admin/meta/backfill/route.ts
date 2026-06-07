@@ -154,7 +154,12 @@ export async function POST(req: Request) {
 
           let provisionResult = null;
           if (!mapped.is_test && mapped.email) {
-            provisionResult = await provisionMetaLead(mapped.email, mapped.full_name || null, "de");
+            provisionResult = await provisionMetaLead(
+              mapped.email,
+              mapped.full_name || null,
+              "de",
+              mapped.phone || null,
+            );
           }
 
           results.push({
