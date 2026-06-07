@@ -1,7 +1,7 @@
 "use client";
 import { fetchCgmHistory, invalidateCgmCache } from "@/lib/cgm/clientCache";
 import { pickCgmCurrentBase, injectCurrentPoint, guardCgmCurrentForward, type CgmPoint } from "@/lib/cgm/cgmDotHelpers";
-import { useTranslations } from "next-intl";
+import { useTranslations, useLocale } from "next-intl";
 
 import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import CgmFetchButton, { type CgmFetchResult } from "@/components/CgmFetchButton";
@@ -367,6 +367,7 @@ function HeroFront({
   flippable: boolean;
   showMealNodes: boolean;
 }) {
+  const locale = useLocale();
   const ok  = state.kind === "ok";
   const cgm = ok ? state.cgm : [];
   const fs  = ok ? state.fingersticks : [];
@@ -388,7 +389,7 @@ function HeroFront({
   const [heroRange, setHeroRange] = useState<TargetRange>(() => getTargetRange());
   useEffect(() => { fetchTargetRange().then(setHeroRange).catch(() => {}); }, []);
   const valueColor = current ? colorFor(current.v, heroRange.low, heroRange.high) : "var(--text-dim)";
-  const ageLabel = current ? formatAge(now - current.t) : null;
+  const ageLabel = current ? formatAge(now - current.t, locale) : null;
 
   // Trend delta is CGM-derived: fingersticks are too sparse to drive a
   // 15-min slope. Skipped while a FS override is active to avoid the
@@ -513,12 +514,16 @@ function HeroFront({
 }
 
 
-function formatAge(ms: number): string {
+function formatAge(ms: number, locale: string): string {
   const min = Math.floor(ms / 60000);
-  if (min < 1) return "just now";
-  if (min < 60) return `${min}m ago`;
-  const h = Math.floor(min / 60);
-  return `${h}h ago`;
+  if (locale === "en") {
+    if (min < 1) return "just now";
+    if (min < 60) return `${min}m ago`;
+    return `${Math.floor(min / 60)}h ago`;
+  }
+  if (min < 1) return "gerade eben";
+  if (min < 60) return `vor ${min}m`;
+  return `vor ${Math.floor(min / 60)}h`;
 }
 
 /* Compute the delta in mg/dL between the current reading and the reading
@@ -554,6 +559,7 @@ function computeDelta15m(
    `glucoseLineColor(last.v)`. */
 function RollingChart({ readings, showMealNodes }: { readings: ChartPoint[]; showMealNodes: boolean }) {
   const t = useTranslations("insights");
+  const locale = useLocale();
   // User-saved TIR band drives the green "in-range" shaded rectangle
   // overlay and the Y-axis hint at top/bottom of the band so the chart
   // reads in lock-step with the user's Settings choice rather than the
@@ -673,9 +679,9 @@ function RollingChart({ readings, showMealNodes }: { readings: ChartPoint[]; sho
       { t: now - h1 * 3600 * 1000, label: `-${h1}h` },
       { t: now - h2 * 3600 * 1000, label: `-${h2}h` },
       { t: now - h3 * 3600 * 1000, label: `-${h3}h` },
-      { t: now,                    label: "now"     },
+      { t: now,                    label: locale === "en" ? "now" : "jetzt" },
     ];
-  }, [winSpan, now]);
+  }, [winSpan, now, locale]);
 
   const path = visibleCgm.map((r, i) => `${i === 0 ? "M" : "L"}${toX(r.t).toFixed(1)},${toY(r.v).toFixed(1)}`).join(" ");
   const lastCgm = visibleCgm[visibleCgm.length - 1];
@@ -693,7 +699,7 @@ function RollingChart({ readings, showMealNodes }: { readings: ChartPoint[]; sho
   const allCgm = useMemo(() => readings.filter((r) => r.source === "cgm"), [readings]);
   const newestCgm = allCgm.length ? allCgm[allCgm.length - 1] : null;
   const isStale = allCgm.length > 0 && visibleCgm.length === 0 && newestCgm != null;
-  const staleAge = isStale && newestCgm ? formatAge(now - newestCgm.t) : null;
+  const staleAge = isStale && newestCgm ? formatAge(now - newestCgm.t, locale) : null;
 
   // Crosshair-snappable points (pixel space). Includes BOTH CGM and FS so
   // the user can hover/touch either kind of marker.
