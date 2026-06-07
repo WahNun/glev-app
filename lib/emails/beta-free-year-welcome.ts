@@ -186,7 +186,7 @@ function htmlEn(
     <p style="margin:16px 0 0;font-size:14px;color:#64748b;">— Lucas, founder of Glev</p>
   </td></tr>
   <tr><td style="padding:20px 40px;background:#fafafa;text-align:center;font-size:12px;color:#94a3b8;border-top:1px solid #f1f5f9;">
-    Glev · T1D insulin decision support · <a href="${baseUrl}" style="color:#94a3b8;">glev.app</a>
+    Glev · T1D management that listens · <a href="${baseUrl}" style="color:#94a3b8;">glev.app</a>
     ${unsubHtml}
   </td></tr>
 </table>

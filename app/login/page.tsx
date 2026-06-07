@@ -188,7 +188,7 @@ export default function LoginPage() {
         <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 14, marginBottom: 32 }}>
           <GlevLockup size={44} />
           <div style={{ fontSize: 11, color: "var(--text-faint)", letterSpacing: "0.12em" }}>
-            INSULIN DECISION SUPPORT
+            T1D MANAGEMENT THAT LISTENS
           </div>
         </div>
 

@@ -365,7 +365,7 @@ function Shell({ children }: { children: React.ReactNode }) {
         <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 14, marginBottom: 32 }}>
           <GlevLockup size={44} />
           <div style={{ fontSize: 11, color: "rgba(255,255,255,0.3)", letterSpacing: "0.12em" }}>
-            INSULIN DECISION SUPPORT
+            T1D MANAGEMENT THAT LISTENS
           </div>
         </div>
         <div style={{ background: SURFACE, borderRadius: 18, border: "1px solid rgba(255,255,255,0.07)", padding: 28 }}>

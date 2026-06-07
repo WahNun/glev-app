@@ -62,7 +62,7 @@ const UI_DE: UIStrings = {
 };
 
 const UI_EN: UIStrings = {
-  tagline: "Insulin Decision Support",
+  tagline: "T1D Management That Listens",
   recommendedBy: "Recommended by",
   cta: "Get started with Glev",
   ctaSub: "Free to sign up · No credit card",
