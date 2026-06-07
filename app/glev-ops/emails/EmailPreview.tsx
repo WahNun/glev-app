@@ -34,6 +34,7 @@ type Props = {
   email: string;
   locale: "de" | "en";
   campaign: string;
+  canWrite?: boolean;
 };
 
 const CAMPAIGNS = [
@@ -58,6 +59,7 @@ export default function EmailPreview({
   email,
   locale,
   campaign,
+  canWrite = true,
 }: Props) {
   const router = useRouter();
   const isSms = campaign === "sms";
@@ -327,7 +329,7 @@ export default function EmailPreview({
                     </div>
                   </div>
                   <div style={{ display: "flex", gap: 6, alignItems: "center", flexShrink: 0 }}>
-                    {selected.editableKey && (
+                    {selected.editableKey && canWrite && (
                       <button
                         type="button"
                         onClick={() => { setEditMode((v) => !v); setSaveState("idle"); }}

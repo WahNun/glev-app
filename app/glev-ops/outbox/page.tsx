@@ -1,5 +1,5 @@
 import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
-import { isAdminAuthed } from "@/lib/adminAuth";
+import { isAnyAuthed, getSessionRole } from "@/lib/adminAuth";
 import { loginAction } from "./actions";
 import OutboxDashboard from "./OutboxDashboard";
 import AdminLoginForm from "../_components/AdminLoginForm";
@@ -154,7 +154,7 @@ export default async function AdminOutboxPage({
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const params = await searchParams;
-  const authed = await isAdminAuthed();
+  const authed = await isAnyAuthed();
 
   const err = typeof params.err === "string" ? params.err : undefined;
   const statusFilter = parseStatusFilter(params.status);
@@ -164,6 +164,7 @@ export default async function AdminOutboxPage({
     return <AdminLoginForm action={loginAction} title="Mail-Outbox" error={loginErr} />;
   }
 
+  const role = await getSessionRole();
   const data = await loadOutboxData(statusFilter);
 
   return (
@@ -173,6 +174,7 @@ export default async function AdminOutboxPage({
       truncated={data.truncated}
       fetchErrors={data.fetchErrors}
       statusFilter={statusFilter}
+      canWrite={role === "admin"}
     />
   );
 }

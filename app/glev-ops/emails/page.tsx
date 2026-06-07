@@ -43,7 +43,7 @@ import {
 } from "@/lib/emails/meta-lead-reminder";
 import { giftAccessHtml, giftAccessSubject } from "@/lib/emails/gift-access";
 import { getAllTemplates } from "@/lib/messageTemplates";
-import { isAdminAuthed } from "@/lib/adminAuth";
+import { isAnyAuthed, getSessionRole } from "@/lib/adminAuth";
 import { loginAction } from "./actions";
 import AdminLoginForm from "../_components/AdminLoginForm";
 import EmailPreview, {
@@ -354,13 +354,15 @@ export default async function AdminEmailsPage({
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const sp = await searchParams;
-  const authed = await isAdminAuthed();
+  const authed = await isAnyAuthed();
 
   if (!authed) {
     const errParam = Array.isArray(sp.err) ? sp.err[0] : sp.err;
     const err = errParam === "bad" ? "Login fehlgeschlagen." : null;
     return <AdminLoginForm action={loginAction} title="Mail & SMS Preview" error={err} />;
   }
+
+  const role = await getSessionRole();
 
   const nameParam = Array.isArray(sp.name) ? sp.name[0] : sp.name;
   const emailParam = Array.isArray(sp.email) ? sp.email[0] : sp.email;
@@ -409,6 +411,7 @@ export default async function AdminEmailsPage({
         email={email}
         locale={locale}
         campaign={campaign}
+        canWrite={role === "admin"}
       />
     </main>
   );

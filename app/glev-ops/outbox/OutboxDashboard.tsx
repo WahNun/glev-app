@@ -10,6 +10,7 @@ interface Props {
   truncated: boolean;
   fetchErrors: string[];
   statusFilter: OutboxStatusFilter;
+  canWrite?: boolean;
 }
 
 const STATUS_LABELS: Record<OutboxStatusFilter, string> = {
@@ -130,6 +131,7 @@ export default function OutboxDashboard({
   truncated,
   fetchErrors,
   statusFilter,
+  canWrite = true,
 }: Props) {
   const router = useRouter();
   const pathname = usePathname() ?? "/glev-ops/outbox";
@@ -360,9 +362,9 @@ export default function OutboxDashboard({
                   <td style={{ ...tdStyle, fontSize: 12, color: "#6b7280", whiteSpace: "nowrap" }}>
                     {fmtDate(row.sent_at)}
                   </td>
-                  {hasDeadRows || statusFilter === "dead" ? (
+                  {(hasDeadRows || statusFilter === "dead") ? (
                     <td style={tdStyle}>
-                      {row.status === "dead" ? (
+                      {row.status === "dead" && canWrite ? (
                         <form action={retryDeadAction}>
                           <input type="hidden" name="id" value={row.id} />
                           <button type="submit" style={retryBtnStyle}>

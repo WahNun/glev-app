@@ -26,6 +26,8 @@ type Props = {
   searchLimit: number;
   listLimit: number;
   truncated: boolean;
+  /** Nur Admins dürfen Schreib-Aktionen ausführen (Sofort senden, Neu planen, Abbrechen). */
+  canWrite?: boolean;
   /**
    * Wir erstellen `now` einmal in der Server-Komponente und reichen es
    * als ISO-String runger. Damit ist die Status-Klassifikation pro
@@ -225,6 +227,7 @@ export default function DripDashboard({
   searchLimit,
   listLimit,
   truncated,
+  canWrite = true,
   nowIso,
   filters,
 }: Props) {
@@ -369,13 +372,13 @@ export default function DripDashboard({
                     ⓘ
                   </span>
                 </th>
-                <th style={thStyle}>Aktionen</th>
+                {canWrite && <th style={thStyle}>Aktionen</th>}
               </tr>
             </thead>
             <tbody>
               {rows.length === 0 ? (
                 <tr>
-                  <td colSpan={8} style={{ ...tdStyle, textAlign: "center", color: "#888" }}>
+                  <td colSpan={canWrite ? 8 : 7} style={{ ...tdStyle, textAlign: "center", color: "#888" }}>
                     {anyFilter ? "Keine Treffer." : "Keine Drip-Termine."}
                   </td>
                 </tr>
@@ -397,7 +400,7 @@ export default function DripDashboard({
                       <td style={{ ...tdStyle, whiteSpace: "normal", maxWidth: 280 }}>
                         <ErrorCell error={r.last_error} attemptCount={r.attempt_count} />
                       </td>
-                      <td style={tdStyle}>
+                      {canWrite && <td style={tdStyle}>
                         {!canAct ? (
                           <span style={{ color: "#888", fontSize: 13 }}>—</span>
                         ) : editing ? (
@@ -478,7 +481,7 @@ export default function DripDashboard({
                             </form>
                           </div>
                         )}
-                      </td>
+                      </td>}
                     </tr>
                   );
                 })

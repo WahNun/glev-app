@@ -4,7 +4,7 @@ import {
   type DripCounts,
   type DripScheduleRow,
 } from "@/lib/emails/drip-status";
-import { isAdminAuthed } from "@/lib/adminAuth";
+import { isAnyAuthed, getSessionRole } from "@/lib/adminAuth";
 import { loginAction } from "./actions";
 import DripDashboard from "./DripDashboard";
 import AdminLoginForm from "../_components/AdminLoginForm";
@@ -291,13 +291,15 @@ export default async function AdminDripPage({
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const sp = await searchParams;
-  const authed = await isAdminAuthed();
+  const authed = await isAnyAuthed();
 
   if (!authed) {
     const errParam = Array.isArray(sp.err) ? sp.err[0] : sp.err;
     const err = errParam === "bad" ? "Login fehlgeschlagen." : null;
     return <AdminLoginForm action={loginAction} title="Drip-Pipeline" error={err} />;
   }
+
+  const role = await getSessionRole();
   const qParam = Array.isArray(sp.q) ? sp.q[0] : sp.q;
   const statusParam = Array.isArray(sp.status) ? sp.status[0] : sp.status;
   const tierParam = Array.isArray(sp.tier) ? sp.tier[0] : sp.tier;
@@ -337,6 +339,7 @@ export default async function AdminDripPage({
         searchLimit={SEARCH_LIMIT}
         listLimit={LIST_LIMIT}
         truncated={truncated}
+        canWrite={role === "admin"}
         nowIso={now.toISOString()}
         filters={filters}
       />
