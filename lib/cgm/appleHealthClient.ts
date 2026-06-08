@@ -267,7 +267,14 @@ export async function requestAuthorization(): Promise<{ ok: boolean; error?: str
     try {
       const result = await Promise.race([
         plugin.requestAuthorization({
-          read: ["bloodGlucose", "stepCount", "activeEnergyBurned", "workouts"],
+          // Capgo HealthDataType strings (NOT raw HealthKit identifiers):
+          //   stepCount → "steps"
+          //   activeEnergyBurned → "calories"
+          // Using the HealthKit identifier verbatim throws
+          // "unsupported health data type ..." in parseTypesWithWorkouts
+          // BEFORE healthStore.requestAuthorization is called, so iOS
+          // never shows the permission dialog.
+          read: ["bloodGlucose", "steps", "calories", "workouts"],
         }),
         timeoutPromise,
       ]);
@@ -342,7 +349,7 @@ export async function syncRecentSteps(): Promise<StepsSyncResult> {
   let samples: PluginSample[] = [];
   try {
     const res = await plugin.readSamples({
-      dataType: "stepCount",
+      dataType: "steps",
       startDate,
       endDate,
       limit: 5000,
@@ -897,7 +904,7 @@ export async function backfillSteps(opts?: {
     let samples: PluginSample[] = [];
     try {
       const res = await plugin.readSamples({
-        dataType: "stepCount",
+        dataType: "steps",
         startDate: chunkStartIso,
         endDate: chunkEndIso,
         limit: STEPS_BACKFILL_READ_LIMIT,
