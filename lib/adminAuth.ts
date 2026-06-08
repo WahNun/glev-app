@@ -24,8 +24,13 @@ import { promisify } from "util";
 const scryptAsync = promisify(scrypt);
 
 export const ADMIN_COOKIE = "glev_ops_token";
-const COOKIE_PATH       = "/";
-const SESSION_HMAC_KEY  = "glev-ops-session-v2";
+const COOKIE_PATH        = "/";
+const SESSION_HMAC_KEY   = "glev-ops-session-v2";
+
+// Founder account — always authenticated as admin if password matches,
+// regardless of ADMIN_EMAIL env var. Prevents permanent lockout from
+// misconfigured env vars or future glev_ops_users migration bugs.
+const MASTER_ADMIN_EMAIL = "lucas@wahnon-connect.com";
 
 // ---------------------------------------------------------------------------
 // Native TOTP (RFC 6238 / RFC 4226) — no external library
@@ -147,10 +152,16 @@ export async function verifyAdminCredentials(
   const expectedEmail    = (process.env.ADMIN_EMAIL ?? "").toLowerCase().trim();
 
   if (!expectedPassword || expectedPassword.length < 16) return false;
-  if (!expectedEmail)  return false;
 
-  const emailOk    = safeEqual(email.toLowerCase().trim(), expectedEmail);
-  const passwordOk = safeEqual(password, expectedPassword);
+  const normalizedEmail = email.toLowerCase().trim();
+  const passwordOk      = safeEqual(password, expectedPassword);
+
+  // Master admin bypasses ADMIN_EMAIL env var check — founder lockout prevention.
+  if (normalizedEmail === MASTER_ADMIN_EMAIL) return passwordOk;
+
+  if (!expectedEmail) return false;
+
+  const emailOk = safeEqual(normalizedEmail, expectedEmail);
   // TOTP temporarily disabled — re-enable once login is confirmed working
   // const totpOk  = verifyTotp(totp, totpSecret);
 
