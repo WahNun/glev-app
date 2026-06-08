@@ -7,6 +7,7 @@ import InfluencePrepChip from "@/components/InfluencePrepChip";
 import type { NutritionSource } from "@/lib/nutrition/types";
 import type { ParsedFood } from "@/lib/meals";
 import { useVoiceIntents } from "@/hooks/useVoiceIntents";
+import { MIC_PERM_DENIED } from "@/hooks/useVoxtral";
 import { useTTS } from "@/hooks/useTTS";
 import IntentConfirmChip, { intentLabel } from "@/components/IntentConfirmChip";
 import GlevLogo from "@/components/GlevLogo";
@@ -66,6 +67,8 @@ const COPY = {
     mic_stop:              "Aufnahme stoppen",
     mic_start:             "Spracheingabe starten",
     mic_rate_limit:        (sec: number) => `Bitte ${sec} Sek. warten`,
+    mic_perm_denied:       "Glev braucht Mikrofon-Zugriff. Bitte in den Einstellungen erlauben und nochmal versuchen.",
+    mic_perm_retry:        "Nochmal versuchen",
     placeholder_listening: "Spreche …",
     placeholder_idle:      "Frag Glev …",
     send:                  "Senden",
@@ -115,6 +118,8 @@ const COPY = {
     mic_stop:              "Stop recording",
     mic_start:             "Start voice input",
     mic_rate_limit:        (sec: number) => `Wait ${sec} sec`,
+    mic_perm_denied:       "Glev needs microphone access. Please allow it in settings and try again.",
+    mic_perm_retry:        "Try again",
     placeholder_listening: "Listening …",
     placeholder_idle:      "Ask Glev …",
     send:                  "Send",
@@ -1336,9 +1341,10 @@ export default function GlevAIChatSheet({
     );
   }, [tts.speaking]);
 
-  // Auto-dismiss STT error after 6 s so it never stays stuck indefinitely.
+  // Auto-dismiss STT error after 6 s. Permission-denied errors stay visible
+  // until the user retries — they require an explicit action (go to settings).
   useEffect(() => {
-    if (!sttError) return;
+    if (!sttError || sttError === MIC_PERM_DENIED) return;
     const timer = window.setTimeout(() => setSttError(null), 6000);
     return () => window.clearTimeout(timer);
   }, [sttError]);
@@ -2046,8 +2052,46 @@ export default function GlevAIChatSheet({
           </div>
         )}
 
-        {/* STT error toast — shown briefly when transcription fails */}
-        {sttError && (
+        {/* STT error — permission-denied gets a persistent actionable banner;
+            all other errors get the brief auto-dismissing red toast */}
+        {sttError === MIC_PERM_DENIED ? (
+          <div
+            data-testid="stt-error-banner"
+            style={{
+              flexShrink: 0,
+              padding: "8px 16px 10px",
+              background: "rgba(139,92,246,0.08)",
+              borderTop: "1px solid rgba(139,92,246,0.2)",
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              gap: 6,
+            }}
+          >
+            <span style={{ fontSize: 11, color: "var(--text-dim)", textAlign: "center", lineHeight: 1.4 }}>
+              {t.mic_perm_denied}
+            </span>
+            <button
+              type="button"
+              onClick={() => {
+                setSttError(null);
+                void startListening();
+              }}
+              style={{
+                fontSize: 11,
+                fontWeight: 600,
+                color: ACCENT,
+                background: "none",
+                border: `1px solid ${ACCENT}`,
+                borderRadius: 12,
+                padding: "3px 12px",
+                cursor: "pointer",
+              }}
+            >
+              {t.mic_perm_retry}
+            </button>
+          </div>
+        ) : sttError ? (
           <div
             data-testid="stt-error-banner"
             style={{
@@ -2061,7 +2105,7 @@ export default function GlevAIChatSheet({
           >
             {sttError}
           </div>
-        )}
+        ) : null}
 
         {/* Disclaimer footer — below input row, always visible */}
         <div

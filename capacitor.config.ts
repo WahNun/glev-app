@@ -16,10 +16,48 @@ import type { CapacitorConfig } from "@capacitor/cli";
  * Native build prerequisites are documented in `replit.md` → "Native
  * (Capacitor)".
  */
-const config: CapacitorConfig = {
+// D-032 (siehe DECISIONS.md):
+//
+// iOS-Plugins werden zur Laufzeit von der CapacitorBridge.swift aus der
+// Top-Level-`packageClassList` in `ios/App/App/capacitor.config.json`
+// gelesen. Fehlt ein Plugin in der Liste, registriert die Bridge es
+// nicht — Aufrufe scheitern stumm:
+//   - `HealthPlugin` → Apple-Health-Permission-Dialog erscheint nie,
+//     Glev fehlt komplett in iPhone Settings.
+//   - `GlevCriticalAlertsPlugin` → System-Toggle für kritische Alarme
+//     erscheint nicht in iOS Settings → Glev → Benachrichtigungen.
+//   - `PushNotifications` etc. → registrationError statt token.
+//
+// WICHTIG / FALLE: `cap sync ios` **generiert die `packageClassList` in
+// der JSON jedes Mal komplett neu** (siehe
+// `node_modules/@capacitor/cli/dist/util/iosplugin.js` →
+// `generateIOSPackageJSON`). Es scannt dabei nur externe SPM-Plugins in
+// `node_modules/@capacitor/*/ios/` per Regex auf `@objc(...)` /
+// `CAP_PLUGIN(...)`. Der Eintrag `packageClassList` UNTEN in dieser
+// TS-Config wird vom CLI **ignoriert** — er steht nur hier als
+// Source-of-Truth / Doku für Menschen.
+//
+// Konsequenz: lokal definierte Plugins (`App/GlevCriticalAlertsPlugin
+// .swift`) werden vom Scan NICHT gefunden und beim Sync gestrippt.
+// → Nach jedem `cap sync ios` muss die Liste in
+//   `ios/App/App/capacitor.config.json` manuell wieder vervollständigt
+//   werden. Quelle der Wahrheit ist die Liste hier unten.
+//
+// `CapacitorConfig`-Type kennt das iOS-spezifische Feld offiziell nicht,
+// daher der Inline-Cast.
+const config: CapacitorConfig & { packageClassList: string[] } = {
   appId: "app.glev",
   appName: "Glev",
   webDir: "www",
+  packageClassList: [
+    "HapticsPlugin",
+    "LocalNotificationsPlugin",
+    "PushNotificationsPlugin",
+    "ScreenOrientationPlugin",
+    "SharePlugin",
+    "HealthPlugin",
+    "GlevCriticalAlertsPlugin",
+  ],
   server: {
     url: "https://glev.app/dashboard",
     cleartext: false,

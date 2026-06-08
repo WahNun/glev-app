@@ -20,6 +20,7 @@
 		A0D298652FD4E27100E1C17B /* glev_low_alarm.wav in Resources */ = {isa = PBXBuildFile; fileRef = A0D298642FD4E27100E1C17B /* glev_low_alarm.wav */; };
 		A0D298662FD4E27100E1C17B /* glev_elevated.wav in Resources */ = {isa = PBXBuildFile; fileRef = A0D298622FD4E27100E1C17B /* glev_elevated.wav */; };
 		A0D298672FD4E27100E1C17B /* glev_high_alarm.wav in Resources */ = {isa = PBXBuildFile; fileRef = A0D298632FD4E27100E1C17B /* glev_high_alarm.wav */; };
+		A0D298692FD63C9300E1C17B /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = A0D298682FD63C9300E1C17B /* PrivacyInfo.xcprivacy */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -38,6 +39,7 @@
 		A0D298622FD4E27100E1C17B /* glev_elevated.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = glev_elevated.wav; sourceTree = "<group>"; };
 		A0D298632FD4E27100E1C17B /* glev_high_alarm.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = glev_high_alarm.wav; sourceTree = "<group>"; };
 		A0D298642FD4E27100E1C17B /* glev_low_alarm.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = glev_low_alarm.wav; sourceTree = "<group>"; };
+		A0D298682FD63C9300E1C17B /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -55,6 +57,7 @@
 		504EC2FB1FED79650016851F = {
 			isa = PBXGroup;
 			children = (
+				A0D298682FD63C9300E1C17B /* PrivacyInfo.xcprivacy */,
 				A0D298602FD3B51900E1C17B /* GlevCriticalAlertsPlugin.swift */,
 				958DCC722DB07C7200EA8C5F /* debug.xcconfig */,
 				504EC3061FED79650016851F /* App */,
@@ -166,6 +169,7 @@
 				2FAD9763203C412B000D30F8 /* config.xml in Resources */,
 				A0D298652FD4E27100E1C17B /* glev_low_alarm.wav in Resources */,
 				A0D298662FD4E27100E1C17B /* glev_elevated.wav in Resources */,
+				A0D298692FD63C9300E1C17B /* PrivacyInfo.xcprivacy in Resources */,
 				A0D298672FD4E27100E1C17B /* glev_high_alarm.wav in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

@@ -28,6 +28,129 @@ type SheetKey = "notifications" | "cycleLogging" | "language" | "timeFormat" | "
 
 const PUSH_DEBUG_EMAIL = "lucas@wahnon-connect.com";
 
+function HealthDebugSection() {
+  const [step, setStep] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [isnative, setIsnative] = useState<string | null>(null);
+  const [pluginLoaded, setPluginLoaded] = useState<string | null>(null);
+  const [pluginSource, setPluginSource] = useState<string | null>(null);
+  const [isPluginAvailable, setIsPluginAvailable] = useState<string | null>(null);
+  const [pluginMethods, setPluginMethods] = useState<string | null>(null);
+  const [authResult, setAuthResult] = useState<string | null>(null);
+  const [lastAttemptAt, setLastAttemptAt] = useState<string | null>(null);
+  const [platform, setPlatform] = useState<string | null>(null);
+  const [retrying, setRetrying] = useState(false);
+  const [elapsedSecs, setElapsedSecs] = useState(0);
+  const [isMasterUser, setIsMasterUser] = useState(false);
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const tickRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const refresh = () => {
+    setStep(localStorage.getItem("glev_health_step"));
+    setError(localStorage.getItem("glev_health_error"));
+    setIsnative(localStorage.getItem("glev_health_isnative"));
+    setPluginLoaded(localStorage.getItem("glev_health_plugin_loaded"));
+    setPluginSource(localStorage.getItem("glev_health_plugin_source"));
+    setIsPluginAvailable(localStorage.getItem("glev_health_is_plugin_available"));
+    setPluginMethods(localStorage.getItem("glev_health_plugin_methods"));
+    setAuthResult(localStorage.getItem("glev_health_auth_result"));
+    setLastAttemptAt(localStorage.getItem("glev_health_last_attempt_at"));
+  };
+  const stop = () => {
+    if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
+    if (tickRef.current) { clearInterval(tickRef.current); tickRef.current = null; }
+  };
+  useEffect(() => {
+    refresh();
+    const w = window as unknown as { Capacitor?: { getPlatform?: () => string } };
+    setPlatform(w.Capacitor?.getPlatform?.() ?? "web");
+    import("@/lib/supabase").then(({ supabase }) => {
+      supabase?.auth.getUser().then(({ data }) => {
+        setIsMasterUser(data.user?.email === PUSH_DEBUG_EMAIL);
+      });
+    });
+    return () => { stop(); };
+  }, []);
+
+  const handleRetry = async () => {
+    stop();
+    setRetrying(true);
+    setElapsedSecs(0);
+    const { resetHealthDebug, requestAuthorization } = await import(
+      "@/lib/cgm/appleHealthClient"
+    );
+    resetHealthDebug();
+    refresh();
+    // Fire-and-forget so the UI keeps polling while the native dialog
+    // (hopefully) appears. We don't await — the result lands in
+    // localStorage via the instrumented requestAuthorization itself.
+    void requestAuthorization().then(() => {
+      refresh();
+      stop();
+      setRetrying(false);
+    });
+    pollRef.current = setInterval(() => {
+      refresh();
+      const s = localStorage.getItem("glev_health_step");
+      // Stop polling once we hit a terminal step (resolved / error / timeout / denied).
+      if (s === "request_resolved" || s === "timeout" || s === "caught" ||
+          s === "plugin_missing" || s === "not_native" || s === "load_plugin_timeout") {
+        stop();
+        setRetrying(false);
+      }
+    }, 500);
+    tickRef.current = setInterval(() => setElapsedSecs((n) => n + 1), 1000);
+  };
+
+  if (!isMasterUser) return null;
+  const terminalOk = step === "request_resolved";
+  const terminalErr = step === "timeout" || step === "caught" ||
+    step === "plugin_missing" || step === "not_native" ||
+    step === "load_plugin_timeout";
+  const bg = terminalOk ? "rgba(80,255,120,0.08)"
+    : terminalErr ? "rgba(255,80,80,0.08)"
+    : "rgba(120,120,120,0.08)";
+  const border = terminalOk ? "rgba(80,255,120,0.3)"
+    : terminalErr ? "rgba(255,80,80,0.3)"
+    : "rgba(120,120,120,0.2)";
+
+  return (
+    <div style={{ margin: "16px 0", padding: "12px 16px", borderRadius: 12, background: bg, border: `1px solid ${border}`, fontSize: 12, color: "var(--fg)", wordBreak: "break-all" }}>
+      <div style={{ fontWeight: 600, marginBottom: 8 }}>Apple-Health-Debug</div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+        <div>🖥 Platform: <strong>{platform ?? "?"}</strong> {isnative === "true" ? "(native ✓)" : isnative === "false" ? "(non-native)" : "(?)"}</div>
+        <div>🔍 Capacitor.isPluginAvailable(&quot;Health&quot;): <strong>{isPluginAvailable ?? "—"}</strong></div>
+        <div>📦 Plugin loaded: <strong>{pluginLoaded ?? "—"}</strong> {pluginSource && <span style={{ color: "var(--text-faint)" }}>via {pluginSource}</span>}</div>
+        {pluginMethods && <div>🧩 Methods: <span style={{ color: "var(--text-faint)" }}>{pluginMethods}</span></div>}
+        <div>📍 Letzter Schritt: <strong>{step ?? "—"}</strong>{retrying && elapsedSecs > 0 && <span style={{ color: "var(--text-faint)", marginLeft: 6 }}>({elapsedSecs}s)</span>}</div>
+        {authResult && <div>🔐 Result: <span style={{ color: "var(--text-faint)" }}>{authResult.slice(0, 120)}{authResult.length > 120 ? "…" : ""}</span></div>}
+        {lastAttemptAt && <div>🕒 Letzter Versuch: <span style={{ color: "var(--text-faint)" }}>{lastAttemptAt.replace("T", " ").slice(0, 19)}Z</span></div>}
+        {error && <div style={{ color: "var(--red, #f87171)", marginTop: 2 }}>❌ {error}</div>}
+      </div>
+      {step === "plugin_missing" && (
+        <div style={{ marginTop: 8, padding: "8px 10px", borderRadius: 8, background: "rgba(255,80,80,0.10)", fontSize: 11, lineHeight: 1.4 }}>
+          ⚠️ <strong>@capgo/capacitor-health</strong> wurde nicht ins Web-Bundle bzw. nicht in den Native-Bridge geladen. Prüfe: (1) Package in package.json, (2) HealthPlugin in capacitor.config.json packageClassList, (3) CapgoCapacitorHealth in CapApp-SPM/Package.swift, (4) Archive nach letztem cap sync gebaut.
+        </div>
+      )}
+      {step === "load_plugin_timeout" && (
+        <div style={{ marginTop: 8, padding: "8px 10px", borderRadius: 8, background: "rgba(255,80,80,0.10)", fontSize: 11, lineHeight: 1.4 }}>
+          ⚠️ <strong>Dynamic import von @capgo/capacitor-health hängt &gt;15 s.</strong> Möglich: (a) Vercel-Build hat den Webpack-Chunk nicht ausgespielt (auf Build-Output prüfen), (b) Capgo registerPlugin() wartet auf Capacitor-Bridge-Bootstrap der im WKWebView nie kommt → in iOS-Settings das App-Cache leeren oder App vollständig deinstallieren + reinstallieren, (c) NEXT_PUBLIC_*-env-Var fehlt im Vercel-Build.
+        </div>
+      )}
+      {step === "timeout" && (
+        <div style={{ marginTop: 8, padding: "8px 10px", borderRadius: 8, background: "rgba(255,180,0,0.10)", border: "1px solid rgba(255,180,0,0.3)", fontSize: 11, lineHeight: 1.5 }}>
+          ⏳ <strong>requestAuthorization() hat nach 30 s nicht reagiert.</strong> Native HealthKit-Dialog ist nie erschienen oder die JS-Bridge erreicht den nativen Plugin-Code nicht. Wahrscheinlichste Ursachen: (a) HealthPlugin im Bridge nicht registriert → JS landet im Web-Stub der nie resolved, (b) iOS hat einen verwaisten Modal-State → iPhone neu starten, (c) App vollständig löschen + neu installieren.
+        </div>
+      )}
+      <div style={{ marginTop: 10, display: "flex", gap: 8 }}>
+        <button onClick={() => void handleRetry()} disabled={retrying} style={{ padding: "6px 12px", borderRadius: 8, border: "none", background: "var(--accent)", color: "#fff", fontSize: 12, cursor: retrying ? "default" : "pointer", opacity: retrying ? 0.6 : 1 }}>
+          {retrying ? `Warte… (${elapsedSecs}s)` : "🏥 Health-Permission neu anfragen"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function PushDebugSection() {
   const [token, setToken] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -431,6 +554,8 @@ export default function AppSettingsPage() {
       </SettingsSection>
 
       <PushDebugSection />
+
+      <HealthDebugSection />
 
       <BottomSheet open={openSheet !== null} onClose={closeSheet} title={active?.title} footer={active?.footer}>
         {active?.body}
