@@ -205,7 +205,35 @@ export async function requestAuthorization(): Promise<{ ok: boolean; error?: str
   }
   try {
     healthDebug("step", "load_plugin");
-    const plugin = await loadPlugin();
+    // Race the dynamic import against a 15s timeout. The Capgo plugin's
+    // index.js calls `registerPlugin(...)` at module top-level which on
+    // iOS WKWebView can hang indefinitely if the Capacitor JS-bridge
+    // bootstrap raced with our `import()`. Without the race the whole
+    // requestAuthorization call gets stuck before even reaching the
+    // native side, and the UI debug section would show "load_plugin"
+    // forever (Lucas observed >55 s).
+    let loadTimer: ReturnType<typeof setTimeout> | undefined;
+    const loadTimeoutPromise = new Promise<null>((resolve) => {
+      loadTimer = setTimeout(() => resolve(null), 15_000);
+    });
+    let pluginLoadTimedOut = false;
+    const pluginOrNull = await Promise.race([
+      loadPlugin(),
+      loadTimeoutPromise.then((v) => {
+        pluginLoadTimedOut = true;
+        return v;
+      }),
+    ]);
+    if (loadTimer) clearTimeout(loadTimer);
+    const plugin = pluginOrNull;
+    if (pluginLoadTimedOut) {
+      healthDebug("step", "load_plugin_timeout");
+      healthDebug(
+        "error",
+        "dynamic import('@capgo/capacitor-health') did not settle within 15s",
+      );
+      return { ok: false, error: "load-plugin-timeout" };
+    }
     healthDebug("plugin_loaded", plugin ? "true" : "false");
     if (!plugin) {
       healthDebug("step", "plugin_missing");

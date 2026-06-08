@@ -90,7 +90,7 @@ function HealthDebugSection() {
       const s = localStorage.getItem("glev_health_step");
       // Stop polling once we hit a terminal step (resolved / error / timeout / denied).
       if (s === "request_resolved" || s === "timeout" || s === "caught" ||
-          s === "plugin_missing" || s === "not_native") {
+          s === "plugin_missing" || s === "not_native" || s === "load_plugin_timeout") {
         stop();
         setRetrying(false);
       }
@@ -101,7 +101,8 @@ function HealthDebugSection() {
   if (!isMasterUser) return null;
   const terminalOk = step === "request_resolved";
   const terminalErr = step === "timeout" || step === "caught" ||
-    step === "plugin_missing" || step === "not_native";
+    step === "plugin_missing" || step === "not_native" ||
+    step === "load_plugin_timeout";
   const bg = terminalOk ? "rgba(80,255,120,0.08)"
     : terminalErr ? "rgba(255,80,80,0.08)"
     : "rgba(120,120,120,0.08)";
@@ -124,6 +125,11 @@ function HealthDebugSection() {
       {step === "plugin_missing" && (
         <div style={{ marginTop: 8, padding: "8px 10px", borderRadius: 8, background: "rgba(255,80,80,0.10)", fontSize: 11, lineHeight: 1.4 }}>
           ⚠️ <strong>@capgo/capacitor-health</strong> wurde nicht ins Web-Bundle bzw. nicht in den Native-Bridge geladen. Prüfe: (1) Package in package.json, (2) HealthPlugin in capacitor.config.json packageClassList, (3) CapgoCapacitorHealth in CapApp-SPM/Package.swift, (4) Archive nach letztem cap sync gebaut.
+        </div>
+      )}
+      {step === "load_plugin_timeout" && (
+        <div style={{ marginTop: 8, padding: "8px 10px", borderRadius: 8, background: "rgba(255,80,80,0.10)", fontSize: 11, lineHeight: 1.4 }}>
+          ⚠️ <strong>Dynamic import von @capgo/capacitor-health hängt &gt;15 s.</strong> Möglich: (a) Vercel-Build hat den Webpack-Chunk nicht ausgespielt (auf Build-Output prüfen), (b) Capgo registerPlugin() wartet auf Capacitor-Bridge-Bootstrap der im WKWebView nie kommt → in iOS-Settings das App-Cache leeren oder App vollständig deinstallieren + reinstallieren, (c) NEXT_PUBLIC_*-env-Var fehlt im Vercel-Build.
         </div>
       )}
       {step === "timeout" && (
