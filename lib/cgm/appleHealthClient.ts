@@ -48,6 +48,59 @@ const FIRST_SYNC_HOURS = 24;
 const INCREMENTAL_SYNC_HOURS = 3;
 const FETCH_TIMEOUT_MS = 15_000;
 
+// Hard timeout for the native HealthKit permission dialog round-trip.
+// iOS sometimes never resolves the request (e.g. plugin not registered
+// in the bridge → web-stub returns undefined-never-resolves, or HKHealthStore
+// gets stuck pre-dialog). Without this guard the connect button stays
+// in "Connecting…" state forever. 30 s is generous — a healthy native
+// call resolves in <1 s once the user taps Allow/Deny.
+const HEALTH_AUTH_TIMEOUT_MS = 30_000;
+
+/**
+ * Debug-instrumentation. Writes step / error / availability values to
+ * localStorage so the HealthDebugSection in Settings → App can render
+ * exactly where the chain breaks. Mirrors the pattern in
+ * lib/pushNotifications.ts. Silently no-ops outside the browser.
+ *
+ * Keys:
+ *   glev_health_step              — last reached step ("begin", "plugin_loaded", "request_call", "request_resolved", "timeout", "caught", ...)
+ *   glev_health_error             — last error message
+ *   glev_health_isnative          — "true" | "false"
+ *   glev_health_plugin_loaded     — "true" | "false"
+ *   glev_health_plugin_methods    — comma-joined keys on the plugin object
+ *   glev_health_auth_result       — last requestAuthorization payload (JSON, truncated)
+ *   glev_health_last_attempt_at   — ISO timestamp of last attempt
+ */
+function healthDebug(key: string, value: string): void {
+  try {
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(`glev_health_${key}`, value);
+    }
+  } catch {
+    /* non-fatal */
+  }
+}
+
+/** Resets the debug keys so a fresh attempt starts with a clean slate. */
+export function resetHealthDebug(): void {
+  if (typeof window === "undefined") return;
+  for (const k of [
+    "step",
+    "error",
+    "isnative",
+    "plugin_loaded",
+    "plugin_methods",
+    "auth_result",
+    "last_attempt_at",
+  ]) {
+    try {
+      window.localStorage.removeItem(`glev_health_${k}`);
+    } catch {
+      /* non-fatal */
+    }
+  }
+}
+
 export interface SyncResult {
   ok: boolean;
   reason?:
@@ -142,22 +195,69 @@ export async function isNative(): Promise<boolean> {
  * returning empty as the real signal.
  */
 export async function requestAuthorization(): Promise<{ ok: boolean; error?: string }> {
-  if (!(await isNative())) return { ok: false, error: "not-native" };
+  healthDebug("step", "begin");
+  healthDebug("last_attempt_at", new Date().toISOString());
+  const native = await isNative();
+  healthDebug("isnative", native ? "true" : "false");
+  if (!native) {
+    healthDebug("step", "not_native");
+    return { ok: false, error: "not-native" };
+  }
   try {
+    healthDebug("step", "load_plugin");
     const plugin = await loadPlugin();
-    if (!plugin) return { ok: false, error: "plugin-missing" };
+    healthDebug("plugin_loaded", plugin ? "true" : "false");
+    if (!plugin) {
+      healthDebug("step", "plugin_missing");
+      healthDebug("error", "import @capgo/capacitor-health returned no Health export");
+      return { ok: false, error: "plugin-missing" };
+    }
+    // Enumerate the plugin object so we can spot a web-stub (no
+    // requestAuthorization method) vs. the real native binding.
+    try {
+      const methods = Object.keys(plugin as unknown as Record<string, unknown>)
+        .filter((k) => typeof (plugin as unknown as Record<string, unknown>)[k] === "function")
+        .join(",");
+      healthDebug("plugin_methods", methods || "(none)");
+    } catch {
+      /* non-fatal */
+    }
     // Task #183: also request stepCount + activeEnergyBurned so the
     // engine's "daily activity" context signal can read them without a
     // second permission round-trip. iOS only prompts once per install,
     // so bundling the asks is strictly better UX than two prompts.
     // Also request `workouts` so syncRecentWorkouts() can read
     // HKWorkout sessions without a second permission round-trip.
-    await plugin.requestAuthorization({
-      read: ["bloodGlucose", "stepCount", "activeEnergyBurned", "workouts"],
+    healthDebug("step", "request_call");
+    // Hard-cap the native call. If the plugin is not really bridged the
+    // returned thenable will never settle — without the race the connect
+    // button stays disabled forever and the user thinks the app froze.
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      timer = setTimeout(() => reject(new Error("timeout")), HEALTH_AUTH_TIMEOUT_MS);
     });
-    return { ok: true };
+    try {
+      const result = await Promise.race([
+        plugin.requestAuthorization({
+          read: ["bloodGlucose", "stepCount", "activeEnergyBurned", "workouts"],
+        }),
+        timeoutPromise,
+      ]);
+      healthDebug("step", "request_resolved");
+      try {
+        healthDebug("auth_result", JSON.stringify(result).slice(0, 300));
+      } catch {
+        healthDebug("auth_result", "(unserialisable)");
+      }
+      return { ok: true };
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "unknown" };
+    const msg = e instanceof Error ? e.message : "unknown";
+    healthDebug("step", msg === "timeout" ? "timeout" : "caught");
+    healthDebug("error", msg);
+    return { ok: false, error: msg };
   }
 }
 
