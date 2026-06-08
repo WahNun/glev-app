@@ -391,6 +391,10 @@ export default function LoginPage() {
           </Link>
         </div>
 
+        <div style={{ textAlign: "center", marginTop: 14, fontSize: 10, color: "var(--text-ghost)", letterSpacing: "0.12em" }}>
+          GLEV — T1D MANAGEMENT THAT LISTENS
+        </div>
+
       </div>
     </main>
   );
