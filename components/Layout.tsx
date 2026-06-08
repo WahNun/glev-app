@@ -1410,7 +1410,7 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
 // Reads the latest cached CGM glucose timestamp from /api/cgm/glucose (never
 // calls upstream CGM services directly). Polls every 60 s. Returns null when
 // no CGM source is configured so the pill stays hidden for non-CGM users.
-type CgmPillStatus = "live" | "connecting" | "delayed" | "offline";
+type CgmPillStatus = "live" | "connecting" | "delayed" | "offline" | "paused";
 
 function useCgmPillStatus(source: string | null): CgmPillStatus | null {
   const [ts, setTs] = useState<string | null | undefined>(undefined);
@@ -1450,6 +1450,7 @@ function CgmStatusPill({ source, locale: loc }: { source: string | null; locale:
     connecting: { dot: "#f59e0b", label: loc === "en" ? "CONNECTING" : "VERBINDET" },
     delayed:    { dot: "#fb923c", label: loc === "en" ? "DELAYED"    : "VERSPÄTET" },
     offline:    { dot: "#ef4444", label: loc === "en" ? "OFFLINE"    : "OFFLINE"   },
+    paused:     { dot: "#9ca3af", label: loc === "en" ? "PAUSED"     : "PAUSIERT"  },
   };
   const { dot, label } = cfg[status];
 
@@ -1510,6 +1511,7 @@ function MobileGlevFab({
         overflow: "visible",
         pointerEvents: "none",
         userSelect: "none",
+        transform: "translateY(-12px)",
       }}
     >
       {/* Outer icon slot: 22×22 — positioning anchor for the Glev AI
@@ -1563,20 +1565,16 @@ function MobileGlevFab({
             position: "absolute",
             left: "50%",
             top: "50%",
-            transform: "translate(-50%, calc(-50% - 17px))",
+            transform: "translate(-50%, calc(-50% - 5px))",
             pointerEvents: "none",
             opacity: 1,
+            borderRadius: "50%",
+            boxShadow: "0 0 24px rgba(16, 185, 129, 0.15), 0 8px 24px rgba(0, 0, 0, 0.4)",
           }}
         >
           <GlevAIButton onPress={() => {}} isListening={recording} isSpeaking={speaking} />
         </span>
       </span>
-      <span
-        style={{
-          lineHeight: 1.1, whiteSpace: "nowrap",
-          overflow: "hidden", textOverflow: "ellipsis", maxWidth: "100%",
-        }}
-      >{label}</span>
     </div>
   );
 }
@@ -1710,7 +1708,7 @@ function MobileTab({
         background: "rgba(0,0,0,0.001)",
         cursor: "pointer",
         color: visualActive ? ACCENT : NAV_INACTIVE,
-        fontSize: 10, fontWeight: 600, letterSpacing: "0.08em",
+        fontSize: 9, fontWeight: 600, letterSpacing: "0.04em",
         borderRadius: 10,
         transition: "color 0.15s",
         // Subtle scale-down on press for tactile feedback on iOS where
@@ -1745,8 +1743,8 @@ function MobileTab({
       </span>
       <span style={{
         lineHeight: 1.1, whiteSpace: "nowrap",
-        overflow: "hidden", textOverflow: "ellipsis", maxWidth: "100%",
-        textTransform: "uppercase" as const, letterSpacing: "0.08em",
+        overflow: "hidden", maxWidth: "100%",
+        textTransform: "uppercase" as const, letterSpacing: "0.04em",
       }}>{label}</span>
     </button>
   );
