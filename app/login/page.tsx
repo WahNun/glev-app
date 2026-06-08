@@ -26,7 +26,6 @@ const T = {
     no_account: "Noch kein Konto?",
     register: "Jetzt registrieren",
     back: "← Zurück zur Startseite",
-    members: "MEMBERS ONLY · PRIVATE BETA",
   },
   en: {
     email: "EMAIL",
@@ -47,7 +46,6 @@ const T = {
     no_account: "No account yet?",
     register: "Sign up",
     back: "← Back to homepage",
-    members: "MEMBERS ONLY · PRIVATE BETA",
   },
 };
 
@@ -393,9 +391,6 @@ export default function LoginPage() {
           </Link>
         </div>
 
-        <div style={{ textAlign: "center", marginTop: 14, fontSize: 10, color: "var(--text-ghost)", letterSpacing: "0.06em" }}>
-          {t.members}
-        </div>
       </div>
     </main>
   );
