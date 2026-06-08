@@ -33,6 +33,8 @@ function HealthDebugSection() {
   const [error, setError] = useState<string | null>(null);
   const [isnative, setIsnative] = useState<string | null>(null);
   const [pluginLoaded, setPluginLoaded] = useState<string | null>(null);
+  const [pluginSource, setPluginSource] = useState<string | null>(null);
+  const [isPluginAvailable, setIsPluginAvailable] = useState<string | null>(null);
   const [pluginMethods, setPluginMethods] = useState<string | null>(null);
   const [authResult, setAuthResult] = useState<string | null>(null);
   const [lastAttemptAt, setLastAttemptAt] = useState<string | null>(null);
@@ -48,6 +50,8 @@ function HealthDebugSection() {
     setError(localStorage.getItem("glev_health_error"));
     setIsnative(localStorage.getItem("glev_health_isnative"));
     setPluginLoaded(localStorage.getItem("glev_health_plugin_loaded"));
+    setPluginSource(localStorage.getItem("glev_health_plugin_source"));
+    setIsPluginAvailable(localStorage.getItem("glev_health_is_plugin_available"));
     setPluginMethods(localStorage.getItem("glev_health_plugin_methods"));
     setAuthResult(localStorage.getItem("glev_health_auth_result"));
     setLastAttemptAt(localStorage.getItem("glev_health_last_attempt_at"));
@@ -115,7 +119,8 @@ function HealthDebugSection() {
       <div style={{ fontWeight: 600, marginBottom: 8 }}>Apple-Health-Debug</div>
       <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
         <div>🖥 Platform: <strong>{platform ?? "?"}</strong> {isnative === "true" ? "(native ✓)" : isnative === "false" ? "(non-native)" : "(?)"}</div>
-        <div>📦 Plugin loaded: <strong>{pluginLoaded ?? "—"}</strong></div>
+        <div>🔍 Capacitor.isPluginAvailable(&quot;Health&quot;): <strong>{isPluginAvailable ?? "—"}</strong></div>
+        <div>📦 Plugin loaded: <strong>{pluginLoaded ?? "—"}</strong> {pluginSource && <span style={{ color: "var(--text-faint)" }}>via {pluginSource}</span>}</div>
         {pluginMethods && <div>🧩 Methods: <span style={{ color: "var(--text-faint)" }}>{pluginMethods}</span></div>}
         <div>📍 Letzter Schritt: <strong>{step ?? "—"}</strong>{retrying && elapsedSecs > 0 && <span style={{ color: "var(--text-faint)", marginLeft: 6 }}>({elapsedSecs}s)</span>}</div>
         {authResult && <div>🔐 Result: <span style={{ color: "var(--text-faint)" }}>{authResult.slice(0, 120)}{authResult.length > 120 ? "…" : ""}</span></div>}

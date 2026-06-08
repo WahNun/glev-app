@@ -1180,10 +1180,40 @@ interface HealthKitPlugin {
 }
 
 async function loadPlugin(): Promise<HealthKitPlugin | null> {
+  // Fast path: when the native HealthPlugin is already registered in
+  // the Capacitor bridge, `window.Capacitor.Plugins.Health` is the
+  // exact proxy object that the dynamic import would eventually hand
+  // us — but available immediately, without a webpack-chunk fetch.
+  //
+  // This avoids the hang Lucas observed on iOS where
+  // `await import("@capgo/capacitor-health")` never settled in WKWebView
+  // (likely a chunk-loading edge-case under WebKit's CSP / scheme
+  // restrictions). Critical Alerts works because it accesses
+  // `Capacitor.Plugins` directly; this brings Health to parity.
   try {
-    // Dynamic import is mandatory — a static import would force the
-    // plugin's native-bridge bindings into the Vercel web bundle and
-    // crash on first load in any non-Capacitor browser.
+    if (typeof window !== "undefined") {
+      const cap = (window as unknown as {
+        Capacitor?: {
+          Plugins?: { Health?: HealthKitPlugin };
+          isPluginAvailable?: (name: string) => boolean;
+        };
+      }).Capacitor;
+      const isAvail = cap?.isPluginAvailable?.("Health");
+      healthDebug("is_plugin_available", String(isAvail ?? "unknown"));
+      const nativeHealth = cap?.Plugins?.Health;
+      if (nativeHealth) {
+        healthDebug("plugin_source", "native_bridge");
+        return nativeHealth;
+      }
+      healthDebug("plugin_source", "dynamic_import_fallback");
+    }
+  } catch {
+    /* fall through to dynamic import */
+  }
+  try {
+    // Dynamic import is mandatory for the web build — a static import
+    // would force the plugin's native-bridge bindings into the Vercel
+    // web bundle and crash on first load in any non-Capacitor browser.
     const mod = (await import("@capgo/capacitor-health")) as unknown as {
       Health?: HealthKitPlugin;
     };
