@@ -13,6 +13,67 @@ import { SettingsSection, SettingsRow, ConnectedDot } from "@/components/Setting
 const ACCENT = "#4F6EF7", BORDER = "var(--border)";
 const iconProps = { width: 16, height: 16, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: 2, strokeLinecap: "round" as const, strokeLinejoin: "round" as const };
 
+const DEXCOM_KB_URL = "https://nightscout.pro/knowledge-base/dexcom";
+
+function DexcomSheetBody() {
+  const t = useTranslations("settings_cgm");
+  const openKb = () => {
+    try { window.open(DEXCOM_KB_URL, "_blank", "noopener,noreferrer"); } catch {}
+  };
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      <p style={{ fontSize: 14, color: "var(--text-body)", lineHeight: 1.6, margin: 0 }}>
+        {t("sheet_dexcom_body")}
+      </p>
+
+      {/* Nightscout KB callout */}
+      <div style={{
+        borderRadius: 12,
+        border: "1px solid var(--border)",
+        background: "var(--surface-soft)",
+        padding: "14px 16px",
+        display: "flex", flexDirection: "column", gap: 10,
+      }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <svg width={15} height={15} viewBox="0 0 24 24" fill="none" stroke={ACCENT} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+            <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+            <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+          </svg>
+          <span style={{ fontSize: 13, fontWeight: 600, color: "var(--text-strong)" }}>
+            nightscout.pro
+          </span>
+        </div>
+        <p style={{ fontSize: 13, color: "var(--text-body)", lineHeight: 1.55, margin: 0 }}>
+          {t("sheet_dexcom_kb_intro")}
+        </p>
+        <button
+          type="button"
+          onClick={openKb}
+          style={{
+            alignSelf: "flex-start",
+            padding: "8px 14px",
+            borderRadius: 8,
+            border: `1px solid ${ACCENT}`,
+            background: "transparent",
+            color: ACCENT,
+            fontSize: 13,
+            fontWeight: 600,
+            cursor: "pointer",
+            letterSpacing: "0.01em",
+          }}
+        >
+          {t("sheet_dexcom_kb_label")}
+        </button>
+      </div>
+
+      {/* Compliance disclaimer */}
+      <p style={{ fontSize: 12, color: "var(--text-dim)", lineHeight: 1.55, margin: 0 }}>
+        {t("sheet_dexcom_disclaimer")}
+      </p>
+    </div>
+  );
+}
+
 function useCgmConnected(): boolean {
   const [connected, setConnected] = useState(false);
   useEffect(() => {
@@ -107,7 +168,7 @@ export default function CgmSettingsPage() {
   const sheetMap: Record<SheetKey, { title: string; body: React.ReactNode }> = {
     libre2:        { title: t("row_libre2"),              body: <CgmSettingsCard /> },
     nightscout:    { title: t("row_nightscout"),          body: <NightscoutSettingsCard /> },
-    dexcom:        { title: t("sheet_dexcom_title"),      body: <p style={{ fontSize: 14, color: "var(--text-body)", lineHeight: 1.55, margin: 0 }}>{t("sheet_dexcom_body")}</p> },
+    dexcom:        { title: t("sheet_dexcom_title"),      body: <DexcomSheetBody /> },
     apple_health:  { title: t("row_apple_health"),        body: <AppleHealthSettingsCard /> },
     setup_request: { title: tReq("intro_title"),          body: <CgmSetupRequestForm onSuccess={closeSheet} /> },
   };
