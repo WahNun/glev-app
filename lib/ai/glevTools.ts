@@ -46,7 +46,7 @@ import {
 import { aggregateNutrition } from "@/lib/nutrition/aggregate";
 import { getCachedUserHistory } from "@/lib/nutrition/userHistoryCache";
 import type { ParsedFoodItem } from "@/lib/nutrition/types";
-import { applyAlcoholFallback, sumAlcoholG } from "@/lib/ai/alcoholFallback";
+import { applyAlcoholFallback, sumAlcoholG, hasAlcoholKeyword } from "@/lib/ai/alcoholFallback";
 
 // ── Tool definitions (Mistral function-calling schema) ───────────────
 export const GLEV_TOOLS = [
@@ -2258,6 +2258,26 @@ async function toolLogInfluenceEntry(
   const details = shorten(typeof args.details === "string" ? args.details : null, 200);
   const amount = shorten(typeof args.amount === "string" ? args.amount : null, 100);
   const notes = shorten(typeof args.notes === "string" ? args.notes : null, 200);
+
+  // ── Alcohol keyword guard (Mistral hallucination blocker) ─────────────────
+  // Mistral occasionally calls log_influence_entry(influence_type: "alcohol")
+  // for non-alcoholic meals (e.g. Empanadas, Pizza Margherita). Block here
+  // before creating an ai_pending_actions row so no chip appears in the UI.
+  // The dual-emission path (source_meal_token present) is validated upstream
+  // and must NOT be blocked here — it only runs through toolLogMealEntry.
+  if (influenceType === "alcohol") {
+    const candidateTexts = [details ?? "", notes ?? "", amount ?? ""].join(" ");
+    if (!hasAlcoholKeyword(candidateTexts)) {
+      console.warn(
+        "[alcohol-guard] rejected Mistral log_influence_entry(alcohol) — no alcohol keyword in:",
+        JSON.stringify({ details, notes, amount }),
+      );
+      return {
+        error: "Kein Alkohol in dieser Mahlzeit erkannt. Alkohol-Einflusseinträge werden nur gespeichert, wenn der Nutzer Alkohol explizit erwähnt hat.",
+      };
+    }
+  }
+
   const loggedAt = resolveLoggedAt(args.logged_at, userTimezone);
   const timeLabel = formatInUserTimezone(new Date(loggedAt).getTime(), userTimezone);
 

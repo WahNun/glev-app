@@ -770,6 +770,7 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
           0%,100% { box-shadow: 0 0 20px ${ACCENT}55; }
           50%     { box-shadow: 0 0 32px ${ACCENT}88, 0 0 60px ${ACCENT}33; }
         }
+        @keyframes cgmLivePulse { 0%,100% { opacity:1; } 50% { opacity:0.45; } }
       `}</style>
 
       {/* MOBILE HEADER — solid surface bg always; logo opens About modal, account icon opens Settings */}
@@ -834,20 +835,6 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
               das Logo-Quadrat soll in Light Mode NICHT mit-aufhellen,
               sonst löst es sich vom Header optisch auf. */}
           <GlevLockup size={26} color="var(--text)" symbolBg="var(--surface-alt)" />
-          {pathname.startsWith("/dashboard") && cgmSource && (
-            <div style={{
-              display: "inline-flex", alignItems: "center", gap: 5,
-              height: 20, padding: "0 7px", borderRadius: 99,
-              background: "#22D3A014",
-              border: "1px solid #22D3A035",
-              color: "#22D3A0",
-              fontSize: 10, fontWeight: 700, letterSpacing: "0.05em",
-              flexShrink: 0, userSelect: "none",
-            }}>
-              <span style={{ width: 5, height: 5, borderRadius: "50%", background: "#22D3A0", boxShadow: "0 0 4px #22D3A0bb" }} aria-hidden />
-              Live
-            </div>
-          )}
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           {/* Engine-Pille im Header wurde entfernt (User-Wunsch
@@ -1017,6 +1004,7 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
               Settings tab. The header keeps the brand lockup on the
               left and a recording-state pill on the right — only
               visible while the engine is actively listening. */}
+          <CgmStatusPill source={cgmSource} locale={locale} />
           {voice.recording && (
             <button
               type="button"
@@ -1418,6 +1406,73 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
   );
 }
 
+// ── CGM Live Status Pill ─────────────────────────────────────────────────────
+// Reads the latest cached CGM glucose timestamp from /api/cgm/glucose (never
+// calls upstream CGM services directly). Polls every 60 s. Returns null when
+// no CGM source is configured so the pill stays hidden for non-CGM users.
+type CgmPillStatus = "live" | "connecting" | "delayed" | "offline";
+
+function useCgmPillStatus(source: string | null): CgmPillStatus | null {
+  const [ts, setTs] = useState<string | null | undefined>(undefined);
+
+  useEffect(() => {
+    if (!source) return;
+    let cancelled = false;
+    const load = () => {
+      fetch("/api/cgm/glucose", { cache: "no-store" })
+        .then(r => r.ok ? r.json() : null)
+        .then((d: { connected?: boolean; timestamp?: string | null } | null) => {
+          if (cancelled) return;
+          setTs(d?.connected ? (d.timestamp ?? null) : null);
+        })
+        .catch(() => { if (!cancelled) setTs(null); });
+    };
+    load();
+    const id = setInterval(load, 60_000);
+    return () => { cancelled = true; clearInterval(id); };
+  }, [source]);
+
+  if (!source) return null;
+  if (ts === undefined) return "connecting";
+  if (!ts) return "offline";
+  const ageMin = (Date.now() - new Date(ts).getTime()) / 60_000;
+  if (ageMin < 5)  return "live";
+  if (ageMin < 15) return "delayed";
+  return "offline";
+}
+
+function CgmStatusPill({ source, locale: loc }: { source: string | null; locale: string }) {
+  const status = useCgmPillStatus(source);
+  if (!status) return null;
+
+  const cfg: Record<CgmPillStatus, { dot: string; label: string }> = {
+    live:       { dot: "#10b981", label: loc === "en" ? "LIVE"       : "LIVE"      },
+    connecting: { dot: "#f59e0b", label: loc === "en" ? "CONNECTING" : "VERBINDET" },
+    delayed:    { dot: "#fb923c", label: loc === "en" ? "DELAYED"    : "VERSPÄTET" },
+    offline:    { dot: "#ef4444", label: loc === "en" ? "OFFLINE"    : "OFFLINE"   },
+  };
+  const { dot, label } = cfg[status];
+
+  return (
+    <div style={{
+      display: "flex", alignItems: "center", gap: 6,
+      borderRadius: 999, padding: "4px 10px",
+      background: "rgba(255,255,255,0.06)",
+      border: "1px solid rgba(255,255,255,0.08)",
+      fontSize: 11, fontWeight: 600, letterSpacing: "0.06em",
+      color: "var(--text)",
+      flexShrink: 0, userSelect: "none" as const,
+    }}>
+      <span style={{
+        width: 6, height: 6, borderRadius: "50%",
+        background: dot, flexShrink: 0,
+        ...(status === "live" ? { animation: "cgmLivePulse 1.5s ease-in-out infinite" } : {}),
+      }} aria-hidden />
+      {label}
+    </div>
+  );
+}
+
 /**
  * Centre nav slot that visually replaces a normal MobileTab with a raised
  * Glev-branded bubble (round, accent ring + soft halo, same look as the
@@ -1655,7 +1710,7 @@ function MobileTab({
         background: "rgba(0,0,0,0.001)",
         cursor: "pointer",
         color: visualActive ? ACCENT : NAV_INACTIVE,
-        fontSize: 10, fontWeight: visualActive ? 600 : 500, letterSpacing: "0.005em",
+        fontSize: 10, fontWeight: 600, letterSpacing: "0.08em",
         borderRadius: 10,
         transition: "color 0.15s",
         // Subtle scale-down on press for tactile feedback on iOS where
@@ -1691,6 +1746,7 @@ function MobileTab({
       <span style={{
         lineHeight: 1.1, whiteSpace: "nowrap",
         overflow: "hidden", textOverflow: "ellipsis", maxWidth: "100%",
+        textTransform: "uppercase" as const, letterSpacing: "0.08em",
       }}>{label}</span>
     </button>
   );

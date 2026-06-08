@@ -366,7 +366,7 @@ function trial6BodyDe(firstName: string | null, scheduleId?: string): string {
       <tr style="background:#f0f4ff;">
         <td colspan="2" style="padding:12px 18px;font-size:13px;color:#374151;line-height:1.6;">
           ✓ Adaptive Engine — KI-Bolus aus deiner Geschichte<br />
-          ✓ Adapt Score 0–100 · deine Bolus-Präzision<br />
+          ✓ Adapt Score 0–100 · deine Bolus-Konsistenz<br />
           ✓ CGM-basierte Insights<br />
           ✓ Alle Basis-Features
         </td>
@@ -488,7 +488,7 @@ function trialExpiredBodyDe(firstName: string | null, scheduleId?: string): stri
       <tr style="background:#f0f4ff;">
         <td colspan="2" style="padding:12px 18px;font-size:13px;color:#374151;line-height:1.6;">
           ✓ Adaptive Engine — KI-Bolus aus deiner Geschichte<br />
-          ✓ Adapt Score 0–100 · deine Bolus-Präzision<br />
+          ✓ Adapt Score 0–100 · deine Bolus-Konsistenz<br />
           ✓ CGM-basierte Insights<br />
           ✓ Alle Basis-Features
         </td>

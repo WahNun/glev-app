@@ -5,6 +5,7 @@ import type { ParsedFood } from "@/lib/meals";
 import { classifyMeal } from "@/lib/meals";
 import { getHistory } from "@/lib/cgm";
 import { naiveIsoToUtcMs, resolveLoggedAt } from "@/lib/ai/glevTools";
+import { hasAlcoholKeyword } from "@/lib/ai/alcoholFallback";
 
 /**
  * POST /api/ai/confirm-action
@@ -134,6 +135,15 @@ export async function handleConfirmPost(
 
   try {
     const result = await executeConfirmedAction(sb, userId, row.kind, row.params);
+    if (result.rejected) {
+      // Roll back the used_at claim — a rejected action is not consumed.
+      await sb
+        .from("ai_pending_actions")
+        .update({ used_at: null })
+        .eq("token", token)
+        .eq("used_at", claimAt);
+      return NextResponse.json({ ok: false, rejected: true, reason: result.reason }, { status: 422 });
+    }
     return NextResponse.json({ ok: true, kind: row.kind, ...result });
   } catch (e) {
     // Insert failed (constraint violation, schema lag, transient DB
@@ -160,7 +170,7 @@ async function executeConfirmedAction(
   userId: string,
   kind: string,
   params: Record<string, unknown>,
-): Promise<{ insertedId?: string; updatedSetting?: string }> {
+): Promise<{ insertedId?: string; updatedSetting?: string; rejected?: boolean; reason?: string }> {
   switch (kind) {
     case "log_meal_entry":
       return await execLogMealEntry(sb, userId, params);
@@ -492,7 +502,7 @@ async function execLogInfluenceEntry(
   sb: SupabaseClient,
   userId: string,
   p: Record<string, unknown>,
-): Promise<{ insertedId?: string }> {
+): Promise<{ insertedId?: string; rejected?: boolean; reason?: string }> {
   const influenceType = typeof p.influence_type === "string" ? p.influence_type : "";
   const VALID_INFLUENCE_TYPES = [
     "alcohol", "stress", "illness", "medication",
@@ -507,13 +517,37 @@ async function execLogInfluenceEntry(
     typeof p.amount === "string" && p.amount.trim() ? p.amount.trim() : null;
   const notes =
     typeof p.notes === "string" && p.notes.trim() ? p.notes.trim() : null;
+
+  // ── Alcohol keyword guard (defense-in-depth) ─────────────────────────────
+  // Primary guard is in toolLogInfluenceEntry (glevTools.ts) — it blocks the
+  // pending action before the chip appears. This secondary guard protects
+  // against any path that bypassed the primary (e.g. manually crafted tokens).
+  //
+  // Dual-emission entries (source_meal_token present) are exempt: they were
+  // created by toolLogMealEntry after the ALCOHOL_MATCH_TABLE confirmed the
+  // meal contained alcohol — no false positives possible on that path.
+  // Also check `note` (singular) in addition to `notes` because the
+  // dual-emission payload uses `note` (see InfluencePrepPayload in useGlevAI.ts).
+  const sourceMealToken =
+    typeof p.source_meal_token === "string" ? p.source_meal_token : null;
+
+  if (influenceType === "alcohol" && !sourceMealToken) {
+    const noteField = typeof p.note === "string" && p.note.trim() ? p.note.trim() : null;
+    const candidateTexts = [details ?? "", noteField ?? "", notes ?? "", amount ?? ""].join(" ");
+    if (!hasAlcoholKeyword(candidateTexts)) {
+      console.warn(
+        "[alcohol-guard] confirm-action rejected log_influence_entry(alcohol) — no alcohol keyword in:",
+        JSON.stringify({ details, note: noteField, notes, amount }),
+      );
+      return { rejected: true, reason: "no_alcohol_keyword" };
+    }
+  }
   const tz = typeof p._user_timezone === "string" && p._user_timezone ? p._user_timezone : null;
   const occurredAt = resolveLoggedAt(p.logged_at, tz);
 
   // Dual-Emission linkage: if source_meal_token is present, resolve the
   // meal's DB id so we can store source_meal_id (FK to meals.id).
-  const sourceMealToken =
-    typeof p.source_meal_token === "string" ? p.source_meal_token : null;
+  // (sourceMealToken is already declared above in the alcohol guard section)
   let sourceMealId: string | null = null;
   if (sourceMealToken) {
     const { data: paRow } = await sb
