@@ -79,12 +79,15 @@
        --nav-top-total  = full header height incl. safe-area
 
      Bottom nav (footer chrome):
-       --nav-bottom-height  = 56 px MobileTab fixed row
+       --nav-bottom-height  = 54 px MobileTab fixed row
+                              (icon 22 px + gap 4 px + UPPERCASE label
+                              ~14 px + breathing ~14 px)
        --nav-bottom-top-pad = 4 px gap above tab row
-       --nav-bottom-safe    = bottom inner padding (half sa-bottom,
-                              floored at 16 px — Task #382: 4 px was
-                              too small on Web where sa-bottom = 0,
-                              leaving a visible gap below the nav bar)
+       --nav-bottom-safe    = bottom inner padding, capped at 20 px so
+                              iPhone home-indicator (sa-bottom ≈ 34 px)
+                              stays clear without leaving an excessive
+                              empty band; Web/Android (sa-bottom = 0)
+                              → 4 px floor
        --nav-bottom-total   = full footer height incl. safe-area
 
      IMPORTANT: do NOT hardcode `env(safe-area-inset-top|bottom)` in
@@ -124,9 +127,9 @@
   --onboarding-progress-top:  calc(var(--safe-top) + 26px);
   --onboarding-footer-bottom: calc(var(--safe-bottom) + 22px);
 
-  --nav-bottom-height:  38px;
-  --nav-bottom-top-pad: 2px;
-  --nav-bottom-safe:    max(4px, min(10px, var(--safe-bottom)));
+  --nav-bottom-height:  54px;
+  --nav-bottom-top-pad: 4px;
+  --nav-bottom-safe:    max(4px, min(20px, var(--safe-bottom)));
   --nav-bottom-total:   calc(var(--nav-bottom-height) + var(--nav-bottom-top-pad) + var(--nav-bottom-safe));
 
   /* Foreground color for text/icons placed on top of a brand-accent

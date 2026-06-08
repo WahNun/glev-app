@@ -241,6 +241,26 @@ test.describe("Mobile Bottom Nav", () => {
     await expect(page).toHaveURL(/\/engine/, { timeout: 15_000 });
   });
 
+  test("no nav button is clipped at the bottom of the viewport", async ({ page }) => {
+    // Verify that every tab button's bottom edge is within the viewport height,
+    // i.e. nothing is cut off by an undersized footer on a 393×852 screen.
+    const nav = page.locator("nav.glev-mobile-nav");
+    await expect(nav).toBeVisible({ timeout: 15_000 });
+
+    const viewportHeight = MOBILE_VIEWPORT.height;
+    const buttons = nav.getByRole("button");
+    const count = await buttons.count();
+    expect(count).toBeGreaterThan(0);
+
+    for (let i = 0; i < count; i++) {
+      const btn = buttons.nth(i);
+      const box = await btn.boundingBox();
+      expect(box).not.toBeNull();
+      // bottom edge must not overflow the viewport
+      expect(box!.y + box!.height).toBeLessThanOrEqual(viewportHeight + 1); // 1 px rounding tolerance
+    }
+  });
+
   test("active tab is highlighted (aria-expanded on FAB when on /engine)", async ({ context, page }) => {
     await context.grantPermissions(["microphone"]);
     await page.goto("/engine", { waitUntil: "domcontentloaded", timeout: 60_000 });
