@@ -12,7 +12,9 @@ import { supabase } from "@/lib/supabase";
  * Also handles the Supabase implicit-flow case where the token arrives as
  * #access_token=… in the hash instead of ?code= (PKCE). In that case
  * detectSessionInUrl has already created the session — we just need to
- * detect it and redirect to /onboarding instead of showing an error.
+ * detect it and redirect appropriately:
+ *   - invite / recovery → /auth/confirm?session=ready so the user sets a password
+ *   - signup / email / magiclink → /onboarding (existing behaviour)
  */
 export default function AuthErrorPage() {
   const router = useRouter();
@@ -22,11 +24,24 @@ export default function AuthErrorPage() {
     if (!supabase) { setChecking(false); return; }
     const sb = supabase; // capture non-null ref — TS can't narrow across async closure
 
+    // Read the hash type BEFORE detectSessionInUrl potentially clears it.
+    // The hash is only available client-side; read it synchronously on mount.
+    const rawHash = typeof window !== "undefined" ? window.location.hash.replace(/^#/, "") : "";
+    const hashParams = new URLSearchParams(rawHash);
+    const hashType = hashParams.get("type") ?? "";
+
     // Give Supabase JS a moment to process the hash (#access_token=…)
     // via detectSessionInUrl before we check for an active session.
     const timer = setTimeout(async () => {
       const { data: { session } } = await sb.auth.getSession();
       if (session) {
+        // invite / recovery: user must still set their password — send to
+        // /auth/confirm which shows the password-setup form (session=ready
+        // tells the page to skip the OTP exchange, session is already live).
+        if (hashType === "invite" || hashType === "recovery") {
+          router.replace(`/auth/confirm?session=ready&type=${hashType}`);
+          return;
+        }
         // Session exists — user confirmed their email via implicit flow.
         // Set trial_end_at (non-fatal if it fails) then go to onboarding.
         try {

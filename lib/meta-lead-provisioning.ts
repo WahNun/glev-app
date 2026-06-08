@@ -118,7 +118,11 @@ export async function provisionMetaLead(
       email,
       options: {
         data: name ? { full_name: name } : undefined,
-        redirectTo: `${APP_URL}/auth/callback?next=/auth/confirm&lang=${effectiveLocale}`,
+        // D-001: redirectTo must point to /auth/confirm directly (client page
+        // that parses the #access_token hash). Routing through /auth/callback
+        // (a server route) loses the hash fragment and bounces the user to
+        // /auth/auth-error before they can set a password.
+        redirectTo: `${APP_URL}/auth/confirm?lang=${effectiveLocale}`,
       },
     });
 
@@ -140,11 +144,11 @@ export async function provisionMetaLead(
       userId = existing.id;
       created = false;
 
-      // Recovery-Link für bestehenden User
+      // Recovery-Link für bestehenden User — direkt auf /auth/confirm (D-001)
       const { data: rec } = await sb.auth.admin.generateLink({
         type: "recovery",
         email,
-        options: { redirectTo: `${APP_URL}/auth/callback?next=/auth/confirm&lang=${effectiveLocale}` },
+        options: { redirectTo: `${APP_URL}/auth/confirm?lang=${effectiveLocale}` },
       });
       inviteUrl = rec?.properties?.action_link ?? null;
       if (!inviteUrl) {
