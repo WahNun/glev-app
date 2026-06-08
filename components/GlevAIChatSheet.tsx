@@ -770,6 +770,7 @@ function PendingActionWidget({
               onClick={onDetailOpen}
               disabled={busy}
               style={{
+                flex: 1,
                 padding: "9px 10px",
                 borderRadius: 8,
                 border: "1px solid var(--border-strong)",
@@ -778,7 +779,6 @@ function PendingActionWidget({
                 fontSize: 13,
                 cursor: busy ? "default" : "pointer",
                 opacity: busy ? 0.5 : 1,
-                whiteSpace: "nowrap",
               }}
             >
               {t.fingerstick_details}
@@ -922,6 +922,7 @@ function PendingActionWidget({
               onClick={onDetailOpen}
               disabled={busy}
               style={{
+                flex: 1,
                 padding: "9px 10px",
                 borderRadius: 8,
                 border: `1px solid ${CYCLE_PINK}40`,
@@ -931,7 +932,6 @@ function PendingActionWidget({
                 fontWeight: 600,
                 cursor: busy ? "default" : "pointer",
                 opacity: busy ? 0.5 : 1,
-                whiteSpace: "nowrap",
               }}
             >
               {t.cycle_details}
@@ -1034,13 +1034,13 @@ function PendingActionWidget({
               onClick={onDetailOpen}
               disabled={busy}
               style={{
+                flex: 1,
                 padding: "9px 10px", borderRadius: 8,
                 border: "1px solid var(--border-strong)",
                 background: "var(--surface-soft)",
                 color: "var(--text-body)", fontSize: 13,
                 cursor: busy ? "default" : "pointer",
                 opacity: busy ? 0.5 : 1,
-                whiteSpace: "nowrap" as const,
               }}
             >
               {detailLabel}
@@ -1133,6 +1133,7 @@ function PendingActionWidget({
             onClick={onDetailOpen}
             disabled={busy}
             style={{
+              flex: 1,
               padding: "9px 10px",
               borderRadius: 8,
               border: "1px solid var(--border-strong)",
@@ -1141,7 +1142,6 @@ function PendingActionWidget({
               fontSize: 13,
               cursor: busy ? "default" : "pointer",
               opacity: busy ? 0.5 : 1,
-              whiteSpace: "nowrap",
             }}
           >
             {t.detail}
