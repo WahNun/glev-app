@@ -2,19 +2,13 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-        <key>com.apple.developer.healthkit</key>
-        <true/>
-        <key>com.apple.developer.healthkit.access</key>
-        <array/>
-        <key>aps-environment</key>
-        <string>production</string>
-        <!-- Phase B: Critical Alerts entitlement.
-             Inactive until Apple approves Request ID X4854X3M8P and a new
-             Provisioning Profile with this capability is generated in
-             developer.apple.com → Certificates, IDs & Profiles → Profiles.
-             Code is safe to ship before approval — iOS ignores the key
-             silently until the profile grants it. -->
-        <key>com.apple.developer.usernotifications.critical-alerts</key>
-        <true/>
+	<key>aps-environment</key>
+	<string>production</string>
+	<key>com.apple.developer.healthkit</key>
+	<true/>
+	<key>com.apple.developer.healthkit.background-delivery</key>
+	<true/>
+	<key>com.apple.developer.usernotifications.critical-alerts</key>
+	<true/>
 </dict>
 </plist>

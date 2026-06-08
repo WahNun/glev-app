@@ -5,10 +5,11 @@ import { useRef, useState, useCallback, useEffect } from "react";
 /**
  * useVoxtral — hold-to-talk hook for GlevAIChatSheet.
  *
- * Works on web (getUserMedia) and Capacitor native shells (same API,
- * permission dialog triggered by the browser layer). No @capacitor/microphone
- * package needed — Capacitor bridges getUserMedia to the native mic on
- * both iOS (AVAudioSession) and Android (RECORD_AUDIO).
+ * Works on web (getUserMedia) and Capacitor native shells. On iOS, WKWebView
+ * auto-triggers the system permission dialog on the first getUserMedia() call.
+ * On Android, the runtime RECORD_AUDIO permission must be explicitly requested —
+ * startListening() checks navigator.permissions first and surfaces MIC_PERM_DENIED
+ * so the UI can show an actionable banner instead of a raw error string.
  *
  * Transport: SSE streaming (POST /api/transcribe/mistral/stream).
  * The SSE route currently wraps the batch Voxtral API; when Mistral ships
@@ -34,6 +35,13 @@ import { useRef, useState, useCallback, useEffect } from "react";
  */
 
 import { ERROR_MESSAGES } from "@/lib/ai/errors";
+
+/**
+ * Sentinel returned via onError when the OS microphone permission is denied.
+ * The UI checks for this exact string to show a dedicated recovery banner
+ * instead of the generic red error toast.
+ */
+export const MIC_PERM_DENIED = "MIC_PERM_DENIED" as const;
 
 const STT_STREAM_ROUTE = "/api/transcribe/mistral/stream";
 const STT_REST_ROUTE = "/api/transcribe/mistral";
@@ -274,6 +282,24 @@ export function useVoxtral({ onTranscript, onPartialTranscript, onError }: UseVo
     }
     setIsTranscribing(false);
 
+    // On Android the runtime RECORD_AUDIO permission must be granted before
+    // getUserMedia() is called — Capacitor's WebView does not auto-prompt for
+    // it the way iOS WKWebView does. Check the permission state first so we
+    // can surface an actionable error immediately when the user has previously
+    // denied access, and let getUserMedia trigger the first-time dialog normally
+    // when the state is "prompt".
+    if (typeof navigator !== "undefined" && navigator.permissions) {
+      try {
+        const perm = await navigator.permissions.query({ name: "microphone" as PermissionName });
+        if (perm.state === "denied") {
+          onError?.(MIC_PERM_DENIED);
+          return;
+        }
+      } catch {
+        // permissions API unavailable in this environment — proceed normally
+      }
+    }
+
     try {
       const mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
       streamRef.current = mediaStream;
@@ -354,8 +380,10 @@ export function useVoxtral({ onTranscript, onPartialTranscript, onError }: UseVo
       recorder.start(100);
       setIsListening(true);
     } catch (e) {
-      const msg = e instanceof Error ? e.message : "Mikrofon nicht verfügbar";
-      onError?.(msg);
+      const isPermDenied =
+        e instanceof DOMException &&
+        (e.name === "NotAllowedError" || e.name === "PermissionDeniedError");
+      onError?.(isPermDenied ? MIC_PERM_DENIED : e instanceof Error ? e.message : "Mikrofon nicht verfügbar");
     }
   }, [isListening, rateLimitUntil, onTranscript, onPartialTranscript, onError, handleRateLimit]);
 
