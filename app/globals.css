@@ -75,7 +75,7 @@
 
      Header (top chrome):
        --nav-top-safe   = iOS status-bar safe-area
-       --nav-top-height = 28 px content band (4 pad + 20 lockup + 4 pad)
+       --nav-top-height = 48 px content band (11 pad + 26 lockup + 11 pad)
        --nav-top-total  = full header height incl. safe-area
 
      Bottom nav (footer chrome):
@@ -104,7 +104,7 @@
   --safe-bottom: env(safe-area-inset-bottom, 0px);
 
   --nav-top-safe:    var(--safe-top);
-  --nav-top-height:  20px;
+  --nav-top-height:  48px;
   --nav-top-total:   calc(var(--nav-top-safe) + var(--nav-top-height));
 
   /* Marketing chrome (Homepage `app/page.tsx`, Blog `app/blog/page.tsx`).

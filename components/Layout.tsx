@@ -802,10 +802,10 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
         // border instead of kissing it. Top pad stays tight (4 px) —
         // the status-bar safe-area zone already separates the wordmark
         // from the clock/battery row above.
-        // Task #363: vertical padding now sources from the central
-        // --nav-top-safe variable in app/globals.css.
-        // Task #382: bottom pad implemented (was documented but stayed
-        // at 4 px — now correctly set to 10 px).
+        // --nav-top-height controls the content band height (app/globals.css).
+        // paddingBottom pads the bottom edge of that band; the logo + CGM pill
+        // are vertically centred in the remaining space via alignItems:center.
+        // Current: 48 px band − 11 px bottom pad = 37 px for 26 px logo + pill.
         height: "var(--nav-top-total)",
         paddingTop: "var(--nav-top-safe)",
         paddingBottom: 11,
