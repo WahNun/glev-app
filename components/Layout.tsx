@@ -156,14 +156,6 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
-  // CGM-source for the "● Live" header pill on /dashboard.
-  const [cgmSource, setCgmSource] = useState<string | null>(null);
-  useEffect(() => {
-    fetch("/api/cgm/source", { cache: "no-store" })
-      .then(r => r.ok ? r.json() : null)
-      .then((d: { source: string | null } | null) => { if (d?.source) setCgmSource(d.source); })
-      .catch(() => {});
-  }, []);
   // Voice-recording bridge: while the engine is recording, the FAB's
   // tap means "stop recording" (not "open quick-add"), and a "Speak"
   // pill appears in the header as a global cue + secondary stop tap.
@@ -1004,7 +996,7 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
               Settings tab. The header keeps the brand lockup on the
               left and a recording-state pill on the right — only
               visible while the engine is actively listening. */}
-          <CgmStatusPill source={cgmSource} locale={locale} />
+          <CgmStatusPill locale={locale} />
           {voice.recording && (
             <button
               type="button"
@@ -1408,15 +1400,14 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
 
 // ── CGM Live Status Pill ─────────────────────────────────────────────────────
 // Reads the latest cached CGM glucose timestamp from /api/cgm/glucose (never
-// calls upstream CGM services directly). Polls every 60 s. Returns null when
-// no CGM source is configured so the pill stays hidden for non-CGM users.
+// calls upstream CGM services directly). Polls every 60 s. Always returns a
+// status so the pill is always visible (LIVE / DELAYED / OFFLINE / CONNECTING).
 type CgmPillStatus = "live" | "connecting" | "delayed" | "offline" | "paused";
 
-function useCgmPillStatus(source: string | null): CgmPillStatus | null {
+function useCgmPillStatus(): CgmPillStatus {
   const [ts, setTs] = useState<string | null | undefined>(undefined);
 
   useEffect(() => {
-    if (!source) return;
     let cancelled = false;
     const load = () => {
       fetch("/api/cgm/glucose", { cache: "no-store" })
@@ -1430,9 +1421,8 @@ function useCgmPillStatus(source: string | null): CgmPillStatus | null {
     load();
     const id = setInterval(load, 60_000);
     return () => { cancelled = true; clearInterval(id); };
-  }, [source]);
+  }, []);
 
-  if (!source) return null;
   if (ts === undefined) return "connecting";
   if (!ts) return "offline";
   const ageMin = (Date.now() - new Date(ts).getTime()) / 60_000;
@@ -1441,9 +1431,8 @@ function useCgmPillStatus(source: string | null): CgmPillStatus | null {
   return "offline";
 }
 
-function CgmStatusPill({ source, locale: loc }: { source: string | null; locale: string }) {
-  const status = useCgmPillStatus(source);
-  if (!status) return null;
+function CgmStatusPill({ locale: loc }: { locale: string }) {
+  const status = useCgmPillStatus();
 
   const cfg: Record<CgmPillStatus, { dot: string; label: string }> = {
     live:       { dot: "#10b981", label: loc === "en" ? "LIVE"       : "LIVE"      },
