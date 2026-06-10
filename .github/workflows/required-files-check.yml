@@ -1,0 +1,79 @@
+name: Required Files Existence Check
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check critical iOS files exist
+        run: |
+          FILES_TO_CHECK=(
+            "ios/App/App/Info.plist"
+            "ios/App/App/PrivacyInfo.xcprivacy"
+            "ios/App/App/App.entitlements"
+            "ios/App/App/AppDelegate.swift"
+            "ios/App/App.xcodeproj/project.pbxproj"
+            "capacitor.config.ts"
+            "DECISIONS.md"
+            "AGENTS.md"
+            "package.json"
+            "supabase/config.toml"
+          )
+          MISSING=()
+          for f in "${FILES_TO_CHECK[@]}"; do
+            if [ ! -f "$f" ]; then
+              MISSING+=("$f")
+            fi
+          done
+          if [ ${#MISSING[@]} -gt 0 ]; then
+            echo "ERROR: Required files missing from repo:"
+            for f in "${MISSING[@]}"; do
+              echo "  - $f"
+            done
+            echo ""
+            echo "These files are protected. Their deletion blocks merges."
+            echo "If intentional removal, see AGENTS.md for override process."
+            exit 1
+          fi
+          echo "All required files present."
+
+      - name: Check Info.plist has HealthKit + Critical Alerts strings
+        run: |
+          if ! grep -q "NSHealthShareUsageDescription" ios/App/App/Info.plist; then
+            echo "ERROR: NSHealthShareUsageDescription missing from Info.plist"
+            exit 1
+          fi
+          if ! grep -q "NSHealthUpdateUsageDescription" ios/App/App/Info.plist; then
+            echo "ERROR: NSHealthUpdateUsageDescription missing from Info.plist"
+            exit 1
+          fi
+          echo "HealthKit usage descriptions present."
+
+      - name: Check App.entitlements has HealthKit + Critical Alerts
+        run: |
+          if ! grep -q "com.apple.developer.healthkit" ios/App/App/App.entitlements; then
+            echo "ERROR: HealthKit entitlement missing from App.entitlements"
+            exit 1
+          fi
+          if ! grep -q "com.apple.developer.usernotifications.critical-alerts" ios/App/App/App.entitlements; then
+            echo "ERROR: Critical Alerts entitlement missing from App.entitlements"
+            exit 1
+          fi
+          echo "iOS entitlements present."
+
+      - name: Check capacitor.config.json has HealthPlugin
+        run: |
+          if [ -f "ios/App/App/capacitor.config.json" ]; then
+            if ! grep -q "HealthPlugin\|@capgo/capacitor-health" ios/App/App/capacitor.config.json; then
+              echo "WARNING: HealthPlugin not in capacitor.config.json — run 'npx cap sync ios' to regenerate"
+              exit 1
+            fi
+          fi
+          echo "Capacitor health plugin registered."
