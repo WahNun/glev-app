@@ -1400,8 +1400,8 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
 }
 
 // ── CGM Live Status Pill ─────────────────────────────────────────────────────
-// Reads the latest cached CGM glucose timestamp from /api/cgm/glucose (never
-// calls upstream CGM services directly). Polls every 60 s. Always returns a
+// Reads the latest CGM timestamp from /api/cgm/latest (source-agnostic:
+// LLU, Apple Health, Nightscout). Polls every 60 s. Always returns a
 // status so the pill is always visible (LIVE / DELAYED / OFFLINE / CONNECTING).
 type CgmPillStatus = "live" | "connecting" | "delayed" | "offline" | "paused";
 
@@ -1429,7 +1429,17 @@ function useCgmPillStatus(): CgmPillStatus {
 
   if (ts === undefined) return "connecting";
   if (!ts) return "offline";
-  const ageMin = (Date.now() - new Date(ts).getTime()) / 60_000;
+  // LLU FactoryTimestamp arrives as "M/D/YYYY H:MM:SS AM/PM" (UTC value,
+  // no timezone marker). Browsers parse that format as *local* time, so
+  // a user in UTC+1 sees the timestamp as 1 h older than it really is
+  // → ageMin > 15 → OFFLINE even though the reading is fresh.
+  // ISO strings (Nightscout, Apple Health) already contain "T" / "Z" and
+  // are parsed correctly without the workaround.
+  const parsed = ts.includes("T") || ts.includes("Z") || ts.includes("+")
+    ? new Date(ts)
+    : new Date(ts + " UTC");
+  const ageMin = (Date.now() - parsed.getTime()) / 60_000;
+  if (isNaN(ageMin)) return "offline";
   if (ageMin < 5)  return "live";
   if (ageMin < 15) return "delayed";
   return "offline";
