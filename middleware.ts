@@ -82,9 +82,15 @@ function getSessionFromCookies(req: NextRequest): boolean {
   try {
     const parsed = JSON.parse(raw);
     const session = Array.isArray(parsed) ? parsed[0] : parsed;
-    if (!session?.access_token) return false;
-    const expiresAt: number = session.expires_at ?? 0;
-    return expiresAt > Date.now() / 1000;
+    // Only check that a session token exists — do NOT reject on expires_at.
+    // Access tokens expire after 1 hour; if the Capacitor app was backgrounded
+    // longer than that, the token is stale but the refresh token is still valid
+    // (7-day cookie). The client-side Supabase client refreshes automatically on
+    // mount. Blocking here forces a full re-login even though the session is
+    // recoverable — exactly the bug Capacitor users hit every time they kill
+    // and reopen the app. Real security lives in the individual API route
+    // authenticate() helpers, not in this UI-routing middleware.
+    return !!session?.access_token;
   } catch {
     return false;
   }

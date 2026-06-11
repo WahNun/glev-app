@@ -203,7 +203,7 @@ export default function LoginPage() {
                 required
                 disabled={loading}
                 style={inp}
-                autoComplete="email"
+                autoComplete="username"
               />
             </div>
 
