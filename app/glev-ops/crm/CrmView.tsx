@@ -503,7 +503,7 @@ function LeadStatusCell({ email, initial }: { email: string; initial: string | n
     if (v === "dq") return "🔴 DQ";
     if (v === "in_review") return "🟡 In Prüfung";
     if (v === "qualified") return "🟢 Qualifiziert";
-    if (v === "lukas_action") return "🔵 Lukas Action";
+    if (v === "lukas_action") return "🔵 Lucas Action";
     return "";
   }
 
@@ -521,7 +521,7 @@ function LeadStatusCell({ email, initial }: { email: string; initial: string | n
         <option value="in_review">🟡 In Prüfung</option>
         <option value="qualified">🟢 Qualifiziert</option>
         <option value="dq">🔴 DQ</option>
-        <option value="lukas_action">🔵 Lukas Action</option>
+        <option value="lukas_action">🔵 Lucas Action</option>
       </select>
     </div>
   );
