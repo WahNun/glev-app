@@ -96,7 +96,3 @@ STRIPE_PRICE_SETUP_FEE_ID = "price_1TRt6LHotG1viVv3Atv4vj5J"
 NEXT_PUBLIC_APP_URL = "https://1582eb31-8cfb-41c9-8ede-f7c139b9ebd0-00-1dahva746bc3v.kirk.replit.dev"
 NEXT_PUBLIC_ADMIN_EMAIL = "lucas@wahnon-connect.com"
 META_PAGE_ID = "1149661878228477"
-
-[[ports]]
-localPort = 5000
-externalPort = 80
