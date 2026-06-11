@@ -265,7 +265,7 @@ function LegalPageInner() {
 
           <section id="dse-11">
             <h2><span className="num">11</span> Änderungen</h2>
-            <p>Wir behalten uns vor, diese Datenschutzerklärung bei Bedarf anzupassen. Bei wesentlichen Änderungen werden registrierte Nutzer per E-Mail informiert. <strong>Stand: Mai 2026.</strong></p>
+            <p>Wir behalten uns vor, diese Datenschutzerklärung bei Bedarf anzupassen. Bei wesentlichen Änderungen werden registrierte Nutzer per E-Mail informiert. <strong>Stand: Juni 2026.</strong></p>
           </section>
 
           <section id="dse-12">
@@ -305,8 +305,8 @@ function LegalPageInner() {
             </table>
 
             <h3>12.2 Datenweitergabe / Data sharing</h3>
-            <p><strong>DE:</strong> Es werden <strong>keine</strong> Daten an Dritte weitergegeben. Alle Gesundheits- und Kontodaten verbleiben auf unseren Servern (Supabase EU-Region Irland).</p>
-            <p><strong>EN:</strong> <strong>No data is shared with third parties.</strong> All health and account data stays on our servers (Supabase EU region, Ireland).</p>
+            <p><strong>DE:</strong> Wir geben keine Daten für Werbe-Zwecke weiter und teilen sie nicht ohne dein ausdrückliches Einverständnis. Alle Gesundheits- und Kontodaten verbleiben auf unseren Servern (Supabase EU-Region Irland).</p>
+            <p><strong>EN:</strong> We do not share data for advertising purposes and do not share it without your explicit consent. All health and account data stays on our servers (Supabase EU region, Ireland).</p>
 
             <h3>12.3 Verschlüsselung / Encryption</h3>
             <p><strong>DE:</strong> Alle Daten werden <strong>verschlüsselt übertragen</strong> (HTTPS/TLS) und verschlüsselt gespeichert (Encryption at Rest via Supabase).</p>
