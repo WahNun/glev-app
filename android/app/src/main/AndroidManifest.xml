@@ -75,6 +75,20 @@
             android:name=".GlucoseChangeReceiver"
             android:exported="false" />
 
+        <!--
+          AlarmKeepAliveService runs as a foreground service to prevent Android
+          Doze/App-Standby from delaying FCM push delivery for hypo/hyper alarms.
+          foregroundServiceType="health" is required on Android 14+ (API 34+) for
+          health-related foreground services; it matches the FOREGROUND_SERVICE_HEALTH
+          permission declared above and is silently ignored on older API levels.
+          exported="false" — only started by MainActivity, not accessible to other apps.
+        -->
+        <service
+            android:name=".AlarmKeepAliveService"
+            android:enabled="true"
+            android:exported="false"
+            android:foregroundServiceType="health" />
+
     </application>
 
     <!-- Permissions -->
@@ -116,5 +130,24 @@
       registration and GlucoseSyncWorker returns Result.success() early.
     -->
     <uses-permission android:name="android.permission.health.READ_BLOOD_GLUCOSE" />
+
+    <!--
+      ACCESS_NOTIFICATION_POLICY is required for NotificationChannel.setBypassDnd(true)
+      to take effect.  Declaring the permission here is not sufficient on its own —
+      the user must also grant "Do Not Disturb access" for Glev once in
+      Settings → Apps → Glev → Notifications → Do Not Disturb access (or via
+      Settings.ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS intent).  The in-app
+      flow for this is a planned follow-up; this permission enables it.
+    -->
+    <uses-permission android:name="android.permission.ACCESS_NOTIFICATION_POLICY" />
+
+    <!--
+      FOREGROUND_SERVICE is required to call startForegroundService() / startForeground().
+      FOREGROUND_SERVICE_HEALTH is the Android 14+ (API 34+) type-specific permission
+      for health-related foreground services.  On older API levels it is silently ignored.
+      Both are install-time permissions — no runtime prompt is shown to the user.
+    -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_HEALTH" />
 
 </manifest>
