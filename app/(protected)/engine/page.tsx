@@ -2832,8 +2832,9 @@ export default function EnginePage() {
             }}>
               {/* Start/stop control for desktop. On mobile the EngineChatPanel
                   (chatPanelNode below) owns the voice/text input, so this
-                  pill is desktop-only. */}
-              {!isMobile && (
+                  pill is desktop-only. Hidden when Glev AI consent is active —
+                  the fullscreen Glev AI chat auto-opens and is the primary UI. */}
+              {!isMobile && !glevAiConsented && (
                 <button
                   type="button"
                   onClick={() => recording ? stopRecording() : startRecording()}

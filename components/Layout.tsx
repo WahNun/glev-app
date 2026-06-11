@@ -568,6 +568,19 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
     }
   }, [pathname, sourceHdr, wizardStep]);
 
+  // On desktop/iPad there is no FAB, so the fullscreen Glev AI chat
+  // never gets opened manually. Auto-open it whenever the user
+  // navigates to /engine with consent already granted and a non-mobile
+  // viewport (>768 px). Closing the sheet sets glevAiFullscreenOpen=false
+  // and does NOT retrigger this effect (pathname didn't change), so the
+  // user can still dismiss and see the Engine wizard behind it.
+  useEffect(() => {
+    if (!aiVoiceEnabled || !glevAi.consentGranted) return;
+    if (!pathname.startsWith("/engine")) return;
+    if (typeof window === "undefined" || window.innerWidth <= 768) return;
+    setGlevAiFullscreenOpen(true);
+  }, [pathname, glevAi.consentGranted, aiVoiceEnabled]);
+
   // Track previous pathname so we can detect returning from /engine.
   const prevPathnameRef = useRef<string>("");
 
