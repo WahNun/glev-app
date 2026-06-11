@@ -1410,11 +1410,14 @@ function useCgmPillStatus(): CgmPillStatus {
   useEffect(() => {
     let cancelled = false;
     const load = () => {
-      fetch("/api/cgm/glucose", { cache: "no-store" })
+      // Use /api/cgm/latest — source-agnostic dispatcher (LLU + Apple Health
+      // + Nightscout + Junction). /api/cgm/glucose only covers Junction/Nightscout
+      // and returns connected:false for LLU users, incorrectly showing OFFLINE.
+      fetch("/api/cgm/latest", { cache: "no-store" })
         .then(r => r.ok ? r.json() : null)
-        .then((d: { connected?: boolean; timestamp?: string | null } | null) => {
+        .then((d: { current?: { timestamp?: string | null } | null } | null) => {
           if (cancelled) return;
-          setTs(d?.connected ? (d.timestamp ?? null) : null);
+          setTs(d?.current?.timestamp ?? null);
         })
         .catch(() => { if (!cancelled) setTs(null); });
     };
