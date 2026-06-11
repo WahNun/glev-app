@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type MutableRefObject } from "react";
 import { supabase } from "@/lib/supabase";
 import { scheduleCheckReminder } from "@/lib/mealCheckReminders";
 import { getActionNavConfig } from "@/lib/ai/pendingActions";
@@ -138,6 +138,16 @@ export type MealQueueItem = {
   token?: string;
 };
 
+/** AI processing state for FAB animation binding. */
+export type AIState = "idle" | "thinking" | "speaking";
+
+/** Attachment resolved from /api/ai/upload (signed URL + metadata). */
+export type ChatAttachment = {
+  url: string;
+  mimeType: string;
+  fileName: string;
+};
+
 export type ContextSnapshot = {
   /** Active screen name — forwarded to the API so the preamble can
    *  note which view the user has open. Optional; non-dashboard
@@ -212,6 +222,12 @@ export function useGlevAI(opts?: {
   const [messages, setMessages] = useState<GlevChatMessage[]>([]);
   const [streaming, setStreaming] = useState<boolean>(false);
   const abortRef = useRef<AbortController | null>(null);
+  /** idle → thinking on send, thinking → idle when stream ends.
+   *  speaking is set externally by the TTS player via setAiState. */
+  const [aiState, setAiState] = useState<AIState>("idle");
+  /** Populated by the TTS player on audio start so the FAB can read
+   *  frequency data for amplitude-reactive animation. */
+  const audioAnalyserRef = useRef<AnalyserNode | null>(null);
   // Slow-response warning: true after SLOW_WARNING_MS with no stream end.
   const [isSlow, setIsSlow] = useState<boolean>(false);
   // Rate-limit countdown: seconds remaining before the auto-retry fires.
@@ -437,14 +453,15 @@ export function useGlevAI(opts?: {
   const sendMessageRef = useRef<(text: string) => void>(() => {});
 
   const sendMessage = useCallback(
-    async (text: string) => {
+    async (text: string, attachments?: ChatAttachment[]) => {
       const trimmed = text.trim();
-      if (!trimmed || streaming) return;
+      const hasAttachments = (attachments ?? []).length > 0;
+      if ((!trimmed && !hasAttachments) || streaming) return;
 
       const userMsg: GlevChatMessage = {
         id: nextId(),
         role: "user",
-        content: trimmed,
+        content: trimmed || "📎",
       };
       const assistantId = nextId();
       const assistantMsg: GlevChatMessage = {
@@ -463,6 +480,7 @@ export function useGlevAI(opts?: {
 
       setMessages((prev) => [...prev, userMsg, assistantMsg]);
       setStreaming(true);
+      setAiState("thinking");
       setIsSlow(false);
       setRateLimitCountdown(null);
 
@@ -483,6 +501,7 @@ export function useGlevAI(opts?: {
             message: trimmed,
             history: apiHistory,
             contextSnapshot: buildContextPayload(optsRef.current?.contextSnapshot),
+            ...(hasAttachments ? { attachments } : {}),
             // Device-local IANA timezone — single source of truth for
             // alle Zeit-Formatierungen in den AI-Tools. Wir trauen dem
             // Profil-Feld bewusst nicht, weil Nutzer reisen und das
@@ -710,6 +729,7 @@ export function useGlevAI(opts?: {
         clearTimeout(slowTimerId);
         setIsSlow(false);
         setStreaming(false);
+        setAiState("idle");
         abortRef.current = null;
         setMessages((prev) =>
           prev.map((m) =>
@@ -881,6 +901,15 @@ export function useGlevAI(opts?: {
     sheetOpen,
     messages,
     streaming,
+    /** Current AI processing state for FAB animation. */
+    aiState,
+    /** Set by TTS player to 'speaking' when audio starts, back to 'idle'
+     *  when audio ends. Exposed so Layout.tsx can wire it without needing
+     *  a separate window event. */
+    setAiState,
+    /** Populated by the TTS player with a Web Audio AnalyserNode so the
+     *  FAB can read amplitude data during the speaking animation. */
+    audioAnalyserRef: audioAnalyserRef as MutableRefObject<AnalyserNode | null>,
     /** True after SLOW_WARNING_MS of waiting — the chat sheet can show
      *  "Glev braucht etwas länger…" while the user waits for a response. */
     isSlow,

@@ -12,7 +12,7 @@ import DashboardQuickAddSheet from "@/components/DashboardQuickAddSheet";
 import GlevAIButton from "@/components/GlevAIButton";
 import GlevAIConsentModal from "@/components/GlevAIConsentModal";
 import GlevAIChatSheet from "@/components/GlevAIChatSheet";
-import { useGlevAI } from "@/lib/useGlevAI";
+import { useGlevAI, type AIState } from "@/lib/useGlevAI";
 import { GlevAIProvider } from "@/lib/glevAIContext";
 import { resolveFabAction } from "@/lib/fabAction";
 import { useFeatureFlag } from "@/lib/featureFlags";
@@ -1255,6 +1255,8 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
                     : !glevAi.sheetOpen))
             : false}
           showArrow={arrowHint}
+          aiState={aiVoiceEnabled ? glevAi.aiState : "idle"}
+          audioAnalyserRef={glevAi.audioAnalyserRef}
         />
         <MobileTab
           label={tNav("insights")}
@@ -1477,6 +1479,7 @@ function CgmStatusPill({ locale: loc }: { locale: string }) {
 
 function MobileGlevFab({
   label, active, recording = false, speaking = false, sheetOpen = false, hasConversation = false, showArrow = false,
+  aiState = "idle", audioAnalyserRef,
 }: {
   label: string;
   active: boolean;
@@ -1487,7 +1490,71 @@ function MobileGlevFab({
   hasConversation?: boolean;
   /** Show the upward chevron arrow (only when AI chat is available for this user). */
   showArrow?: boolean;
+  aiState?: AIState;
+  audioAnalyserRef?: { current: AnalyserNode | null };
 }) {
+  const bubbleRef = useRef<HTMLSpanElement>(null);
+  const rafRef    = useRef<number>(0);
+  const angleRef  = useRef<number>(0);
+  const prevTsRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    const el = bubbleRef.current;
+    if (!el) return;
+
+    const BASE_TRANSLATE = "translate(-50%, calc(-50% - 5px))";
+
+    if (aiState === "thinking") {
+      // Sinusoidal rotation: speed oscillates 0.5x–2x of 120 deg/s base, 3s period.
+      const BASE_DEG_MS = 0.12; // 120 deg/s
+      prevTsRef.current = null;
+
+      const tick = (ts: number) => {
+        if (prevTsRef.current === null) prevTsRef.current = ts;
+        const dt   = ts - prevTsRef.current;
+        prevTsRef.current = ts;
+        // speed factor: 1.25 + 0.75*sin(2π*t/3000) → range [0.5, 2.0]
+        const factor = 1.25 + 0.75 * Math.sin((2 * Math.PI * ts) / 3000);
+        angleRef.current = (angleRef.current + BASE_DEG_MS * dt * factor) % 360;
+        el.style.transform = `${BASE_TRANSLATE} rotate(${angleRef.current.toFixed(2)}deg)`;
+        el.style.filter = "";
+        rafRef.current = requestAnimationFrame(tick);
+      };
+      rafRef.current = requestAnimationFrame(tick);
+
+    } else if (aiState === "speaking") {
+      const analyser = audioAnalyserRef?.current;
+      if (!analyser) {
+        el.style.transform = BASE_TRANSLATE;
+        el.style.filter = "";
+        return;
+      }
+      const buf = new Uint8Array(analyser.frequencyBinCount);
+
+      const tick = () => {
+        analyser.getByteFrequencyData(buf);
+        let sum = 0;
+        for (let i = 0; i < buf.length; i++) sum += buf[i];
+        const amp = sum / (buf.length * 255); // [0, 1]
+        const scale      = 1 + amp * 0.15;       // [1.00, 1.15]
+        const brightness = 100 + amp * 40;        // [100%, 140%]
+        el.style.transform = `${BASE_TRANSLATE} scale(${scale.toFixed(3)})`;
+        el.style.filter    = `brightness(${brightness.toFixed(1)}%)`;
+        rafRef.current = requestAnimationFrame(tick);
+      };
+      rafRef.current = requestAnimationFrame(tick);
+
+    } else {
+      // idle — reset
+      el.style.transform = BASE_TRANSLATE;
+      el.style.filter    = "";
+    }
+
+    return () => {
+      cancelAnimationFrame(rafRef.current);
+    };
+  }, [aiState, audioAnalyserRef]);
+
   return (
     <div
       aria-hidden="true"
@@ -1553,6 +1620,7 @@ function MobileGlevFab({
           </span>
         )}
         <span
+          ref={bubbleRef}
           style={{
             position: "absolute",
             left: "50%",
