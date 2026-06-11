@@ -2472,7 +2472,7 @@
     "brand_principle_honest_title": "Medically honest",
     "brand_principle_honest_text": "Never “calculate”, never “dose”. Glev documents — therapy is your doctor's job.",
     "brand_compliance_no_med_title": "Glev is not a medical device",
-    "brand_compliance_no_med_body": "Glev is a documentation and organisation tool for people with type-1 diabetes. Glev does not calculate insulin doses, gives no therapy recommendations and is not certified under MDR/IVDR. You make therapy decisions with your treating doctor.",
+    "brand_compliance_no_med_body": "Glev is not a medical device and does not replace a physician. The app shows you patterns and estimates based on your past meals — the decision about your insulin dose is always yours, ideally in consultation with your diabetes team.",
     "brand_compliance_data_title": "Data",
     "brand_compliance_data_text": "Glucose, meal and insulin data live in Supabase (EU region). Auth via Supabase, AI features via Replit AI Integrations.",
     "brand_compliance_cgm_title": "CGM sources",

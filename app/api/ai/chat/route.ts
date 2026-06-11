@@ -168,16 +168,11 @@ export async function callMistralWithRetry<T>(
 // (`public.ai_rate_limit_hits`) via the service-role client so the cap
 // is enforced across all serverless function instances and survives
 // cold starts — see migration 20260523_ai_rate_limit_hits.sql.
-const RATE_LIMIT_MAX = 20;
+const RATE_LIMIT_MAX = 30;
 const RATE_LIMIT_WINDOW_MS = 60_000;
 
-/**
- * Returns `true` if the user has already hit RATE_LIMIT_MAX requests in
- * the last RATE_LIMIT_WINDOW_MS. Otherwise records this hit and returns
- * `false`. Fails open: if the admin client is unconfigured or the DB
- * call errors, we let the request through rather than locking everyone
- * out (the existing Mistral-side quota remains as a backstop).
- */
+/** Returns `true` if the user has already reached RATE_LIMIT_MAX hits
+ *  in the last RATE_LIMIT_WINDOW_MS. Fails open on DB errors. */
 async function isRateLimited(userId: string): Promise<boolean> {
   let admin;
   try {
@@ -186,8 +181,7 @@ async function isRateLimited(userId: string): Promise<boolean> {
     return false;
   }
 
-  const now = Date.now();
-  const cutoffIso = new Date(now - RATE_LIMIT_WINDOW_MS).toISOString();
+  const cutoffIso = new Date(Date.now() - RATE_LIMIT_WINDOW_MS).toISOString();
 
   const { count, error: countErr } = await admin
     .from("ai_rate_limit_hits")
@@ -195,30 +189,32 @@ async function isRateLimited(userId: string): Promise<boolean> {
     .eq("user_id", userId)
     .gte("hit_at", cutoffIso);
 
-  if (countErr) {
-    return false;
-  }
-  if ((count ?? 0) >= RATE_LIMIT_MAX) {
-    return true;
+  if (countErr) return false;
+  return (count ?? 0) >= RATE_LIMIT_MAX;
+}
+
+/** Records one rate-limit hit for the user. Fails open on DB errors.
+ *  Also opportunistically prunes stale rows for this user. */
+async function addRateLimitHit(userId: string): Promise<void> {
+  let admin;
+  try {
+    admin = getSupabaseAdmin();
+  } catch {
+    return;
   }
 
-  const { error: insertErr } = await admin
+  const now = Date.now();
+  const cutoffIso = new Date(now - RATE_LIMIT_WINDOW_MS).toISOString();
+
+  await admin
     .from("ai_rate_limit_hits")
     .insert({ user_id: userId, hit_at: new Date(now).toISOString() });
-  if (insertErr) {
-    return false;
-  }
 
-  // Opportunistic best-effort cleanup of stale rows for this user so
-  // the table doesn't grow without bound. Errors are ignored — a
-  // future row will retry the prune.
   void admin
     .from("ai_rate_limit_hits")
     .delete()
     .eq("user_id", userId)
     .lt("hit_at", cutoffIso);
-
-  return false;
 }
 
 // ── Body shape ────────────────────────────────────────────────────────
@@ -564,11 +560,13 @@ export async function handleChatPost(
     history: Boolean(profile?.ai_consent_history_at),
   };
 
-  // 3. Rate limit
+  // 3. Rate limit — one hit per user-initiated message, recorded before
+  //    any Mistral calls so tool-round retries don't count separately.
   if (await isRateLimited(user.id)) {
     console.error("[chat]", { code: "MISTRAL_RATE_LIMITED", userId: user.id });
     return errorResponse("MISTRAL_RATE_LIMITED", 429);
   }
+  await addRateLimitHit(user.id);
 
   // 4. Body
   const raw = await req.json().catch(() => null);
