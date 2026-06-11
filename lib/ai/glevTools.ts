@@ -667,7 +667,7 @@ Wenn der Nutzer einen Markennamen nennt, leite insulin_type automatisch aus der 
     function: {
       name: "submit_structured_feedback",
       description:
-        "Speichert User-Feedback strukturiert im Backend. Nutze NUR wenn der User Feedback geben will (z. B. Bug-Report, Feature-Wunsch, Beschwerde, Lob). Erst nach den strukturierten Nachfragen aufrufen — nicht beim ersten Hinweis, sondern nachdem du what_noticed, where_noticed, what_broken und what_wished erfragt hast.",
+        "Speichert User-Feedback strukturiert im Backend. Nutze NUR wenn der User Feedback geben will (z. B. Bug-Report, Feature-Wunsch, Beschwerde, Lob). WICHTIG: Wenn der Nutzer in einer Nachricht bereits genug Kontext gegeben hat (was aufgefallen ist, wo, was passiert), sofort aufrufen — keine unnötigen Rückfragen stellen. Fehlende optionale Felder (what_broken, what_wished) können leer bleiben. Nur nachfragen wenn what_noticed komplett fehlt.",
       parameters: {
         type: "object",
         properties: {
