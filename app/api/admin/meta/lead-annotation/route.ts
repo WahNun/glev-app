@@ -1,8 +1,8 @@
 // PATCH /api/admin/meta/lead-annotation
-// Setzt lead_status und/oder lead_comment für einen Meta-Lead.
+// Setzt lead_status, lead_comment und/oder lead_action_step für einen Meta-Lead.
 //
 // Auth: glev_ops_token Cookie (Admin oder Marketer)
-// Body: { email: string; lead_status?: string | null; lead_comment?: string | null }
+// Body: { email: string; lead_status?: string | null; lead_comment?: string | null; lead_action_step?: string | null }
 
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
@@ -43,6 +43,11 @@ export async function PATCH(req: NextRequest) {
     const c = body.lead_comment;
     updates.lead_comment =
       c === null || c === undefined ? null : typeof c === "string" ? c : null;
+  }
+  if ("lead_action_step" in body) {
+    const a = body.lead_action_step;
+    updates.lead_action_step =
+      a === null || a === undefined ? null : typeof a === "string" ? a : null;
   }
 
   if (Object.keys(updates).length === 0) {

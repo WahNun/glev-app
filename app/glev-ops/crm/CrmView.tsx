@@ -69,6 +69,7 @@ export type CrmUserRow = {
   sms_opted_out: boolean;
   lead_status: string | null;
   lead_comment: string | null;
+  lead_action_step: string | null;
 };
 
 export type CrmBetaRow = {
@@ -494,11 +495,21 @@ function LeadStatusCell({ email, initial }: { email: string; initial: string | n
       ? { background: "#fffbeb", color: "#b45309", border: "1px solid #fde68a", borderRadius: 4, padding: "2px 7px", fontSize: 11, fontWeight: 600, whiteSpace: "nowrap" }
       : value === "qualified"
       ? { background: "#dcfce7", color: "#166534", border: "1px solid #bbf7d0", borderRadius: 4, padding: "2px 7px", fontSize: 11, fontWeight: 600, whiteSpace: "nowrap" }
+      : value === "lukas_action"
+      ? { background: "#eff6ff", color: "#1d4ed8", border: "1px solid #bfdbfe", borderRadius: 4, padding: "2px 7px", fontSize: 11, fontWeight: 600, whiteSpace: "nowrap" }
       : { background: "#f3f4f6", color: "#9ca3af", borderRadius: 4, padding: "2px 7px", fontSize: 11, whiteSpace: "nowrap" };
 
+  function label(v: string | null) {
+    if (v === "dq") return "🔴 DQ";
+    if (v === "in_review") return "🟡 In Prüfung";
+    if (v === "qualified") return "🟢 Qualifiziert";
+    if (v === "lukas_action") return "🔵 Lukas Action";
+    return "";
+  }
+
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: 4, minWidth: 110 }}>
-      {value && <span style={chipStyle}>{value === "dq" ? "🔴 DQ" : value === "in_review" ? "🟡 In Prüfung" : "🟢 Qualifiziert"}</span>}
+    <div style={{ display: "flex", alignItems: "center", gap: 4, minWidth: 120 }}>
+      {value && <span style={chipStyle}>{label(value)}</span>}
       <select
         value={value ?? ""}
         disabled={saving}
@@ -510,6 +521,7 @@ function LeadStatusCell({ email, initial }: { email: string; initial: string | n
         <option value="in_review">🟡 In Prüfung</option>
         <option value="qualified">🟢 Qualifiziert</option>
         <option value="dq">🔴 DQ</option>
+        <option value="lukas_action">🔵 Lukas Action</option>
       </select>
     </div>
   );
@@ -590,6 +602,85 @@ function LeadCommentCell({ email, initial }: { email: string; initial: string | 
       style={{ background: "none", border: "1px dashed #d1d5db", borderRadius: 4, padding: "3px 7px", fontSize: 12, color: saved ? "#374151" : "#9ca3af", cursor: "pointer", maxWidth: 180, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", display: "block", textAlign: "left", fontFamily: "inherit" }}
     >
       {saved ? (saved.length > 40 ? `${saved.slice(0, 40)}…` : saved) : "+ Notiz"}
+    </button>
+  );
+}
+
+function LeadActionStepCell({ email, initial }: { email: string; initial: string | null }) {
+  const [saved, setSaved] = useState<string | null>(initial);
+  const [draft, setDraft] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [confirmed, setConfirmed] = useState(false);
+
+  const isEditing = draft !== null;
+
+  function openEditor() {
+    setDraft(saved ?? "");
+    setConfirmed(false);
+  }
+
+  async function save() {
+    if (draft === null) return;
+    setSaving(true);
+    try {
+      await fetch("/api/admin/meta/lead-annotation", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, lead_action_step: draft.trim() || null }),
+      });
+      setSaved(draft.trim() || null);
+      setDraft(null);
+      setConfirmed(true);
+      setTimeout(() => setConfirmed(false), 2000);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (confirmed) {
+    return <span style={{ color: "#059669", fontSize: 12, fontWeight: 600 }}>✓ Gespeichert</span>;
+  }
+
+  if (isEditing) {
+    return (
+      <div style={{ display: "flex", flexDirection: "column", gap: 4, minWidth: 180 }}>
+        <textarea
+          autoFocus
+          rows={3}
+          value={draft ?? ""}
+          onChange={(e) => setDraft(e.target.value)}
+          style={{ fontSize: 12, padding: "4px 6px", border: "1px solid #93c5fd", borderRadius: 4, resize: "vertical", fontFamily: "inherit", width: 180 }}
+          onKeyDown={(e) => { if (e.key === "Escape") { setDraft(null); } }}
+        />
+        <div style={{ display: "flex", gap: 4 }}>
+          <button
+            type="button"
+            disabled={saving}
+            onClick={save}
+            style={{ fontSize: 11, padding: "3px 8px", background: "#1d4ed8", color: "#fff", border: "none", borderRadius: 4, cursor: "pointer", fontFamily: "inherit" }}
+          >
+            {saving ? "…" : "Speichern"}
+          </button>
+          <button
+            type="button"
+            onClick={() => setDraft(null)}
+            style={{ fontSize: 11, padding: "3px 8px", background: "#f3f4f6", color: "#6b7280", border: "none", borderRadius: 4, cursor: "pointer", fontFamily: "inherit" }}
+          >
+            Abbrechen
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={openEditor}
+      title={saved ?? "Action Step hinzufügen"}
+      style={{ background: saved ? "#eff6ff" : "none", border: `1px ${saved ? "solid #bfdbfe" : "dashed #bfdbfe"}`, borderRadius: 4, padding: "3px 7px", fontSize: 12, color: saved ? "#1d4ed8" : "#93c5fd", cursor: "pointer", maxWidth: 180, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", display: "block", textAlign: "left", fontFamily: "inherit" }}
+    >
+      {saved ? (saved.length > 40 ? `${saved.slice(0, 40)}…` : saved) : "+ Action Step"}
     </button>
   );
 }
@@ -755,9 +846,11 @@ function TrialTab({ users }: { users: CrmUserRow[] }) {
                   status,
                   lead_status: u.lead_status ?? "",
                   lead_comment: u.lead_comment ?? "",
+                  lead_action_step: u.lead_action_step ?? "",
                   reminder: u.reminder_sent_at ?? "",
                   onboarding: u.onboarding_completed_at ? "Abgeschlossen" : u.profile_trial_start_at ? "Ausstehend" : "",
                   link_clicks: [u.sms_clicked ? "SMS" : null, u.email_clicked ? "Email" : null].filter(Boolean).join("; "),
+                  last_sign_in_at: u.last_sign_in_at ?? "",
                   created_at: u.created_at,
                 };
               }),
@@ -772,9 +865,11 @@ function TrialTab({ users }: { users: CrmUserRow[] }) {
                 { key: "status", header: "Trial-Status" },
                 { key: "lead_status", header: "Lead-Status" },
                 { key: "lead_comment", header: "Kommentar" },
+                { key: "lead_action_step", header: "Action Step" },
                 { key: "reminder", header: "Reminder" },
                 { key: "onboarding", header: "Onboarding" },
                 { key: "link_clicks", header: "Link-Klicks" },
+                { key: "last_sign_in_at", header: "Zuletzt eingeloggt" },
                 { key: "created_at", header: "Angelegt" },
               ],
               `crm-trial-${today}.csv`,
@@ -808,9 +903,11 @@ function TrialTab({ users }: { users: CrmUserRow[] }) {
               <Th>Trial-Status</Th>
               <Th>Lead-Status</Th>
               <Th>Kommentar</Th>
+              <Th>Action Step</Th>
               <Th>Link-Klicks</Th>
               <Th>Reminder</Th>
               <Th>Onboarding</Th>
+              <Th>Zuletzt eingeloggt</Th>
               <Th>Angelegt</Th>
               <Th></Th>
             </tr>
@@ -882,6 +979,9 @@ function TrialTab({ users }: { users: CrmUserRow[] }) {
                   <td style={{ padding: "8px 12px", verticalAlign: "middle" }}>
                     <LeadCommentCell email={u.email} initial={u.lead_comment} />
                   </td>
+                  <td style={{ padding: "8px 12px", verticalAlign: "middle" }}>
+                    <LeadActionStepCell email={u.email} initial={u.lead_action_step} />
+                  </td>
                   <Td>
                     {(u.sms_clicked || u.email_clicked) ? (
                       <span style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
@@ -902,6 +1002,7 @@ function TrialTab({ users }: { users: CrmUserRow[] }) {
                         ? <span style={badgePending}>Ausstehend</span>
                         : <span style={{ color: "#d1d5db", fontSize: 12 }}>—</span>}
                   </Td>
+                  <Td title={u.last_sign_in_at ?? ""}>{fmtRel(u.last_sign_in_at)}</Td>
                   <Td>{fmtDate(u.created_at)}</Td>
                   <Td>
                     <span style={{ display: "flex", gap: 8, alignItems: "center" }}>
@@ -913,7 +1014,7 @@ function TrialTab({ users }: { users: CrmUserRow[] }) {
               );
             })}
             {filtered.length === 0 && (
-              <tr><td colSpan={16} style={{ padding: 32, textAlign: "center", color: "#999" }}>Keine Trial-Nutzer.</td></tr>
+              <tr><td colSpan={18} style={{ padding: 32, textAlign: "center", color: "#999" }}>Keine Trial-Nutzer.</td></tr>
             )}
           </tbody>
         </table>
