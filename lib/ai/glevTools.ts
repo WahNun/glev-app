@@ -2581,7 +2581,7 @@ async function toolSubmitStructuredFeedback(
     return {
       ok: false,
       error: "feedback_consent_missing",
-      message: "Du hast die Feedback-Speicherung noch nicht aktiviert. Bitte aktiviere sie in Einstellungen → Glev AI → „App-Feedback speichern", damit ich dein Feedback aufnehmen kann.",
+      message: "Du hast die Feedback-Speicherung noch nicht aktiviert. Bitte aktiviere sie in Einstellungen \u2192 Glev AI \u2192 \"App-Feedback speichern\", damit ich dein Feedback aufnehmen kann.",
     };
   }
 
