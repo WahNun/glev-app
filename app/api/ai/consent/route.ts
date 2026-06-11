@@ -23,11 +23,12 @@ import { authedClient } from "@/app/api/insulin/_helpers";
  */
 const CONSENT_VERSION = "v1.0";
 
-type Scope = "glucose" | "iob" | "history";
-const SCOPE_COLUMN: Record<Scope, "ai_consent_glucose_at" | "ai_consent_iob_at" | "ai_consent_history_at"> = {
-  glucose: "ai_consent_glucose_at",
-  iob:     "ai_consent_iob_at",
-  history: "ai_consent_history_at",
+type Scope = "glucose" | "iob" | "history" | "feedback";
+const SCOPE_COLUMN: Record<Scope, "ai_consent_glucose_at" | "ai_consent_iob_at" | "ai_consent_history_at" | "ai_feedback_consent_at"> = {
+  glucose:  "ai_consent_glucose_at",
+  iob:      "ai_consent_iob_at",
+  history:  "ai_consent_history_at",
+  feedback: "ai_feedback_consent_at",
 };
 
 export async function POST(req: NextRequest) {
@@ -57,7 +58,7 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     if (body && typeof body === "object") {
       const s = (body as { scope?: unknown }).scope;
-      if (s === "glucose" || s === "iob" || s === "history") {
+      if (s === "glucose" || s === "iob" || s === "history" || s === "feedback") {
         scope = s;
       }
       const g = (body as { granted?: unknown }).granted;
@@ -176,6 +177,7 @@ export async function DELETE(req: NextRequest) {
       ai_consent_glucose_at: null,
       ai_consent_iob_at: null,
       ai_consent_history_at: null,
+      ai_feedback_consent_at: null,
     })
     .eq("user_id", user.id);
 
@@ -189,5 +191,6 @@ export async function DELETE(req: NextRequest) {
     ai_consent_glucose_at: null,
     ai_consent_iob_at: null,
     ai_consent_history_at: null,
+    ai_feedback_consent_at: null,
   });
 }

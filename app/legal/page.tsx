@@ -126,6 +126,7 @@ function LegalPageInner() {
                 <tr><td>Gesundheitsdaten (Glukose, Symptome, Mahlzeiten)</td><td>Art. 9 Abs. 2 lit. a DSGVO – Ausdrückliche Einwilligung</td></tr>
                 <tr><td>Technische Verbindungsdaten</td><td>Art. 6 Abs. 1 lit. f DSGVO – Berechtigte Interessen (sicherer Betrieb)</td></tr>
                 <tr><td>Lead-Daten aus Meta-Werbung (Name, E-Mail)</td><td>Art. 6 Abs. 1 lit. b DSGVO – Vertragsanbahnung + Einwilligung via Formular</td></tr>
+                <tr><td>KI-Feedback-Daten (strukturierte Bug- und Feature-Meldungen via Chat)</td><td>Art. 6 Abs. 1 lit. a DSGVO – Einwilligung (freiwillig, jederzeit widerrufbar in Einstellungen → Glev AI)</td></tr>
               </tbody>
             </table>
           </section>
@@ -156,6 +157,10 @@ function LegalPageInner() {
                 <p>No data is passed on to third parties outside the listed processors. No data sharing for advertising purposes.</p>
                 <p>Glev does <strong>not</strong> send any <strong>personal identifiers</strong> (email, name, date of birth) to OpenAI or Mistral. Both AI providers see only meal and chat content with no user context. Voice recordings are <strong>deleted immediately</strong> after transcription by OpenAI Whisper and are not stored permanently.</p>
                 <p>In Settings → <strong>Glev Engine → Glev AI</strong> you can individually enable or disable each AI feature. If all AI features are disabled, Glev remains fully usable as a pure documentation app without AI.</p>
+                <div className="highlight-box" style={{ marginTop: "1rem" }}>
+                  <strong>AI feedback collection (optional)</strong><br />
+                  If you report a bug or feature request via the Glev AI chat and have enabled <em>Save app feedback</em> in Settings → Glev AI, the following data is stored in your Glev account: a description of what you noticed, the location in the app, a description of what is broken (if applicable), your feature wish (if applicable), an AI-generated summary, and a category/severity classification. This data is processed by Mistral AI solely to generate the structured summary — Mistral does not store it permanently (API mode, no training use). The feedback is stored encrypted in the Supabase EU database and is only accessible to the Glev team. <strong>Legal basis: Art. 6(1)(a) GDPR (consent).</strong> You can revoke your consent at any time in Settings → Glev AI → <em>Save app feedback</em> (toggle off). Existing feedback entries are deleted on account deletion.
+                </div>
                 <ul>
                   <li><a href="https://openai.com/policies/privacy-policy" target="_blank" rel="noopener noreferrer">OpenAI Privacy Policy</a></li>
                   <li><a href="https://mistral.ai/terms#privacy-policy" target="_blank" rel="noopener noreferrer">Mistral Privacy Policy</a></li>
@@ -186,6 +191,10 @@ function LegalPageInner() {
                 <p>Eine Weitergabe an Dritte außerhalb der genannten Auftragsverarbeiter findet <strong>nicht</strong> statt. Keine Datenweitergabe zu Werbezwecken.</p>
                 <p>Glev sendet <strong>keine personenbezogenen Identifikatoren</strong> (E-Mail, Name, Geburtsdatum) an OpenAI oder Mistral. Beide KI-Dienstleister sehen ausschließlich Mahlzeit- und Chat-Inhalte ohne User-Kontext. Sprach-Aufnahmen werden nach Erhalt der Transkription durch OpenAI Whisper <strong>unverzüglich gelöscht</strong> und nicht dauerhaft gespeichert.</p>
                 <p>In den Einstellungen → <strong>Glev Engine → Glev AI</strong> kannst Du jede einzelne KI-Funktion granular aktivieren oder deaktivieren. Bei vollständiger Deaktivierung ist Glev weiterhin als reine Dokumentations-App ohne KI nutzbar.</p>
+                <div className="highlight-box" style={{ marginTop: "1rem" }}>
+                  <strong>KI-gestützte Feedback-Erfassung (optional)</strong><br />
+                  Wenn du über den Glev-AI-Chat einen Bug oder Feature-Wunsch meldest und die Option <em>„App-Feedback speichern"</em> in Einstellungen → Glev AI aktiviert hast, werden folgende Daten in deinem Glev-Konto gespeichert: eine Beschreibung des Beobachteten, der Ort in der App, eine Beschreibung des Fehlers (falls zutreffend), dein Feature-Wunsch (falls zutreffend), eine KI-generierte Zusammenfassung sowie eine Kategorie- und Schweregrad-Klassifikation. Diese Daten werden von Mistral AI ausschließlich zur Erstellung der strukturierten Zusammenfassung verarbeitet — Mistral speichert sie nicht dauerhaft (API-Modus, kein Training). Das Feedback wird verschlüsselt in der Supabase-EU-Datenbank gespeichert und ist ausschließlich für das Glev-Team zugänglich. <strong>Rechtsgrundlage: Art. 6 Abs. 1 lit. a DSGVO (Einwilligung).</strong> Du kannst deine Einwilligung jederzeit in Einstellungen → Glev AI → <em>„App-Feedback speichern"</em> (Toggle deaktivieren) widerrufen. Bestehende Feedback-Einträge werden bei Kontolöschung gelöscht.
+                </div>
                 <ul>
                   <li><a href="https://openai.com/policies/privacy-policy" target="_blank" rel="noopener noreferrer">OpenAI Privacy Policy</a></li>
                   <li><a href="https://mistral.ai/terms#privacy-policy" target="_blank" rel="noopener noreferrer">Mistral Privacy Policy</a></li>

@@ -1511,6 +1511,8 @@
     "glev_intel_row_iob_desc": "Allow the currently active bolus amount to flow into the context snapshot.",
     "glev_intel_row_history_title": "7-day history",
     "glev_intel_row_history_desc": "Longer-term history (meals, glucose, insulin) as extra context.",
+    "glev_intel_row_feedback_title": "Save app feedback",
+    "glev_intel_row_feedback_desc": "When you report a bug or feature request in chat, Glev AI may store the structured details (what, where, what's broken, what you'd like) in your account so the team can act on it. Without this consent, Glev AI cannot accept feedback.",
     "glev_intel_master_off_hint": "First enable Glev Intelligence above to configure data access.",
     "glev_intel_master_off_cta": "Enable Glev Intelligence",
     "glev_intel_revoke_all": "Revoke all AI access",

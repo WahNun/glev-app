@@ -21,7 +21,8 @@ export default function AiSettingsPage() {
   const [aiScopeGlucose, setAiScopeGlucose] = useState<boolean | null>(null);
   const [aiScopeIob, setAiScopeIob] = useState<boolean | null>(null);
   const [aiScopeHistory, setAiScopeHistory] = useState<boolean | null>(null);
-  const [aiScopeBusy, setAiScopeBusy] = useState<"glucose" | "iob" | "history" | "revoke" | null>(null);
+  const [aiScopeFeedback, setAiScopeFeedback] = useState<boolean | null>(null);
+  const [aiScopeBusy, setAiScopeBusy] = useState<"glucose" | "iob" | "history" | "feedback" | "revoke" | null>(null);
 
   const [fabMode, setFabMode] = useState<"ai" | "voice">("voice");
   useEffect(() => {
@@ -115,18 +116,20 @@ export default function AiSettingsPage() {
         if (!user) { setAiConsentGranted(false); return; }
         const { data } = await supabase
           .from("profiles")
-          .select("ai_consent_at, ai_consent_glucose_at, ai_consent_iob_at, ai_consent_history_at")
+          .select("ai_consent_at, ai_consent_glucose_at, ai_consent_iob_at, ai_consent_history_at, ai_feedback_consent_at")
           .eq("user_id", user.id)
           .maybeSingle();
         setAiConsentGranted(Boolean(data?.ai_consent_at));
         setAiScopeGlucose(Boolean(data?.ai_consent_glucose_at));
         setAiScopeIob(Boolean(data?.ai_consent_iob_at));
         setAiScopeHistory(Boolean(data?.ai_consent_history_at));
+        setAiScopeFeedback(Boolean(data?.ai_feedback_consent_at));
       } catch {
         setAiConsentGranted(false);
         setAiScopeGlucose(false);
         setAiScopeIob(false);
         setAiScopeHistory(false);
+        setAiScopeFeedback(false);
       }
     })();
   }, []);
@@ -140,13 +143,14 @@ export default function AiSettingsPage() {
         if (!user) return;
         const { data } = await supabase
           .from("profiles")
-          .select("ai_consent_at, ai_consent_glucose_at, ai_consent_iob_at, ai_consent_history_at")
+          .select("ai_consent_at, ai_consent_glucose_at, ai_consent_iob_at, ai_consent_history_at, ai_feedback_consent_at")
           .eq("user_id", user.id)
           .maybeSingle();
         setAiConsentGranted(Boolean(data?.ai_consent_at));
         setAiScopeGlucose(Boolean(data?.ai_consent_glucose_at));
         setAiScopeIob(Boolean(data?.ai_consent_iob_at));
         setAiScopeHistory(Boolean(data?.ai_consent_history_at));
+        setAiScopeFeedback(Boolean(data?.ai_feedback_consent_at));
       } catch { /* keep previous */ }
     };
     // Re-sync when the window regains focus (e.g. user switches tabs).
@@ -195,17 +199,19 @@ export default function AiSettingsPage() {
     }
   }, [aiConsentGranted, aiConsentBusy, aiScopeGlucose, aiScopeIob, aiScopeHistory]);
 
-  const toggleAiScope = useCallback(async (scope: "glucose" | "iob" | "history", next: boolean) => {
+  const toggleAiScope = useCallback(async (scope: "glucose" | "iob" | "history" | "feedback", next: boolean) => {
     if (aiScopeBusy) return;
     if (!aiConsentGranted) return;
     const setter =
-      scope === "glucose" ? setAiScopeGlucose :
-      scope === "iob"     ? setAiScopeIob     :
-                            setAiScopeHistory;
+      scope === "glucose"  ? setAiScopeGlucose  :
+      scope === "iob"      ? setAiScopeIob      :
+      scope === "feedback" ? setAiScopeFeedback :
+                             setAiScopeHistory;
     const prev =
-      scope === "glucose" ? aiScopeGlucose :
-      scope === "iob"     ? aiScopeIob     :
-                            aiScopeHistory;
+      scope === "glucose"  ? aiScopeGlucose  :
+      scope === "iob"      ? aiScopeIob      :
+      scope === "feedback" ? aiScopeFeedback :
+                             aiScopeHistory;
     setAiScopeBusy(scope);
     setter(next);
     try {
@@ -228,11 +234,12 @@ export default function AiSettingsPage() {
       if (!window.confirm(t("glev_intel_revoke_confirm"))) return;
     }
     setAiScopeBusy("revoke");
-    const prev = { master: aiConsentGranted, glucose: aiScopeGlucose, iob: aiScopeIob, history: aiScopeHistory };
+    const prev = { master: aiConsentGranted, glucose: aiScopeGlucose, iob: aiScopeIob, history: aiScopeHistory, feedback: aiScopeFeedback };
     setAiConsentGranted(false);
     setAiScopeGlucose(false);
     setAiScopeIob(false);
     setAiScopeHistory(false);
+    setAiScopeFeedback(false);
     if (typeof window !== "undefined") {
       try { window.sessionStorage.removeItem("glev_ai_history_v1"); } catch { /* ignore */ }
       window.dispatchEvent(new CustomEvent("glev:ai-consent-revoked"));
@@ -245,10 +252,11 @@ export default function AiSettingsPage() {
       setAiScopeGlucose(prev.glucose);
       setAiScopeIob(prev.iob);
       setAiScopeHistory(prev.history);
+      setAiScopeFeedback(prev.feedback);
     } finally {
       setAiScopeBusy(null);
     }
-  }, [aiConsentBusy, aiScopeBusy, aiConsentGranted, aiScopeGlucose, aiScopeIob, aiScopeHistory, t]);
+  }, [aiConsentBusy, aiScopeBusy, aiConsentGranted, aiScopeGlucose, aiScopeIob, aiScopeHistory, aiScopeFeedback, t]);
 
   if (aiVoiceEnabled === false) {
     router.replace("/settings");
@@ -412,6 +420,8 @@ export default function AiSettingsPage() {
             title: t("glev_intel_row_iob_title"),     desc: t("glev_intel_row_iob_desc") },
           { key: "history" as const, granted: !!aiScopeHistory, locked: false,
             title: t("glev_intel_row_history_title"), desc: t("glev_intel_row_history_desc") },
+          { key: "feedback" as const, granted: !!aiScopeFeedback, locked: false,
+            title: t("glev_intel_row_feedback_title"), desc: t("glev_intel_row_feedback_desc") },
         ]).map((row) => {
           const busy = aiScopeBusy === row.key;
           const disabled = row.locked || busy || aiConsentGranted === null;

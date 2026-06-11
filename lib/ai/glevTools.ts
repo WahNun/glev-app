@@ -2571,6 +2571,20 @@ async function toolSubmitStructuredFeedback(
   const severity = typeof args.severity === "string" && validSeverities.includes(args.severity)
     ? args.severity : "medium";
 
+  const { data: prof } = await sb
+    .from("profiles")
+    .select("ai_feedback_consent_at")
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  if (!prof?.ai_feedback_consent_at) {
+    return {
+      ok: false,
+      error: "feedback_consent_missing",
+      message: "Du hast die Feedback-Speicherung noch nicht aktiviert. Bitte aktiviere sie in Einstellungen → Glev AI → „App-Feedback speichern", damit ich dein Feedback aufnehmen kann.",
+    };
+  }
+
   const { error } = await sb
     .from("user_feedback")
     .insert({
