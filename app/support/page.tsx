@@ -167,7 +167,7 @@ const EN: Lang = {
   founderHeading: "Straight from the founder",
   founderBadge: "Solo project",
   founderBody:
-    "I&apos;m building Glev solo right now — and I&apos;m giving it my best. I take feedback seriously and try to act on it quickly, without making false promises. Transparency matters more to me than marketing speak.",
+    "I'm building Glev solo right now — and I'm giving it my best. I take feedback seriously and try to act on it quickly, without making false promises. Transparency matters more to me than marketing speak.",
   founderNote:
     "Glev is a one-person project. Response times may vary — but every message gets read.",
   communityHeading: "Ways to reach me",

@@ -215,7 +215,12 @@ export default function LandscapeGlucoseOverlay() {
       const mqLandscape =
         typeof window.matchMedia === "function" &&
         window.matchMedia("(orientation: landscape)").matches;
-      setLandscape((mqLandscape || w > h) && h <= 768);
+      // Only activate on the native Capacitor shell (iOS / Android).
+      // On web / desktop Chrome the dimension check (w > h && h <= 768)
+      // can fire on any wide browser window and would incorrectly show the
+      // full-screen CGM overlay — and trigger unauthenticated API calls —
+      // on public pages like /support, /contact, /beta, etc.
+      setLandscape((mqLandscape || w > h) && h <= 768 && isNativePlatformForOrientation());
     }
     check();
     window.addEventListener("resize", check);
