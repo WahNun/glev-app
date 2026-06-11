@@ -316,10 +316,6 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
       if (voice.recording) {
         voice.requestStop();
       } else {
-        // Settings → "Aktion beim Tippen" lets the user choose between
-        // the new AI flow (default) and the previous voice-recording
-        // route (/engine?voice=1). Both modes still let the long-press
-        // quick-add sheet through.
         runFabShortTap();
       }
     }
@@ -341,12 +337,10 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
     }
   };
 
-  // Dispatches the FAB short-tap based on the user's Settings pref
-  // (`glev_fab_mode`): "ai" (default) opens the Glev AI consent
-  // modal / chat sheet; "voice" routes to /engine?voice=1 — same
-  // path the long-press quick-add "Voice" entry uses, including the
-  // monotonic `vt` token that re-triggers auto-record even if the
-  // user is already on /engine.
+  // Dispatches the FAB short-tap. When ai_voice is enabled and consent is
+  // granted, opens the fullscreen AI chat (on /engine) or navigates to
+  // /glev-ai (all other tabs). Without the flag, falls back to the legacy
+  // /engine?voice=1 route. Long-press always opens the quick-add sheet.
   const runFabShortTap = () => {
     const action = resolveFabAction({
       pathname,

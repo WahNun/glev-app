@@ -24,39 +24,6 @@ export default function AiSettingsPage() {
   const [aiScopeFeedback, setAiScopeFeedback] = useState<boolean | null>(null);
   const [aiScopeBusy, setAiScopeBusy] = useState<"glucose" | "iob" | "history" | "feedback" | "revoke" | null>(null);
 
-  const [fabMode, setFabMode] = useState<"ai" | "voice">("voice");
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    try {
-      const stored = window.localStorage.getItem("glev_fab_mode");
-      if (stored === "voice" || stored === "ai") setFabMode(stored);
-    } catch { /* ignore */ }
-  }, []);
-  const setFabModeAndPersist = useCallback((next: "ai" | "voice") => {
-    setFabMode(next);
-    if (typeof window !== "undefined") {
-      try { window.localStorage.setItem("glev_fab_mode", next); } catch { /* ignore */ }
-    }
-  }, []);
-
-  const [chatPosition, setChatPosition] = useState<"tap" | "swipe">("swipe");
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    try {
-      const stored = window.localStorage.getItem("glev_chat_position");
-      if (stored === "tap" || stored === "swipe") setChatPosition(stored);
-    } catch { /* ignore */ }
-  }, []);
-  const setChatPositionAndPersist = useCallback((next: "tap" | "swipe") => {
-    setChatPosition(next);
-    if (typeof window !== "undefined") {
-      try {
-        window.localStorage.setItem("glev_chat_position", next);
-        window.dispatchEvent(new CustomEvent("glev:chat-position-changed", { detail: next }));
-      } catch { /* ignore */ }
-    }
-  }, []);
-
   const [ttsAutoRead, setTtsAutoRead] = useState(false);
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -323,26 +290,8 @@ export default function AiSettingsPage() {
         </div>
       </div>
 
-      {/* FAB mode + TTS */}
+      {/* Sprache & Vorlesestimme */}
       <div style={{ background: "var(--surface)", border: `1px solid ${BORDER}`, borderRadius: 14, marginBottom: 16, overflow: "hidden" }}>
-        <div style={{ padding: "14px 16px", borderBottom: `1px solid ${BORDER}`, display: "flex", flexDirection: "column", gap: 10 }}>
-          <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-            <span style={{ fontSize: 14, fontWeight: 600, color: "var(--text-strong)" }}>{t("chat_position_label")}</span>
-            <span style={{ fontSize: 13, color: "var(--text-dim)", lineHeight: 1.3 }}>{t("chat_position_desc")}</span>
-          </div>
-          <div role="radiogroup" aria-label={t("chat_position_label")} style={{ display: "flex", gap: 8, padding: 4, borderRadius: 10, background: "var(--surface-soft)", border: `1px solid ${BORDER}` }}>
-            {(["tap", "swipe"] as const).map((opt) => {
-              const active = chatPosition === opt;
-              return (
-                <button key={opt} type="button" role="radio" aria-checked={active}
-                  onClick={() => setChatPositionAndPersist(opt)}
-                  style={{ flex: 1, padding: "8px 10px", borderRadius: 8, border: "none", cursor: "pointer", fontSize: 13, fontWeight: active ? 600 : 500, color: active ? "var(--on-accent)" : "var(--text-strong)", background: active ? ACCENT : "transparent", transition: "background 0.15s, color 0.15s" }}>
-                  {t(opt === "tap" ? "chat_position_option_tap" : "chat_position_option_swipe")}
-                </button>
-              );
-            })}
-          </div>
-        </div>
         <div style={{ padding: "14px 16px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, borderBottom: `1px solid ${BORDER}` }}>
           <span style={{ display: "flex", flexDirection: "column", gap: 2 }}>
             <span style={{ fontSize: 14, fontWeight: 600, color: "var(--text-strong)" }}>{t("tts_auto_label")}</span>
