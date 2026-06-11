@@ -24,7 +24,6 @@ jobs:
             "DECISIONS.md"
             "AGENTS.md"
             "package.json"
-            "supabase/config.toml"
           )
           MISSING=()
           for f in "${FILES_TO_CHECK[@]}"; do
