@@ -186,6 +186,10 @@ export const GLEV_TOOLS = [
             type: "number",
             description: "Optional: Fett in Gramm.",
           },
+          fiber_grams: {
+            type: "number",
+            description: "Optional: Ballaststoffe in Gramm. Nur setzen wenn bekannt (z. B. Linsen, Vollkornbrot, Hülsenfrüchte, Haferflocken). Weglassen wenn unsicher.",
+          },
           meal_type: {
             type: "string",
             enum: ["FAST_CARBS", "HIGH_PROTEIN", "HIGH_FAT", "BALANCED"],
