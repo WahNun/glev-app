@@ -226,6 +226,9 @@ export function useTTS() {
   // Set to true inside stop() so audio.onerror doesn't trigger the Web Speech
   // fallback when we intentionally interrupted playback (e.g. sheet closed).
   const stoppedIntentionally = useRef(false);
+  // Web Audio AnalyserNode — populated when Mistral TTS plays, null otherwise.
+  // Exposed so callers can drive FAB amplitude animation.
+  const analyserRef = useRef<AnalyserNode | null>(null);
 
   useEffect(() => {
     setEnabled(readPref(TTS_MUTE_KEY, true));
@@ -300,6 +303,7 @@ export function useTTS() {
       audioRef.current.src = "";
       audioRef.current = null;
     }
+    analyserRef.current = null;
     revokeBlob();
     // Stop Web Speech fallback
     if (typeof window !== "undefined" && "speechSynthesis" in window) {
@@ -384,17 +388,35 @@ export function useTTS() {
           audio.playbackRate = speedToFloat(speedRef.current);
           audioRef.current = audio;
 
+          // Wire Web Audio AnalyserNode so callers can drive amplitude animations.
+          // Uses the module-level singleton AudioContext (already unlocked on first
+          // user gesture). createMediaElementSource can only be called once per
+          // element — safe here because each speak() creates a fresh Audio object.
+          const ctx = getAudioCtx();
+          if (ctx) {
+            try {
+              const source   = ctx.createMediaElementSource(audio);
+              const analyser = ctx.createAnalyser();
+              analyser.fftSize = 256;
+              source.connect(analyser);
+              analyser.connect(ctx.destination);
+              analyserRef.current = analyser;
+            } catch { /* non-fatal — skip analyser if Web Audio unavailable */ }
+          }
+
           audio.onplay = () => { setSpeaking(true); setSpeakingId(id ?? null); };
           audio.onended = () => {
             setSpeaking(false);
             setSpeakingId(null);
             audioRef.current = null;
+            analyserRef.current = null;
             revokeBlob();
           };
           audio.onerror = () => {
             setSpeaking(false);
             setSpeakingId(null);
             audioRef.current = null;
+            analyserRef.current = null;
             revokeBlob();
             // Only fall back to Web Speech when playback failed on its own —
             // NOT when stop() intentionally interrupted it (e.g. sheet closed).
@@ -460,5 +482,5 @@ export function useTTS() {
     return () => { stop(); };
   }, [stop]);
 
-  return { speak, stop, speaking, speakingId, enabled, toggleEnabled, autoRead, toggleAutoRead, intentAnnounce, toggleIntentAnnounce, speed, setSpeed };
+  return { speak, stop, speaking, speakingId, enabled, toggleEnabled, autoRead, toggleAutoRead, intentAnnounce, toggleIntentAnnounce, speed, setSpeed, analyserRef };
 }

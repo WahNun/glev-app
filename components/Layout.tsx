@@ -208,10 +208,15 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
   const [aiThinking, setAiThinking] = useState(false);
   useEffect(() => {
     function onTtsSpeaking(e: Event) {
-      setTtsSpeaking((e as CustomEvent<{ active: boolean }>).detail.active);
+      const { active, analyser } = (e as CustomEvent<{ active: boolean; analyser: AnalyserNode | null }>).detail;
+      setTtsSpeaking(active);
+      glevAi.audioAnalyserRef.current = analyser ?? null;
+      glevAi.setAiState(active ? "speaking" : "idle");
     }
     window.addEventListener("glev:tts-speaking", onTtsSpeaking);
     return () => window.removeEventListener("glev:tts-speaking", onTtsSpeaking);
+  // glevAi is stable (single useGlevAI instance for the layout lifetime)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Voice-intent navigation: glev:intent-navigate is dispatched by

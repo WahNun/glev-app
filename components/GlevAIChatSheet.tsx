@@ -1397,12 +1397,16 @@ export default function GlevAIChatSheet({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isListening]);
 
-  // Broadcast TTS speaking state so the FAB can glow green.
+  // Broadcast TTS speaking state + AnalyserNode so the FAB can animate.
+  // analyserRef.current is already set before audio.play() triggers onplay,
+  // so it's populated when tts.speaking flips to true.
   useEffect(() => {
     window.dispatchEvent(
-      new CustomEvent("glev:tts-speaking", { detail: { active: tts.speaking } }),
+      new CustomEvent("glev:tts-speaking", {
+        detail: { active: tts.speaking, analyser: tts.analyserRef.current },
+      }),
     );
-  }, [tts.speaking]);
+  }, [tts.speaking, tts.analyserRef]);
 
   // Auto-dismiss STT error after 6 s. Permission-denied errors stay visible
   // until the user retries — they require an explicit action (go to settings).

@@ -1,8 +1,10 @@
 package app.glev;
 
+import android.app.Notification;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.content.Context;
+import android.content.Intent;
 import android.media.AudioAttributes;
 import android.net.Uri;
 import android.os.Build;
@@ -21,6 +23,7 @@ public class MainActivity extends BridgeActivity {
         SplashScreen.installSplashScreen(this);
         super.onCreate(savedInstanceState);
         createNotificationChannels();
+        startAlarmKeepAliveService();
         initHealthConnectSync();
     }
 
@@ -35,11 +38,14 @@ public class MainActivity extends BridgeActivity {
      * This method is idempotent: re-registering an existing channel is a no-op.
      *
      * Channels:
-     *   - hypo_alarm   IMPORTANCE_HIGH   glev_low_alarm.wav
-     *     Used by the Supabase Edge Function hypo-check when sending FCM pushes
-     *     for low-glucose alerts.  References the raw resource
-     *     android/app/src/main/res/raw/glev_low_alarm.wav which must be present
-     *     in the APK/AAB before the build (see android/app/src/main/res/raw/SOUND_ASSETS.md).
+     *   - hypo_alarm    IMPORTANCE_HIGH  setBypassDnd=true  glev_low_alarm.wav
+     *   - hyper_alarm   IMPORTANCE_HIGH  setBypassDnd=true  (default OS sound)
+     *   - elevated_alarm IMPORTANCE_HIGH setBypassDnd=false (D-026: never critical)
+     *
+     * setBypassDnd requires ACCESS_NOTIFICATION_POLICY in the Manifest AND the
+     * user must grant "Do Not Disturb access" in System Settings once.  The
+     * channel flag alone is not sufficient — it signals intent to the OS but
+     * the actual bypass only activates after the user grants DnD policy access.
      */
     private void createNotificationChannels() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
@@ -51,31 +57,100 @@ public class MainActivity extends BridgeActivity {
             (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
         if (nm == null) return;
 
-        // ── hypo_alarm channel ──────────────────────────────────────────────
-        NotificationChannel hypoChannel = new NotificationChannel(
-            "hypo_alarm",
-            "Hypo-Alarm",
-            NotificationManager.IMPORTANCE_HIGH
-        );
-        hypoChannel.setDescription(
-            "Dringende Benachrichtigungen bei niedrigem Blutzucker"
-        );
-        hypoChannel.enableVibration(true);
-        hypoChannel.setVibrationPattern(new long[]{0, 400, 200, 400});
-
-        // Attach the custom WAV sound.
-        // The raw resource glev_low_alarm.wav must exist in
-        // android/app/src/main/res/raw/ before building.
-        Uri soundUri = Uri.parse(
-            "android.resource://" + getPackageName() + "/raw/glev_low_alarm"
-        );
-        AudioAttributes audioAttributes = new AudioAttributes.Builder()
+        AudioAttributes alarmAudioAttributes = new AudioAttributes.Builder()
             .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
             .setUsage(AudioAttributes.USAGE_ALARM)
             .build();
-        hypoChannel.setSound(soundUri, audioAttributes);
+
+        // ── hypo_alarm channel ──────────────────────────────────────────────
+        // Critical low-glucose alert — iOS equivalent: interruption-level critical
+        // (D-026). setBypassDnd=true so the alert fires even in Do Not Disturb.
+        // Requires ACCESS_NOTIFICATION_POLICY + user DnD grant in System Settings.
+        NotificationChannel hypoChannel = new NotificationChannel(
+            "hypo_alarm",
+            "Hypo-Alarm (kritisch)",
+            NotificationManager.IMPORTANCE_HIGH
+        );
+        hypoChannel.setDescription(
+            "Kritische Unterzuckerungs-Warnung — durchbricht Stummschaltung"
+        );
+        hypoChannel.enableVibration(true);
+        hypoChannel.setVibrationPattern(new long[]{0, 500, 200, 500});
+        hypoChannel.setBypassDnd(true);
+        hypoChannel.setLockscreenVisibility(Notification.VISIBILITY_PUBLIC);
+        hypoChannel.setShowBadge(true);
+
+        // Custom alarm sound — glev_low_alarm.wav must be present in
+        // android/app/src/main/res/raw/ before building (see SOUND_ASSETS.md).
+        Uri hypoSoundUri = Uri.parse(
+            "android.resource://" + getPackageName() + "/raw/glev_low_alarm"
+        );
+        hypoChannel.setSound(hypoSoundUri, alarmAudioAttributes);
 
         nm.createNotificationChannel(hypoChannel);
+
+        // ── hyper_alarm channel ─────────────────────────────────────────────
+        // Severe high-glucose alert — iOS equivalent: interruption-level critical
+        // for values ≥250 mg/dL (D-026). Same DnD-bypass as hypo_alarm.
+        NotificationChannel hyperChannel = new NotificationChannel(
+            "hyper_alarm",
+            "Hyper-Alarm (kritisch)",
+            NotificationManager.IMPORTANCE_HIGH
+        );
+        hyperChannel.setDescription(
+            "Kritische Überzuckerungs-Warnung — durchbricht Stummschaltung"
+        );
+        hyperChannel.enableVibration(true);
+        hyperChannel.setVibrationPattern(new long[]{0, 500, 200, 500});
+        hyperChannel.setBypassDnd(true);
+        hyperChannel.setLockscreenVisibility(Notification.VISIBILITY_PUBLIC);
+        hyperChannel.setShowBadge(true);
+        // No custom sound file defined yet for hyper_alarm — falls back to OS default.
+        // Add /res/raw/glev_high_alarm.wav and wire it here once available.
+
+        nm.createNotificationChannel(hyperChannel);
+
+        // ── elevated_alarm channel ──────────────────────────────────────────
+        // Non-critical elevated glucose alert (140–250 mg/dL).
+        // Per D-026: NIEMALS critical/DnD-bypass (medically not immediately
+        // life-threatening). iOS equivalent: interruption-level time-sensitive.
+        // setBypassDnd intentionally omitted (defaults to false).
+        NotificationChannel elevatedChannel = new NotificationChannel(
+            "elevated_alarm",
+            "Erhöhter Blutzucker",
+            NotificationManager.IMPORTANCE_HIGH
+        );
+        elevatedChannel.setDescription(
+            "Erhöhter Blutzucker-Alarm — time-sensitive, kein DnD-Bypass"
+        );
+        elevatedChannel.enableVibration(true);
+        elevatedChannel.setVibrationPattern(new long[]{0, 300, 150, 300});
+        elevatedChannel.setLockscreenVisibility(Notification.VISIBILITY_PUBLIC);
+        elevatedChannel.setShowBadge(true);
+
+        nm.createNotificationChannel(elevatedChannel);
+    }
+
+    /**
+     * Start the AlarmKeepAliveService as a foreground service.
+     *
+     * The service holds a persistent low-priority notification so Android's
+     * Doze/App-Standby cannot kill the push receiver before a hypo/hyper alert
+     * arrives.  This is the Android equivalent of iOS background execution for
+     * HealthKit observer queries.
+     *
+     * On Android 8+ (API 26+) we must call startForegroundService() rather than
+     * startService() — the system grants a 5-second window for the service to
+     * call startForeground(), after which it is ANR-killed if it hasn't done so.
+     * AlarmKeepAliveService calls startForeground() immediately in onStartCommand.
+     */
+    private void startAlarmKeepAliveService() {
+        Intent serviceIntent = new Intent(this, AlarmKeepAliveService.class);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            startForegroundService(serviceIntent);
+        } else {
+            startService(serviceIntent);
+        }
     }
 
     /**
