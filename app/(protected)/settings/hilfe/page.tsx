@@ -26,6 +26,14 @@ export default function HilfeSettingsPage() {
 
       <SettingsSection>
         <SettingsRow
+          iconColor={ACCENT}
+          icon={<svg {...iconProps}><circle cx="12" cy="12" r="10" /><path d="M12 8v4m0 4h.01" /></svg>}
+          label="Support & Feedback"
+          subtitle="Kontaktformular, Gründer-Infos, Roadmap"
+          ariaLabel="Support-Seite öffnen"
+          onClick={() => window.open("/support", "_blank", "noopener,noreferrer")}
+        />
+        <SettingsRow
           iconColor={PURPLE}
           icon={<svg {...iconProps}><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" /></svg>}
           label={t("row_feature_requests")}
