@@ -76,6 +76,33 @@ function isMistral429Error(e: unknown): boolean {
 }
 
 /**
+ * Returns `true` when the caught error is a Mistral 5xx server error
+ * (overloaded, gateway timeout, internal server error, etc.).
+ * These are transient — a single retry with a short delay recovers most cases.
+ */
+function isMistral5xxError(e: unknown): boolean {
+  if (!e || typeof e !== "object") return false;
+  const err = e as Record<string, unknown>;
+  const code = typeof err.statusCode === "number" ? err.statusCode
+    : typeof err.status === "number" ? err.status
+    : null;
+  if (code !== null) return code >= 500 && code < 600;
+  // Fallback: check message string for common 5xx patterns
+  if (typeof err.message === "string") {
+    return (
+      err.message.includes("500") ||
+      err.message.includes("502") ||
+      err.message.includes("503") ||
+      err.message.includes("504") ||
+      err.message.toLowerCase().includes("internal server error") ||
+      err.message.toLowerCase().includes("service unavailable") ||
+      err.message.toLowerCase().includes("overloaded")
+    );
+  }
+  return false;
+}
+
+/**
  * Wraps a Mistral API call with up to `MAX_MISTRAL_RETRIES` server-side
  * retries on 429 responses. Backs off for the `Retry-After` duration
  * (default 5 s) between attempts.
@@ -107,6 +134,9 @@ export async function callMistralWithRetry<T>(
     makeRateLimitError: (retryAfterSec, attempts) =>
       new MistralRateLimitError(retryAfterSec, attempts),
     logPrefix: "[chat] Mistral",
+    is5xx: isMistral5xxError,
+    max5xxRetries: 1,
+    retry5xxDelayMs: 1_500,
   }, _sleep);
 }
 

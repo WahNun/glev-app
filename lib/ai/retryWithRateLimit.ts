@@ -33,6 +33,18 @@ export interface RetryOpts<E extends Error> {
   makeRateLimitError: (retryAfterSec: number, attempts: number) => E;
   /** Prefix for `console.warn` messages, e.g. `"[chat]"` or `"[transcribe]"`. */
   logPrefix: string;
+  /**
+   * Optional: returns true when the caught error is a 5xx server error
+   * (overloaded, gateway timeout, etc.). When provided, the call is retried
+   * up to `max5xxRetries` times with a fixed `retry5xxDelayMs` delay before
+   * the error is re-thrown. This silently recovers transient provider outages
+   * without surfacing UPSTREAM_ERROR to the user.
+   */
+  is5xx?: (e: unknown) => boolean;
+  /** How many times to retry 5xx errors. Defaults to 1. */
+  max5xxRetries?: number;
+  /** Fixed delay in ms between 5xx retries. Defaults to 1 500. */
+  retry5xxDelayMs?: number;
 }
 
 /**
@@ -77,24 +89,45 @@ export async function callWithRetry<T, E extends Error>(
     new Promise((r) => setTimeout(r, ms)),
 ): Promise<T> {
   const getRetryAfterSec = opts.getRetryAfterSec ?? defaultGetRetryAfterSec;
-  let attempt = 0;
+  const max5xx = opts.max5xxRetries ?? 1;
+  const delay5xx = opts.retry5xxDelayMs ?? 1_500;
+  let attempt429 = 0;
+  let attempt5xx = 0;
 
   while (true) {
     try {
       return await fn();
     } catch (e) {
+      // ── 5xx server error (overloaded, gateway timeout, etc.) ──────
+      if (opts.is5xx && opts.is5xx(e)) {
+        if (attempt5xx < max5xx) {
+          attempt5xx++;
+          const errCode = (() => {
+            if (!e || typeof e !== "object") return "?";
+            const err = e as Record<string, unknown>;
+            return String(err.statusCode ?? err.status ?? "5xx");
+          })();
+          console.warn(`${opts.logPrefix} server error ${errCode} — retry ${attempt5xx}/${max5xx} in ${delay5xx}ms`);
+          await _sleep(delay5xx);
+          continue;
+        }
+        // All 5xx retries exhausted — re-throw as-is (becomes UPSTREAM_ERROR).
+        throw e;
+      }
+
+      // ── 429 rate limit ────────────────────────────────────────────
       if (!opts.is429(e)) throw e;
 
       const retryAfterSec = getRetryAfterSec(e);
-      attempt++;
+      attempt429++;
 
       console.warn(`${opts.logPrefix} rate limit 429`, {
-        attempt,
+        attempt: attempt429,
         retry_after_sec: retryAfterSec,
       });
 
-      if (attempt > opts.maxRetries || retryAfterSec * 1000 > opts.maxRetryWaitMs) {
-        throw opts.makeRateLimitError(retryAfterSec, attempt);
+      if (attempt429 > opts.maxRetries || retryAfterSec * 1000 > opts.maxRetryWaitMs) {
+        throw opts.makeRateLimitError(retryAfterSec, attempt429);
       }
 
       await _sleep(retryAfterSec * 1000);
