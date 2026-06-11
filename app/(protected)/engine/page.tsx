@@ -34,6 +34,7 @@ import { useEngineHeader } from "@/lib/engineHeaderContext";
 import { useEngineSourceHeader } from "@/lib/engineSourceHeaderContext";
 import { useVoiceRecording } from "@/lib/voiceRecordingContext";
 import { useFeatureFlag } from "@/lib/featureFlags";
+import { useGlevAIContext } from "@/lib/glevAIContext";
 import { fetchLatestCgm } from "@/components/CgmFetchButton";
 import { findCgmReadingNearTime } from "@/lib/postMealCgmAutoFill";
 import { classifyPreReferenceTrend, type TrendClass, type TrendSample } from "@/lib/engine/trend";
@@ -519,6 +520,10 @@ export default function EnginePage() {
   }, [searchParams]);
   const [isMobile, setIsMobile] = useState(false);
   const aiVoiceEnabled = useFeatureFlag("ai_voice");
+  // When Glev AI consent is active the legacy food-parser chat panel
+  // (EngineChatPanel / "AI FOOD PARSER") is hidden — users interact
+  // exclusively via the global Glev AI sheet instead.
+  const { consentGranted: glevAiConsented } = useGlevAIContext();
   const [meals, setMeals]     = useState<Meal[]>([]);
   const [adaptedICR, setAdaptedICR] = useState(15);
   const [selectedICR, setSelectedICR] = useState<'static' | 'adaptive'>('adaptive');
@@ -2877,8 +2882,10 @@ export default function EnginePage() {
                   while the user moves through Steps 2 and 3 — see the
                   outer 2-column grid below.
                   EngineChatPanel is the food-parsing chat (core feature) —
-                  always rendered on mobile regardless of ai_voice flag. */}
-              {isMobile && chatPanelNode}
+                  always rendered on mobile regardless of ai_voice flag.
+                  Hidden when Glev AI consent is active — users use the
+                  global Glev AI sheet instead. */}
+              {isMobile && !glevAiConsented && chatPanelNode}
               {(() => {
                 const anyMacro =
                   (Number(carbs)   || 0) > 0 ||
@@ -3913,7 +3920,7 @@ export default function EnginePage() {
               internal message scroller works as expected and the input row
               never disappears below the fold. minHeight 480 protects the
               experience on shorter viewports (e.g. landscape laptops). */}
-          {!isMobile && aiVoiceEnabled && (
+          {!isMobile && aiVoiceEnabled && !glevAiConsented && (
             <aside
               style={{
                 position: "sticky",
