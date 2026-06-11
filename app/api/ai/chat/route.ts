@@ -330,7 +330,7 @@ function contextPreamble(
   const nowTime = nowIso.slice(11, 16);
   const lines: string[] = [
     `Heute ist ${todayLocalDate} (Datum in der lokalen Zeitzone des Nutzers; für add_appointment relative Angaben wie „nächste Woche" auf das absolute Datum umrechnen).`,
-    `Aktuelle Uhrzeit: ${nowTime} Uhr (Lokalzeit). Jetzt: ${nowIso} — nutze diesen ISO-8601-String mit Offset als Vorlage für logged_at (z. B. für „vor 20 Minuten": Offset übernehmen, Uhrzeit entsprechend zurückrechnen).`,
+    `Aktuelle Uhrzeit: ${nowTime} Uhr (Lokalzeit). Jetzt: ${nowIso} — nutze diesen ISO-8601-String mit Offset als Vorlage für logged_at. Beispiele: „vor 20 Minuten" → Uhrzeit − 20 Min, Offset beibehalten. „gegen 16:02 Uhr" oder „um 14:30" → heutiges Datum + genannte Uhrzeit + gleicher Offset (z. B. ${nowIso.slice(0, 11)}16:02:00${nowIso.slice(19)}). Bei explizit genannten Uhrzeiten IMMER logged_at setzen.`,
     "Kontext-Snapshot des Nutzers (kann veraltet oder Platzhalter sein — wenn unklar, vorsichtig formulieren):",
   ];
   if (ctx.screen) lines.push(`- Screen: ${ctx.screen}`);

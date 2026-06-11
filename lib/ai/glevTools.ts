@@ -635,7 +635,7 @@ Wenn der Nutzer einen Markennamen nennt, leite insulin_type automatisch aus der 
         properties: {
           units: {
             type: "number",
-            description: "Anzahl IE (0-100). Pflichtfeld.",
+            description: "Anzahl IE (0-100). Pflichtfeld. KRITISCH: exakt den vom Nutzer genannten Wert übernehmen — niemals schätzen, runden oder erfinden. Deutsche Zahlwörter direkt umrechnen: 'eine'/'ein' = 1, 'zwei' = 2, 'drei' = 3, 'vier' = 4, 'fünf' = 5, 'sechs' = 6, 'sieben' = 7, 'acht' = 8, 'neun' = 9, 'zehn' = 10. Bei 'eineinhalb' = 1.5, 'zweieinhalb' = 2.5.",
           },
           insulin_name: {
             type: "string",
@@ -651,7 +651,7 @@ Wenn der Nutzer einen Markennamen nennt, leite insulin_type automatisch aus der 
           logged_at: {
             type: "string",
             description:
-              "Optional: Zeitpunkt der Injektion als ISO-8601-String (z. B. '2026-06-04T08:30:00'). Wenn der Nutzer eine Uhrzeit nennt, hier eintragen; sonst weglassen.",
+              "PFLICHT wenn der Nutzer eine Uhrzeit nennt (z. B. 'gegen 16:02 Uhr', 'vorhin um 14:30', 'heute Morgen um 8'). ISO-8601-String mit Offset — Vorlage aus dem System-Prompt (Jetzt-ISO) übernehmen, nur die Uhrzeit ersetzen. Beispiel: wenn Jetzt=2026-06-11T18:16:00+02:00 und Nutzer sagt '16:02 Uhr', dann logged_at='2026-06-11T16:02:00+02:00'. Immer heutiges Datum verwenden, es sei denn der Nutzer nennt explizit ein anderes Datum. Weglassen nur wenn kein Zeitbezug genannt wird.",
           },
           notes: {
             type: "string",
