@@ -884,18 +884,34 @@ export async function handleChatPost(
         const imageAttachments = attachments.filter((a) => a.mimeType.startsWith("image/"));
         const pdfAttachments   = attachments.filter((a) => a.mimeType === "application/pdf");
 
-        // Prepend PDF references to the last user message so the model
-        // knows a document was attached (full text extraction via pdfjs
-        // is a follow-up task).
+        // Extract text from PDF attachments and prepend to the last user
+        // message so Mistral receives the actual document content.
         if (pdfAttachments.length > 0) {
-          const pdfNote = pdfAttachments
-            .map((a) => `[Angehängtes Dokument: ${a.fileName}]`)
-            .join("\n");
+          const { extractTextFromPdf } = await import("@/lib/pdf/extractText");
           const lastUserIdx = messages.length - 1;
-          if (messages[lastUserIdx]?.role === "user") {
+          const pdfParts: string[] = [];
+
+          for (const att of pdfAttachments) {
+            try {
+              const resp = await fetch(att.url);
+              if (!resp.ok) throw new Error(`PDF fetch failed: ${resp.status}`);
+              const buf = await resp.arrayBuffer();
+              const text = await extractTextFromPdf(buf, 50);
+              const trimmed =
+                text.length > 12000
+                  ? text.slice(0, 12000) + "\n\n[Dokument gekürzt — nur die ersten 12000 Zeichen]"
+                  : text;
+              pdfParts.push(`[Anhang: ${att.fileName}]\n${trimmed || "[Kein lesbarer Text — möglicherweise ein Scan-PDF]"}`);
+            } catch (err) {
+              console.error("[pdf-extract] Fehler", { fileName: att.fileName, err });
+              pdfParts.push(`[Angehängtes Dokument: ${att.fileName} — Inhalt konnte nicht gelesen werden]`);
+            }
+          }
+
+          if (pdfParts.length > 0 && messages[lastUserIdx]?.role === "user") {
             messages[lastUserIdx] = {
               ...messages[lastUserIdx],
-              content: `${pdfNote}\n\n${messages[lastUserIdx].content as string}`,
+              content: `${pdfParts.join("\n\n")}\n\n${messages[lastUserIdx].content as string}`,
             };
           }
         }
