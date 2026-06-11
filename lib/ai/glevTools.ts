@@ -2571,7 +2571,7 @@ async function toolSubmitStructuredFeedback(
   const severity = typeof args.severity === "string" && validSeverities.includes(args.severity)
     ? args.severity : "medium";
 
-  const { data, error } = await sb
+  const { error } = await sb
     .from("user_feedback")
     .insert({
       user_id: userId,
@@ -2584,14 +2584,11 @@ async function toolSubmitStructuredFeedback(
       severity,
       free_text: typeof args.free_text === "string" ? args.free_text : what_noticed,
       ai_summary: typeof args.ai_summary === "string" ? args.ai_summary : null,
-    })
-    .select("id")
-    .single();
+    });
 
   if (error) return { error: error.message };
   return {
     ok: true,
-    feedback_id: data.id,
     message: "Danke! Dein Feedback ist bei mir angekommen. Lucas und das Team kümmern sich drum.",
   };
 }
