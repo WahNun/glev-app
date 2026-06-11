@@ -426,6 +426,12 @@ const HISTORY_FINGERPRINTS = [
 ];
 
 function sanitizeHistoryContent(content: string): string {
+  if (!content || !content.trim()) {
+    // Mistral rejects assistant messages with empty content and no tool_calls
+    // (error 3240). This happens when a prior turn failed before streaming any
+    // tokens and the client replays the empty turn in history.
+    return "[Antwort nicht verfügbar]";
+  }
   const lower = content.toLowerCase();
   if (HISTORY_FINGERPRINTS.some((f) => lower.includes(f))) {
     return "[Antwort wurde intern bereinigt]";
