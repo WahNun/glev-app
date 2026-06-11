@@ -229,6 +229,11 @@ type ContextSnapshot = {
   iobSummary: string;
   lastMealDescription: string;
 };
+export type ChatAttachment = {
+  url: string;
+  mimeType: string;
+  fileName: string;
+};
 type ChatBody = {
   message: string;
   conversationId?: string;
@@ -239,12 +244,18 @@ type ChatBody = {
   // unten an die Tools durchgereicht. Optional/null → Server-Default
   // Europe/Berlin.
   timezone?: string | null;
+  /** Optional file attachments uploaded via /api/ai/upload.
+   *  Images → pixtral-12b-2409 (vision model).
+   *  PDFs   → text prepended to message, then mistral-small-latest. */
+  attachments?: ChatAttachment[];
 };
 
 function validateBody(b: unknown): { ok: true; body: ChatBody } | { ok: false; error: string } {
   if (!b || typeof b !== "object") return { ok: false, error: "body must be an object" };
   const o = b as Record<string, unknown>;
-  if (typeof o.message !== "string" || !o.message.trim()) {
+  // Allow empty message when attachments are present (image-only send)
+  const hasAttachments = Array.isArray(o.attachments) && (o.attachments as unknown[]).length > 0;
+  if ((typeof o.message !== "string" || !o.message.trim()) && !hasAttachments) {
     return { ok: false, error: "message is required" };
   }
   const ctx = o.contextSnapshot as Record<string, unknown> | undefined;
@@ -268,10 +279,19 @@ function validateBody(b: unknown): { ok: true; body: ChatBody } | { ok: false; e
         })
         .slice(-10)
     : [];
+  const attachments: ChatAttachment[] = hasAttachments
+    ? (o.attachments as unknown[])
+        .filter((a): a is ChatAttachment => {
+          if (!a || typeof a !== "object") return false;
+          const aa = a as Record<string, unknown>;
+          return typeof aa.url === "string" && typeof aa.mimeType === "string" && typeof aa.fileName === "string";
+        })
+        .slice(0, 3)
+    : [];
   return {
     ok: true,
     body: {
-      message: o.message,
+      message: typeof o.message === "string" ? o.message : "",
       conversationId: typeof o.conversationId === "string" ? o.conversationId : undefined,
       history,
       contextSnapshot: {
@@ -284,6 +304,7 @@ function validateBody(b: unknown): { ok: true; body: ChatBody } | { ok: false; e
         typeof o.timezone === "string" && o.timezone.trim().length > 0
           ? o.timezone.trim()
           : null,
+      attachments,
     },
   };
 }
@@ -558,6 +579,7 @@ export async function handleChatPost(
   }
   const { message, history, contextSnapshot } = v.body;
   const timezone: string | null = v.body.timezone ?? null;
+  const attachments: ChatAttachment[] = v.body.attachments ?? [];
 
   // 5. Mistral client
   const _getMistral = deps.getMistral ?? getMistralClient;
@@ -856,10 +878,55 @@ export async function handleChatPost(
         if (timedOut || closed) return;
 
         // ── Phase 2: stream the final answer ────────────────────────
+        // Route to pixtral-12b-2409 when image attachments are present.
+        // PDFs are prepended as a "[Attached PDF: filename]" note in the
+        // user message so mistral-small-latest is aware of the context.
+        const imageAttachments = attachments.filter((a) => a.mimeType.startsWith("image/"));
+        const pdfAttachments   = attachments.filter((a) => a.mimeType === "application/pdf");
+
+        // Prepend PDF references to the last user message so the model
+        // knows a document was attached (full text extraction via pdfjs
+        // is a follow-up task).
+        if (pdfAttachments.length > 0) {
+          const pdfNote = pdfAttachments
+            .map((a) => `[Angehängtes Dokument: ${a.fileName}]`)
+            .join("\n");
+          const lastUserIdx = messages.length - 1;
+          if (messages[lastUserIdx]?.role === "user") {
+            messages[lastUserIdx] = {
+              ...messages[lastUserIdx],
+              content: `${pdfNote}\n\n${messages[lastUserIdx].content as string}`,
+            };
+          }
+        }
+
+        const usePixtral = imageAttachments.length > 0;
+        const finalModel = usePixtral ? "pixtral-12b-2409" : "mistral-small-latest";
+
+        // For Pixtral: replace the last user message with a content-array
+        // that includes the text plus image_url objects.
+        if (usePixtral) {
+          const lastUserIdx = messages.length - 1;
+          if (messages[lastUserIdx]?.role === "user") {
+            const textContent = messages[lastUserIdx].content as string;
+            messages[lastUserIdx] = {
+              role: "user",
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              content: [
+                { type: "text", text: textContent },
+                ...imageAttachments.map((a) => ({
+                  type: "image_url" as const,
+                  imageUrl: { url: a.url },
+                })),
+              ],
+            };
+          }
+        }
+
         const result = await callMistralWithRetry(
           () => client.chat.stream({
-            model: "mistral-small-latest",
-            maxTokens: 300,
+            model: finalModel,
+            maxTokens: usePixtral ? 512 : 300,
             temperature: 0.4,
             messages,
           }),

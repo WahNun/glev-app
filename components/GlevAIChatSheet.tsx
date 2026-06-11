@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
+import type { ChatAttachment } from "@/lib/useGlevAI";
 import { useLocale } from "next-intl";
 import type { GlevChatMessage, InfluencePrepPayload, MealPendingPayload, MealQueueItem, PendingAction } from "@/lib/useGlevAI";
 import InfluencePrepChip from "@/components/InfluencePrepChip";
@@ -72,6 +73,10 @@ const COPY = {
     placeholder_listening: "Spreche …",
     placeholder_idle:      "Frag Glev …",
     send:                  "Senden",
+    attach_too_large:      "Datei zu groß (max. 5 MB)",
+    attach_limit:          "Maximal 3 Anhänge erlaubt",
+    attach_uploading:      "Lädt hoch …",
+    attach_remove:         "Anhang entfernen",
   },
   en: {
     disclaimer:            "Glev is not a medical device. All information is for orientation only.",
@@ -123,16 +128,29 @@ const COPY = {
     placeholder_listening: "Listening …",
     placeholder_idle:      "Ask Glev …",
     send:                  "Send",
+    attach_too_large:      "File too large (max 5 MB)",
+    attach_limit:          "Max 3 attachments",
+    attach_uploading:      "Uploading …",
+    attach_remove:         "Remove attachment",
   },
 } as const;
 // ──────────────────────────────────────────────────────────────────────────
+
+/** Local attachment state before upload resolves. */
+type PendingAttachment = {
+  id: string;
+  file: File;
+  preview: string | null; // object URL for images; null for PDFs
+  mimeType: string;
+  fileName: string;
+};
 
 interface Props {
   open: boolean;
   onClose: () => void;
   messages: GlevChatMessage[];
   streaming: boolean;
-  onSend: (text: string) => void;
+  onSend: (text: string, attachments?: ChatAttachment[]) => void;
   onConfirmAction?: (messageId: string, token: string) => void;
   onCancelAction?: (messageId: string, token: string) => void;
   /** Called by the "Engine öffnen →" button on a log_meal_entry chip.
@@ -1191,8 +1209,53 @@ export default function GlevAIChatSheet({
   const [input, setInput] = useState("");
   const [sttError, setSttError] = useState<string | null>(null);
   const [sttPartial, setSttPartial] = useState<string | null>(null);
+  const [pendingAttachments, setPendingAttachments] = useState<PendingAttachment[]>([]);
+  const [attachToast, setAttachToast] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const scrollerRef = useRef<HTMLDivElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const addFiles = useCallback((files: FileList | File[]) => {
+    const arr = Array.from(files);
+    if (pendingAttachments.length + arr.length > 3) {
+      setAttachToast(t.attach_limit);
+      setTimeout(() => setAttachToast(null), 3000);
+      return;
+    }
+    for (const file of arr) {
+      if (file.size > 5 * 1024 * 1024) {
+        setAttachToast(t.attach_too_large);
+        setTimeout(() => setAttachToast(null), 3000);
+        return;
+      }
+      const preview = file.type.startsWith("image/") ? URL.createObjectURL(file) : null;
+      setPendingAttachments((prev) => [
+        ...prev,
+        { id: `${Date.now()}-${Math.random()}`, file, preview, mimeType: file.type, fileName: file.name },
+      ]);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingAttachments.length, t.attach_limit, t.attach_too_large]);
+
+  const removeAttachment = useCallback((id: string) => {
+    setPendingAttachments((prev) => {
+      const removed = prev.find((a) => a.id === id);
+      if (removed?.preview) URL.revokeObjectURL(removed.preview);
+      return prev.filter((a) => a.id !== id);
+    });
+  }, []);
+
+  // Revoke preview URLs when sheet closes to avoid memory leaks.
+  useEffect(() => {
+    if (!open) {
+      setPendingAttachments((prev) => {
+        prev.forEach((a) => { if (a.preview) URL.revokeObjectURL(a.preview); });
+        return [];
+      });
+    }
+  }, [open]);
 
   // Drag-to-dismiss: swipe the handle down ≥ 80 px to close the sheet.
   // Using a ref for startY avoids stale-closure issues in the move handler.
@@ -1377,12 +1440,38 @@ export default function GlevAIChatSheet({
 
   if (!open) return null;
 
-  const submit = () => {
+  const submit = async () => {
     const text = input.trim();
-    if (!text || streaming) return;
+    const hasAttachments = pendingAttachments.length > 0;
+    if ((!text && !hasAttachments) || streaming || uploading) return;
     setSttError(null);
     setInput("");
-    onSend(text);
+
+    let resolvedAttachments: ChatAttachment[] | undefined;
+    if (hasAttachments) {
+      setUploading(true);
+      const uploaded: ChatAttachment[] = [];
+      for (const att of pendingAttachments) {
+        try {
+          const fd = new FormData();
+          fd.append("file", att.file);
+          const res = await fetch("/api/ai/upload", { method: "POST", body: fd });
+          if (res.ok) {
+            const data = await res.json() as { url: string; mimeType: string; fileName: string };
+            uploaded.push({ url: data.url, mimeType: data.mimeType, fileName: data.fileName });
+          }
+        } catch {
+          /* non-fatal: skip failed uploads */
+        }
+      }
+      // Revoke preview URLs
+      pendingAttachments.forEach((a) => { if (a.preview) URL.revokeObjectURL(a.preview); });
+      setPendingAttachments([]);
+      setUploading(false);
+      if (uploaded.length > 0) resolvedAttachments = uploaded;
+    }
+
+    onSend(text, resolvedAttachments);
   };
 
   return (
@@ -1905,76 +1994,291 @@ export default function GlevAIChatSheet({
           />
         )}
 
-        {/* Input row */}
+        {/* Attachment preview chips — visible above the input row when files are queued */}
+        {pendingAttachments.length > 0 && (
+          <div
+            style={{
+              flexShrink: 0,
+              display: "flex",
+              flexWrap: "wrap",
+              gap: 6,
+              padding: "6px 16px 0",
+              background: SHEET_BG,
+            }}
+          >
+            {pendingAttachments.map((att) => (
+              <div
+                key={att.id}
+                style={{
+                  position: "relative",
+                  width: 52,
+                  height: 52,
+                  borderRadius: 8,
+                  overflow: "hidden",
+                  border: "1px solid var(--border)",
+                  background: "var(--surface-soft)",
+                  flexShrink: 0,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                {att.preview ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={att.preview}
+                    alt={att.fileName}
+                    style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                  />
+                ) : (
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                    <polyline points="14 2 14 8 20 8"/>
+                  </svg>
+                )}
+                <button
+                  type="button"
+                  aria-label={t.attach_remove}
+                  onClick={() => removeAttachment(att.id)}
+                  style={{
+                    position: "absolute",
+                    top: 2,
+                    right: 2,
+                    width: 16,
+                    height: 16,
+                    borderRadius: 8,
+                    background: "rgba(0,0,0,0.55)",
+                    border: "none",
+                    cursor: "pointer",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    color: "#fff",
+                    fontSize: 10,
+                    lineHeight: 1,
+                  }}
+                >
+                  ✕
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Attachment error toast */}
+        {attachToast && (
+          <div
+            style={{
+              flexShrink: 0,
+              padding: "4px 16px 0",
+              fontSize: 11,
+              color: "#ff8888",
+              background: SHEET_BG,
+            }}
+          >
+            {attachToast}
+          </div>
+        )}
+
+        {/* Hidden file inputs */}
+        <input
+          ref={cameraInputRef}
+          type="file"
+          accept="image/*"
+          capture="environment"
+          style={{ display: "none" }}
+          onChange={(e) => { if (e.target.files) addFiles(e.target.files); e.target.value = ""; }}
+        />
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*,application/pdf"
+          multiple
+          style={{ display: "none" }}
+          onChange={(e) => { if (e.target.files) addFiles(e.target.files); e.target.value = ""; }}
+        />
+
+        {/* Input row: [📷] [📎] [text field] [🎤 / ➤] */}
         <div
           style={{
             flexShrink: 0,
             display: "flex",
             alignItems: "center",
-            gap: 8,
+            gap: 6,
             padding: "10px 16px 8px",
             background: SHEET_BG,
             borderTop: "1px solid var(--border-soft)",
           }}
         >
-          {/* Mic button — hold to talk; Glev icon rotates while listening.
-              When a STT rate-limit is active, the button is disabled and shows
-              a "Bitte X Sek. warten" countdown label in place of the icon. */}
-          <div style={{ flexShrink: 0, display: "flex", flexDirection: "column", alignItems: "center", gap: 2 }}>
-            <button
-              type="button"
-              data-glev-mic="true"
-              disabled={!!voiceCountdown}
-              aria-label={voiceCountdown ? t.mic_rate_limit(voiceCountdown) : isListening ? t.mic_stop : t.mic_start}
-              aria-pressed={isListening}
-              onPointerDown={(e) => {
-                if (voiceCountdown) return;
+          {/* Camera button */}
+          <button
+            type="button"
+            aria-label="Foto aufnehmen"
+            disabled={streaming || uploading}
+            onClick={() => cameraInputRef.current?.click()}
+            style={{
+              flexShrink: 0,
+              width: 34,
+              height: 34,
+              borderRadius: 17,
+              border: "1px solid var(--border)",
+              background: "var(--surface-alt)",
+              cursor: streaming || uploading ? "default" : "pointer",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              opacity: streaming || uploading ? 0.4 : 1,
+              transition: "opacity 0.15s",
+            }}
+          >
+            {/* Camera icon (inline SVG — Lucide style) */}
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--text-dim)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+              <circle cx="12" cy="13" r="4"/>
+            </svg>
+          </button>
+
+          {/* Paperclip button */}
+          <button
+            type="button"
+            aria-label="Datei anhängen"
+            disabled={streaming || uploading}
+            onClick={() => fileInputRef.current?.click()}
+            style={{
+              flexShrink: 0,
+              width: 34,
+              height: 34,
+              borderRadius: 17,
+              border: "1px solid var(--border)",
+              background: "var(--surface-alt)",
+              cursor: streaming || uploading ? "default" : "pointer",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              opacity: streaming || uploading ? 0.4 : 1,
+              transition: "opacity 0.15s",
+            }}
+          >
+            {/* Paperclip icon */}
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--text-dim)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/>
+            </svg>
+          </button>
+
+          {/* Text input */}
+          <input
+            ref={inputRef}
+            type="text"
+            value={uploading ? t.attach_uploading : input}
+            onChange={(e) => { if (!uploading) setInput(e.target.value); }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey) {
                 e.preventDefault();
-                setSttError(null);
-                setSttPartial(null);
-                void startListening();
-              }}
-              onPointerUp={() => { if (!voiceCountdown) stopListening(); }}
-              onPointerLeave={() => { if (isListening && !voiceCountdown) stopListening(); }}
-              style={{
-                flexShrink: 0,
-                width: 36,
-                height: 36,
-                borderRadius: 18,
-                border: voiceCountdown
-                  ? "1px solid var(--border-soft)"
-                  : isListening ? `1px solid ${ACCENT}` : "1px solid var(--border)",
-                cursor: voiceCountdown ? "not-allowed" : "pointer",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                background: voiceCountdown
-                  ? "var(--surface-alt)"
-                  : isListening ? "rgba(139,92,246,0.12)" : "var(--surface-alt)",
-                opacity: voiceCountdown ? 0.4 : 1,
-                animation: "none",
-                touchAction: "none",
-                transition: "background 0.15s, border-color 0.15s, opacity 0.15s",
-              }}
-            >
-              <span
+                void submit();
+              }
+            }}
+            placeholder={isListening ? t.placeholder_listening : t.placeholder_idle}
+            disabled={streaming || uploading}
+            style={{
+              flex: 1,
+              border: `1px solid ${isListening ? `${ACCENT}66` : "var(--border)"}`,
+              borderRadius: 20,
+              padding: "10px 14px",
+              background: "var(--surface-soft)",
+              color: uploading ? "var(--text-dim)" : "var(--text)",
+              fontSize: 14,
+              outline: "none",
+              opacity: streaming || uploading ? 0.7 : 1,
+              transition: "border-color 0.2s",
+            }}
+          />
+
+          {/* Mic / Send — shows mic when no text+attachments, send otherwise */}
+          <div style={{ flexShrink: 0, display: "flex", flexDirection: "column", alignItems: "center", gap: 2 }}>
+            {!input.trim() && pendingAttachments.length === 0 && !uploading ? (
+              /* Mic button — hold to talk */
+              <button
+                type="button"
+                data-glev-mic="true"
+                disabled={!!voiceCountdown}
+                aria-label={voiceCountdown ? t.mic_rate_limit(voiceCountdown) : isListening ? t.mic_stop : t.mic_start}
+                aria-pressed={isListening}
+                onPointerDown={(e) => {
+                  if (voiceCountdown) return;
+                  e.preventDefault();
+                  setSttError(null);
+                  setSttPartial(null);
+                  void startListening();
+                }}
+                onPointerUp={() => { if (!voiceCountdown) stopListening(); }}
+                onPointerLeave={() => { if (isListening && !voiceCountdown) stopListening(); }}
                 style={{
+                  flexShrink: 0,
+                  width: 38,
+                  height: 38,
+                  borderRadius: 19,
+                  border: voiceCountdown
+                    ? "1px solid var(--border-soft)"
+                    : isListening ? `1px solid ${ACCENT}` : "1px solid var(--border)",
+                  cursor: voiceCountdown ? "not-allowed" : "pointer",
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
-                  animation: isListening ? "glevIconSpin 1.6s linear infinite" : "none",
+                  background: voiceCountdown
+                    ? "var(--surface-alt)"
+                    : isListening ? "rgba(139,92,246,0.12)" : "var(--surface-alt)",
+                  opacity: voiceCountdown ? 0.4 : 1,
+                  touchAction: "none",
+                  transition: "background 0.15s, border-color 0.15s, opacity 0.15s",
                 }}
               >
-                <GlevLogo size={20} color={voiceCountdown ? "var(--text-dim)" : isListening ? ACCENT : "var(--text-dim)"} bg="transparent" />
-              </span>
-              <style>{`
-                @keyframes glevIconSpin {
-                  from { transform: rotate(0deg); }
-                  to   { transform: rotate(360deg); }
-                }
-              `}</style>
-            </button>
-            {voiceCountdown ? (
+                {isListening ? (
+                  /* Spinning Glev logo while listening */
+                  <span style={{ display: "flex", alignItems: "center", justifyContent: "center", animation: "glevIconSpin 1.6s linear infinite" }}>
+                    <GlevLogo size={18} color={ACCENT} bg="transparent" />
+                  </span>
+                ) : (
+                  /* Mic icon at rest */
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={voiceCountdown ? "var(--text-dim)" : "var(--text-dim)"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+                    <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+                    <line x1="12" y1="19" x2="12" y2="23"/>
+                    <line x1="8" y1="23" x2="16" y2="23"/>
+                  </svg>
+                )}
+                <style>{`
+                  @keyframes glevIconSpin {
+                    from { transform: rotate(0deg); }
+                    to   { transform: rotate(360deg); }
+                  }
+                `}</style>
+              </button>
+            ) : (
+              /* Send button — active when text or attachments present */
+              <button
+                type="button"
+                onClick={() => void submit()}
+                disabled={streaming || uploading}
+                aria-label={t.send}
+                style={{
+                  flexShrink: 0,
+                  width: 38,
+                  height: 38,
+                  borderRadius: 19,
+                  background: streaming || uploading ? "rgba(79,110,247,0.4)" : ACCENT,
+                  border: "none",
+                  cursor: streaming || uploading ? "default" : "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="var(--on-accent)">
+                  <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" />
+                </svg>
+              </button>
+            )}
+            {voiceCountdown && !input.trim() && pendingAttachments.length === 0 ? (
               <span
                 data-testid="stt-rate-limit-countdown"
                 style={{ fontSize: 9, color: "var(--text-dim)", lineHeight: 1, whiteSpace: "nowrap" }}
@@ -1983,55 +2287,6 @@ export default function GlevAIChatSheet({
               </span>
             ) : null}
           </div>
-
-          <input
-            ref={inputRef}
-            type="text"
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey) {
-                e.preventDefault();
-                submit();
-              }
-            }}
-            placeholder={isListening ? t.placeholder_listening : t.placeholder_idle}
-            disabled={streaming}
-            style={{
-              flex: 1,
-              border: `1px solid ${isListening ? `${ACCENT}66` : "var(--border)"}`,
-              borderRadius: 20,
-              padding: "10px 14px",
-              background: "var(--surface-soft)",
-              color: "var(--text)",
-              fontSize: 14,
-              outline: "none",
-              opacity: streaming ? 0.7 : 1,
-              transition: "border-color 0.2s",
-            }}
-          />
-          <button
-            type="button"
-            onClick={submit}
-            disabled={!input.trim() || streaming}
-            aria-label={t.send}
-            style={{
-              flexShrink: 0,
-              width: 38,
-              height: 38,
-              borderRadius: 19,
-              background: !input.trim() || streaming ? "rgba(79,110,247,0.4)" : ACCENT,
-              border: "none",
-              cursor: !input.trim() || streaming ? "default" : "pointer",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-            }}
-          >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="var(--on-accent)">
-              <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" />
-            </svg>
-          </button>
         </div>
 
         {/* STT partial transcript — greyed-out live preview while speaking */}
