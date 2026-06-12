@@ -1,0 +1,32 @@
+<!DOCTYPE html><html><head><meta charset='UTF-8'>
+<style>*{margin:0;padding:0;box-sizing:border-box}body{background:#080812;font-family:-apple-system,BlinkMacSystemFont,system-ui;width:390px;height:200px;overflow:hidden;position:relative}
+.pill{position:fixed;left:12px;right:12px;bottom:12px;height:62px;border-radius:31px;background:rgba(255,255,255,0.055);-webkit-backdrop-filter:blur(24px) saturate(160%);backdrop-filter:blur(24px) saturate(160%);border:1px solid rgba(255,255,255,0.12);box-shadow:0 8px 32px rgba(0,0,0,0.5),inset 0 1px 0 rgba(255,255,255,0.15);display:flex;align-items:center;padding:0 8px;overflow:visible}
+.pill::before{content:'';position:absolute;inset:0;border-radius:31px;background:linear-gradient(180deg,rgba(255,255,255,0.09) 0%,rgba(255,255,255,0.02) 50%,transparent 100%);pointer-events:none}
+.gap{flex:0 0 64px}
+.fab{position:fixed;bottom:50px;left:50%;transform:translateX(-50%);width:64px;height:64px;border-radius:50%;background:linear-gradient(135deg,#1d1f3a,#0d0f23);border:2px solid #4F6EF7;box-shadow:0 0 28px rgba(79,110,247,0.55),0 8px 24px rgba(0,0,0,0.5)}
+</style></head><body>
+<div class='pill'>
+  
+<button style='flex:1 1 0;min-width:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;padding:0 2px;height:38px;border:none;background:rgba(0,0,0,0.001);cursor:pointer;border-radius:10px'>
+  <svg width='22' height='22' viewBox='0 0 24 24' fill='none' stroke='#4F6EF7' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M3 11l9-8 9 8'/><path d='M5 10v9h4v-4h4v4h4V10'/></svg>
+  <span style='font-size:7.5px;font-weight:600;letter-spacing:0.15px;text-transform:uppercase;color:#fff;white-space:nowrap'>DASHBOARD</span>
+</button>
+  
+<button style='flex:1 1 0;min-width:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;padding:0 2px;height:38px;border:none;background:rgba(0,0,0,0.001);cursor:pointer;border-radius:10px'>
+  <svg width='22' height='22' viewBox='0 0 24 24' fill='none' stroke='rgba(255,255,255,0.32)' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M3 11l9-8 9 8'/><path d='M5 10v9h4v-4h4v4h4V10'/></svg>
+  <span style='font-size:7.5px;font-weight:600;letter-spacing:0.15px;text-transform:uppercase;color:rgba(255,255,255,0.32);white-space:nowrap'>LOG</span>
+</button>
+  <div class='gap'></div>
+  
+<button style='flex:1 1 0;min-width:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;padding:0 2px;height:38px;border:none;background:rgba(0,0,0,0.001);cursor:pointer;border-radius:10px'>
+  <svg width='22' height='22' viewBox='0 0 24 24' fill='none' stroke='rgba(255,255,255,0.32)' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M3 11l9-8 9 8'/><path d='M5 10v9h4v-4h4v4h4V10'/></svg>
+  <span style='font-size:7.5px;font-weight:600;letter-spacing:0.15px;text-transform:uppercase;color:rgba(255,255,255,0.32);white-space:nowrap'>INSIGHTS</span>
+</button>
+  
+<button style='flex:1 1 0;min-width:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;padding:0 2px;height:38px;border:none;background:rgba(0,0,0,0.001);cursor:pointer;border-radius:10px'>
+  <svg width='22' height='22' viewBox='0 0 24 24' fill='none' stroke='rgba(255,255,255,0.32)' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M3 11l9-8 9 8'/><path d='M5 10v9h4v-4h4v4h4V10'/></svg>
+  <span style='font-size:7.5px;font-weight:600;letter-spacing:0.15px;text-transform:uppercase;color:rgba(255,255,255,0.32);white-space:nowrap'>SETTINGS</span>
+</button>
+</div>
+<div class='fab'></div>
+</body></html>

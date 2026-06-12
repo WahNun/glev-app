@@ -1216,6 +1216,7 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
         boxShadow: "0 8px 32px rgba(0,0,0,0.50), inset 0 1px 0 rgba(255,255,255,0.15)",
         paddingTop: 0, paddingBottom: 0,
         paddingLeft: 8, paddingRight: 8,
+        alignItems: "center",
         overflow: "visible",
         // z-index 1102 — above the chat sheet (1101) and its backdrop (1100)
         // so the Glev button is never clipped when the sheet is open.
@@ -1793,7 +1794,7 @@ function MobileTab({
         minWidth: 0,
         display: "flex", flexDirection: "column",
         alignItems: "center", justifyContent: "center",
-        gap: 3, padding: "3px 2px 0px 2px", height: 38,
+        gap: 3, padding: "0 2px", height: 38,
         border: "none",
         // Same iOS WKWebView hit-test fix as the FAB hit-area button:
         // pure transparent backgrounds skip touch dispatch in WebKit.
