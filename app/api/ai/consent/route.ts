@@ -102,11 +102,16 @@ export async function POST(req: NextRequest) {
   }
 
   // Master-consent grant (legacy path).
+  // ai_feedback_consent_at is set automatically together with master consent —
+  // app feedback is not sensitive health data and requiring a separate toggle
+  // caused 0 feedback rows ever being written (all users had null here).
+  const now = new Date().toISOString();
   const { data, error } = await sb
     .from("profiles")
     .update({
-      ai_consent_at: new Date().toISOString(),
+      ai_consent_at: now,
       ai_consent_version: CONSENT_VERSION,
+      ai_feedback_consent_at: now,
     })
     .eq("user_id", user.id)
     .select("ai_consent_at, ai_consent_version")
@@ -122,8 +127,9 @@ export async function POST(req: NextRequest) {
       .from("profiles")
       .insert({
         user_id: user.id,
-        ai_consent_at: new Date().toISOString(),
+        ai_consent_at: now,
         ai_consent_version: CONSENT_VERSION,
+        ai_feedback_consent_at: now,
       })
       .select("ai_consent_at, ai_consent_version")
       .maybeSingle();
