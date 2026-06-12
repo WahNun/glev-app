@@ -144,29 +144,26 @@ export default function LoginPage() {
     setAppleLoading(true);
     setError(null);
     try {
-      const { SignInWithApple } = await import("@capacitor-community/apple-sign-in");
-      const result = await SignInWithApple.authorize({
-        clientId: "com.glev.app",
-        redirectURI: "https://glev.app/auth/callback",
-        scopes: "email name",
-        state: crypto.randomUUID(),
+      const { AppleSignIn, SignInScope } = await import("@capawesome/capacitor-apple-sign-in");
+      const result = await AppleSignIn.signIn({
+        scopes: [SignInScope.Email, SignInScope.FullName],
         nonce: crypto.randomUUID(),
       });
 
-      const { identityToken } = result.response;
-      if (!identityToken) throw new Error("No identity token from Apple");
+      const { idToken } = result;
+      if (!idToken) throw new Error("No identity token from Apple");
 
       const { data, error: authError } = await supabase.auth.signInWithIdToken({
         provider: "apple",
-        token: identityToken,
+        token: idToken,
       });
 
       if (authError) throw authError;
 
-      if (result.response.givenName && data.user) {
+      if (result.givenName && data.user) {
         await supabase.from("profiles").update({
-          first_name: result.response.givenName,
-          last_name: result.response.familyName,
+          first_name: result.givenName,
+          last_name: result.familyName,
         }).eq("user_id", data.user.id);
       }
 
