@@ -124,7 +124,21 @@ export default function FeedbackPage() {
 
   return (
     <div style={{ padding: 24, fontFamily: "system-ui, sans-serif", fontSize: 13 }}>
-      <h1 style={{ fontSize: 20, fontWeight: 700, marginBottom: 16 }}>User-Feedback</h1>
+      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16 }}>
+        <h1 style={{ fontSize: 20, fontWeight: 700, margin: 0 }}>User-Feedback</h1>
+        <button
+          onClick={() => { void load(); }}
+          disabled={loading}
+          style={{
+            padding: "6px 14px", border: "1px solid #4F6EF7", borderRadius: 6,
+            fontSize: 12, cursor: loading ? "not-allowed" : "pointer",
+            background: loading ? "#e0e7ff" : "#4F6EF7", color: "#fff", fontWeight: 600,
+            opacity: loading ? 0.7 : 1,
+          }}
+        >
+          {loading ? "Lädt…" : "↻ Neuste laden"}
+        </button>
+      </div>
 
       {/* Filter Bar */}
       <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 16 }}>

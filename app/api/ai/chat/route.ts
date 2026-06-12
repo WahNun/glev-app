@@ -681,9 +681,46 @@ export async function handleChatPost(
       }, timeoutMs);
 
       try {
+        // ── Feedback Pre-Guard ────────────────────────────────────────
+        // If the user's message clearly describes a problem or feature
+        // wish, force the first Mistral call to use submit_structured_
+        // feedback — instead of letting the model choose text over the tool.
+        // Signals: negative/problem words + app context words.
+        // This is conservative (AND-logic): both a problem signal AND an
+        // app signal must appear so normal questions aren't misclassified.
+        const userMsgLower = message.toLowerCase();
+        const FEEDBACK_PROBLEM_SIGNALS = [
+          "stört", "stören", "nervt", "nervt mich", "buggy", "bug",
+          "fehler", "kaputt", "geht nicht", "klappt nicht", "funktioniert nicht",
+          "nicht richtig", "nicht korrekt", "falsch", "falsche", "falsches",
+          "lücke", "abstand", "versatz", "hängt", "hängt sich", "abstürzt",
+          "absturz", "crash", "bitte fix", "please fix", "wünsche mir",
+          "würde ich mir", "würde mir wünschen", "feature request",
+          "wieso.*nicht", "warum.*nicht", "warum.*kein", "wieso.*kein",
+        ];
+        const FEEDBACK_APP_SIGNALS = [
+          "seite", "screen", "button", "tab", "dashboard", "engine",
+          "einstellungen", "settings", "overlay", "modal", "ansicht",
+          "navigation", "glev", "app", "fenster", "bildschirm",
+        ];
+        const hasProblemSignal = FEEDBACK_PROBLEM_SIGNALS.some(
+          (s) => s.includes(".*") ? new RegExp(s).test(userMsgLower) : userMsgLower.includes(s),
+        );
+        const hasAppSignal = FEEDBACK_APP_SIGNALS.some((s) => userMsgLower.includes(s));
+        const forceFeedbackTool = hasProblemSignal && hasAppSignal;
+
         // ── Phase 1: resolve any tool calls ─────────────────────────
         for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
           if (timedOut || closed) return;
+
+          // On round 0 with a detected feedback intent, pin toolChoice so
+          // Mistral MUST call submit_structured_feedback rather than replying
+          // with plain forwarding text.
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const resolvedToolChoice: any =
+            round === 0 && forceFeedbackTool
+              ? { type: "function", function: { name: "submit_structured_feedback" } }
+              : "auto";
 
           const completion = await callMistralWithRetry(
             () => client.chat.complete({
@@ -693,7 +730,7 @@ export async function handleChatPost(
               messages,
               // eslint-disable-next-line @typescript-eslint/no-explicit-any
               tools: GLEV_TOOLS as any,
-              toolChoice: "auto",
+              toolChoice: resolvedToolChoice,
             }),
             _sleep,
           );
@@ -703,31 +740,33 @@ export async function handleChatPost(
           const choice = completion?.choices?.[0];
           const toolCalls = choice?.message?.toolCalls ?? [];
           if (!toolCalls.length) {
-            // ── Feedback Guard ────────────────────────────────────────
-            // Mistral sometimes responds with a plain-text confirmation
-            // ("Ich leite dein Feedback an das Team weiter.") instead of
-            // calling submit_structured_feedback. Detect this by checking
-            // whether the model's own reply looks like a feedback hand-off
-            // without having called the tool (round 0 = first call, so no
-            // tool has run yet). If detected, force exactly one more call
-            // with toolChoice pinned to submit_structured_feedback, then
-            // append the result so the streaming phase sees the saved state.
+            // ── Feedback Guard (response-side) ────────────────────────
+            // When Mistral skips submit_structured_feedback and just writes
+            // a forwarding text ("Das Team schaut sich das an.", "Ich leite
+            // das weiter.", "Notiert.", etc.), detect it from the model's
+            // own reply and force exactly one more tool call.
+            //
+            // This guard catches the response-side miss. There is also a
+            // pre-call guard (see below) that forces the tool on the very
+            // first round when the user's message looks like feedback, so
+            // in practice the model should almost never reach this branch.
             if (round === 0) {
               const responseText =
                 typeof choice?.message?.content === "string"
                   ? choice.message.content.toLowerCase()
                   : "";
               const FEEDBACK_CONFIRMATION_PATTERNS = [
-                /leite.*weiter/,
-                /weitergeleitet/,
-                /feedback.*team/,
-                /team.*kümmert/,
-                /nehme.*auf/,
-                /notiert/,
-                /an das team/,
-                /werde.*weiterleiten/,
-                /merke.*vor/,
-                /gebe.*weiter/,
+                // Forwarding phrases
+                /leite.*weiter/, /weitergeleitet/, /werde.*weiterleiten/,
+                /gebe.*weiter/, /werde.*weitergeben/,
+                // Team phrases
+                /an das team/, /feedback.*team/, /team.*kümmert/,
+                /team.*schaut/, /schaut.*das.*an/, /schaut.*sich.*an/,
+                // Acknowledgement phrases
+                /nehme.*auf/, /nehme.*mit/, /notiert/, /habe.*notiert/,
+                /werde.*notieren/, /merke.*vor/, /merke.*das.*vor/,
+                // Generic forwarding
+                /kümmert.*sich/, /kümmern.*uns/,
               ];
               const looksLikeFeedbackConfirmation = FEEDBACK_CONFIRMATION_PATTERNS.some(
                 (p) => p.test(responseText),
@@ -743,7 +782,6 @@ export async function handleChatPost(
                       messages,
                       // eslint-disable-next-line @typescript-eslint/no-explicit-any
                       tools: GLEV_TOOLS as any,
-                      // Force the specific tool — model MUST call it.
                       // eslint-disable-next-line @typescript-eslint/no-explicit-any
                       toolChoice: { type: "function", function: { name: "submit_structured_feedback" } } as any,
                     }),
@@ -779,14 +817,10 @@ export async function handleChatPost(
                       content: JSON.stringify(result),
                     });
                   }
-                  // Fall through to streaming — Mistral will now see the
-                  // tool result and generate the proper confirmation text.
                 }
               }
             }
             // ─────────────────────────────────────────────────────────
-            // No tool requested (or feedback guard handled) → fall
-            // through to the streaming call below.
             break;
           }
 
