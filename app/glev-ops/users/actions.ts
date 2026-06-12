@@ -12,6 +12,7 @@ import { writeAuditLog, isSchemaMissingError } from "@/lib/admin/audit";
 import { enqueueEmail } from "@/lib/emails/outbox";
 import { scheduleDripEmails, scheduleGiftDripEmails } from "@/lib/emails/drip-scheduler";
 import type { EmailLocale } from "@/lib/emails/beta-welcome";
+import { buildGiftYearInviteRedirectTo } from "@/lib/admin/grantYearHelpers";
 
 /**
  * Server actions for /glev-ops/users (Stages 1-3).
@@ -272,7 +273,7 @@ export async function grantBetaFreeYearAction(formData: FormData): Promise<void>
       const { data: linkData, error: linkErr } = await sb.auth.admin.generateLink({
         type: "magiclink",
         email,
-        options: { redirectTo: `${appUrl}/auth/confirm` },
+        options: { redirectTo: buildGiftYearInviteRedirectTo(process.env.NEXT_PUBLIC_APP_URL) },
       });
       if (linkErr || !linkData?.properties?.action_link) {
         // eslint-disable-next-line no-console
