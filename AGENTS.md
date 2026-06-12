@@ -88,6 +88,46 @@ Use these instead:
 - Lucas's Mac uses pnpm; Replit uses npm. `ios/App/CapApp-SPM/Package.swift` gets rewritten on each `cap sync` per-machine. Do NOT commit machine-specific path changes to this file.
 - After any Capacitor plugin addition that requires custom-class registration: the `capacitor.config.json` (gitignored, auto-generated) is the source of truth. The `packageClassList` in `capacitor.config.ts` is documentation only (Capacitor CLI ignores it).
 
+## ios/App/App/capacitor.config.json ist Build-Pflicht aber gitignored
+
+Diese Datei wird normalerweise von `npx cap sync ios` generiert. Sie ist in `.gitignore` eingetragen (machine-specific). ABER: ohne diese Datei kann der Xcode-Build die capacitor-Plugins nicht resolven und bricht ab BEVOR der Compiler etwas Sinnvolles meldet.
+
+Wenn die Datei fehlt (z.B. nach frischem Clone oder versehentlichem Delete): manuell anlegen mit dem exakten 7-Plugin-packageClassList:
+
+```json
+{
+  "appId": "app.glev",
+  "appName": "Glev",
+  "webDir": "www",
+  "packageClassList": [
+    "HapticsPlugin",
+    "LocalNotificationsPlugin",
+    "PushNotificationsPlugin",
+    "ScreenOrientationPlugin",
+    "SharePlugin",
+    "HealthPlugin",
+    "GlevCriticalAlertsPlugin"
+  ],
+  "server": {
+    "url": "https://glev.app/dashboard",
+    "cleartext": false,
+    "androidScheme": "https",
+    "allowNavigation": ["glev.app"]
+  },
+  "plugins": {
+    "PushNotifications": {
+      "presentationOptions": ["badge", "sound", "alert"]
+    }
+  },
+  "ios": {
+    "contentInset": "never",
+    "backgroundColor": "#09090B"
+  }
+}
+```
+
+NICHT mit `npx cap sync ios` regenerieren — das strippt `GlevCriticalAlertsPlugin` wieder raus (D-032).
+
 ## Reach Out
 
 For questions, ambiguity, or anything that touches Lucas's strategic positioning: stop and ask. Better one extra Lucas-ping than one production regression.
