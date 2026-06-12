@@ -7,62 +7,35 @@
 //      representative value, a decimal separator variant, and the boundary
 //      where the fast path SHOULD NOT fire (0-unit bolus).
 //
-//   2. classifyIntent() network path — fetch is swapped with lightweight stubs
-//      to cover: successful classify-intent response, non-200 status, network
-//      error, and missing-intent field in the JSON body. Every non-200 or
-//      error path must return fallback_chat so the caller can fall through to
-//      the normal chat pipeline.
-//
-//   3. WRITE_INTENTS membership — verifies the five intent types that require
+//   2. WRITE_INTENTS membership — verifies the five intent types that require
 //      user confirmation are present, and that navigate / fallback_chat are
 //      NOT in the set (they are dispatched immediately or forwarded to chat).
 //
-//   4. useVoiceIntents routing logic — exercised via the exported __test__
+//   3. useVoiceIntents routing logic — exercised via the exported __test__
 //      helpers that mirror handleTranscript without touching React state:
 //        • Every WRITE_INTENTS type → onPending callback, not dispatched.
 //        • navigate → onDispatch immediately, no pending.
 //        • fallback_chat → onFallback with the original transcript, no pending.
 //
-//   5. Confirm path — simulateConfirm verifies the correct CustomEvent type
+//   4. Confirm path — simulateConfirm verifies the correct CustomEvent type
 //      is fired for each write intent (the contract between useVoiceIntents
 //      and the log sheets that listen to these events).
 //
-//   6. Dismiss path — simulateDismiss verifies the ORIGINAL transcript (the
+//   5. Dismiss path — simulateDismiss verifies the ORIGINAL transcript (the
 //      raw voice utterance) is passed back to onFallbackTranscript, not the
 //      intent payload. This is the mis-classification escape hatch.
 //
-//   7. IntentConfirmChip auto-dismiss contract — AUTO_DISMISS_MS = 3 000 ms.
+//   6. IntentConfirmChip auto-dismiss contract — AUTO_DISMISS_MS = 3 000 ms.
 //      The constant is the shared clock between the progress-bar CSS animation
 //      and the setTimeout; if either diverges the chip UI is broken.
+//
+// Note: /api/ai/classify-intent has been removed. Ambiguous transcripts now
+// fall through directly to fallback_chat → gpt-4o-mini chat pipeline.
 
 import { test, expect } from "@playwright/test";
 import { classifyIntent, type IntentEnvelope } from "@/lib/ai/intentClassifier";
 import { WRITE_INTENTS, __test__ as hookTest } from "@/hooks/useVoiceIntents";
 import { AUTO_DISMISS_MS } from "@/components/IntentConfirmChip";
-
-// ── helpers ────────────────────────────────────────────────────────────────
-
-function fetchReturningIntent(intent: IntentEnvelope): typeof fetch {
-  return () =>
-    Promise.resolve(
-      new Response(JSON.stringify({ intent }), {
-        status: 200,
-        headers: { "Content-Type": "application/json" },
-      }),
-    ) as ReturnType<typeof fetch>;
-}
-
-function fetchReturningStatus(status: number): typeof fetch {
-  return () =>
-    Promise.resolve(new Response("Error", { status })) as ReturnType<
-      typeof fetch
-    >;
-}
-
-function fetchThrowingNetworkError(): typeof fetch {
-  return () =>
-    Promise.reject(new Error("Network failure")) as ReturnType<typeof fetch>;
-}
 
 // ── 1. classifyIntent — fast-path (no fetch call) ─────────────────────────
 
@@ -103,16 +76,10 @@ test("classifyIntent fast-path: '2u' compact unit → log_bolus", async () => {
 
 test("classifyIntent fast-path: '0 IE' → NOT log_bolus (safety: 0-unit guard rejects it)", async () => {
   // The regex matches but units=0 is rejected by the > 0 guard, so the fast
-  // path returns null and classifyIntent falls through to the network call.
-  // Network error → fallback_chat, which is the important safety invariant.
-  const orig = global.fetch;
-  global.fetch = fetchThrowingNetworkError();
-  try {
-    const result = await classifyIntent("0 IE");
-    expect(result.type).toBe("fallback_chat");
-  } finally {
-    global.fetch = orig;
-  }
+  // path returns null and classifyIntent falls through directly to fallback_chat.
+  // This is the important safety invariant — no network call needed.
+  const result = await classifyIntent("0 IE");
+  expect(result.type).toBe("fallback_chat");
 });
 
 test("classifyIntent fast-path: 'Geh zu Dashboard' → navigate screen=dashboard", async () => {
@@ -147,86 +114,7 @@ test("classifyIntent fast-path: 'Öffne Einstellungen' (German synonym) → navi
   }
 });
 
-// ── 2. classifyIntent — network path ──────────────────────────────────────
-
-test("classifyIntent network: successful API response → returns the classified intent", async () => {
-  const mockIntent: IntentEnvelope = {
-    type: "log_meal",
-    payload: { input_text: "Müsli mit Milch" },
-  };
-  const orig = global.fetch;
-  global.fetch = fetchReturningIntent(mockIntent);
-  try {
-    const result = await classifyIntent("Müsli mit Milch zum Frühstück");
-    expect(result).toEqual(mockIntent);
-  } finally {
-    global.fetch = orig;
-  }
-});
-
-test("classifyIntent network: API returns log_exercise intent → returned as-is", async () => {
-  const mockIntent: IntentEnvelope = {
-    type: "log_exercise",
-    payload: { duration_minutes: 30, exercise_type: "Joggen", intensity: "medium" },
-  };
-  const orig = global.fetch;
-  global.fetch = fetchReturningIntent(mockIntent);
-  try {
-    const result = await classifyIntent("30 Minuten joggen gegangen");
-    expect(result).toEqual(mockIntent);
-  } finally {
-    global.fetch = orig;
-  }
-});
-
-test("classifyIntent network: non-200 response → fallback_chat", async () => {
-  const orig = global.fetch;
-  global.fetch = fetchReturningStatus(500);
-  try {
-    const result = await classifyIntent("Was war mein letzter Bolus?");
-    expect(result.type).toBe("fallback_chat");
-  } finally {
-    global.fetch = orig;
-  }
-});
-
-test("classifyIntent network: 400 response → fallback_chat", async () => {
-  const orig = global.fetch;
-  global.fetch = fetchReturningStatus(400);
-  try {
-    const result = await classifyIntent("Zeig mir meine Kurve");
-    expect(result.type).toBe("fallback_chat");
-  } finally {
-    global.fetch = orig;
-  }
-});
-
-test("classifyIntent network: network error (fetch throws) → fallback_chat", async () => {
-  const orig = global.fetch;
-  global.fetch = fetchThrowingNetworkError();
-  try {
-    const result = await classifyIntent("Wie war mein TIR gestern?");
-    expect(result.type).toBe("fallback_chat");
-  } finally {
-    global.fetch = orig;
-  }
-});
-
-test("classifyIntent network: response body missing intent field → fallback_chat", async () => {
-  const orig = global.fetch;
-  global.fetch = () =>
-    Promise.resolve(
-      new Response(JSON.stringify({}), { status: 200 }),
-    ) as ReturnType<typeof fetch>;
-  try {
-    const result = await classifyIntent("Hallo");
-    expect(result.type).toBe("fallback_chat");
-  } finally {
-    global.fetch = orig;
-  }
-});
-
-// ── 3. WRITE_INTENTS membership ────────────────────────────────────────────
+// ── 2. WRITE_INTENTS membership ────────────────────────────────────────────
 
 test("WRITE_INTENTS: contains all five write intent types", () => {
   const required = [

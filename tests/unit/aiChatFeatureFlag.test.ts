@@ -10,10 +10,10 @@
 //
 //   Layer 2 — route-level (handleChatPost via dependency injection):
 //     Verifies the full POST handler returns 403 "not available" before
-//     reaching the Mistral call (Mistral spy asserts 0 invocations), and
+//     reaching the OpenAI call (OpenAI spy asserts 0 invocations), and
 //     that a user with the flag set does NOT hit the flag-403 gate.
 //
-// Pattern: injectable Supabase client + injectable getMistral factory.
+// Pattern: injectable Supabase client + injectable getOpenAI factory.
 // No live Supabase, no real network required. Follows the same dep-injection
 // approach as `tests/unit/passwordResetRoute.test.ts`.
 
@@ -167,10 +167,10 @@ test("checkChatFlag: no user_settings row → returns 403 PERMISSION_DENIED", as
 // ---------------------------------------------------------------------------
 
 test("POST: flag false → 403 PERMISSION_DENIED with zero Mistral calls", async () => {
-  let mistralCallCount = 0;
-  const getMistral = () => {
-    mistralCallCount++;
-    throw new Error("should not reach Mistral");
+  let openAICallCount = 0;
+  const getOpenAI = () => {
+    openAICallCount++;
+    throw new Error("should not reach OpenAI");
   };
 
   const sb = makeClient({ featureFlags: { ai_voice: false } });
@@ -181,21 +181,21 @@ test("POST: flag false → 403 PERMISSION_DENIED with zero Mistral calls", async
     body: validBody(),
     headers: { "Content-Type": "application/json" },
   });
-  const res = await handleChatPost(req, { auth, getMistral });
+  const res = await handleChatPost(req, { auth, getOpenAI });
 
   expect(res.status).toBe(403);
   const json = await res.json();
   expect(json.error_code).toBe("PERMISSION_DENIED");
   expect(json.retry_allowed).toBe(false);
   expect(typeof json.user_message).toBe("string");
-  expect(mistralCallCount).toBe(0);
+  expect(openAICallCount).toBe(0);
 });
 
 test("POST: flag missing → 403 PERMISSION_DENIED with zero Mistral calls", async () => {
-  let mistralCallCount = 0;
-  const getMistral = () => {
-    mistralCallCount++;
-    throw new Error("should not reach Mistral");
+  let openAICallCount = 0;
+  const getOpenAI = () => {
+    openAICallCount++;
+    throw new Error("should not reach OpenAI");
   };
 
   const sb = makeClient({ featureFlags: {} });
@@ -206,19 +206,19 @@ test("POST: flag missing → 403 PERMISSION_DENIED with zero Mistral calls", asy
     body: validBody(),
     headers: { "Content-Type": "application/json" },
   });
-  const res = await handleChatPost(req, { auth, getMistral });
+  const res = await handleChatPost(req, { auth, getOpenAI });
 
   expect(res.status).toBe(403);
   const json = await res.json();
   expect(json.error_code).toBe("PERMISSION_DENIED");
   expect(json.retry_allowed).toBe(false);
   expect(typeof json.user_message).toBe("string");
-  expect(mistralCallCount).toBe(0);
+  expect(openAICallCount).toBe(0);
 });
 
 test("POST: flag true + consent granted → does NOT return flag-403", async () => {
-  const getMistral = () => {
-    throw new Error("Mistral not configured in test");
+  const getOpenAI = () => {
+    throw new Error("OpenAI not configured in test");
   };
 
   const sb = makeClient({
@@ -232,10 +232,10 @@ test("POST: flag true + consent granted → does NOT return flag-403", async () 
     body: validBody(),
     headers: { "Content-Type": "application/json" },
   });
-  const res = await handleChatPost(req, { auth, getMistral });
+  const res = await handleChatPost(req, { auth, getOpenAI });
 
   // Must NOT be the feature-flag 403 — the request passed the flag gate.
-  // (It will hit a 503 from the Mistral stub, which is expected.)
+  // (It will hit a 503 from the OpenAI stub, which is expected.)
   const isFlagBlock =
     res.status === 403 && (await res.json()).error_code === "PERMISSION_DENIED";
   expect(isFlagBlock).toBe(false);

@@ -122,31 +122,17 @@ function tryFastPath(transcript: string): IntentEnvelope | null {
  * Classify a voice transcript into an IntentEnvelope.
  *
  * 1. Tries fast-path regex (no network call, < 1 ms).
- * 2. On no match, calls POST /api/ai/classify-intent (Mistral, ~500 ms).
- * 3. On any error, returns { type: "fallback_chat" } so the caller can
- *    fall through to the normal chat pipeline.
+ * 2. On no match, returns { type: "fallback_chat" } so the caller can
+ *    fall through to the normal chat pipeline (gpt-4o-mini in /api/ai/chat).
+ *
+ * Note: the /api/ai/classify-intent endpoint has been removed. All ambiguous
+ * transcripts now fall through to the main chat handler directly.
  */
 export async function classifyIntent(
   transcript: string,
 ): Promise<IntentEnvelope> {
   const fast = tryFastPath(transcript);
   if (fast) return fast;
-
-  try {
-    const res = await fetch("/api/ai/classify-intent", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ transcript }),
-    });
-    if (!res.ok) {
-      return { type: "fallback_chat", payload: { transcript } };
-    }
-    const data = (await res.json()) as { intent?: IntentEnvelope };
-    const intent = data.intent;
-    if (intent && typeof intent.type === "string") return intent;
-  } catch {
-    // Network error or JSON parse failure — fall through to chat.
-  }
 
   return { type: "fallback_chat", payload: { transcript } };
 }

@@ -7,16 +7,15 @@
 //      is rejected with 403 "ai consent required".
 //   2. Sub-scope gate — the granular consent timestamps (ai_consent_glucose_at,
 //      ai_consent_iob_at, ai_consent_history_at) must suppress the matching
-//      data field from the context preamble sent to Mistral when null.
+//      data field from the context preamble sent to OpenAI when null.
 //
-// Pattern: injectable Supabase client + injectable getMistral factory.
+// Pattern: injectable Supabase client + injectable getOpenAI factory.
 // Mirrors the dep-injection approach in `tests/unit/aiChatFeatureFlag.test.ts`.
 
 import { test, expect } from "@playwright/test";
 import { NextRequest } from "next/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { User } from "@supabase/supabase-js";
-import type { Mistral } from "@mistralai/mistralai";
 import type { AuthOk } from "@/app/api/insulin/_helpers";
 import { handleChatPost } from "@/app/api/ai/chat/route";
 
@@ -96,34 +95,37 @@ function makeClient(opts: {
 }
 
 /**
- * Creates a Mistral spy that:
- * - Returns no tool calls from `chat.complete` so the tool-call loop exits.
- * - Yields no tokens from `chat.stream`.
- * - Captures the `messages` array passed to both calls so tests can inspect
- *   the context preamble that the route built for the model.
+ * Creates an OpenAI spy that:
+ * - Returns no tool calls from `chat.completions.create` (non-streaming) so
+ *   the tool-call loop exits immediately.
+ * - Yields no tokens from `chat.completions.create` (streaming).
+ * - Captures the `messages` array passed to the first call so tests can
+ *   inspect the context preamble that the route built for the model.
  */
-function makeMistralSpy(): {
-  factory: () => Mistral;
+function makeOpenAISpy(): {
+  factory: () => unknown;
   captured: { messages: unknown[] | null };
 } {
   const captured: { messages: unknown[] | null } = { messages: null };
-  const factory = (): Mistral =>
-    ({
-      chat: {
-        async complete({ messages }: { messages: unknown[] }) {
+  const factory = () => ({
+    chat: {
+      completions: {
+        async create({ messages, stream }: { messages: unknown[]; stream?: boolean }) {
           captured.messages = messages;
+          if (stream) {
+            return (async function* () {
+              // empty — no tokens
+            })();
+          }
           return {
             choices: [
-              { message: { content: "", toolCalls: [] }, finishReason: "stop" },
+              { message: { content: "", tool_calls: [] }, finish_reason: "stop" },
             ],
           };
         },
-        // eslint-disable-next-line require-yield
-        async *stream({ messages }: { messages: unknown[] }) {
-          captured.messages = messages;
-        },
       },
-    }) as unknown as Mistral;
+    },
+  });
   return { factory, captured };
 }
 
@@ -163,8 +165,8 @@ function makeAuth(sb: SupabaseClient): AuthOk {
 // ---------------------------------------------------------------------------
 
 test("consent gate: ai_voice=true + no profile row → 403 'ai consent required'", async () => {
-  const getMistral = () => {
-    throw new Error("should not reach Mistral");
+  const getOpenAI = () => {
+    throw new Error("should not reach OpenAI");
   };
 
   const sb = makeClient({ profileData: null });
@@ -175,7 +177,7 @@ test("consent gate: ai_voice=true + no profile row → 403 'ai consent required'
     body: validBody(),
     headers: { "Content-Type": "application/json" },
   });
-  const res = await handleChatPost(req, { auth, getMistral });
+  const res = await handleChatPost(req, { auth, getOpenAI });
 
   expect(res.status).toBe(403);
   const json = await res.json();
@@ -185,8 +187,8 @@ test("consent gate: ai_voice=true + no profile row → 403 'ai consent required'
 });
 
 test("consent gate: ai_voice=true + ai_consent_at=null → 403 PERMISSION_DENIED", async () => {
-  const getMistral = () => {
-    throw new Error("should not reach Mistral");
+  const getOpenAI = () => {
+    throw new Error("should not reach OpenAI");
   };
 
   const sb = makeClient({ profileData: { ai_consent_at: null } });
@@ -197,7 +199,7 @@ test("consent gate: ai_voice=true + ai_consent_at=null → 403 PERMISSION_DENIED
     body: validBody(),
     headers: { "Content-Type": "application/json" },
   });
-  const res = await handleChatPost(req, { auth, getMistral });
+  const res = await handleChatPost(req, { auth, getOpenAI });
 
   expect(res.status).toBe(403);
   const json = await res.json();
@@ -207,8 +209,8 @@ test("consent gate: ai_voice=true + ai_consent_at=null → 403 PERMISSION_DENIED
 });
 
 test("consent gate: ai_voice=true + ai_consent_at set → passes consent gate (no consent-403)", async () => {
-  const getMistral = () => {
-    throw new Error("Mistral not configured in test");
+  const getOpenAI = () => {
+    throw new Error("OpenAI not configured in test");
   };
 
   const sb = makeClient({
@@ -226,21 +228,22 @@ test("consent gate: ai_voice=true + ai_consent_at set → passes consent gate (n
     body: validBody(),
     headers: { "Content-Type": "application/json" },
   });
-  const res = await handleChatPost(req, { auth, getMistral });
+  const res = await handleChatPost(req, { auth, getOpenAI });
 
   // Must NOT be the consent 403 — the request passed the consent gate.
-  // (It will fail further in with a 503 or similar from the Mistral stub.)
+  // (It will fail further in with a 503 or similar from the OpenAI stub.)
   const isConsentBlock =
     res.status === 403 && (await res.json()).error_code === "PERMISSION_DENIED";
   expect(isConsentBlock).toBe(false);
 });
 
 // ---------------------------------------------------------------------------
-// Tests — sub-scope flags control the context preamble sent to Mistral
+// Tests — sub-scope flags control the context preamble sent to OpenAI
 //
-// Each test uses a Mistral spy (makeMistralSpy) to capture the `messages`
-// array that the route passes to `client.chat.complete`. We then search all
-// system-role messages for the preamble lines produced by contextPreamble().
+// Each test uses an OpenAI spy (makeOpenAISpy) to capture the `messages`
+// array that the route passes to `client.chat.completions.create`. We then
+// search all system-role messages for the preamble lines produced by
+// contextPreamble().
 //
 // Lines under test (from contextPreamble in route.ts):
 //   if (scopes.glucose) → "- Glukose: <glucoseSummary>"
@@ -256,7 +259,7 @@ function systemContent(messages: unknown[]): string {
 }
 
 test("sub-scope: ai_consent_glucose_at=null → glucose line absent from preamble", async () => {
-  const { factory, captured } = makeMistralSpy();
+  const { factory, captured } = makeOpenAISpy();
 
   const sb = makeClient({
     profileData: {
@@ -281,7 +284,7 @@ test("sub-scope: ai_consent_glucose_at=null → glucose line absent from preambl
     headers: { "Content-Type": "application/json" },
   });
 
-  const res = await handleChatPost(req, { auth, getMistral: factory });
+  const res = await handleChatPost(req, { auth, getOpenAI: factory });
   await drainResponse(res);
 
   expect(captured.messages).not.toBeNull();
@@ -292,7 +295,7 @@ test("sub-scope: ai_consent_glucose_at=null → glucose line absent from preambl
 });
 
 test("sub-scope: ai_consent_iob_at=null → IOB line absent from preamble", async () => {
-  const { factory, captured } = makeMistralSpy();
+  const { factory, captured } = makeOpenAISpy();
 
   const sb = makeClient({
     profileData: {
@@ -317,7 +320,7 @@ test("sub-scope: ai_consent_iob_at=null → IOB line absent from preamble", asyn
     headers: { "Content-Type": "application/json" },
   });
 
-  const res = await handleChatPost(req, { auth, getMistral: factory });
+  const res = await handleChatPost(req, { auth, getOpenAI: factory });
   await drainResponse(res);
 
   expect(captured.messages).not.toBeNull();
@@ -328,7 +331,7 @@ test("sub-scope: ai_consent_iob_at=null → IOB line absent from preamble", asyn
 });
 
 test("sub-scope: all three sub-scopes set → both glucose and IOB lines present in preamble", async () => {
-  const { factory, captured } = makeMistralSpy();
+  const { factory, captured } = makeOpenAISpy();
 
   const sb = makeClient({
     profileData: {
@@ -353,7 +356,7 @@ test("sub-scope: all three sub-scopes set → both glucose and IOB lines present
     headers: { "Content-Type": "application/json" },
   });
 
-  const res = await handleChatPost(req, { auth, getMistral: factory });
+  const res = await handleChatPost(req, { auth, getOpenAI: factory });
   await drainResponse(res);
 
   expect(captured.messages).not.toBeNull();

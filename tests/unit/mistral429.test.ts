@@ -1,13 +1,14 @@
 // tests/unit/mistral429.test.ts
 //
-// Unit tests for Mistral 429 detection + server-side retry logic (Phase 2).
+// Unit tests for OpenAI 429 detection + server-side retry logic (Phase 2).
 //
 // Strategy:
-//  - `callMistralWithRetry` is exported and tested in isolation.
-//  - `handleChatPost` is tested end-to-end via dep-injection with Mistral
+//  - `callOpenAIWithRetry` is exported and tested in isolation.
+//  - `handleChatPost` is tested end-to-end via dep-injection with OpenAI
 //    mocks that throw 429 errors.
 //  - A source-code inspection test verifies the chat sheet honours the
 //    `retryAllowed` flag and renders a Retry button on rate-limit errors.
+//  - SSE error_code "MISTRAL_RATE_LIMITED" is kept for backward compat.
 
 import { test, expect } from "@playwright/test";
 import { NextRequest } from "next/server";
@@ -15,7 +16,7 @@ import { readFileSync } from "fs";
 import { join } from "path";
 import type { SupabaseClient, User } from "@supabase/supabase-js";
 import type { AuthOk } from "@/app/api/insulin/_helpers";
-import { handleChatPost, callMistralWithRetry } from "@/app/api/ai/chat/route";
+import { handleChatPost, callOpenAIWithRetry } from "@/app/api/ai/chat/route";
 
 // ── Source-code inspection helper ─────────────────────────────────────────────
 
@@ -158,9 +159,9 @@ async function collectSseFrames(res: Response): Promise<Array<Record<string, unk
   return frames;
 }
 
-// ── callMistralWithRetry unit tests ───────────────────────────────────────────
+// ── callOpenAIWithRetry unit tests ────────────────────────────────────────────
 
-test("callMistralWithRetry: 429 with Retry-After:2 → success on 2nd attempt", async () => {
+test("callOpenAIWithRetry: 429 with Retry-After:2 → success on 2nd attempt", async () => {
   let calls = 0;
   const sleepMs: number[] = [];
   const fn = async () => {
@@ -168,7 +169,7 @@ test("callMistralWithRetry: 429 with Retry-After:2 → success on 2nd attempt", 
     if (calls === 1) throw make429(2);
     return "ok";
   };
-  const result = await callMistralWithRetry(fn, (ms) => {
+  const result = await callOpenAIWithRetry(fn, (ms) => {
     sleepMs.push(ms);
     return Promise.resolve();
   });
@@ -178,7 +179,7 @@ test("callMistralWithRetry: 429 with Retry-After:2 → success on 2nd attempt", 
   expect(sleepMs).toEqual([2000]);
 });
 
-test("callMistralWithRetry: 429 without Retry-After header → defaults to 5s back-off", async () => {
+test("callOpenAIWithRetry: 429 without Retry-After header → defaults to 5s back-off", async () => {
   let calls = 0;
   const sleepMs: number[] = [];
   const fn = async () => {
@@ -186,7 +187,7 @@ test("callMistralWithRetry: 429 without Retry-After header → defaults to 5s ba
     if (calls === 1) throw make429(); // no header
     return "ok";
   };
-  await callMistralWithRetry(fn, (ms) => {
+  await callOpenAIWithRetry(fn, (ms) => {
     sleepMs.push(ms);
     return Promise.resolve();
   });
@@ -195,21 +196,21 @@ test("callMistralWithRetry: 429 without Retry-After header → defaults to 5s ba
   expect(sleepMs).toEqual([5000]); // default 5 s
 });
 
-test("callMistralWithRetry: 3 × 429 → throws MistralRateLimitError after max retries", async () => {
+test("callOpenAIWithRetry: 3 × 429 → throws OpenAIRateLimitError after max retries", async () => {
   let calls = 0;
   const fn = async () => {
     calls++;
     throw make429(1);
   };
   await expect(
-    callMistralWithRetry(fn, () => Promise.resolve()),
-  ).rejects.toMatchObject({ name: "MistralRateLimitError" });
+    callOpenAIWithRetry(fn, () => Promise.resolve()),
+  ).rejects.toMatchObject({ name: "OpenAIRateLimitError" });
 
-  // MAX_MISTRAL_RETRIES is 2, so we expect 3 calls (initial + 2 retries)
+  // MAX_OPENAI_RETRIES is 2, so we expect 3 calls (initial + 2 retries)
   expect(calls).toBe(3);
 });
 
-test("callMistralWithRetry: Retry-After exceeding 8s budget → throws without waiting", async () => {
+test("callOpenAIWithRetry: Retry-After exceeding 8s budget → throws without waiting", async () => {
   let calls = 0;
   const sleepMs: number[] = [];
   const fn = async () => {
@@ -217,8 +218,8 @@ test("callMistralWithRetry: Retry-After exceeding 8s budget → throws without w
     throw make429(10); // 10s > MAX_RETRY_WAIT_MS (8s)
   };
   await expect(
-    callMistralWithRetry(fn, (ms) => { sleepMs.push(ms); return Promise.resolve(); }),
-  ).rejects.toMatchObject({ name: "MistralRateLimitError" });
+    callOpenAIWithRetry(fn, (ms) => { sleepMs.push(ms); return Promise.resolve(); }),
+  ).rejects.toMatchObject({ name: "OpenAIRateLimitError" });
 
   expect(calls).toBe(1); // gave up on first attempt — no sleep
   expect(sleepMs).toHaveLength(0);
@@ -227,14 +228,16 @@ test("callMistralWithRetry: Retry-After exceeding 8s budget → throws without w
 // ── handleChatPost end-to-end 429 tests ──────────────────────────────────────
 
 test("handleChatPost: 3 × 429 → SSE frame error_code=MISTRAL_RATE_LIMITED + retry_after_sec", async () => {
+  // error_code keeps "MISTRAL_RATE_LIMITED" string for backward compat with clients
   let calls = 0;
-  const getMistral = () => ({
+  const getOpenAI = () => ({
     chat: {
-      complete: async () => {
-        calls++;
-        throw make429(3);
+      completions: {
+        create: async () => {
+          calls++;
+          throw make429(3);
+        },
       },
-      stream: async () => { throw make429(3); },
     },
   }) as never;
 
@@ -246,7 +249,7 @@ test("handleChatPost: 3 × 429 → SSE frame error_code=MISTRAL_RATE_LIMITED + r
 
   const res = await handleChatPost(req, {
     auth: makeAuth(),
-    getMistral,
+    getOpenAI,
     timeoutMs: 10_000,
     sleep: () => Promise.resolve(),
   });
@@ -262,10 +265,12 @@ test("handleChatPost: 3 × 429 → SSE frame error_code=MISTRAL_RATE_LIMITED + r
 }, 10_000);
 
 test("handleChatPost: MISTRAL_RATE_LIMITED SSE frame has non-empty German user_message", async () => {
-  const getMistral = () => ({
+  // error_code keeps "MISTRAL_RATE_LIMITED" string for backward compat with clients
+  const getOpenAI = () => ({
     chat: {
-      complete: async () => { throw make429(1); },
-      stream: async () => { throw make429(1); },
+      completions: {
+        create: async () => { throw make429(1); },
+      },
     },
   }) as never;
 
@@ -277,7 +282,7 @@ test("handleChatPost: MISTRAL_RATE_LIMITED SSE frame has non-empty German user_m
 
   const res = await handleChatPost(req, {
     auth: makeAuth(),
-    getMistral,
+    getOpenAI,
     timeoutMs: 10_000,
     sleep: () => Promise.resolve(),
   });

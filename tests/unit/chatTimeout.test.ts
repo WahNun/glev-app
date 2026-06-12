@@ -17,7 +17,7 @@ import { test, expect } from "@playwright/test";
 import { NextRequest } from "next/server";
 import type { SupabaseClient, User } from "@supabase/supabase-js";
 import type { AuthOk } from "@/app/api/insulin/_helpers";
-import { handleChatPost, callMistralWithRetry } from "@/app/api/ai/chat/route";
+import { handleChatPost, callOpenAIWithRetry } from "@/app/api/ai/chat/route";
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -145,20 +145,21 @@ async function collectSseFrames(res: Response): Promise<Array<Record<string, unk
   return frames;
 }
 
-// ── Timeout unit test for callMistralWithRetry ────────────────────────────────
+// ── Timeout unit test for callOpenAIWithRetry ─────────────────────────────────
 
-test("callMistralWithRetry: non-429 errors propagate immediately", async () => {
+test("callOpenAIWithRetry: non-429 errors propagate immediately", async () => {
   const err = Object.assign(new Error("network error"), { statusCode: 503 });
-  await expect(callMistralWithRetry(() => Promise.reject(err))).rejects.toThrow("network error");
+  await expect(callOpenAIWithRetry(() => Promise.reject(err))).rejects.toThrow("network error");
 });
 
 // ── handleChatPost — timeout scenarios ────────────────────────────────────────
 
-test("timeout: slow Mistral (never resolves within 100ms) → CHAT_TIMEOUT SSE frame", async () => {
-  const getMistral = () => ({
+test("timeout: slow OpenAI (never resolves within 100ms) → CHAT_TIMEOUT SSE frame", async () => {
+  const getOpenAI = () => ({
     chat: {
-      complete: () => new Promise<never>(() => { /* never resolves */ }),
-      stream: () => new Promise<never>(() => { /* never resolves */ }),
+      completions: {
+        create: () => new Promise<never>(() => { /* never resolves */ }),
+      },
     },
   }) as never;
 
@@ -170,7 +171,7 @@ test("timeout: slow Mistral (never resolves within 100ms) → CHAT_TIMEOUT SSE f
 
   const res = await handleChatPost(req, {
     auth: makeAuth(),
-    getMistral,
+    getOpenAI,
     timeoutMs: 100,
     sleep: () => Promise.resolve(),
   });
@@ -186,10 +187,11 @@ test("timeout: slow Mistral (never resolves within 100ms) → CHAT_TIMEOUT SSE f
 }, 5_000);
 
 test("timeout: CHAT_TIMEOUT frame carries non-empty German user_message", async () => {
-  const getMistral = () => ({
+  const getOpenAI = () => ({
     chat: {
-      complete: () => new Promise<never>(() => {}),
-      stream: () => new Promise<never>(() => {}),
+      completions: {
+        create: () => new Promise<never>(() => {}),
+      },
     },
   }) as never;
 
@@ -201,7 +203,7 @@ test("timeout: CHAT_TIMEOUT frame carries non-empty German user_message", async 
 
   const res = await handleChatPost(req, {
     auth: makeAuth(),
-    getMistral,
+    getOpenAI,
     timeoutMs: 80,
     sleep: () => Promise.resolve(),
   });
@@ -214,17 +216,19 @@ test("timeout: CHAT_TIMEOUT frame carries non-empty German user_message", async 
   expect(msg).toMatch(/versuchen|länger|Antwort/i);
 }, 5_000);
 
-test("timeout: fast Mistral (resolves before 200ms timeout) → no CHAT_TIMEOUT frame", async () => {
-  const getMistral = () => ({
+test("timeout: fast OpenAI (resolves before 200ms timeout) → no CHAT_TIMEOUT frame", async () => {
+  const getOpenAI = () => ({
     chat: {
-      complete: async () => ({
-        choices: [{ message: { toolCalls: [] } }],
-      }),
-      stream: async () => ({
-        [Symbol.asyncIterator]: async function* () {
-          yield { data: { choices: [{ delta: { content: "Hi" } }] } };
+      completions: {
+        create: async (opts: { stream?: boolean }) => {
+          if (opts?.stream) {
+            return (async function* () {
+              yield { choices: [{ delta: { content: "Hi" } }] };
+            })();
+          }
+          return { choices: [{ message: { tool_calls: [] } }] };
         },
-      }),
+      },
     },
   }) as never;
 
@@ -236,7 +240,7 @@ test("timeout: fast Mistral (resolves before 200ms timeout) → no CHAT_TIMEOUT 
 
   const res = await handleChatPost(req, {
     auth: makeAuth(),
-    getMistral,
+    getOpenAI,
     timeoutMs: 500,
     sleep: () => Promise.resolve(),
   });
@@ -250,10 +254,11 @@ test("timeout: fast Mistral (resolves before 200ms timeout) → no CHAT_TIMEOUT 
 }, 5_000);
 
 test("timeout: stream is closed after CHAT_TIMEOUT (no infinite hang)", async () => {
-  const getMistral = () => ({
+  const getOpenAI = () => ({
     chat: {
-      complete: () => new Promise<never>(() => {}),
-      stream: () => new Promise<never>(() => {}),
+      completions: {
+        create: () => new Promise<never>(() => {}),
+      },
     },
   }) as never;
 
@@ -265,7 +270,7 @@ test("timeout: stream is closed after CHAT_TIMEOUT (no infinite hang)", async ()
 
   const res = await handleChatPost(req, {
     auth: makeAuth(),
-    getMistral,
+    getOpenAI,
     timeoutMs: 100,
     sleep: () => Promise.resolve(),
   });

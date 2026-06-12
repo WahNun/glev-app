@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse, after } from "next/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { Mistral } from "@mistralai/mistralai";
+import OpenAI from "openai";
 import { authedClient, type AuthOk, type AuthErr } from "@/app/api/insulin/_helpers";
-import { getMistralClient } from "@/lib/ai/mistralClient";
+import { getOpenAIClient } from "@/lib/ai/openaiClient";
 import { GLEV_CHAT_SYSTEM_PROMPT } from "@/lib/ai/glevChatPrompt";
 import { errorResponse } from "@/lib/api/errorResponse";
 import { getUserFriendlyMessage } from "@/lib/ai/errorMessages";
@@ -24,13 +24,13 @@ import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
 import { callWithRetry, defaultGetRetryAfterSec } from "@/lib/ai/retryWithRateLimit";
 
 // Maximum number of sequential tool-call rounds before we stop calling
-// Mistral with `tools` and force a streamed final answer. Two is enough
+// OpenAI with `tools` and force a streamed final answer. Two is enough
 // for any realistic chain ("get glucose + IOB + last meal") while
 // keeping a hard ceiling against accidental tool-loop runaways.
 const MAX_TOOL_ROUNDS = 2;
 
 // ── Timeout ───────────────────────────────────────────────────────────
-// Hard ceiling for Mistral round-trips inside the SSE stream.
+// Hard ceiling for OpenAI round-trips inside the SSE stream.
 // If the stream hasn't produced [DONE] within this window the handler
 // emits a CHAT_TIMEOUT SSE error frame and closes the stream.
 // Kept as a named constant so tests can override it via ChatDeps.timeoutMs.
@@ -41,53 +41,53 @@ const DEFAULT_TIMEOUT_MS = 18_000;
 // than this, we surface MISTRAL_RATE_LIMITED to the client immediately
 // (let the client-side retry handle it) rather than burning Vercel
 // function time that would hit the serverless limit.
+// NOTE: error_code stays "MISTRAL_RATE_LIMITED" for client backward-compat;
+// should be renamed to "PROVIDER_RATE_LIMITED" in a follow-up cleanup sprint.
 const MAX_RETRY_WAIT_MS = 8_000;
-const MAX_MISTRAL_RETRIES = 2;
+const MAX_AI_RETRIES = 2;
 
 /**
- * Thrown by `callMistralWithRetry` when all server-side retry attempts
+ * Thrown by `callOpenAIWithRetry` when all server-side retry attempts
  * are exhausted or the Retry-After delay exceeds MAX_RETRY_WAIT_MS.
  */
-class MistralRateLimitError extends Error {
+class OpenAIRateLimitError extends Error {
   readonly retry_after_sec: number;
   readonly attempts: number;
 
   constructor(retry_after_sec: number, attempts: number) {
     super("MISTRAL_RATE_LIMITED");
-    this.name = "MistralRateLimitError";
+    this.name = "OpenAIRateLimitError";
     this.retry_after_sec = retry_after_sec;
     this.attempts = attempts;
   }
 }
 
 /**
- * Returns `true` when the caught error represents a Mistral HTTP 429.
- * The Mistral SDK surfaces rate-limits as thrown errors with a
- * `statusCode` or `status` field (SDK v1 uses `statusCode`).
+ * Returns `true` when the caught error represents an OpenAI HTTP 429.
+ * The OpenAI SDK surfaces rate-limits as APIStatusError with `status: 429`.
  */
-function isMistral429Error(e: unknown): boolean {
+function isOpenAI429Error(e: unknown): boolean {
   if (!e || typeof e !== "object") return false;
   const err = e as Record<string, unknown>;
   return (
-    err.statusCode === 429 ||
     err.status === 429 ||
+    err.statusCode === 429 ||
     (typeof err.message === "string" && err.message.includes("429"))
   );
 }
 
 /**
- * Returns `true` when the caught error is a Mistral 5xx server error
+ * Returns `true` when the caught error is an OpenAI 5xx server error
  * (overloaded, gateway timeout, internal server error, etc.).
  * These are transient — a single retry with a short delay recovers most cases.
  */
-function isMistral5xxError(e: unknown): boolean {
+function isOpenAI5xxError(e: unknown): boolean {
   if (!e || typeof e !== "object") return false;
   const err = e as Record<string, unknown>;
-  const code = typeof err.statusCode === "number" ? err.statusCode
-    : typeof err.status === "number" ? err.status
+  const code = typeof err.status === "number" ? err.status
+    : typeof err.statusCode === "number" ? err.statusCode
     : null;
   if (code !== null) return code >= 500 && code < 600;
-  // Fallback: check message string for common 5xx patterns
   if (typeof err.message === "string") {
     return (
       err.message.includes("500") ||
@@ -103,38 +103,34 @@ function isMistral5xxError(e: unknown): boolean {
 }
 
 /**
- * Wraps a Mistral API call with up to `MAX_MISTRAL_RETRIES` server-side
+ * Wraps an OpenAI API call with up to `MAX_AI_RETRIES` server-side
  * retries on 429 responses. Backs off for the `Retry-After` duration
  * (default 5 s) between attempts.
  *
- * Throws `MistralRateLimitError` when:
+ * Throws `OpenAIRateLimitError` when:
  * - All retries are exhausted, OR
  * - The Retry-After delay would exceed `MAX_RETRY_WAIT_MS` (prefer
  *   surfacing a client-side retry over burning Vercel function time).
  *
  * All other errors propagate as-is.
  *
- * Delegates to the shared `callWithRetry` helper in
- * `lib/ai/retryWithRateLimit.ts`; Mistral-specific quirks (statusCode vs
- * status field) stay isolated here via `isMistral429Error`.
- *
- * @param fn     - Factory that performs one Mistral API call.
+ * @param fn     - Factory that performs one OpenAI API call.
  * @param _sleep - Injectable sleep function for unit tests.
  */
-export async function callMistralWithRetry<T>(
+export async function callOpenAIWithRetry<T>(
   fn: () => Promise<T>,
   _sleep: (ms: number) => Promise<void> = (ms) =>
     new Promise((r) => setTimeout(r, ms)),
 ): Promise<T> {
   return callWithRetry(fn, {
-    is429: isMistral429Error,
+    is429: isOpenAI429Error,
     getRetryAfterSec: defaultGetRetryAfterSec,
-    maxRetries: MAX_MISTRAL_RETRIES,
+    maxRetries: MAX_AI_RETRIES,
     maxRetryWaitMs: MAX_RETRY_WAIT_MS,
     makeRateLimitError: (retryAfterSec, attempts) =>
-      new MistralRateLimitError(retryAfterSec, attempts),
-    logPrefix: "[chat] Mistral",
-    is5xx: isMistral5xxError,
+      new OpenAIRateLimitError(retryAfterSec, attempts),
+    logPrefix: "[chat] OpenAI",
+    is5xx: isOpenAI5xxError,
     max5xxRetries: 1,
     retry5xxDelayMs: 1_500,
   }, _sleep);
@@ -145,7 +141,7 @@ export async function callMistralWithRetry<T>(
  *
  * Streaming SSE endpoint that powers the Glev AI chat sheet (Phase 2).
  * The response body is `text/event-stream` with one `data: <token>` line
- * per Mistral chunk and a final `data: [DONE]` sentinel — matching the
+ * per OpenAI chunk and a final `data: [DONE]` sentinel — matching the
  * pattern most JS SSE consumers expect.
  *
  * Gates (in order):
@@ -241,8 +237,8 @@ type ChatBody = {
   // Europe/Berlin.
   timezone?: string | null;
   /** Optional file attachments uploaded via /api/ai/upload.
-   *  Images → pixtral-12b-2409 (vision model).
-   *  PDFs   → text prepended to message, then mistral-small-latest. */
+   *  Images → gpt-4o-mini (vision built-in).
+   *  PDFs   → text prepended to message, then gpt-4o-mini. */
   attachments?: ChatAttachment[];
 };
 
@@ -309,7 +305,7 @@ type ContextScopes = { glucose: boolean; iob: boolean; history: boolean };
 
 /**
  * Builds the system preamble that ships the user's live snapshot to
- * Mistral. Each line is gated by the matching granular consent scope
+ * OpenAI. Each line is gated by the matching granular consent scope
  * (Task #664). `lastMealDescription` is always included as long as the
  * master consent is set — it is the floor of the AI feature and not
  * separately toggleable. Lines that are gated off are omitted entirely
@@ -357,7 +353,7 @@ function todayInTimezone(timezone: string | null): string {
 
 // Hard cap auf die Anzahl Memory-Einträge, die in den System-Prompt
 // injiziert werden. Bei ~500 Zeichen pro Value + key + Bullet-Padding
-// wären 50 Einträge ≲ 28 KB — deutlich unter Mistrals 32k-Kontext, lässt
+// wären 50 Einträge ≲ 28 KB — deutlich unter dem Kontext-Limit, lässt
 // aber genug Spielraum für History, Tool-Calls und die eigentliche
 // Antwort. Größere Caps brauchen erst eine Embedding-/Retrieval-Schicht
 // (siehe „Out of scope" in Task #663).
@@ -404,13 +400,13 @@ async function loadUserMemoryBlock(
 }
 
 /**
- * Strips system-prompt echoes from assistant history before sending to Mistral.
+ * Strips system-prompt echoes from assistant history before sending to OpenAI.
  * Prevents the feedback loop: model echoes prompt → echo lands in history →
  * model echoes it again next turn.
  *
  * Strategy: if the assistant turn contains unique system-prompt fingerprints
  * that never appear in legitimate replies, replace the content with a neutral
- * placeholder so Mistral doesn't treat the echo as a learned pattern.
+ * placeholder so OpenAI doesn't treat the echo as a learned pattern.
  */
 const HISTORY_FINGERPRINTS = [
   "strikte grenzen (niemals brechen)",
@@ -427,8 +423,8 @@ const HISTORY_FINGERPRINTS = [
 
 function sanitizeHistoryContent(content: string): string {
   if (!content || !content.trim()) {
-    // Mistral rejects assistant messages with empty content and no tool_calls
-    // (error 3240). This happens when a prior turn failed before streaming any
+    // OpenAI rejects assistant messages with empty content and no tool_calls.
+    // This happens when a prior turn failed before streaming any
     // tokens and the client replays the empty turn in history.
     return "[Antwort nicht verfügbar]";
   }
@@ -506,9 +502,9 @@ export async function checkChatFlag(
  *
  * - `auth`: pre-resolved auth result. When omitted `handleChatPost` calls
  *   `authedClient(req)` itself (production path).
- * - `getMistral`: factory that returns a Mistral client. When omitted the
- *   real `getMistralClient()` is used. Tests can pass a spy here to assert
- *   that no Mistral call occurs when the feature-flag gate blocks early.
+ * - `getOpenAI`: factory that returns an OpenAI client. When omitted the
+ *   real `getOpenAIClient()` is used. Tests can pass a spy here to assert
+ *   that no OpenAI call occurs when the feature-flag gate blocks early.
  * - `timeoutMs`: stream timeout in milliseconds. Defaults to 18 000. Tests
  *   can lower this to make timeout scenarios fast.
  * - `sleep`: injectable sleep for 429-retry back-off. Defaults to real
@@ -516,7 +512,7 @@ export async function checkChatFlag(
  */
 export type ChatDeps = {
   auth?: AuthOk | AuthErr;
-  getMistral?: () => Mistral;
+  getOpenAI?: () => OpenAI;
   timeoutMs?: number;
   sleep?: (ms: number) => Promise<void>;
 };
@@ -526,7 +522,7 @@ export type ChatDeps = {
  * called directly in unit tests with injectable dependencies.
  *
  * The exported `POST` function is a thin wrapper that calls this with the
- * real authedClient result and no Mistral override.
+ * real authedClient result and no OpenAI override.
  */
 export async function handleChatPost(
   req: NextRequest,
@@ -567,7 +563,7 @@ export async function handleChatPost(
   };
 
   // 3. Rate limit — one hit per user-initiated message, recorded before
-  //    any Mistral calls so tool-round retries don't count separately.
+  //    any OpenAI calls so tool-round retries don't count separately.
   if (await isRateLimited(user.id)) {
     console.error("[chat]", { code: "MISTRAL_RATE_LIMITED", userId: user.id });
     return errorResponse("MISTRAL_RATE_LIMITED", 429);
@@ -585,21 +581,21 @@ export async function handleChatPost(
   const timezone: string | null = v.body.timezone ?? null;
   const attachments: ChatAttachment[] = v.body.attachments ?? [];
 
-  // 5. Mistral client
-  const _getMistral = deps.getMistral ?? getMistralClient;
+  // 5. OpenAI client
+  const _getOpenAI = deps.getOpenAI ?? getOpenAIClient;
   let client;
   try {
-    client = _getMistral();
+    client = _getOpenAI();
   } catch (e) {
     console.error("[chat]", { code: "UPSTREAM_ERROR", cause: e instanceof Error ? e.message : String(e) });
     return errorResponse("UPSTREAM_ERROR", 503);
   }
 
   // Compose messages: system + context preamble + last-10 history + new turn.
-  // Typed loosely as `any[]` because the Mistral SDK's message-union type
+  // Typed loosely as `any[]` because the OpenAI SDK's message-union type
   // is awkward to reproduce inline (tool replies vs assistant tool_calls
   // vs plain user/assistant turns) and we treat the array as an opaque
-  // protocol buffer that only Mistral itself needs to validate.
+  // protocol buffer that only OpenAI itself needs to validate.
   // Memory-Block (persistente User-Beobachtungen) wird nur dann als
   // System-Message angehängt, wenn es tatsächlich Einträge gibt. Kein
   // leerer „Was du über diesen User weißt:"-Header — das würde den
@@ -630,12 +626,12 @@ export async function handleChatPost(
 
   // 6. Tool-call loop + final stream.
   //
-  // Mistral's tool-calling protocol is two-phase: first a non-streaming
-  // `chat.complete` with `tools` lets the model emit `tool_calls`; we
-  // execute them server-side, append the results as `role: "tool"`
+  // OpenAI's tool-calling protocol is two-phase: first a non-streaming
+  // `chat.completions.create` with `tools` lets the model emit `tool_calls`;
+  // we execute them server-side, append the results as `role: "tool"`
   // messages, and re-call. Once the model returns text-only (no more
   // tool_calls) — or we hit MAX_TOOL_ROUNDS — we switch to
-  // `chat.stream` for the final, user-visible answer.
+  // streaming for the final, user-visible answer.
   //
   // This keeps the streaming UX intact (tokens still arrive live) while
   // adding the read-only tool layer (Phase 3 / Task 1). Write-tools
@@ -684,14 +680,14 @@ export async function handleChatPost(
         // ── Feedback Direct-Save Guard ────────────────────────────────
         // When the user's message clearly describes a bug, problem or
         // feature wish, call submit_structured_feedback DIRECTLY —
-        // without relying on Mistral's tool-choice mechanism (which
-        // proved unreliable: toolChoice object format was silently
-        // ignored by the SDK, causing the model to respond with text
+        // without relying on the model's tool-choice mechanism (which
+        // proved unreliable in the Mistral era: toolChoice object format
+        // was silently ignored, causing the model to respond with text
         // like "Das Team schaut sich das an." without saving anything).
         //
         // Strategy: keyword detection (problem + app signal) → build
         // args locally → executeGlevTool → append synthetic assistant
-        // + tool messages → Mistral streaming phase sees the saved
+        // + tool messages → OpenAI streaming phase sees the saved
         // state and generates a proper confirmation.
         const userMsgLower = message.toLowerCase();
         const FEEDBACK_PROBLEM_SIGNALS = [
@@ -746,16 +742,16 @@ export async function handleChatPost(
           messages.push({
             role: "assistant",
             content: "",
-            toolCalls: [{
+            tool_calls: [{
               id: syntheticId,
+              type: "function",
               // eslint-disable-next-line @typescript-eslint/no-explicit-any
               function: { name: "submit_structured_feedback", arguments: autoArgs } as any,
             }],
           });
           messages.push({
             role: "tool",
-            name: "submit_structured_feedback",
-            toolCallId: syntheticId,
+            tool_call_id: syntheticId,
             content: JSON.stringify(feedbackResult),
           });
 
@@ -766,15 +762,16 @@ export async function handleChatPost(
         for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
           if (timedOut || closed) return;
 
-          const completion = await callMistralWithRetry(
-            () => client.chat.complete({
-              model: "mistral-small-latest",
-              maxTokens: 300,
+          const completion = await callOpenAIWithRetry(
+            () => client.chat.completions.create({
+              model: "gpt-4o-mini",
+              max_tokens: 300,
               temperature: 0.4,
               messages,
               // eslint-disable-next-line @typescript-eslint/no-explicit-any
               tools: GLEV_TOOLS as any,
-              toolChoice: "auto",
+              tool_choice: "auto",
+              stream: false,
             }),
             _sleep,
           );
@@ -782,13 +779,13 @@ export async function handleChatPost(
           if (timedOut || closed) return;
 
           const choice = completion?.choices?.[0];
-          const toolCalls = choice?.message?.toolCalls ?? [];
+          const toolCalls = choice?.message?.tool_calls ?? [];
           if (!toolCalls.length) {
             // ── Feedback Guard (response-side) ────────────────────────
-            // Mistral responded with text but no tool call. If the text
+            // OpenAI responded with text but no tool call. If the text
             // looks like a feedback forwarding phrase AND no feedback was
             // already saved by the pre-call direct-save guard above,
-            // save it directly here too — no second Mistral round needed.
+            // save it directly here too — no second OpenAI round needed.
             if (round === 0) {
               const responseText =
                 typeof choice?.message?.content === "string"
@@ -837,16 +834,16 @@ export async function handleChatPost(
                 messages.push({
                   role: "assistant",
                   content: "",
-                  toolCalls: [{
+                  tool_calls: [{
                     id: guardId,
+                    type: "function",
                     // eslint-disable-next-line @typescript-eslint/no-explicit-any
                     function: { name: "submit_structured_feedback", arguments: autoArgs } as any,
                   }],
                 });
                 messages.push({
                   role: "tool",
-                  name: "submit_structured_feedback",
-                  toolCallId: guardId,
+                  tool_call_id: guardId,
                   content: JSON.stringify(guardResult),
                 });
                 console.log("[chat] feedback response-guard save:", JSON.stringify(guardResult).slice(0, 120));
@@ -862,7 +859,7 @@ export async function handleChatPost(
           messages.push({
             role: "assistant",
             content: choice?.message?.content ?? "",
-            toolCalls,
+            tool_calls: toolCalls,
           });
 
           // Hard cap: maximal EINE pending WRITE-Aktion pro Assistant-
@@ -872,10 +869,10 @@ export async function handleChatPost(
           // Bubble in `useGlevAI`). Statt das clientseitig zu lösen
           // brechen wir hier server-seitig ab: erste WRITE wird normal
           // bearbeitet, jede weitere WRITE-Tool-Call der gleichen Runde
-          // wird Mistral als „rejected: only one write per turn" zurück-
+          // wird dem Modell als „rejected: only one write per turn" zurück-
           // gegeben — damit kann das Modell entweder im Text drauf
           // hinweisen oder im nächsten Turn nachziehen.
-          let pendingEmittedThisRound = false; // still tracks state for the Mistral stub note
+          let pendingEmittedThisRound = false; // still tracks state for the model stub note
           for (const call of toolCalls) {
             const fn = call.function;
             const rawArgs =
@@ -892,7 +889,7 @@ export async function handleChatPost(
 
             // WRITE-tools return a `pending_action` envelope instead of
             // doing the insert. Forward the envelope to the UI on a
-            // dedicated SSE frame, and give Mistral a short "awaiting
+            // dedicated SSE frame, and give OpenAI a short "awaiting
             // user confirmation" stub so it doesn't try to confirm
             // itself or chain more writes in the same round.
             if (isDualPendingActionEnvelope(result)) {
@@ -919,8 +916,7 @@ export async function handleChatPost(
               if (result.backgroundTask) after(result.backgroundTask);
               messages.push({
                 role: "tool",
-                name: fn?.name ?? "",
-                toolCallId: call.id,
+                tool_call_id: call.id,
                 content: JSON.stringify({
                   status: "awaiting_user_confirmation",
                   kind: "log_meal_entry+log_influence_entry",
@@ -955,8 +951,7 @@ export async function handleChatPost(
               if (result.backgroundTask) after(result.backgroundTask);
               messages.push({
                 role: "tool",
-                name: fn?.name ?? "",
-                toolCallId: call.id,
+                tool_call_id: call.id,
                 content: JSON.stringify({
                   status: "awaiting_user_confirmation",
                   kind: result.pending_action.kind,
@@ -969,8 +964,7 @@ export async function handleChatPost(
               send(JSON.stringify({ navigate: result.navigate }));
               messages.push({
                 role: "tool",
-                name: fn?.name ?? "",
-                toolCallId: call.id,
+                tool_call_id: call.id,
                 content: JSON.stringify({
                   status: "navigating",
                   path: result.navigate,
@@ -983,8 +977,7 @@ export async function handleChatPost(
               send(JSON.stringify({ set_macro: result.set_macro }));
               messages.push({
                 role: "tool",
-                name: fn?.name ?? "",
-                toolCallId: call.id,
+                tool_call_id: call.id,
                 content: JSON.stringify({
                   status: "macro_updated",
                   field: result.set_macro.field,
@@ -1004,8 +997,7 @@ export async function handleChatPost(
               if (mp.fat != null) macroBits.push(`${mp.fat}g Fett`);
               messages.push({
                 role: "tool",
-                name: fn?.name ?? "",
-                toolCallId: call.id,
+                tool_call_id: call.id,
                 content: JSON.stringify({
                   status: "meal_prep_sent",
                   input_text: mp.input_text,
@@ -1016,8 +1008,7 @@ export async function handleChatPost(
             } else {
               messages.push({
                 role: "tool",
-                name: fn?.name ?? "",
-                toolCallId: call.id,
+                tool_call_id: call.id,
                 content: JSON.stringify(result),
               });
             }
@@ -1028,14 +1019,13 @@ export async function handleChatPost(
         if (timedOut || closed) return;
 
         // ── Phase 2: stream the final answer ────────────────────────
-        // Route to pixtral-12b-2409 when image attachments are present.
-        // PDFs are prepended as a "[Attached PDF: filename]" note in the
-        // user message so mistral-small-latest is aware of the context.
+        // gpt-4o-mini handles both text and image inputs natively (vision built-in).
+        // PDFs are prepended as text so OpenAI receives the actual document content.
         const imageAttachments = attachments.filter((a) => a.mimeType.startsWith("image/"));
         const pdfAttachments   = attachments.filter((a) => a.mimeType === "application/pdf");
 
         // Extract text from PDF attachments and prepend to the last user
-        // message so Mistral receives the actual document content.
+        // message so OpenAI receives the actual document content.
         if (pdfAttachments.length > 0) {
           const { extractTextFromPdf } = await import("@/lib/pdf/extractText");
           const lastUserIdx = messages.length - 1;
@@ -1066,12 +1056,11 @@ export async function handleChatPost(
           }
         }
 
-        const usePixtral = imageAttachments.length > 0;
-        const finalModel = usePixtral ? "pixtral-12b-2409" : "mistral-small-latest";
+        const hasImages = imageAttachments.length > 0;
 
-        // For Pixtral: replace the last user message with a content-array
-        // that includes the text plus image_url objects.
-        if (usePixtral) {
+        // For vision: replace the last user message with a content-array
+        // that includes the text plus image_url objects (OpenAI format).
+        if (hasImages) {
           const lastUserIdx = messages.length - 1;
           if (messages[lastUserIdx]?.role === "user") {
             const textContent = messages[lastUserIdx].content as string;
@@ -1082,37 +1071,31 @@ export async function handleChatPost(
                 { type: "text", text: textContent },
                 ...imageAttachments.map((a) => ({
                   type: "image_url" as const,
-                  imageUrl: { url: a.url },
+                  image_url: { url: a.url },
                 })),
               ],
             };
           }
         }
 
-        const result = await callMistralWithRetry(
-          () => client.chat.stream({
-            model: finalModel,
-            maxTokens: usePixtral ? 512 : 300,
+        const streamResult = await callOpenAIWithRetry(
+          () => client.chat.completions.create({
+            model: "gpt-4o-mini",
+            max_tokens: hasImages ? 512 : 300,
             temperature: 0.4,
             messages,
+            stream: true,
           }),
           _sleep,
         );
 
         if (timedOut || closed) return;
 
-        for await (const event of result) {
+        for await (const chunk of streamResult) {
           if (timedOut || closed) return;
-          const delta = event?.data?.choices?.[0]?.delta?.content;
+          const delta = chunk?.choices?.[0]?.delta?.content;
           if (typeof delta === "string" && delta.length > 0) {
             send(JSON.stringify({ token: delta }));
-          } else if (Array.isArray(delta)) {
-            for (const chunk of delta) {
-              const text = typeof chunk === "string" ? chunk : (chunk as { text?: string })?.text;
-              if (typeof text === "string" && text.length > 0) {
-                send(JSON.stringify({ token: text }));
-              }
-            }
           }
         }
 
@@ -1124,9 +1107,9 @@ export async function handleChatPost(
         clearTimeout(timeoutId);
         if (timedOut || closed) return;
 
-        // ── Mistral rate limit (all retries exhausted) ───────────────
-        if (e instanceof MistralRateLimitError) {
-          console.warn("[chat] Mistral rate limit — all retries exhausted", {
+        // ── OpenAI rate limit (all retries exhausted) ────────────────
+        if (e instanceof OpenAIRateLimitError) {
+          console.warn("[chat] OpenAI rate limit — all retries exhausted", {
             retry_after_sec: e.retry_after_sec,
             attempts: e.attempts,
           });
