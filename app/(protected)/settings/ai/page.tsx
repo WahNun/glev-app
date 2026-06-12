@@ -120,28 +120,39 @@ export default function AiSettingsPage() {
         setAiScopeFeedback(Boolean(data?.ai_feedback_consent_at));
       } catch { /* keep previous */ }
     };
+    // When consent is granted the toggle should flip to ON immediately
+    // (optimistic) — the event fires only after the POST succeeded, so the
+    // value is reliable. The async re-fetch below confirms with the DB.
+    const onConsentGranted = () => {
+      setAiConsentGranted(true);
+      void refresh();
+    };
     // Re-sync when the window regains focus (e.g. user switches tabs).
     window.addEventListener("focus", refresh);
     // Re-sync when the consent modal in Layout confirms a grant — this fires
     // after the user re-enables AI via the toggle (OFF → ON path dispatched
     // "glev:ai-open-consent-modal", user accepted, grantConsent() succeeded).
-    // Without this listener the Settings page state stays stuck at false and
-    // the toggle appears unresponsive until the next app restart.
-    window.addEventListener("glev:ai-consent-granted", refresh);
+    window.addEventListener("glev:ai-consent-granted", onConsentGranted);
     return () => {
       window.removeEventListener("focus", refresh);
-      window.removeEventListener("glev:ai-consent-granted", refresh);
+      window.removeEventListener("glev:ai-consent-granted", onConsentGranted);
     };
   }, []);
 
   const toggleAiConsent = useCallback(async (next: boolean) => {
-    if (aiConsentBusy || aiConsentGranted === null) return;
+    if (aiConsentGranted === null) return;
     if (next) {
+      // Opening the modal is safe even while a DELETE is in-flight:
+      // the user must still explicitly accept — no write happens yet.
+      // We intentionally do NOT block on aiConsentBusy here, so rapid
+      // OFF→ON taps are never silently ignored.
       if (typeof window !== "undefined") {
         window.dispatchEvent(new CustomEvent("glev:ai-open-consent-modal"));
       }
       return;
     }
+    // OFF path: prevent double-tap while the DELETE is in-flight.
+    if (aiConsentBusy) return;
     setAiConsentBusy(true);
     const prev = aiConsentGranted;
     const prevScopes = { glucose: aiScopeGlucose, iob: aiScopeIob, history: aiScopeHistory };

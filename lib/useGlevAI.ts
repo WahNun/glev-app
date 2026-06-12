@@ -222,6 +222,11 @@ export function useGlevAI(opts?: {
   const [messages, setMessages] = useState<GlevChatMessage[]>([]);
   const [streaming, setStreaming] = useState<boolean>(false);
   const abortRef = useRef<AbortController | null>(null);
+  /** True when the consent modal was triggered by an external event
+   *  (Settings toggle) rather than by the floating FAB button.
+   *  Used in grantConsent() to skip setSheetOpen(true) — the user is
+   *  on the Settings page and should NOT be transported to the chat. */
+  const consentFromExternalRef = useRef(false);
   /** idle → thinking on send, thinking → idle when stream ends.
    *  speaking is set externally by the TTS player via setAiState. */
   const [aiState, setAiState] = useState<AIState>("idle");
@@ -297,6 +302,9 @@ export function useGlevAI(opts?: {
 
   /** Floating button entry — modal if not consented, sheet if consented. */
   const openFromButton = useCallback(() => {
+    // FAB tap = user-initiated, not from Settings — mark accordingly so
+    // grantConsent() opens the sheet as expected.
+    consentFromExternalRef.current = false;
     if (consentGranted) {
       setSheetOpen(true);
     } else {
@@ -306,15 +314,26 @@ export function useGlevAI(opts?: {
 
   /** Modal "Nicht jetzt" — just close, do not write. */
   const dismissConsent = useCallback(() => {
+    consentFromExternalRef.current = false;
     setModalOpen(false);
   }, []);
 
-  /** Modal "Aktivieren →" — write consent, then open sheet. */
+  /** Modal "Aktivieren →" — write consent, then open sheet.
+   *  When the modal was triggered by the Settings toggle (consentFromExternalRef=true),
+   *  the sheet is NOT opened — the user stays on the Settings page. */
   const grantConsent = useCallback(async () => {
+    // Capture and reset the external-trigger flag atomically.
+    const fromExternal = consentFromExternalRef.current;
+    consentFromExternalRef.current = false;
+
     // Optimistic UI: flip immediately so the sheet opens without flash.
     setConsentGranted(true);
     setModalOpen(false);
-    setSheetOpen(true);
+    // Only open the sheet when the user tapped the FAB — not when they
+    // toggled AI back ON from the Settings page (they should stay there).
+    if (!fromExternal) {
+      setSheetOpen(true);
+    }
     try {
       const res = await fetch("/api/ai/consent", {
         method: "POST",
@@ -331,8 +350,7 @@ export function useGlevAI(opts?: {
       // eslint-disable-next-line no-console
       console.warn("[GlevAI] consent grant failed:", e);
       setConsentGranted(false);
-      // Leave the sheet open — the user can still type, but the next
-      // send will get a 403 and we'll surface a soft error there.
+      if (!fromExternal) setSheetOpen(false);
     }
   }, []);
 
@@ -388,6 +406,8 @@ export function useGlevAI(opts?: {
       try { window.sessionStorage.removeItem(HISTORY_KEY); } catch { /* ignore */ }
     };
     const onOpenModal = () => {
+      // Triggered by Settings toggle — mark so grantConsent() skips setSheetOpen.
+      consentFromExternalRef.current = true;
       setModalOpen(true);
     };
     window.addEventListener("glev:ai-consent-revoked", onRevoked);
