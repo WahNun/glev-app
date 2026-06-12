@@ -574,11 +574,23 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
   // viewport (>768 px). Closing the sheet sets glevAiFullscreenOpen=false
   // and does NOT retrigger this effect (pathname didn't change), so the
   // user can still dismiss and see the Engine wizard behind it.
+  //
+  // Guard: if sheetOpen is still true when this effect fires it means the
+  // user navigated to /engine from inside the mini chat (e.g. AI called
+  // navigate_to('engine')). In that case the sheet-close effect (below)
+  // will dismiss the mini chat — but we must NOT also auto-open the
+  // fullscreen, because the user clicked "Engine öffnen" to *see* the
+  // Engine page, not to re-open the AI overlay on top of it.
+  // Note: sheetOpen is intentionally not in the dep array — this effect
+  // must only run on pathname/consent changes, not on every sheet toggle.
   useEffect(() => {
     if (!aiVoiceEnabled || !glevAi.consentGranted) return;
     if (!pathname.startsWith("/engine")) return;
     if (typeof window === "undefined" || window.innerWidth <= 768) return;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    if (glevAi.sheetOpen) return;
     setGlevAiFullscreenOpen(true);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pathname, glevAi.consentGranted, aiVoiceEnabled]);
 
   // Track previous pathname so we can detect returning from /engine.
