@@ -6,6 +6,15 @@ import { isSTTRateLimited, addSTTRateLimitHit, STT_MIN_BLOB_BYTES } from "@/lib/
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
+/** Map browser MIME type → filename with extension Voxtral understands. */
+function voxtralFileName(mimeType: string): string {
+  if (mimeType.startsWith("audio/mp4") || mimeType.startsWith("audio/m4a")) return "audio.m4a";
+  if (mimeType.startsWith("audio/mpeg") || mimeType.startsWith("audio/mp3")) return "audio.mp3";
+  if (mimeType.startsWith("audio/ogg")) return "audio.ogg";
+  if (mimeType.startsWith("audio/wav")) return "audio.wav";
+  return "audio.webm"; // default — covers audio/webm;codecs=opus (Chrome/Safari/Firefox)
+}
+
 function isMistral429(e: unknown): boolean {
   if (!e || typeof e !== "object") return false;
   const err = e as Record<string, unknown>;
@@ -90,9 +99,13 @@ export async function POST(req: NextRequest) {
 
     const t1 = Date.now();
 
+    // Voxtral identifies the audio format from the file extension.
+    // Without a filename the API returns 400 "Audio input could not be decoded."
+    const audioFile = new File([file], voxtralFileName(file.type), { type: file.type });
+
     const result = await mistral.audio.transcriptions.complete({
       model: "voxtral-mini-latest",
-      file: file as Blob,
+      file: audioFile,
     });
 
     const text = (result as unknown as { text?: string }).text ?? "";
