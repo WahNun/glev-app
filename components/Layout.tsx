@@ -833,12 +833,10 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
         borderBottom: `1px solid ${BORDER}`,
         alignItems: "center", justifyContent: "space-between",
         // Scroll-fade: slide up + fade out on scroll-down, reverse on scroll-up.
-        transform: headerHidden ? "translateY(-100%)" : "translateY(0)",
-        opacity: headerHidden ? 0 : 1,
+        transform: (headerHidden && !glevAi.sheetOpen) ? "translateY(-100%)" : "translateY(0)",
+        opacity: (headerHidden && !glevAi.sheetOpen) ? 0 : 1,
         transition: "transform 220ms cubic-bezier(.4,0,.2,1), opacity 220ms ease",
-        // Keep pointer-events off when hidden so taps don't land on the
-        // invisible header instead of the content below.
-        pointerEvents: headerHidden ? "none" : undefined,
+        pointerEvents: (headerHidden && !glevAi.sheetOpen) ? "none" : undefined,
       }}>
         <div
           onClick={() => setAboutOpen(true)}
@@ -859,7 +857,7 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
             </span>
           )}
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: glevAi.sheetOpen ? 4 : 8, flexShrink: 0 }}>
           {/* Engine-Pille im Header wurde entfernt (User-Wunsch
               2026-05-04): "ich will nurnoch das plus symbol nutzen
               im header allerdings müssen dort alle tabs die aktuell
