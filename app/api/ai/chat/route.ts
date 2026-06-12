@@ -681,13 +681,18 @@ export async function handleChatPost(
       }, timeoutMs);
 
       try {
-        // ── Feedback Pre-Guard ────────────────────────────────────────
-        // If the user's message clearly describes a problem or feature
-        // wish, force the first Mistral call to use submit_structured_
-        // feedback — instead of letting the model choose text over the tool.
-        // Signals: negative/problem words + app context words.
-        // This is conservative (AND-logic): both a problem signal AND an
-        // app signal must appear so normal questions aren't misclassified.
+        // ── Feedback Direct-Save Guard ────────────────────────────────
+        // When the user's message clearly describes a bug, problem or
+        // feature wish, call submit_structured_feedback DIRECTLY —
+        // without relying on Mistral's tool-choice mechanism (which
+        // proved unreliable: toolChoice object format was silently
+        // ignored by the SDK, causing the model to respond with text
+        // like "Das Team schaut sich das an." without saving anything).
+        //
+        // Strategy: keyword detection (problem + app signal) → build
+        // args locally → executeGlevTool → append synthetic assistant
+        // + tool messages → Mistral streaming phase sees the saved
+        // state and generates a proper confirmation.
         const userMsgLower = message.toLowerCase();
         const FEEDBACK_PROBLEM_SIGNALS = [
           "stört", "stören", "nervt", "nervt mich", "buggy", "bug",
@@ -696,31 +701,70 @@ export async function handleChatPost(
           "lücke", "abstand", "versatz", "hängt", "hängt sich", "abstürzt",
           "absturz", "crash", "bitte fix", "please fix", "wünsche mir",
           "würde ich mir", "würde mir wünschen", "feature request",
-          "wieso.*nicht", "warum.*nicht", "warum.*kein", "wieso.*kein",
+          "sieht.*aus", "scheiße", "mist", "doof", "nervig",
         ];
         const FEEDBACK_APP_SIGNALS = [
           "seite", "screen", "button", "tab", "dashboard", "engine",
           "einstellungen", "settings", "overlay", "modal", "ansicht",
           "navigation", "glev", "app", "fenster", "bildschirm",
+          "header", "footer", "kante", "rand", "abstand",
         ];
         const hasProblemSignal = FEEDBACK_PROBLEM_SIGNALS.some(
-          (s) => s.includes(".*") ? new RegExp(s).test(userMsgLower) : userMsgLower.includes(s),
+          (s) => userMsgLower.includes(s),
         );
-        const hasAppSignal = FEEDBACK_APP_SIGNALS.some((s) => userMsgLower.includes(s));
-        const forceFeedbackTool = hasProblemSignal && hasAppSignal;
+        const hasAppSignal = FEEDBACK_APP_SIGNALS.some(
+          (s) => userMsgLower.includes(s),
+        );
+
+        if (hasProblemSignal && hasAppSignal) {
+          // Build args from the user message directly.
+          const trimmed = message.trim();
+          const autoCategory =
+            /wünsche|würde.*mir|feature/i.test(trimmed) ? "feature_request" :
+            /lob|super|toll|gefällt|danke/i.test(trimmed) ? "praise" :
+            "bug";
+          const autoArgs = JSON.stringify({
+            what_noticed: trimmed.slice(0, 600),
+            where_noticed: null,
+            category: autoCategory,
+            severity: "medium",
+            free_text: trimmed.slice(0, 300),
+            ai_summary: trimmed.slice(0, 120) + (trimmed.length > 120 ? "…" : ""),
+          });
+
+          const feedbackResult = await executeGlevTool(
+            "submit_structured_feedback",
+            autoArgs,
+            sb,
+            user.id,
+            timezone,
+          );
+
+          // Append synthetic assistant + tool messages so the streaming
+          // phase sees the saved state and confirms naturally.
+          const syntheticId = `fb_auto_${Date.now()}`;
+          messages.push({
+            role: "assistant",
+            content: "",
+            toolCalls: [{
+              id: syntheticId,
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              function: { name: "submit_structured_feedback", arguments: autoArgs } as any,
+            }],
+          });
+          messages.push({
+            role: "tool",
+            name: "submit_structured_feedback",
+            toolCallId: syntheticId,
+            content: JSON.stringify(feedbackResult),
+          });
+
+          console.log("[chat] feedback direct-save:", JSON.stringify(feedbackResult).slice(0, 120));
+        }
 
         // ── Phase 1: resolve any tool calls ─────────────────────────
         for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
           if (timedOut || closed) return;
-
-          // On round 0 with a detected feedback intent, pin toolChoice so
-          // Mistral MUST call submit_structured_feedback rather than replying
-          // with plain forwarding text.
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const resolvedToolChoice: any =
-            round === 0 && forceFeedbackTool
-              ? { type: "function", function: { name: "submit_structured_feedback" } }
-              : "auto";
 
           const completion = await callMistralWithRetry(
             () => client.chat.complete({
@@ -730,7 +774,7 @@ export async function handleChatPost(
               messages,
               // eslint-disable-next-line @typescript-eslint/no-explicit-any
               tools: GLEV_TOOLS as any,
-              toolChoice: resolvedToolChoice,
+              toolChoice: "auto",
             }),
             _sleep,
           );
@@ -741,83 +785,71 @@ export async function handleChatPost(
           const toolCalls = choice?.message?.toolCalls ?? [];
           if (!toolCalls.length) {
             // ── Feedback Guard (response-side) ────────────────────────
-            // When Mistral skips submit_structured_feedback and just writes
-            // a forwarding text ("Das Team schaut sich das an.", "Ich leite
-            // das weiter.", "Notiert.", etc.), detect it from the model's
-            // own reply and force exactly one more tool call.
-            //
-            // This guard catches the response-side miss. There is also a
-            // pre-call guard (see below) that forces the tool on the very
-            // first round when the user's message looks like feedback, so
-            // in practice the model should almost never reach this branch.
+            // Mistral responded with text but no tool call. If the text
+            // looks like a feedback forwarding phrase AND no feedback was
+            // already saved by the pre-call direct-save guard above,
+            // save it directly here too — no second Mistral round needed.
             if (round === 0) {
               const responseText =
                 typeof choice?.message?.content === "string"
                   ? choice.message.content.toLowerCase()
                   : "";
-              const FEEDBACK_CONFIRMATION_PATTERNS = [
-                // Forwarding phrases
+              const looksLikeFeedbackConfirmation = [
                 /leite.*weiter/, /weitergeleitet/, /werde.*weiterleiten/,
                 /gebe.*weiter/, /werde.*weitergeben/,
-                // Team phrases
                 /an das team/, /feedback.*team/, /team.*kümmert/,
                 /team.*schaut/, /schaut.*das.*an/, /schaut.*sich.*an/,
-                // Acknowledgement phrases
                 /nehme.*auf/, /nehme.*mit/, /notiert/, /habe.*notiert/,
                 /werde.*notieren/, /merke.*vor/, /merke.*das.*vor/,
-                // Generic forwarding
                 /kümmert.*sich/, /kümmern.*uns/,
-              ];
-              const looksLikeFeedbackConfirmation = FEEDBACK_CONFIRMATION_PATTERNS.some(
-                (p) => p.test(responseText),
+              ].some((p) => p.test(responseText));
+
+              // Only save if the direct-save guard above did NOT already
+              // save (i.e. the message didn't match the keyword heuristic).
+              const alreadySaved = messages.some(
+                (m) =>
+                  m.role === "tool" &&
+                  (m as { name?: string }).name === "submit_structured_feedback",
               );
 
-              if (looksLikeFeedbackConfirmation) {
-                const forcedCompletion = await callMistralWithRetry(
-                  () =>
-                    client.chat.complete({
-                      model: "mistral-small-latest",
-                      maxTokens: 300,
-                      temperature: 0.4,
-                      messages,
-                      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                      tools: GLEV_TOOLS as any,
-                      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                      toolChoice: { type: "function", function: { name: "submit_structured_feedback" } } as any,
-                    }),
-                  _sleep,
+              if (looksLikeFeedbackConfirmation && !alreadySaved) {
+                const trimmed = message.trim();
+                const autoCategory =
+                  /wünsche|würde.*mir|feature/i.test(trimmed) ? "feature_request" :
+                  /lob|super|toll|gefällt|danke/i.test(trimmed) ? "praise" :
+                  "bug";
+                const autoArgs = JSON.stringify({
+                  what_noticed: trimmed.slice(0, 600),
+                  where_noticed: null,
+                  category: autoCategory,
+                  severity: "medium",
+                  free_text: trimmed.slice(0, 300),
+                  ai_summary: trimmed.slice(0, 120) + (trimmed.length > 120 ? "…" : ""),
+                });
+                const guardResult = await executeGlevTool(
+                  "submit_structured_feedback",
+                  autoArgs,
+                  sb,
+                  user.id,
+                  timezone,
                 );
-
-                const forcedChoice = forcedCompletion?.choices?.[0];
-                const forcedToolCalls = forcedChoice?.message?.toolCalls ?? [];
-
-                if (forcedToolCalls.length > 0) {
-                  messages.push({
-                    role: "assistant",
-                    content: forcedChoice?.message?.content ?? "",
-                    toolCalls: forcedToolCalls,
-                  });
-                  for (const call of forcedToolCalls) {
-                    const fn = call.function;
-                    const rawArgs =
-                      typeof fn?.arguments === "string"
-                        ? fn.arguments
-                        : JSON.stringify(fn?.arguments ?? {});
-                    const result = await executeGlevTool(
-                      fn?.name ?? "",
-                      rawArgs,
-                      sb,
-                      user.id,
-                      timezone,
-                    );
-                    messages.push({
-                      role: "tool",
-                      name: fn?.name ?? "",
-                      toolCallId: call.id,
-                      content: JSON.stringify(result),
-                    });
-                  }
-                }
+                const guardId = `fb_guard_${Date.now()}`;
+                messages.push({
+                  role: "assistant",
+                  content: "",
+                  toolCalls: [{
+                    id: guardId,
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    function: { name: "submit_structured_feedback", arguments: autoArgs } as any,
+                  }],
+                });
+                messages.push({
+                  role: "tool",
+                  name: "submit_structured_feedback",
+                  toolCallId: guardId,
+                  content: JSON.stringify(guardResult),
+                });
+                console.log("[chat] feedback response-guard save:", JSON.stringify(guardResult).slice(0, 120));
               }
             }
             // ─────────────────────────────────────────────────────────
