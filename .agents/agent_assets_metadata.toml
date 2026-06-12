@@ -216,3 +216,9 @@ id = "mAURkiOcjLenmGczB47ha"
 uri = "file://public/sitemap-download.xml"
 type = "unspecified"
 title = "sitemap.xml – glev.app (9 URLs, aktuell)"
+
+[[outputs]]
+id = "kkotkBDIBg98SwgmFecNO"
+uri = "file://mockup/footer-glass-mockup.png"
+type = "image"
+title = "Floating Liquid-Glass Footer Nav — Mockup"

@@ -1,0 +1,413 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=390, initial-scale=1">
+<title>Glev Footer Mockup</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg:           #09090B;
+    --surface:      #111117;
+    --surface-alt:  #0F0F14;
+    --border:       rgba(255,255,255,0.08);
+    --border-strong:rgba(255,255,255,0.12);
+    --text:         #ffffff;
+    --text-muted:   rgba(255,255,255,0.60);
+    --text-dim:     rgba(255,255,255,0.45);
+    --accent:       #4F6EF7;
+    --green:        #22D3A0;
+  }
+
+  body {
+    width: 390px;
+    height: 844px;
+    background: var(--bg);
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", sans-serif;
+    overflow: hidden;
+    position: relative;
+  }
+
+  /* ── Header ─────────────────────────────────────────────────────── */
+  .header {
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    height: 56px;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 20px;
+    z-index: 100;
+  }
+
+  .wordmark {
+    font-size: 22px;
+    font-weight: 700;
+    letter-spacing: -0.5px;
+  }
+  .wordmark .glev { color: var(--accent); }
+  .wordmark .dot  { color: var(--green); }
+
+  .live-pill {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: rgba(34,211,160,0.12);
+    border: 1px solid rgba(34,211,160,0.28);
+    border-radius: 20px;
+    padding: 5px 12px;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--green);
+    letter-spacing: 0.5px;
+  }
+  .live-dot {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--green);
+    box-shadow: 0 0 6px var(--green);
+  }
+
+  /* ── Scrollable content ──────────────────────────────────────────── */
+  .content {
+    position: absolute;
+    top: 56px;
+    left: 0; right: 0;
+    bottom: 0;
+    padding: 16px 16px 148px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  /* ── Glucose card ────────────────────────────────────────────────── */
+  .glucose-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 16px;
+  }
+  .glucose-card .label {
+    font-size: 11px;
+    color: var(--text-muted);
+    font-weight: 500;
+    letter-spacing: 0.3px;
+    margin-bottom: 6px;
+  }
+  .glucose-card .value {
+    font-size: 32px;
+    font-weight: 700;
+    color: var(--green);
+    letter-spacing: -1px;
+    line-height: 1;
+  }
+  .glucose-card .unit {
+    font-size: 13px;
+    color: var(--text-muted);
+    font-weight: 500;
+    margin-left: 4px;
+  }
+  .curve-svg { margin-top: 12px; width: 100%; }
+
+  /* ── Chat bubbles ────────────────────────────────────────────────── */
+  .chat-area {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .bubble-user {
+    align-self: flex-end;
+    max-width: 78%;
+    background: var(--accent);
+    color: #fff;
+    border-radius: 18px 18px 4px 18px;
+    padding: 11px 15px;
+    font-size: 14px;
+    line-height: 1.45;
+    font-weight: 500;
+  }
+
+  .bubble-ai {
+    align-self: flex-start;
+    max-width: 82%;
+    background: var(--surface);
+    color: var(--text);
+    border: 1px solid var(--border-strong);
+    border-radius: 18px 18px 18px 4px;
+    padding: 11px 15px;
+    font-size: 14px;
+    line-height: 1.45;
+  }
+
+  .bubble-ai .tts-icon {
+    margin-top: 8px;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .tts-bar {
+    width: 2px;
+    border-radius: 2px;
+    background: var(--text-dim);
+  }
+
+  /* ── Floating Glass Footer Pill ─────────────────────────────────── */
+  .footer-pill {
+    position: fixed;
+    left: 12px;
+    right: 12px;
+    bottom: 12px;
+    height: 62px;
+    border-radius: 31px;
+    background: rgba(255,255,255,0.06);
+    -webkit-backdrop-filter: blur(22px) saturate(160%);
+    backdrop-filter: blur(22px) saturate(160%);
+    border: 1px solid rgba(255,255,255,0.13);
+    box-shadow:
+      0 12px 32px rgba(0,0,0,0.55),
+      inset 0 1px 0 rgba(255,255,255,0.16);
+    display: flex;
+    align-items: center;
+    z-index: 200;
+    overflow: hidden;
+  }
+
+  /* Specular highlight overlay */
+  .footer-pill::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: 31px;
+    background: linear-gradient(180deg,
+      rgba(255,255,255,0.09) 0%,
+      rgba(255,255,255,0.02) 45%,
+      transparent 100%
+    );
+    pointer-events: none;
+    z-index: 1;
+  }
+
+  .nav-tab {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    position: relative;
+    z-index: 2;
+    cursor: pointer;
+  }
+
+  .nav-gap {
+    flex: 0 0 64px;
+  }
+
+  .nav-label {
+    font-size: 9px;
+    letter-spacing: 0.4px;
+    font-weight: 600;
+    white-space: nowrap;
+    text-transform: uppercase;
+  }
+  .nav-label.active { color: var(--text); }
+  .nav-label.inactive { color: var(--text-dim); }
+
+  /* ── FAB ─────────────────────────────────────────────────────────── */
+  /* Pill top = bottom:12 + height:62 = 74px from bottom
+     FAB protrudes 16px above pill → FAB top = 74+16 = 90px from bottom
+     FAB bottom = 90 - 64 = 26px from bottom */
+  .fab {
+    position: fixed;
+    bottom: 26px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 64px;
+    height: 64px;
+    border-radius: 50%;
+    background: linear-gradient(145deg, rgba(10,18,40,0.96), rgba(4,10,22,0.98));
+    border: 1px solid rgba(79,110,247,0.35);
+    box-shadow:
+      inset 0 0 12px rgba(79,110,247,0.08),
+      0 0 14px rgba(79,110,247,0.20),
+      0 0 28px rgba(79,110,247,0.08);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 300;
+  }
+
+  /* Home indicator */
+  .home-indicator {
+    position: fixed;
+    bottom: 5px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 110px;
+    height: 4px;
+    border-radius: 3px;
+    background: rgba(255,255,255,0.22);
+    z-index: 400;
+  }
+</style>
+</head>
+<body>
+
+<!-- Header -->
+<div class="header">
+  <div class="wordmark">
+    <span class="glev">glev</span><span class="dot">.</span>
+  </div>
+  <div class="live-pill">
+    <div class="live-dot"></div>
+    LIVE
+  </div>
+</div>
+
+<!-- Content area -->
+<div class="content">
+
+  <!-- Glucose card -->
+  <div class="glucose-card">
+    <div class="label">Glukose · Jetzt</div>
+    <div>
+      <span class="value">6.4</span>
+      <span class="unit">mmol/L ↗</span>
+    </div>
+    <svg class="curve-svg" height="52" viewBox="0 0 340 52" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <!-- Gradient fill under curve -->
+      <defs>
+        <linearGradient id="curveGrad" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#22D3A0" stop-opacity="0.18"/>
+          <stop offset="100%" stop-color="#22D3A0" stop-opacity="0"/>
+        </linearGradient>
+      </defs>
+      <path d="M0 42 C30 40 50 36 80 30 C110 24 130 18 160 14 C190 10 210 8 240 10 C270 12 290 16 320 20 L340 18 L340 52 L0 52 Z"
+            fill="url(#curveGrad)"/>
+      <path d="M0 42 C30 40 50 36 80 30 C110 24 130 18 160 14 C190 10 210 8 240 10 C270 12 290 16 320 20 L340 18"
+            stroke="#22D3A0" stroke-width="2" stroke-linecap="round" fill="none"/>
+      <!-- Current value dot -->
+      <circle cx="340" cy="18" r="4" fill="#22D3A0" opacity="0.9"/>
+      <!-- Target band -->
+      <line x1="0" y1="10" x2="340" y2="10" stroke="rgba(255,255,255,0.07)" stroke-width="1" stroke-dasharray="4 4"/>
+      <line x1="0" y1="36" x2="340" y2="36" stroke="rgba(255,255,255,0.07)" stroke-width="1" stroke-dasharray="4 4"/>
+    </svg>
+  </div>
+
+  <!-- Chat area -->
+  <div class="chat-area">
+
+    <!-- User message -->
+    <div class="bubble-user">
+      Wie wirkt sich mein Frühstück auf die Werte aus?
+    </div>
+
+    <!-- AI response -->
+    <div class="bubble-ai">
+      <div>Nach einem kohlenhydratreichen Frühstück steigt dein Glukosewert typisch in 30–60 min an. Dein letzter Bolus hat gut gepasst — TIR heute bei <strong style="color:#22D3A0">82 %</strong>.</div>
+      <div class="tts-icon">
+        <div class="tts-bar" style="height:8px; opacity:0.4"></div>
+        <div class="tts-bar" style="height:13px; opacity:0.5"></div>
+        <div class="tts-bar" style="height:10px; opacity:0.35"></div>
+        <div class="tts-bar" style="height:6px; opacity:0.3"></div>
+      </div>
+    </div>
+
+    <!-- User message 2 -->
+    <div class="bubble-user">
+      Mich stört, dass der Glev AI Screen nicht ganz fullscreen ist.
+    </div>
+
+    <!-- AI response 2 — partially behind footer (this is the one that bleeds under) -->
+    <div class="bubble-ai" style="margin-bottom:0">
+      Danke für dein Feedback — ich habe es notiert. Lucas und das Team kümmern sich darum. 👍
+    </div>
+
+  </div>
+</div>
+
+<!-- Floating Glass Footer Pill -->
+<div class="footer-pill">
+  <!-- DASHBOARD (active) -->
+  <div class="nav-tab">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none"
+         stroke="#4F6EF7" stroke-width="2" stroke-linecap="round">
+      <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
+      <polyline points="9 22 9 12 15 12 15 22"/>
+    </svg>
+    <span class="nav-label active">DASHBOARD</span>
+  </div>
+
+  <!-- LOG (inactive) -->
+  <div class="nav-tab">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none"
+         stroke="rgba(255,255,255,0.45)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <line x1="18" y1="20" x2="18" y2="10"/>
+      <line x1="12" y1="20" x2="12" y2="4"/>
+      <line x1="6" y1="20" x2="6" y2="14"/>
+    </svg>
+    <span class="nav-label inactive">LOG</span>
+  </div>
+
+  <!-- FAB gap -->
+  <div class="nav-gap"></div>
+
+  <!-- INSIGHTS (inactive) -->
+  <div class="nav-tab">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none"
+         stroke="rgba(255,255,255,0.45)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M9 18h6"/>
+      <path d="M10 22h4"/>
+      <path d="M15.09 14c.18-.98.65-1.74 1.41-2.5A4.65 4.65 0 0 0 18 8 6 6 0 0 0 6 8c0 1.5.5 3 1.5 4 .76.76 1.23 1.52 1.41 2.5"/>
+    </svg>
+    <span class="nav-label inactive">INSIGHTS</span>
+  </div>
+
+  <!-- SETTINGS (inactive) -->
+  <div class="nav-tab">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none"
+         stroke="rgba(255,255,255,0.45)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="3"/>
+      <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+    </svg>
+    <span class="nav-label inactive">SETTINGS</span>
+  </div>
+</div>
+
+<!-- FAB (64×64, identical to current app) -->
+<div class="fab">
+  <!-- Glev Network Logo, 28px in ACCENT color, transparent bg -->
+  <svg width="28" height="28" viewBox="0 0 32 32" fill="none" aria-label="Glev">
+    <rect width="32" height="32" rx="9" fill="transparent"/>
+    <!-- Edges -->
+    <line x1="16" y1="7"  x2="25" y2="12" stroke="#4F6EF7" stroke-width="0.9" stroke-opacity="0.55"/>
+    <line x1="25" y1="12" x2="25" y2="20" stroke="#4F6EF7" stroke-width="0.9" stroke-opacity="0.55"/>
+    <line x1="25" y1="20" x2="18" y2="26" stroke="#4F6EF7" stroke-width="0.9" stroke-opacity="0.55"/>
+    <line x1="18" y1="26" x2="9"  y2="22" stroke="#4F6EF7" stroke-width="0.9" stroke-opacity="0.55"/>
+    <line x1="9"  y1="22" x2="7"  y2="14" stroke="#4F6EF7" stroke-width="0.9" stroke-opacity="0.55"/>
+    <line x1="7"  y1="14" x2="16" y2="7"  stroke="#4F6EF7" stroke-width="0.9" stroke-opacity="0.55"/>
+    <line x1="16" y1="7"  x2="16" y2="16" stroke="#4F6EF7" stroke-width="0.9" stroke-opacity="0.55"/>
+    <line x1="25" y1="12" x2="16" y2="16" stroke="#4F6EF7" stroke-width="0.9" stroke-opacity="0.55"/>
+    <line x1="25" y1="20" x2="16" y2="16" stroke="#4F6EF7" stroke-width="0.9" stroke-opacity="0.55"/>
+    <line x1="18" y1="26" x2="16" y2="16" stroke="#4F6EF7" stroke-width="0.9" stroke-opacity="0.55"/>
+    <!-- Outer nodes -->
+    <circle cx="16" cy="7"  r="2" fill="#4F6EF740" stroke="#4F6EF7" stroke-width="0.8"/>
+    <circle cx="25" cy="12" r="2" fill="#4F6EF740" stroke="#4F6EF7" stroke-width="0.8"/>
+    <circle cx="25" cy="20" r="2" fill="#4F6EF740" stroke="#4F6EF7" stroke-width="0.8"/>
+    <circle cx="18" cy="26" r="2" fill="#4F6EF740" stroke="#4F6EF7" stroke-width="0.8"/>
+    <circle cx="9"  cy="22" r="2" fill="#4F6EF740" stroke="#4F6EF7" stroke-width="0.8"/>
+    <circle cx="7"  cy="14" r="2" fill="#4F6EF740" stroke="#4F6EF7" stroke-width="0.8"/>
+    <!-- Center node (larger, solid) -->
+    <circle cx="16" cy="16" r="3.5" fill="#4F6EF7"/>
+  </svg>
+</div>
+
+<!-- Home indicator -->
+<div class="home-indicator"></div>
+
+</body>
+</html>
