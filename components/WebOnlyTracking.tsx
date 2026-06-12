@@ -5,7 +5,7 @@ import { Capacitor } from "@capacitor/core";
 import Script from "next/script";
 import GoogleAnalytics from "./GoogleAnalytics";
 
-const META_PIXEL_ID = "960780236789931";
+const META_PIXEL_ID = "960780236789931"; // TODO: move to env var when CAPI/Pixel ID stabilizes
 
 export default function WebOnlyTracking({ gaId }: { gaId?: string }) {
   const [mounted, setMounted] = useState(false);
