@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server";
 import { getMistralClient } from "@/lib/ai/mistralClient";
 import { authedClient } from "@/app/api/insulin/_helpers";
+import { isSTTRateLimited, addSTTRateLimitHit, STT_MIN_BLOB_BYTES } from "@/lib/ai/sttRateLimiter";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -107,6 +108,14 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  // Rate limit check — before parsing the (potentially large) audio blob.
+  if (await isSTTRateLimited(auth.user.id)) {
+    return new Response(
+      `data: ${JSON.stringify({ type: "error", error: "Zu viele Anfragen. Bitte kurz warten.", retry_after_sec: 15 })}\n\n`,
+      { status: 429, headers: { "Content-Type": "text/event-stream" } },
+    );
+  }
+
   let file: Blob;
   try {
     const form = await req.formData();
@@ -130,6 +139,17 @@ export async function POST(req: NextRequest) {
       },
     );
   }
+
+  // Reject blobs that are too small to contain real speech.
+  if (file.size < STT_MIN_BLOB_BYTES) {
+    return new Response(
+      `data: ${JSON.stringify({ type: "error", error: "Aufnahme zu kurz — bitte nochmal versuchen." })}\n\n`,
+      { status: 400, headers: { "Content-Type": "text/event-stream" } },
+    );
+  }
+
+  // Record hit after validating audio (don't count rejected blobs).
+  void addSTTRateLimitHit(auth.user.id);
 
   // eslint-disable-next-line no-console
   console.log("[STT stream] audio received:", Math.round(file.size / 1024), "KB");

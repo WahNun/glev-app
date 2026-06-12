@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getMistralClient } from "@/lib/ai/mistralClient";
 import { authedClient } from "@/app/api/insulin/_helpers";
+import { isSTTRateLimited, addSTTRateLimitHit, STT_MIN_BLOB_BYTES } from "@/lib/ai/sttRateLimiter";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -50,6 +51,14 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  // Rate limit check — before any Mistral call.
+  if (await isSTTRateLimited(auth.user.id)) {
+    return NextResponse.json(
+      { error: "Zu viele Anfragen. Bitte kurz warten.", retry_after_sec: 15 },
+      { status: 429 },
+    );
+  }
+
   try {
     const form = await req.formData();
     const file = form.get("audio");
@@ -57,8 +66,18 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "audio file is required" }, { status: 400 });
     }
 
+    // Reject empty / near-empty blobs before sending to Mistral.
+    // A blob this small is almost always a mic tap without real speech
+    // (OS noise gate ate the signal, or user tapped and immediately released).
+    if (file.size < STT_MIN_BLOB_BYTES) {
+      return NextResponse.json({ error: "Aufnahme zu kurz — bitte nochmal versuchen." }, { status: 400 });
+    }
+
     // eslint-disable-next-line no-console
     console.log("[STT mistral] audio received:", Math.round(file.size / 1024), "KB ·", file.type);
+
+    // Record hit after validating audio (don't count rejected blobs).
+    void addSTTRateLimitHit(auth.user.id);
 
     let mistral;
     try { mistral = getMistralClient(); }
