@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { Capacitor } from "@capacitor/core";
 import { supabase } from "@/lib/supabase";
 import GlevLockup from "@/components/GlevLockup";
 
@@ -26,6 +27,9 @@ const T = {
     no_account: "Noch kein Konto?",
     register: "Jetzt registrieren",
     back: "← Zurück zur Startseite",
+    apple_signin: "Mit Apple anmelden",
+    apple_error: "Apple-Anmeldung fehlgeschlagen. Bitte erneut versuchen.",
+    or: "oder",
   },
   en: {
     email: "EMAIL",
@@ -46,6 +50,9 @@ const T = {
     no_account: "No account yet?",
     register: "Sign up",
     back: "← Back to homepage",
+    apple_signin: "Sign in with Apple",
+    apple_error: "Apple sign-in failed. Please try again.",
+    or: "or",
   },
 };
 
@@ -128,6 +135,51 @@ export default function LoginPage() {
     // ob die Email-Adresse in unserer DB existiert (User-Enumeration).
     setResetNotice(t.reset_notice);
     setResetEmail("");
+  }
+
+  const [appleLoading, setAppleLoading] = useState(false);
+
+  async function handleAppleSignIn() {
+    if (!supabase) { setError(t.no_auth); return; }
+    setAppleLoading(true);
+    setError(null);
+    try {
+      const { SignInWithApple } = await import("@capacitor-community/apple-sign-in");
+      const result = await SignInWithApple.authorize({
+        clientId: "com.glev.app",
+        redirectURI: "https://glev.app/auth/callback",
+        scopes: "email name",
+        state: crypto.randomUUID(),
+        nonce: crypto.randomUUID(),
+      });
+
+      const { identityToken } = result.response;
+      if (!identityToken) throw new Error("No identity token from Apple");
+
+      const { data, error: authError } = await supabase.auth.signInWithIdToken({
+        provider: "apple",
+        token: identityToken,
+      });
+
+      if (authError) throw authError;
+
+      if (result.response.givenName && data.user) {
+        await supabase.from("profiles").update({
+          first_name: result.response.givenName,
+          last_name: result.response.familyName,
+        }).eq("user_id", data.user.id);
+      }
+
+      import("@/lib/pushNotifications").then(({ syncCachedPushToken }) => {
+        void syncCachedPushToken();
+      }).catch(() => { /* non-fatal */ });
+
+      window.location.replace("/dashboard");
+    } catch (err) {
+      console.error("[apple-signin]", err);
+      setError(t.apple_error);
+      setAppleLoading(false);
+    }
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -252,6 +304,39 @@ export default function LoginPage() {
               {loading ? t.submitting : t.submit}
             </button>
           </form>
+
+          {Capacitor.getPlatform() === "ios" && (
+            <div style={{ marginTop: 12 }}>
+              <div style={{
+                display: "flex", alignItems: "center", gap: 10, margin: "4px 0 12px",
+              }}>
+                <div style={{ flex: 1, height: 1, background: "var(--border-soft)" }} />
+                <span style={{ fontSize: 11, color: "var(--text-ghost)", letterSpacing: "0.06em" }}>{t.or}</span>
+                <div style={{ flex: 1, height: 1, background: "var(--border-soft)" }} />
+              </div>
+              <button
+                type="button"
+                onClick={handleAppleSignIn}
+                disabled={appleLoading}
+                style={{
+                  display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+                  width: "100%", padding: "13px",
+                  background: appleLoading ? "#333" : "#000",
+                  border: "none", borderRadius: 12,
+                  color: "#fff", fontSize: 14, fontWeight: 600,
+                  cursor: appleLoading ? "default" : "pointer",
+                  transition: "background 0.15s",
+                  fontFamily: "inherit",
+                }}
+              >
+                {/* Apple logo — SF-like glyph via inline SVG */}
+                <svg width="16" height="20" viewBox="0 0 814 1000" fill="white" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M788.1 340.9c-5.8 4.5-108.2 62.2-108.2 190.5 0 148.4 130.3 200.9 134.2 202.2-.6 3.2-20.7 71.9-68.7 141.9-42.8 61.6-87.5 123.1-155.5 123.1s-85.5-39.5-164-39.5c-76 0-103.7 40.8-165.9 40.8s-105-57.8-155.5-127.4C46 790.7 0 663 0 541.8c0-207.3 135.3-317 268.4-317 70.1 0 128.4 46.4 172.5 46.4 42.4 0 109.2-49.1 190.5-49.1 30.8 0 111.9 2.6 167.1 98.3zm-180.5-114.9c-34.6 40.6-92.7 71.4-148.8 71.4-7.7 0-15.4-.6-22.4-2 0-4.5.7-9 .7-13.4 0-38.9 18.6-79.9 50.9-110.7 32.3-30.8 83.2-53.3 127.4-55.3 1.3 7.7 1.9 15.4 1.9 22.4 0 37.6-16 77.9-9.7 87.6z"/>
+                </svg>
+                {appleLoading ? "…" : t.apple_signin}
+              </button>
+            </div>
+          )}
 
           {/* Passwort-vergessen-Einstieg + Inline-Form. Toggle-Link unter
               dem Sign-In-Button, expandiert in-place — kein Modal, kein

@@ -8,6 +8,9 @@ importers:
 
   .:
     dependencies:
+      '@capacitor-community/apple-sign-in':
+        specifier: ^7.1.0
+        version: 7.1.0(@capacitor/core@8.3.1)
       '@capacitor/android':
         specifier: ^8.3.1
         version: 8.3.1(@capacitor/core@8.3.1)
@@ -30,8 +33,8 @@ importers:
         specifier: ^8.0.1
         version: 8.0.1(@capacitor/core@8.3.1)
       '@capacitor/share':
-        specifier: ^6.0.2
-        version: 6.0.4(@capacitor/core@8.3.1)
+        specifier: ^8.0.1
+        version: 8.0.1(@capacitor/core@8.3.1)
       '@capgo/capacitor-health':
         specifier: ^8.4.8
         version: 8.4.8(@capacitor/core@8.3.1)
@@ -139,6 +142,11 @@ packages:
     resolution: {integrity: sha512-JiDShH45zKHWyGe4ZNVRrCjBz8Nh9TMmZG1kh4QTK8hCBTWBi8Da+i7s1fJw7/lYpM4ccepSNfqzZ/QvABBi5g==}
     engines: {node: '>=6.9.0'}
 
+  '@capacitor-community/apple-sign-in@7.1.0':
+    resolution: {integrity: sha512-df7cA7vfvvvilTtpJKeVvxO31W+py5t3HK9233GBD5MvgAgtGvCqeQ3pI0noNkVsKPF9B1g/po8Mph6s4bVSmw==}
+    peerDependencies:
+      '@capacitor/core': '>=7.0.0'
+
   '@capacitor/android@8.3.1':
     resolution: {integrity: sha512-hjskIG8YcBEh3X4yaTXvE9gcqpdcxunTgFruSKnuPxtMxAUzEK4Oq25x0Z1g3cz+MQPc+lRG09R7Ovc+ydKsNw==}
     peerDependencies:
@@ -177,10 +185,10 @@ packages:
     peerDependencies:
       '@capacitor/core': '>=8.0.0'
 
-  '@capacitor/share@6.0.4':
-    resolution: {integrity: sha512-Ij8C3as4n6L+SUj3M1ko+DGIsrDw2VTkn5Y/pQnFRI9dRk6YoSpGKLN54yOyN7ew3N9bVa8Rko+dFwdcNg7ESA==}
+  '@capacitor/share@8.0.1':
+    resolution: {integrity: sha512-3cSBKBCJVon54rKDROP2rqGyeGks4pBh9TbaEk9S375Kbek/ZHe72N50zIa0Vn9Eac/SuhwgehO/mmA4CsUOiw==}
     peerDependencies:
-      '@capacitor/core': ^6.0.0
+      '@capacitor/core': '>=8.0.0'
 
   '@capgo/capacitor-health@8.4.8':
     resolution: {integrity: sha512-nhQDzGzSX4O55YEDUHfbD6iRaXqtXMylJnrmVPt6RRGqbsBwFinyrkC+/BIbW60PjRb2hxaONNCbIFVmHJcHKQ==}
@@ -893,6 +901,9 @@ packages:
 
   '@types/react@19.2.14':
     resolution: {integrity: sha512-ilcTH/UniCkMdtexkoCN0bI7pMcJDvmQFPvuPvmEaYA/NSfFTAgdUSLAoVjaRJm7+6PvcM+q1zYOwS4wTYMF9w==}
+
+  '@types/scriptjs@0.0.2':
+    resolution: {integrity: sha512-GFrUgzGYfNX3VWZwMyzr0JrBwzLv5Kes4BQBvo6hXdRy14/GBbpCiVwwB7v1o2xIEvFf+9GyznmYhuesQQjSag==}
 
   '@types/slice-ansi@4.0.0':
     resolution: {integrity: sha512-+OpjSaq85gvlZAYINyzKpLeiFkSC4EsC6IIiT6v6TLSU5k5U83fHGj9Lel8oKEXM0HqgrMVCjXPDPVICtxF7EQ==}
@@ -1634,6 +1645,9 @@ packages:
   scheduler@0.26.0:
     resolution: {integrity: sha512-NlHwttCI/l5gCPR3D1nNXtWABUmBwvZpEQiD4IXSbIDq8BzLIK/7Ir5gTFSGZDUu37K5cMNp0hFtzO38sC7gWA==}
 
+  scriptjs@2.5.9:
+    resolution: {integrity: sha512-qGVDoreyYiP1pkQnbnFAUIS5AjenNwwQBdl7zeos9etl+hYKWahjRTfzAZZYBv5xNHx7vNKCmaLDQZ6Fr2AEXg==}
+
   semver@7.7.4:
     resolution: {integrity: sha512-vFKC2IEtQnVhpT78h1Yp8wzwrf8CM+MzKMHGJZfBtzhZNycRFnXsHk6E5TxIkkMsgNS7mdX3AGB7x2QM2di4lA==}
     engines: {node: '>=10'}
@@ -1864,6 +1878,12 @@ snapshots:
 
   '@babel/runtime@7.29.2': {}
 
+  '@capacitor-community/apple-sign-in@7.1.0(@capacitor/core@8.3.1)':
+    dependencies:
+      '@capacitor/core': 8.3.1
+      '@types/scriptjs': 0.0.2
+      scriptjs: 2.5.9
+
   '@capacitor/android@8.3.1(@capacitor/core@8.3.1)':
     dependencies:
       '@capacitor/core': 8.3.1
@@ -1914,7 +1934,7 @@ snapshots:
     dependencies:
       '@capacitor/core': 8.3.1
 
-  '@capacitor/share@6.0.4(@capacitor/core@8.3.1)':
+  '@capacitor/share@8.0.1(@capacitor/core@8.3.1)':
     dependencies:
       '@capacitor/core': 8.3.1
 
@@ -2634,6 +2654,8 @@ snapshots:
     dependencies:
       csstype: 3.2.3
 
+  '@types/scriptjs@0.0.2': {}
+
   '@types/slice-ansi@4.0.0': {}
 
   '@types/ws@8.18.1':
@@ -3320,6 +3342,8 @@ snapshots:
   scheduler@0.25.0-rc-603e6108-20241029: {}
 
   scheduler@0.26.0: {}
+
+  scriptjs@2.5.9: {}
 
   semver@7.7.4: {}
 
