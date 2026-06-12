@@ -492,6 +492,18 @@ export function useGlevAI(opts?: {
       const ac = new AbortController();
       abortRef.current = ac;
 
+      // Client-side safety net: if the fetch/stream never resolves (e.g.
+      // TCP hang on mobile networks), force-abort after 30 s so `finally`
+      // always runs and `streaming` is never stuck. The server-side
+      // CHAT_TIMEOUT fires at 18 s, but mobile 5G connections can silently
+      // drop without the SSE frames ever arriving at the client.
+      let clientTimedOut = false;
+      const CLIENT_ABORT_MS = 30_000;
+      const clientAbortTimer = setTimeout(() => {
+        clientTimedOut = true;
+        ac.abort();
+      }, CLIENT_ABORT_MS);
+
       try {
         const res = await fetch("/api/ai/chat", {
           method: "POST",
@@ -675,15 +687,20 @@ export function useGlevAI(opts?: {
       } catch (e) {
         // AbortError = stream was cancelled by navigation (closeSheet) or
         // user action — this is intentional and must never show as an error.
-        if (e instanceof Error && e.name === "AbortError") {
+        // EXCEPTION: if the client-side 30 s safety timer fired, treat the
+        // abort as a CHAT_TIMEOUT so the bubble shows a retry-able error.
+        if (e instanceof Error && e.name === "AbortError" && !clientTimedOut) {
           // Silent — the navigation/close already handled the UX.
         } else {
           const locale = readLocaleCookie() ?? "de";
           // Resolve to a typed code — errors thrown by our SSE/HTTP handlers
           // carry error_code; plain network errors (fetch failed, etc.) have
           // none, so they fall back to UNKNOWN. Never surface e.message.
+          // Client-side safety-timer abort → treat as CHAT_TIMEOUT.
           const errMeta = e as Record<string, unknown>;
-          const rawCode = errMeta?.error_code as string | undefined;
+          const rawCode = clientTimedOut
+            ? "CHAT_TIMEOUT"
+            : (errMeta?.error_code as string | undefined);
           const code: AppErrorCode = (rawCode && ALL_ERROR_CODES.includes(rawCode as AppErrorCode))
             ? rawCode as AppErrorCode
             : "UNKNOWN";
@@ -726,6 +743,7 @@ export function useGlevAI(opts?: {
           );
         }
       } finally {
+        clearTimeout(clientAbortTimer);
         clearTimeout(slowTimerId);
         setIsSlow(false);
         setStreaming(false);
