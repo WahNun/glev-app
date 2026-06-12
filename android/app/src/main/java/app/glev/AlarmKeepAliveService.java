@@ -46,7 +46,7 @@ public class AlarmKeepAliveService extends Service {
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
         Notification notification = new NotificationCompat.Builder(this, CHANNEL_ID)
-            .setSmallIcon(R.mipmap.ic_launcher)
+            .setSmallIcon(R.drawable.ic_stat_glev)
             .setContentTitle("Glev — Alarme aktiv")
             .setContentText("Hypo/Hyper-Warnungen sind eingeschaltet")
             .setPriority(NotificationCompat.PRIORITY_LOW)

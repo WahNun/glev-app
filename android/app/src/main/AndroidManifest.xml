@@ -89,6 +89,21 @@
             android:exported="false"
             android:foregroundServiceType="health" />
 
+        <!--
+          FCM default notification icon and colour.
+          Without these, FCM-delivered notifications fall back to ic_launcher,
+          which Android renders as a solid grey square in the status bar and
+          notification shade (colour icons are not allowed there).
+          ic_stat_glev is a white-on-transparent vector drawable (Glev network
+          graph, 7 nodes / 10 edges) that displays correctly at any density.
+        -->
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_icon"
+            android:resource="@drawable/ic_stat_glev" />
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_color"
+            android:resource="@color/glev_accent" />
+
     </application>
 
     <!-- Permissions -->
