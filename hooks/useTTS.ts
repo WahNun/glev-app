@@ -314,11 +314,14 @@ export function useTTS() {
     setSpeakingId(null);
   }, []);
 
-  /** Map TtsSpeed enum to a playback-rate float. */
+  /** Map TtsSpeed enum to a playback-rate float.
+   *  Voxtral generates audio at a naturally slow cadence, so all three
+   *  tiers are shifted up: slow=1.0 (old "normal"), normal=1.25, fast=1.55.
+   */
   function speedToFloat(s: TtsSpeed): number {
-    if (s === "slow") return 0.75;
-    if (s === "fast") return 1.3;
-    return 1.0;
+    if (s === "slow") return 1.0;
+    if (s === "fast") return 1.55;
+    return 1.25;
   }
 
   /** Web Speech API fallback — used when Mistral TTS is unavailable. */
