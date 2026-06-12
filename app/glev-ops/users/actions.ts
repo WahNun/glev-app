@@ -272,7 +272,7 @@ export async function grantBetaFreeYearAction(formData: FormData): Promise<void>
       const { data: linkData, error: linkErr } = await sb.auth.admin.generateLink({
         type: "magiclink",
         email,
-        options: { redirectTo: `${appUrl}/welcome/beta` },
+        options: { redirectTo: `${appUrl}/auth/confirm` },
       });
       if (linkErr || !linkData?.properties?.action_link) {
         // eslint-disable-next-line no-console
