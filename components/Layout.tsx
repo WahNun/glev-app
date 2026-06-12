@@ -793,7 +793,7 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
 
       {/* MOBILE HEADER — solid surface bg always; logo opens About modal, account icon opens Settings */}
       <header className="glev-mobile-head" style={{
-        position: "fixed", top: 0, left: 0, right: 0, zIndex: 99, overflow: "visible",
+        position: "fixed", top: 0, left: 0, right: 0, zIndex: glevAi.sheetOpen ? 1102 : 99, overflow: "visible",
         // iOS notch / Dynamic Island: push content below the status bar by
         // honouring safe-area-inset-top, with a sensible fallback for
         // browsers that don't expose it (e.g. desktop dev tools).
