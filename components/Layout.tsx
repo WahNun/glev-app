@@ -26,6 +26,7 @@ import {
   ScopeHeaderProvider, useScopeHeader,
   type ScopeMode,
 } from "@/lib/scopeHeaderContext";
+import { useTTS } from "@/hooks/useTTS";
 
 const ACCENT  = "#4F6EF7";
 const GREEN   = "#22D3A0";
@@ -160,6 +161,7 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
   // tap means "stop recording" (not "open quick-add"), and a "Speak"
   // pill appears in the header as a global cue + secondary stop tap.
   const voice = useVoiceRecording();
+  const headerTts = useTTS();
 
   // TTS speaking state — driven by glev:tts-speaking CustomEvents from
   // GlevAIChatSheet so the FAB can show a green glow while AI speaks.
@@ -791,7 +793,7 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
 
       {/* MOBILE HEADER — solid surface bg always; logo opens About modal, account icon opens Settings */}
       <header className="glev-mobile-head" style={{
-        position: "fixed", top: 0, left: 0, right: 0, zIndex: 99, overflow: "visible",
+        position: "fixed", top: 0, left: 0, right: 0, zIndex: glevAi.sheetOpen ? 1102 : 99, overflow: "visible",
         // iOS notch / Dynamic Island: push content below the status bar by
         // honouring safe-area-inset-top, with a sensible fallback for
         // browsers that don't expose it (e.g. desktop dev tools).
@@ -831,12 +833,10 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
         borderBottom: `1px solid ${BORDER}`,
         alignItems: "center", justifyContent: "space-between",
         // Scroll-fade: slide up + fade out on scroll-down, reverse on scroll-up.
-        transform: headerHidden ? "translateY(-100%)" : "translateY(0)",
-        opacity: headerHidden ? 0 : 1,
+        transform: (headerHidden && !glevAi.sheetOpen) ? "translateY(-100%)" : "translateY(0)",
+        opacity: (headerHidden && !glevAi.sheetOpen) ? 0 : 1,
         transition: "transform 220ms cubic-bezier(.4,0,.2,1), opacity 220ms ease",
-        // Keep pointer-events off when hidden so taps don't land on the
-        // invisible header instead of the content below.
-        pointerEvents: headerHidden ? "none" : undefined,
+        pointerEvents: (headerHidden && !glevAi.sheetOpen) ? "none" : undefined,
       }}>
         <div
           onClick={() => setAboutOpen(true)}
@@ -851,8 +851,13 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
               das Logo-Quadrat soll in Light Mode NICHT mit-aufhellen,
               sonst löst es sich vom Header optisch auf. */}
           <GlevLockup size={26} color="var(--text)" symbolBg="var(--surface-alt)" />
+          {glevAi.sheetOpen && (
+            <span style={{ fontSize: 13, fontWeight: 700, color: ACCENT, marginLeft: 2, letterSpacing: "-0.01em" }}>
+              AI
+            </span>
+          )}
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: glevAi.sheetOpen ? 4 : 8, flexShrink: 0 }}>
           {/* Engine-Pille im Header wurde entfernt (User-Wunsch
               2026-05-04): "ich will nurnoch das plus symbol nutzen
               im header allerdings müssen dort alle tabs die aktuell
@@ -1013,37 +1018,101 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
               </div>
             );
           })()}
-          {/* Per 2026-05-17 UX revision the header "+" QuickAddMenu and
-              the account avatar were removed: the centre bottom-nav
-              Glev FAB now hosts the quick-add sheet (single global
-              entry-point), and account/settings live in the bottom-nav
-              Settings tab. The header keeps the brand lockup on the
-              left and a recording-state pill on the right — only
-              visible while the engine is actively listening. */}
-          <CgmStatusPill locale={locale} />
-          {voice.recording && (
-            <button
-              type="button"
-              onClick={voice.requestStop}
-              aria-label={locale === "en" ? "Stop voice recording" : "Sprachaufnahme beenden"}
-              style={{
-                display: "inline-flex", alignItems: "center", gap: 8,
-                height: 32, padding: "0 12px", borderRadius: 99,
-                background: `${ACCENT}1f`,
-                border: `1px solid ${ACCENT}`,
-                color: ACCENT,
-                fontSize: 13, fontWeight: 700, letterSpacing: "-0.005em",
-                cursor: "pointer",
-                animation: "glevMicPulse 1.4s ease-in-out infinite",
-                WebkitTapHighlightColor: "transparent",
-              }}
-            >
-              <span style={{
-                width: 8, height: 8, borderRadius: "50%", background: ACCENT,
-                boxShadow: `0 0 8px ${ACCENT}`,
-              }} aria-hidden="true" />
-              Speak
-            </button>
+          {glevAi.sheetOpen ? (
+            <>
+              <AIStateChip state={glevAi.aiState} />
+              {/* Reset ↻ */}
+              <button
+                type="button"
+                onClick={glevAi.clearMessages}
+                disabled={glevAi.messages.length === 0 && !glevAi.streaming}
+                aria-label={locale === "en" ? "Reset chat" : "Chat zurücksetzen"}
+                style={{
+                  background: "none", border: "none", cursor: "pointer",
+                  padding: 4, display: "flex", alignItems: "center",
+                  color: glevAi.messages.length === 0 && !glevAi.streaming
+                    ? "var(--text-ghost)" : "var(--text-dim)",
+                  transition: "color 0.15s",
+                }}
+              >
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="1 4 1 10 7 10"/>
+                  <path d="M3.51 15a9 9 0 1 0 .49-4.5"/>
+                </svg>
+              </button>
+              {/* Speaker 🔊 */}
+              <button
+                type="button"
+                onClick={headerTts.toggleAutoRead}
+                aria-label={headerTts.autoRead
+                  ? (locale === "en" ? "Disable auto-read" : "Vorlesen deaktivieren")
+                  : (locale === "en" ? "Enable auto-read" : "Vorlesen aktivieren")}
+                style={{
+                  background: "none", border: "none", cursor: "pointer",
+                  padding: 4, display: "flex", alignItems: "center",
+                  color: headerTts.autoRead ? "var(--text-body)" : "var(--text-faint)",
+                  transition: "color 0.15s",
+                }}
+              >
+                {headerTts.autoRead ? (
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
+                    <path d="M19.07 4.93a10 10 0 0 1 0 14.14"/>
+                    <path d="M15.54 8.46a5 5 0 0 1 0 7.07"/>
+                  </svg>
+                ) : (
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
+                    <line x1="23" y1="9" x2="17" y2="15"/>
+                    <line x1="17" y1="9" x2="23" y2="15"/>
+                  </svg>
+                )}
+              </button>
+              {/* Close ✕ */}
+              <button
+                type="button"
+                onClick={glevAi.closeSheet}
+                aria-label={locale === "en" ? "Close Glev AI" : "Glev AI schließen"}
+                style={{
+                  background: "none", border: "none", cursor: "pointer",
+                  padding: 4, display: "flex", alignItems: "center",
+                  color: "var(--text-muted)",
+                }}
+              >
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                  <line x1="18" y1="6" x2="6" y2="18" />
+                  <line x1="6" y1="6" x2="18" y2="18" />
+                </svg>
+              </button>
+            </>
+          ) : (
+            <>
+              <CgmStatusPill locale={locale} />
+              {voice.recording && (
+                <button
+                  type="button"
+                  onClick={voice.requestStop}
+                  aria-label={locale === "en" ? "Stop voice recording" : "Sprachaufnahme beenden"}
+                  style={{
+                    display: "inline-flex", alignItems: "center", gap: 8,
+                    height: 32, padding: "0 12px", borderRadius: 99,
+                    background: `${ACCENT}1f`,
+                    border: `1px solid ${ACCENT}`,
+                    color: ACCENT,
+                    fontSize: 13, fontWeight: 700, letterSpacing: "-0.005em",
+                    cursor: "pointer",
+                    animation: "glevMicPulse 1.4s ease-in-out infinite",
+                    WebkitTapHighlightColor: "transparent",
+                  }}
+                >
+                  <span style={{
+                    width: 8, height: 8, borderRadius: "50%", background: ACCENT,
+                    boxShadow: `0 0 8px ${ACCENT}`,
+                  }} aria-hidden="true" />
+                  Speak
+                </button>
+              )}
+            </>
           )}
         </div>
       </header>
@@ -1420,6 +1489,41 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
 
       {/* Floating Glev button removed — Glev stays in the footer nav only. */}
     </div>
+  );
+}
+
+// ── AI State Chip ─────────────────────────────────────────────────────────────
+function AIStateChip({ state }: { state: AIState }) {
+  const isThinking = state === "thinking";
+  const isSpeaking = state === "speaking";
+  const dotColor = isSpeaking ? "#50C878" : isThinking ? ACCENT : "#50C878";
+  const label = isSpeaking ? "SPRICHT" : isThinking ? "ANALYSIERT" : "BEREIT";
+  const bgColor = isThinking ? `rgba(79,110,247,0.12)` : "rgba(80,200,120,0.10)";
+  const borderColor = isThinking ? `${ACCENT}44` : "rgba(80,200,120,0.28)";
+  return (
+    <span style={{
+      fontSize: 10, fontWeight: 700, letterSpacing: "0.07em",
+      padding: "3px 8px 3px 6px", borderRadius: 99,
+      background: bgColor, color: dotColor,
+      border: `1px solid ${borderColor}`,
+      display: "inline-flex", alignItems: "center", gap: 5,
+      flexShrink: 0, whiteSpace: "nowrap",
+    }}>
+      {isThinking ? (
+        <svg width="8" height="8" viewBox="0 0 20 20" fill="none"
+          style={{ animation: "glevTabSpin 1.5s linear infinite", flexShrink: 0 }}>
+          <circle cx="10" cy="10" r="7" stroke={ACCENT} strokeWidth="2.5"
+            strokeLinecap="round" strokeDasharray="28 16" />
+        </svg>
+      ) : (
+        <span style={{
+          width: 6, height: 6, borderRadius: "50%", background: dotColor,
+          animation: isSpeaking ? "glevStatusPulse 0.9s ease-in-out infinite" : "none",
+          display: "inline-block", flexShrink: 0,
+        }} />
+      )}
+      {label}
+    </span>
   );
 }
 
