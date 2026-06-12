@@ -703,10 +703,90 @@ export async function handleChatPost(
           const choice = completion?.choices?.[0];
           const toolCalls = choice?.message?.toolCalls ?? [];
           if (!toolCalls.length) {
-            // No tool requested → no more rounds needed. We fall
-            // through to the streaming call below, which will produce
-            // the same answer (Mistral is deterministic enough at
-            // temp 0.4 + identical messages) but stream it.
+            // ── Feedback Guard ────────────────────────────────────────
+            // Mistral sometimes responds with a plain-text confirmation
+            // ("Ich leite dein Feedback an das Team weiter.") instead of
+            // calling submit_structured_feedback. Detect this by checking
+            // whether the model's own reply looks like a feedback hand-off
+            // without having called the tool (round 0 = first call, so no
+            // tool has run yet). If detected, force exactly one more call
+            // with toolChoice pinned to submit_structured_feedback, then
+            // append the result so the streaming phase sees the saved state.
+            if (round === 0) {
+              const responseText =
+                typeof choice?.message?.content === "string"
+                  ? choice.message.content.toLowerCase()
+                  : "";
+              const FEEDBACK_CONFIRMATION_PATTERNS = [
+                /leite.*weiter/,
+                /weitergeleitet/,
+                /feedback.*team/,
+                /team.*kümmert/,
+                /nehme.*auf/,
+                /notiert/,
+                /an das team/,
+                /werde.*weiterleiten/,
+                /merke.*vor/,
+                /gebe.*weiter/,
+              ];
+              const looksLikeFeedbackConfirmation = FEEDBACK_CONFIRMATION_PATTERNS.some(
+                (p) => p.test(responseText),
+              );
+
+              if (looksLikeFeedbackConfirmation) {
+                const forcedCompletion = await callMistralWithRetry(
+                  () =>
+                    client.chat.complete({
+                      model: "mistral-small-latest",
+                      maxTokens: 300,
+                      temperature: 0.4,
+                      messages,
+                      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                      tools: GLEV_TOOLS as any,
+                      // Force the specific tool — model MUST call it.
+                      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                      toolChoice: { type: "function", function: { name: "submit_structured_feedback" } } as any,
+                    }),
+                  _sleep,
+                );
+
+                const forcedChoice = forcedCompletion?.choices?.[0];
+                const forcedToolCalls = forcedChoice?.message?.toolCalls ?? [];
+
+                if (forcedToolCalls.length > 0) {
+                  messages.push({
+                    role: "assistant",
+                    content: forcedChoice?.message?.content ?? "",
+                    toolCalls: forcedToolCalls,
+                  });
+                  for (const call of forcedToolCalls) {
+                    const fn = call.function;
+                    const rawArgs =
+                      typeof fn?.arguments === "string"
+                        ? fn.arguments
+                        : JSON.stringify(fn?.arguments ?? {});
+                    const result = await executeGlevTool(
+                      fn?.name ?? "",
+                      rawArgs,
+                      sb,
+                      user.id,
+                      timezone,
+                    );
+                    messages.push({
+                      role: "tool",
+                      name: fn?.name ?? "",
+                      toolCallId: call.id,
+                      content: JSON.stringify(result),
+                    });
+                  }
+                  // Fall through to streaming — Mistral will now see the
+                  // tool result and generate the proper confirmation text.
+                }
+              }
+            }
+            // ─────────────────────────────────────────────────────────
+            // No tool requested (or feedback guard handled) → fall
+            // through to the streaming call below.
             break;
           }
 
