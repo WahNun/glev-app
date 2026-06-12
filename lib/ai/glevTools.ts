@@ -1571,14 +1571,19 @@ async function toolLogMealEntry(
   }
 
   // ── Smart Aggregator + Two-Phase Optimistic Emit ──────────────────
-  // Flags:
-  //   MACRO_AGGREGATOR_V2     — resolve per-item sources via OFF/USDA/GPT.
-  //   OPTIMISTIC_REFINEMENT   — emit meal_prep IMMEDIATELY with Mistral
-  //     estimates, run aggregator detached, write result to
-  //     meal_prep_refinements. Client subscribes via Realtime / polling.
-  const aggregatorEnabled =
-    process.env.MACRO_AGGREGATOR_V2 === "true" ||
-    process.env.NEXT_PUBLIC_MACRO_AGGREGATOR_V2 === "true";
+  // The aggregator (User History → OFF / USDA → GPT fallback) is ALWAYS
+  // active — it was originally gated by MACRO_AGGREGATOR_V2 as a gradual-
+  // rollout flag, but that flag has been retired. /api/parse-food runs it
+  // unconditionally; glevTools now does the same so both paths are consistent.
+  //
+  // OPTIMISTIC_REFINEMENT (env var, default OFF) controls latency vs accuracy:
+  //   false (default) — synchronous: await aggregator before returning.
+  //     resolvedCarbs/Protein/Fat/Fiber = DB-backed values. Adds ~1–2 s.
+  //   true            — optimistic: return immediately with Mistral estimates,
+  //     run aggregator detached, write result to meal_prep_refinements.
+  //     GlevAIChatSheet subscribes via Realtime/polling and updates badges.
+  //     Top-level macros in the pending_action stay as Mistral estimates.
+  const aggregatorEnabled = true;
   const optimisticEnabled =
     process.env.OPTIMISTIC_REFINEMENT === "true" ||
     process.env.NEXT_PUBLIC_OPTIMISTIC_REFINEMENT === "true";
