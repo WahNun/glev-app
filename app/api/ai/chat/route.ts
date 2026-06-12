@@ -874,6 +874,7 @@ export async function handleChatPost(
           // hinweisen oder im nächsten Turn nachziehen.
           let pendingEmittedThisRound = false; // still tracks state for the model stub note
           for (const call of toolCalls) {
+            if (call.type !== "function") continue;
             const fn = call.function;
             const rawArgs =
               typeof fn?.arguments === "string"
