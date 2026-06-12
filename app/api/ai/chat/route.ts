@@ -759,6 +759,12 @@ export async function handleChatPost(
         }
 
         // ── Phase 1: resolve any tool calls ─────────────────────────
+        // Tracks whether a dual-emission (log_meal_entry with alcohol items) has
+        // already fired for this request. If yes, any subsequent explicit
+        // log_influence_entry(alcohol) call is a duplicate — the model got
+        // confused and called both. We reject the duplicate with a stub so no
+        // second influence card appears in the UI.
+        let alcoholDualEmittedThisRequest = false;
         for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
           if (timedOut || closed) return;
 
@@ -880,6 +886,29 @@ export async function handleChatPost(
               typeof fn?.arguments === "string"
                 ? fn.arguments
                 : JSON.stringify(fn?.arguments ?? {});
+
+            // ── Duplicate alcohol-influence guard ─────────────────────
+            // If log_meal_entry already triggered dual-emission (alcohol
+            // influence included automatically), and the model now also
+            // calls log_influence_entry(alcohol) explicitly, block it so
+            // only ONE influence card appears in the UI.
+            if (fn?.name === "log_influence_entry" && alcoholDualEmittedThisRequest) {
+              let parsedInflArgs: Record<string, unknown> = {};
+              try { parsedInflArgs = JSON.parse(rawArgs); } catch { /* ignore */ }
+              if (parsedInflArgs.influence_type === "alcohol") {
+                console.log("[chat] suppressed duplicate log_influence_entry(alcohol) — dual-emission already fired");
+                messages.push({
+                  role: "tool",
+                  tool_call_id: call.id,
+                  content: JSON.stringify({
+                    status: "skipped",
+                    reason: "Alkohol-Einflussfaktor wurde bereits automatisch zusammen mit der Mahlzeit erstellt (Dual-Emission). Kein zweiter Eintrag nötig.",
+                  }),
+                });
+                continue;
+              }
+            }
+
             const result = await executeGlevTool(
               fn?.name ?? "",
               rawArgs,
@@ -898,6 +927,7 @@ export async function handleChatPost(
               // Emit meal_prep frame first (for sessionStorage pre-fill),
               // then both pending_actions so the client renders two chips.
               pendingEmittedThisRound = true;
+              alcoholDualEmittedThisRequest = true; // block any subsequent log_influence_entry(alcohol)
               const [mealAction, inflAction] = result.dual_pending_actions;
               const mp = mealAction.payload as Record<string, unknown> | undefined;
               if (mp) {

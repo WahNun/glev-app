@@ -546,7 +546,7 @@ export const GLEV_TOOLS = [
     function: {
       name: "log_influence_entry",
       description:
-        "Schlägt das Speichern eines Einflussfaktor-Eintrags vor (influence_logs) — für Dinge, die den Blutzucker beeinflussen können: Alkohol, Stress (Prüfung, Arbeit, emotionale Belastung), Erkrankung (Erkältung, Grippe, Infektion), Medikamente (Nicht-Insulin), Schlafmangel, Cannabis, sonstiges. WICHTIG: schreibt NICHT direkt — Bestätigung per UI-Button. Rein dokumentarisch — die Engine ändert Dosierungen NICHT aufgrund dieser Einträge. Aufrufen wenn der Nutzer explizit über Alkohol-, Stress-, Krankheits-, Medikamenten- oder Schlaf-Situationen berichtet.",
+        "Schlägt das Speichern eines Einflussfaktor-Eintrags vor (influence_logs) — für Dinge, die den Blutzucker beeinflussen können: Alkohol, Stress (Prüfung, Arbeit, emotionale Belastung), Erkrankung (Erkältung, Grippe, Infektion), Medikamente (Nicht-Insulin), Schlafmangel, Cannabis, sonstiges. WICHTIG: schreibt NICHT direkt — Bestätigung per UI-Button. Rein dokumentarisch — die Engine ändert Dosierungen NICHT aufgrund dieser Einträge. Aufrufen wenn der Nutzer explizit über Alkohol-, Stress-, Krankheits-, Medikamenten- oder Schlaf-Situationen berichtet. AUSNAHME ALKOHOL: Wenn du gleichzeitig log_meal_entry mit alkoholischen Items aufrufst, NIEMALS zusätzlich log_influence_entry(alcohol) aufrufen — der Alkohol-Einflussfaktor wird automatisch zusammen mit der Mahlzeit erstellt (Dual-Emission). log_influence_entry(alcohol) nur aufrufen wenn der Nutzer Alkohol OHNE gleichzeitige Mahlzeit meldet.",
       parameters: {
         type: "object",
         properties: {
