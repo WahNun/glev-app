@@ -78,17 +78,15 @@
        --nav-top-height = 48 px content band (11 pad + 26 lockup + 11 pad)
        --nav-top-total  = full header height incl. safe-area
 
-     Bottom nav (footer chrome):
-       --nav-bottom-height  = 54 px MobileTab fixed row
-                              (icon 22 px + gap 4 px + UPPERCASE label
-                              ~14 px + breathing ~14 px)
-       --nav-bottom-top-pad = 4 px gap above tab row
-       --nav-bottom-safe    = bottom inner padding, capped at 20 px so
-                              iPhone home-indicator (sa-bottom ≈ 34 px)
-                              stays clear without leaving an excessive
-                              empty band; Web/Android (sa-bottom = 0)
-                              → 4 px floor
-       --nav-bottom-total   = full footer height incl. safe-area
+     Bottom nav (footer chrome) — floating glass pill:
+       --nav-bottom-height  = 62 px pill height
+       --nav-bottom-top-pad = 12 px gap between pill bottom and safe-area top
+                              (pill floats above the home-indicator zone)
+       --nav-bottom-safe    = raw env(safe-area-inset-bottom); the pill
+                              sits at bottom: 12px + safe-bottom so no
+                              internal padding cap is needed
+       --nav-bottom-total   = pill-top distance from screen bottom
+                              = height + top-pad + safe = 74 px + safe
 
      IMPORTANT: do NOT hardcode `env(safe-area-inset-top|bottom)` in
      screens or shared components — read these variables instead.
@@ -127,9 +125,9 @@
   --onboarding-progress-top:  calc(var(--safe-top) + 26px);
   --onboarding-footer-bottom: calc(var(--safe-bottom) + 22px);
 
-  --nav-bottom-height:  54px;
-  --nav-bottom-top-pad: 4px;
-  --nav-bottom-safe:    max(4px, min(20px, var(--safe-bottom)));
+  --nav-bottom-height:  62px;
+  --nav-bottom-top-pad: 12px;
+  --nav-bottom-safe:    var(--safe-bottom);
   --nav-bottom-total:   calc(var(--nav-bottom-height) + var(--nav-bottom-top-pad) + var(--nav-bottom-safe));
 
   /* Foreground color for text/icons placed on top of a brand-accent

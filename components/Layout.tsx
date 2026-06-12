@@ -1202,33 +1202,31 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
           }
         }}
         style={{
-        position: "fixed", bottom: 0, left: 0, right: 0,
-        background: NAV_SURFACE, borderTop: `1px solid ${NAV_BORDER}`,
-        // 2026-05-18 round 8: with capacitor `contentInset: "never"`
-        // the WebView now extends through the home-indicator zone, so
-        // we honour env(safe-area-inset-bottom) properly. The colored
-        // nav surface paints all the way to the physical phone edge
-        // (no blank gap under the labels), and labels sit safely above
-        // the home indicator pill via the sa-bot bottom padding.
-        // Web/Android (sa-bot = 0) → 4 px floor.
-        // 2026-05-18 round 9 (user: "footer ist zu hoch zu viel blank
-        // space unter den icons"): the full sa-bottom (~34 px on iPhone
-        // X+) leaves the home-indicator pill alone but visually creates
-        // a big empty band under the labels. Cut it in half — labels
-        // still clear the home indicator (sa-bot/2 ≈ 17 px is more than
-        // the 8 px pill height + ~6 px breathing room) and the colored
-        // footer band reads compact. Web/Android (sa-bot = 0) → 4 px.
-        // Task #363: footer geometry now sources from the central
-        // --nav-bottom-* variables in app/globals.css.
-        height: "var(--nav-bottom-total)",
-        paddingTop:    "var(--nav-bottom-top-pad)",
-        paddingBottom: "var(--nav-bottom-safe)",
-        paddingLeft:   4,
-        paddingRight:  4,
+        // Floating glass-pill footer — floats 12 px above the home-indicator
+        // safe-area zone. overflow:visible so the FAB bubble can protrude.
+        position: "fixed",
+        bottom: "calc(12px + var(--safe-bottom))",
+        left: 12, right: 12,
+        height: 62,
+        borderRadius: 31,
+        background: "rgba(255,255,255,0.055)",
+        backdropFilter: "blur(24px) saturate(160%)",
+        WebkitBackdropFilter: "blur(24px) saturate(160%)",
+        border: "1px solid rgba(255,255,255,0.12)",
+        boxShadow: "0 8px 32px rgba(0,0,0,0.50), inset 0 1px 0 rgba(255,255,255,0.15)",
+        paddingTop: 0, paddingBottom: 0,
+        paddingLeft: 8, paddingRight: 8,
+        overflow: "visible",
         // z-index 1102 — above the chat sheet (1101) and its backdrop (1100)
         // so the Glev button is never clipped when the sheet is open.
         zIndex: 1102,
       }}>
+        {/* Specular highlight — top-edge sheen on the glass pill */}
+        <div aria-hidden="true" style={{
+          position: "absolute", inset: 0, borderRadius: 31,
+          background: "linear-gradient(180deg, rgba(255,255,255,0.09) 0%, rgba(255,255,255,0.02) 50%, transparent 100%)",
+          pointerEvents: "none",
+        }} />
         <MobileTab
           label={tNav("dashboard")}
           active={pathname.startsWith("/dashboard")}
@@ -1333,7 +1331,7 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
         aria-label={voice.recording ? (locale === "en" ? "Glev — stop recording" : "Glev — Aufnahme beenden") : "Glev"}
         style={{
           position: "fixed",
-          bottom: "calc(var(--nav-bottom-total) - 15px)",
+          bottom: "calc(26px + var(--safe-bottom))",
           left: "50%",
           transform: "translateX(-50%)",
           width: 64,
