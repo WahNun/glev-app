@@ -34,6 +34,7 @@
  * expliziten User-Tap.
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
 import { getHistory } from "@/lib/cgm";
 import {
   buildDoses,
@@ -2585,7 +2586,11 @@ async function toolSubmitStructuredFeedback(
     };
   }
 
-  const { error } = await sb
+  // Use admin client for the insert so RLS on the user's JWT can never
+  // block it. Security is maintained: userId is already validated by the
+  // authedClient check at the top of the chat route before this runs.
+  const admin = getSupabaseAdmin();
+  const { error } = await admin
     .from("user_feedback")
     .insert({
       user_id: userId,
@@ -2600,7 +2605,10 @@ async function toolSubmitStructuredFeedback(
       ai_summary: typeof args.ai_summary === "string" ? args.ai_summary : null,
     });
 
-  if (error) return { error: error.message };
+  if (error) {
+    console.error("[feedback] insert error:", error.message);
+    return { error: error.message };
+  }
   return {
     ok: true,
     message: "Danke! Dein Feedback ist bei mir angekommen. Lucas und das Team kümmern sich drum.",
