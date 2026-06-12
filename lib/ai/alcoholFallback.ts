@@ -33,30 +33,36 @@ const EXEMPT_KEYWORDS = [
  * so a 5 vol-% beer ≈ 5 * 0.789 / 100 * volumeInMl * density ≈ grams * 0.04).
  */
 export const ALCOHOL_MATCH_TABLE: Array<{ re: RegExp; abv: number; label: string }> = [
-  { re: /starkbier|doppelbock|bock(?!wurst)/i,                                        abv: 0.075, label: "Starkbier"      },
+  // All patterns use \b word boundaries to prevent false positives on compound
+  // German food words like "Weintrauben" (grapes), "Weingummi" (wine gums),
+  // "Lagerstärke" (starch), "Pils-Linsen" (lentils), "Bierkäse" (cheese).
+  { re: /\bstarkbier\b|\bdoppelbock\b|\bbock(?!wurst)\b/i,                             abv: 0.075, label: "Starkbier"      },
   // Radler (Bier+Limo mix, ~2.5 vol%) must precede generic beer row — lower ABV.
   { re: /\bradler\b/i,                                                                  abv: 0.025, label: "Radler"         },
   // Cider (fermented apple, ~4–6 vol%) — separate from beer, similar ABV.
   { re: /\bcider\b/i,                                                                   abv: 0.045, label: "Cider"          },
-  { re: /weizen|hefeweizen|wei[sß]bier/i,                                              abv: 0.04,  label: "Weizenbier"     },
-  // stout, IPA, craft beer share the standard beer ABV band.
-  { re: /bier|pils|lager|helles|beer|\bstout\b|\bipa\b|craft\s*beer/i,               abv: 0.04,  label: "Bier"           },
-  { re: /sekt|prosecco|champagner|sparkling\s*wine/i,                                  abv: 0.10,  label: "Sekt"           },
+  { re: /\bweizen\b|\bhefeweizen\b|\bwei[sß]bier\b/i,                                  abv: 0.04,  label: "Weizenbier"     },
+  // \b on bier/pils/lager/helles/beer prevents compound false positives:
+  // Bierkäse, Lagerstärke, Pils-Linsen, Weißkohl etc.
+  { re: /\bbier\b|\bpils\b|\blager\b|\bhelles\b|\bbeer\b|\bstout\b|\bipa\b|\bcraft\s*beer\b/i, abv: 0.04, label: "Bier" },
+  { re: /\bsekt\b|\bprosecco\b|\bchampagner\b|\bsparkling\s*wine\b/i,                  abv: 0.10,  label: "Sekt"           },
   // Sangria (wine-based, ~9 vol%) before generic wine to get correct ABV.
   { re: /\bsangria\b/i,                                                                 abv: 0.09,  label: "Sangria"        },
   // Glühwein / mulled wine (~9 vol%) before generic wein to avoid Wein-row match.
-  { re: /glühwein|gluehwein|mulled\s*wine/i,                                          abv: 0.09,  label: "Glühwein"       },
+  { re: /\bglühwein\b|\bgluehwein\b|\bmulled\s*wine\b/i,                               abv: 0.09,  label: "Glühwein"       },
   // Federweißer (new wine, partially fermented, ~6 vol% average).
-  { re: /federweiß|federweißer|federweisser|federweiser/i,                            abv: 0.06,  label: "Federweißer"    },
-  { re: /rotwein|wei[sß]wein|ros[eé]|red\s*wine|white\s*wine|wine|wein/i,             abv: 0.10,  label: "Wein"           },
-  { re: /aperol\s*spritz/i,                                                             abv: 0.06,  label: "Aperol Spritz"  },
-  { re: /schnaps|vodka|wodka|gin\b|whiskey|whisky|rum\b|tequila|spirit|spirituos/i,   abv: 0.35,  label: "Spirits"        },
-  { re: /baileys|lik[oö]r|liqueur/i,                                                   abv: 0.17,  label: "Likör"          },
-  { re: /mojito|caipirinha/i,                                                           abv: 0.08,  label: "Cocktail"       },
-  { re: /aperol|aperitif|digestif/i,                                                    abv: 0.11,  label: "Aperitif"       },
+  { re: /\bfederweiß\b|\bfederweißer\b|\bfederweisser\b|\bfederweiser\b/i,             abv: 0.06,  label: "Federweißer"    },
+  // \bwein\b and \bwine\b prevent "Weintrauben" (grapes), "Weingummi",
+  // "Weinsauce" from matching. rotwein/weißwein etc. keep their own leading prefix.
+  { re: /\brotwein\b|\bwei[sß]wein\b|\bros[eé]\b|\bred\s*wine\b|\bwhite\s*wine\b|\bwine\b|\bwein\b/i, abv: 0.10, label: "Wein" },
+  { re: /\baperiol?\s*spritz\b/i,                                                       abv: 0.06,  label: "Aperol Spritz"  },
+  { re: /\bschnaps\b|\bvodka\b|\bwodka\b|\bgin\b|\bwhiskey\b|\bwhisky\b|\brum\b|\btequila\b|\bspirituos\w*/i, abv: 0.35, label: "Spirits" },
+  { re: /\bbaileys\b|\blik[oö]r\b|\bliqueur\b/i,                                       abv: 0.17,  label: "Likör"          },
+  { re: /\bmojito\b|\bcaipirinha\b/i,                                                   abv: 0.08,  label: "Cocktail"       },
+  { re: /\baperolf?\b|\baperitif\b|\bdigestif\b/i,                                      abv: 0.11,  label: "Aperitif"       },
   // \bsake\b: word boundary prevents substring matches (e.g. no false positives on "forsake").
   { re: /\bsake\b/i,                                                                    abv: 0.12,  label: "Sake"           },
-  { re: /cocktail/i,                                                                     abv: 0.08,  label: "Cocktail"       },
+  { re: /\bcocktail\b/i,                                                                abv: 0.08,  label: "Cocktail"       },
 ];
 
 /**

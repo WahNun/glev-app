@@ -210,7 +210,7 @@ export const GLEV_TOOLS = [
               properties: {
                 name:      { type: "string",  description: "Name der Zutat/Komponente (Deutsch oder Englisch)." },
                 grams:     { type: "number",  description: "Menge in Gramm." },
-                alcohol_g: { type: "number",  description: "Alkoholgehalt in Gramm — NUR bei alkoholischen Getränken setzen (Bier, Wein, Spirituosen, Cocktails). Richtwerte: 0.33l Bier=13g, 0.5l Bier=20g, 0.2l Wein=16g, 4cl Schnaps=13g. Nicht setzen oder 0 bei nicht-alkoholischen Items." },
+                alcohol_g: { type: "number",  description: "Alkoholgehalt in Gramm — AUSSCHLIESSLICH bei tatsächlich konsumierten alkoholischen Getränken setzen (Bier, Wein, Sekt, Spirituosen, Cocktails). NIEMALS bei Speisen oder Lebensmitteln setzen, auch wenn der Name einen Alkohol-Begriff enthält (z.B. Weintrauben, Weingummi, Bierkäse, Weinsauce aus der Packung haben KEINEN Alkohol). Richtwerte: 0.33l Bier=13g, 0.5l Bier=20g, 0.2l Wein=16g, 4cl Schnaps=13g. Bei nicht-alkoholischen Items: Feld weglassen oder 0." },
               },
               required: ["name", "grams"],
             },
