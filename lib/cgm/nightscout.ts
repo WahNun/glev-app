@@ -308,6 +308,25 @@ export async function getLatest(
 }
 
 /**
+ * Force a live fetch from Nightscout, bypassing the nightscout_readings cache.
+ * Used by /api/cgm/latest when the user explicitly taps Refresh — ensures a
+ * fresh reading lands rather than the cached value from up to 30 min ago.
+ */
+export async function getLatestLive(
+  userId: string
+): Promise<{ current: Reading | null }> {
+  const creds = await getCredentials(userId);
+  if (!creds) {
+    const e: Error & { status?: number } = new Error("nightscout not connected");
+    e.status = 404;
+    throw e;
+  }
+  const entries = await fetchEntries(creds.url, creds.token, 1);
+  if (entries.length > 0) await writeCacheEntries(userId, entries);
+  return { current: entries[0] ? mapEntry(entries[0]) : null };
+}
+
+/**
  * Returns the last 12h of readings (~144 entries at 5-min cadence) plus the
  * single most-recent reading as `current`. Cache-first: reads from
  * nightscout_readings if available, falls back to live fetch and writes

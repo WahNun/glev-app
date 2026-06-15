@@ -271,6 +271,17 @@ export default function CurrentDayGlucoseCard({ showMealNodes = false }: { showM
     }
   }, [loadHistory]);
 
+  // When the user connects or switches CGM source in Settings, pick up
+  // the new data immediately without waiting for the 60s polling cadence.
+  useEffect(() => {
+    const handler = () => {
+      invalidateCgmCache();
+      loadHistory();
+    };
+    window.addEventListener("glev:cgm-source-changed", handler);
+    return () => window.removeEventListener("glev:cgm-source-changed", handler);
+  }, [loadHistory]);
+
   return (
     <div
       onClick={() => s.kind === "ok" && setFlipped((f) => !f)}

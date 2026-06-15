@@ -253,6 +253,7 @@ export default function CgmSettingsCard() {
       await loadStatus();
       setShowForm(false);
       setTimeout(() => setFormSuccess(""), 4000);
+      window.dispatchEvent(new CustomEvent("glev:cgm-source-changed", { detail: { source: "llu" } }));
     } catch (err) {
       setFormError(err instanceof Error ? err.message : t("form.save_failed"));
     } finally {
@@ -368,6 +369,7 @@ export default function CgmSettingsCard() {
             ? t("nightscout.connected_value", { value: cur.value })
             : t("nightscout.connected_no_value"),
       });
+      window.dispatchEvent(new CustomEvent("glev:cgm-source-changed", { detail: { source: "nightscout" } }));
     } catch {
       setNightscoutMessage({
         kind: "error",

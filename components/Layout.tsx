@@ -1540,6 +1540,7 @@ type CgmPillStatus = "live" | "connecting" | "delayed" | "offline" | "paused";
 
 function useCgmPillStatus(): CgmPillStatus {
   const [ts, setTs] = useState<string | null | undefined>(undefined);
+  const loadRef = useRef<(() => void) | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -1555,9 +1556,16 @@ function useCgmPillStatus(): CgmPillStatus {
         })
         .catch(() => { if (!cancelled) setTs(null); });
     };
+    loadRef.current = load;
     load();
     const id = setInterval(load, 60_000);
-    return () => { cancelled = true; clearInterval(id); };
+    return () => { cancelled = true; clearInterval(id); loadRef.current = null; };
+  }, []);
+
+  useEffect(() => {
+    const handler = () => { loadRef.current?.(); };
+    window.addEventListener("glev:cgm-source-changed", handler);
+    return () => window.removeEventListener("glev:cgm-source-changed", handler);
   }, []);
 
   if (ts === undefined) return "connecting";
@@ -1573,7 +1581,7 @@ function useCgmPillStatus(): CgmPillStatus {
     : new Date(ts + " UTC");
   const ageMin = (Date.now() - parsed.getTime()) / 60_000;
   if (isNaN(ageMin)) return "offline";
-  if (ageMin < 5)  return "live";
+  if (ageMin < 6)  return "live";
   if (ageMin < 15) return "delayed";
   return "offline";
 }
@@ -1582,9 +1590,9 @@ function CgmStatusPill({ locale: loc }: { locale: string }) {
   const status = useCgmPillStatus();
 
   const cfg: Record<CgmPillStatus, { dot: string; label: string }> = {
-    live:       { dot: "#10b981", label: loc === "en" ? "LIVE"       : "LIVE"      },
+    live:       { dot: "#22D3A0", label: loc === "en" ? "LIVE"       : "LIVE"      },
     connecting: { dot: "#f59e0b", label: loc === "en" ? "CONNECTING" : "VERBINDET" },
-    delayed:    { dot: "#fb923c", label: loc === "en" ? "DELAYED"    : "VERSPÄTET" },
+    delayed:    { dot: "#FF9500", label: loc === "en" ? "DELAYED"    : "VERSPÄTET" },
     offline:    { dot: "#ef4444", label: loc === "en" ? "OFFLINE"    : "OFFLINE"   },
     paused:     { dot: "#9ca3af", label: loc === "en" ? "PAUSED"     : "PAUSIERT"  },
   };
