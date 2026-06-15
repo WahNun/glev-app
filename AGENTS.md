@@ -134,4 +134,12 @@ For questions, ambiguity, or anything that touches Lucas's strategic positioning
 
 ---
 
+## Account-Delete-Flow
+
+`POST /api/me/delete` (`app/api/me/delete/route.ts`) ist der self-service Hard-Delete-Endpoint (Apple 5.1.1(v) + DSGVO Art. 17). UI-Einstieg: "Konto löschen" Row in `app/(protected)/settings/konto/page.tsx` → 2-Step BottomSheet (E-Mail-Bestätigung + finaler Destructive-Button).
+
+**WICHTIG:** Bei jeder neuen Tabelle mit `user_id`-Spalte MUSS die Konstante `USER_ID_TABLES` in `app/api/me/delete/route.ts` um den Tabellennamen erweitert werden — sonst entstehen Orphan-Records beim Account-Delete. Email-basierte Tabellen (`email_drip_schedule`, `email_drip_unsubscribes`) werden separat via `deleteEmailTables()` bereinigt.
+
+---
+
 End of AGENTS.md.
