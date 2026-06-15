@@ -1,6 +1,7 @@
 import UIKit
 import Capacitor
 import HealthKit
+import UserNotifications
 import WebKit
 
 @UIApplicationMain
@@ -14,6 +15,18 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     private let glucoseBackgroundSync = HealthKitGlucoseBackgroundSync()
 
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
+        // Request notification authorization on every launch — idempotent after first
+        // answer. Consolidates normal + criticalAlert into one dialog; the entitlement
+        // com.apple.developer.usernotifications.critical-alerts must already be in the
+        // provisioning profile for .criticalAlert to appear.
+        UNUserNotificationCenter.current()
+            .requestAuthorization(options: [.alert, .badge, .sound, .criticalAlert, .providesAppNotificationSettings]) { granted, error in
+                if let error = error { NSLog("[Glev] Notification authorization error: \(error)") }
+                NSLog("[Glev] Notification authorization granted: \(granted)")
+            }
+        DispatchQueue.main.async {
+            UIApplication.shared.registerForRemoteNotifications()
+        }
         // Register the HKObserverQuery + Background Delivery on every
         // launch — including the silent background launches iOS itself
         // performs when a new HealthKit sample arrives. Apple's

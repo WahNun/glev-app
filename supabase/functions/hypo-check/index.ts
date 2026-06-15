@@ -250,10 +250,15 @@ async function sendApnsPush(
   const jwt = await getApnsJwt(keyP8, keyId, teamId);
 
   const url = `https://api.push.apple.com/3/device/${token}`;
+  // Critical Alerts require sound as a dictionary with critical:1 so iOS
+  // bypasses silent mode and DnD. A plain string is ignored for critical level.
+  const soundPayload = interruptionLevel === "critical"
+    ? { critical: 1, name: "glev_low_alarm.wav", volume: 1.0 }
+    : "glev_low_alarm.wav";
   const payload = JSON.stringify({
     aps: {
       alert: { title, body },
-      sound: "glev_low_alarm.wav",
+      sound: soundPayload,
       badge: 1,
       "interruption-level": interruptionLevel,
       "content-available": 1,

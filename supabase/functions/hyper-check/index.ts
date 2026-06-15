@@ -149,8 +149,11 @@ async function sendApnsPush(
 ): Promise<void> {
   const jwt = await getApnsJwt(keyP8, keyId, teamId);
   const url = `https://api.push.apple.com/3/device/${token}`;
+  const soundPayload = interruptionLevel === "critical"
+    ? { critical: 1, name: "glev_high_alarm.wav", volume: 1.0 }
+    : "glev_high_alarm.wav";
   const payload = JSON.stringify({
-    aps: { alert: { title, body }, sound: "glev_high_alarm.wav", badge: 1, "interruption-level": interruptionLevel, "content-available": 1 },
+    aps: { alert: { title, body }, sound: soundPayload, badge: 1, "interruption-level": interruptionLevel, "content-available": 1 },
   });
   const res = await fetch(url, {
     method: "POST",

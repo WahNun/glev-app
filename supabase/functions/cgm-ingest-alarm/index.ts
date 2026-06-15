@@ -83,6 +83,7 @@ interface AlarmSettings {
   elevated_alarm_threshold_mgdl: number | null;
   high_alarm_enabled: boolean;
   high_alarm_threshold_mgdl: number | null;
+  notif_critical_alerts: boolean | null;
 }
 
 interface PushTokenRow {
@@ -200,8 +201,14 @@ async function sendApnsPush(
   title: string,
   body: string,
   sound: string,
+  interruptionLevel: "critical" | "time-sensitive" = "time-sensitive",
 ): Promise<void> {
   const jwt = await getApnsJwt(keyP8, keyId, teamId);
+  // Critical Alerts require sound as a dictionary with critical:1 so iOS
+  // bypasses silent mode and DnD. A plain string is ignored for critical level.
+  const soundPayload = interruptionLevel === "critical"
+    ? { critical: 1, name: sound, volume: 1.0 }
+    : sound;
   const res = await fetch(`https://api.push.apple.com/3/device/${token}`, {
     method: "POST",
     headers: {
@@ -214,9 +221,9 @@ async function sendApnsPush(
     body: JSON.stringify({
       aps: {
         alert: { title, body },
-        sound,
+        sound: soundPayload,
         badge: 1,
-        "interruption-level": "time-sensitive",
+        "interruption-level": interruptionLevel,
         "content-available": 1,
       },
     }),
@@ -359,7 +366,8 @@ Deno.serve(async (req: Request) => {
     .select(
       "low_alarm_enabled, low_alarm_threshold_mgdl, " +
       "elevated_alarm_enabled, elevated_alarm_threshold_mgdl, " +
-      "high_alarm_enabled, high_alarm_threshold_mgdl",
+      "high_alarm_enabled, high_alarm_threshold_mgdl, " +
+      "notif_critical_alerts",
     )
     .eq("user_id", userId)
     .maybeSingle();
@@ -375,6 +383,8 @@ Deno.serve(async (req: Request) => {
   }
 
   const settings = settingsData as AlarmSettings;
+  const criticalEnabled = settings.notif_critical_alerts === true;
+  const interruptionLevel: "critical" | "time-sensitive" = criticalEnabled ? "critical" : "time-sensitive";
   const alarmConfigs = buildAlarmConfigs(settings);
   const enabledAlarms = alarmConfigs.filter((a) => a.enabled && a.exceedsFn(cgmValue, a.threshold));
 
@@ -485,6 +495,7 @@ Deno.serve(async (req: Request) => {
           await sendApnsPush(
             apnsKeyP8, apnsKeyId, apnsTeamId, apnsBundleId,
             pushRow.push_token, title, body, alarm.apnsSound,
+            interruptionLevel,
           );
           pushDelivered = true;
         }
