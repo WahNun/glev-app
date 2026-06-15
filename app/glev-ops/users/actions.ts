@@ -529,6 +529,22 @@ export async function setManualPlanAction(formData: FormData): Promise<SetPlanRe
 
       if (userEmail) {
         const dedupeKey = `gift-${userId}-${plan}-${expiresAt ?? "lifetime"}`;
+
+        // Generate a recovery link so the user is prompted to set a password
+        // before entering the app. Pattern from grantBetaFreeYearAction.
+        let signupUrl: string | null = null;
+        const { data: linkData, error: linkErr } = await sb.auth.admin.generateLink({
+          type: "recovery",
+          email: userEmail,
+          options: { redirectTo: `${appUrl}/auth/confirm` },
+        });
+        if (linkErr) {
+          // Non-fatal: email still goes out with /dashboard fallback CTA
+          console.warn("[setManualPlanAction] generateLink failed:", linkErr.message);
+        } else {
+          signupUrl = linkData?.properties?.action_link ?? null;
+        }
+
         await enqueueEmail({
           recipient: userEmail,
           template: "gift-access",
@@ -538,6 +554,7 @@ export async function setManualPlanAction(formData: FormData): Promise<SetPlanRe
             expiresAt: expiresAt ?? null,
             appUrl,
             locale,
+            signupUrl,
           },
           dedupeKey,
         });
