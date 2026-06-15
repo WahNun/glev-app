@@ -103,6 +103,7 @@ export default function CgmSettingsCard() {
   const [nightscoutSubmitting, setNightscoutSubmitting] = useState(false);
   const [nightscoutMessage, setNightscoutMessage] =
     useState<{ kind: "success" | "error"; text: string } | null>(null);
+  const [nightscoutApiSecretHint, setNightscoutApiSecretHint] = useState(false);
 
   const loadStatus = useCallback(async () => {
     setLoadingStatus(true);
@@ -343,12 +344,21 @@ export default function CgmSettingsCard() {
         current?: { value: number | null } | null;
         error?: string;
       };
-      if (!res.ok) throw new Error(body?.error || t("errors.http", { status: res.status }));
+      if (!res.ok) {
+        const errMsg = res.status === 401 ? t("nightscout.err_401")
+                     : res.status === 404 ? t("nightscout.err_404")
+                     : res.status === 504 ? t("nightscout.err_timeout")
+                     : res.status >= 500  ? t("nightscout.err_5xx")
+                     : body?.error || t("errors.connection_failed");
+        setNightscoutMessage({ kind: "error", text: errMsg });
+        return;
+      }
       setNightscoutConnected(true);
       // Update hasToken flag: if user just sent a token OR they preserved
       // an existing one, we have a token now.
       setNightscoutHasToken(tokenToSend != null || nightscoutHasToken);
       setNightscoutToken("");
+      setNightscoutApiSecretHint(false);
       const cur = body?.current ?? null;
       setNightscoutLatest(cur?.value ?? null);
       setNightscoutMessage({
@@ -358,10 +368,10 @@ export default function CgmSettingsCard() {
             ? t("nightscout.connected_value", { value: cur.value })
             : t("nightscout.connected_no_value"),
       });
-    } catch (err) {
+    } catch {
       setNightscoutMessage({
         kind: "error",
-        text: err instanceof Error ? err.message : t("errors.connection_failed"),
+        text: t("errors.connection_failed"),
       });
     } finally {
       setNightscoutSubmitting(false);
@@ -917,7 +927,11 @@ export default function CgmSettingsCard() {
                     id="ns-token"
                     type="password"
                     value={nightscoutToken}
-                    onChange={(e) => setNightscoutToken(e.target.value)}
+                    onChange={(e) => {
+                      setNightscoutToken(e.target.value);
+                      const v = e.target.value.trim();
+                      setNightscoutApiSecretHint(v.length >= 12 && /^[a-zA-Z0-9]+$/.test(v));
+                    }}
                     placeholder={
                       nightscoutHasToken
                         ? t("nightscout.token_placeholder_saved")
@@ -926,6 +940,15 @@ export default function CgmSettingsCard() {
                     style={inp}
                     autoComplete="off"
                   />
+                  {nightscoutApiSecretHint ? (
+                    <div style={{ fontSize: 11, color: "#F59E0B", marginTop: 5, lineHeight: 1.5 }}>
+                      {t("nightscout.token_api_secret_hint")}
+                    </div>
+                  ) : (
+                    <div style={{ fontSize: 11, color: "var(--text-ghost)", marginTop: 5, lineHeight: 1.5 }}>
+                      {t("nightscout.label_token_hint")}
+                    </div>
+                  )}
                 </div>
 
                 {nightscoutConnected && nightscoutLatest != null && (

@@ -177,7 +177,10 @@ async function fetchEntries(
       `nightscout ${res.status}${body ? ": " + body.slice(0, 120) : ""}`
     );
     e.upstream = true;
-    e.status = res.status === 401 || res.status === 403 ? 401 : 502;
+    // 401/403 → auth failure; 404 → URL wrong; everything else → upstream error
+    e.status = (res.status === 401 || res.status === 403) ? 401
+             : res.status === 404 ? 404
+             : 502;
     throw e;
   }
   const json = (await res.json().catch(() => null)) as unknown;
