@@ -163,9 +163,10 @@ export default function SignupPage() {
         }
       }
 
-      // Pixel Lead event (Browser) — CAPI parallel via trackEvent
+      // Pixel Lead event (Browser) — CAPI parallel via trackEvent weiter unten.
+      // eventID koordiniert mit dem CompleteRegistration-Event in /auth/callback.
       if (typeof window !== "undefined" && (window as unknown as { fbq?: (...args: unknown[]) => void }).fbq) {
-        (window as unknown as { fbq: (...args: unknown[]) => void }).fbq("track", "Lead");
+        (window as unknown as { fbq: (...args: unknown[]) => void }).fbq("track", "Lead", {}, { eventID: `signup-${data.user.id}` });
       }
       // Server CAPI Lead — fire-and-forget, blockiert nicht den Step-Wechsel
       const nameParts = name.trim().split(/\s+/);

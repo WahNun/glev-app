@@ -355,8 +355,8 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    // CAPI Purchase — fire-and-forget. Kein Stripe-Retry bei Meta-Fehlern.
-    // event_id = sessionId dedupliziert gegen Browser-Pixel falls vorhanden.
+    // CAPI Purchase + Subscribe — fire-and-forget. Kein Stripe-Retry bei Meta-Fehlern.
+    // event_id dedupliziert gegen Browser-Pixel und Webhook-Retries.
     {
       const capiCountry =
         typeof session.customer_details?.address?.country === 'string'
@@ -366,6 +366,33 @@ export async function POST(req: NextRequest) {
         typeof session.amount_total === 'number' ? session.amount_total / 100 : 9.9;
       const capiSub =
         typeof session.subscription === 'string' ? session.subscription : undefined;
+
+      // Subscribe nur für Subscription-Sessions (nicht One-Time-Payment)
+      if (capiSub) {
+        sendCapiEvent(
+          {
+            email,
+            externalId:     email,
+            subscriptionId: capiSub,
+            country:        capiCountry,
+          },
+          {
+            eventName:      'Subscribe',
+            eventId:        `subscribe_${capiSub}`,
+            eventSourceUrl: `${appUrl}/beta/success`,
+            actionSource:   'website',
+            value:          capiValue,
+            currency:       'EUR',
+            contentName:    'Glev Smart',
+            contentIds:     ['glev-smart-monthly'],
+            contentType:    'product',
+          },
+        ).catch((e) =>
+          // eslint-disable-next-line no-console
+          console.warn('[webhook] CAPI Subscribe failed (non-fatal):', e),
+        );
+      }
+
       sendCapiEvent(
         {
           email,

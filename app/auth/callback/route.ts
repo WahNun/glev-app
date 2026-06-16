@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
+import { sendCapiEvent } from "@/lib/fb-capi-server";
 
 /**
  * Email-confirmation / magic-link callback.
@@ -48,6 +49,23 @@ export async function GET(req: NextRequest) {
 
     const { data: sessionData, error } = await supabase.auth.exchangeCodeForSession(code);
     if (!error) {
+      // CAPI CompleteRegistration — fires for email confirmation and magic-link
+      // sign-ins (not password resets). event_id=signup-{userId} is stable so
+      // Webhook retries and /api/fb-capi browser events deduplicate on Meta's side.
+      const confEmail = sessionData.session?.user?.email;
+      const confUserId = sessionData.session?.user?.id;
+      if (confEmail && next !== "/auth/confirm") {
+        sendCapiEvent(
+          { email: confEmail, externalId: confUserId },
+          {
+            eventName: "CompleteRegistration",
+            eventId: `signup-${confUserId ?? confEmail}`,
+            eventSourceUrl: `${origin}/signup`,
+            actionSource: "website",
+          },
+        ).catch(() => {});
+      }
+
       // If coming from free-trial signup, set trial_end_at now that we have a session.
       if (next === "/onboarding" && sessionData.session?.access_token) {
         try {

@@ -19,6 +19,7 @@ import { cookies } from "next/headers";
 import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
 import { enqueueEmail } from "@/lib/emails/outbox";
 import { scheduleTrialEmails } from "@/lib/emails/drip-scheduler";
+import { sendCapiEvent } from "@/lib/fb-capi-server";
 
 async function resolveUser(req: NextRequest) {
   const url  = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || "";
@@ -81,6 +82,24 @@ export async function POST(req: NextRequest) {
 
     const email = user.email;
     const name  = (user.user_metadata?.full_name as string | undefined) ?? null;
+
+    // CAPI StartTrial — kein Value (Trial ist gratis, kein Zahlungsdaten erforderlich).
+    // event_id=trial-{userId} dedupliziert falls die Route doppelt aufgerufen wird
+    // (auth/callback + direkter Client-Call aus signup/page.tsx).
+    if (email) {
+      sendCapiEvent(
+        { email, externalId: user.id },
+        {
+          eventName:      "StartTrial",
+          eventId:        `trial-${user.id}`,
+          eventSourceUrl: `${process.env.NEXT_PUBLIC_APP_URL ?? ""}/signup`,
+          actionSource:   "website",
+          contentName:    "Glev Free Trial",
+          contentIds:     ["glev-free-trial"],
+          contentType:    "product",
+        },
+      ).catch((e) => console.warn("[free-trial] CAPI StartTrial failed (non-fatal):", e));
+    }
 
     // Detect locale from Accept-Language header (best-effort)
     const acceptLang = req.headers.get("accept-language") ?? "";
