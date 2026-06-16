@@ -428,7 +428,13 @@ function ConfirmInner() {
       // frischen Session, nicht via getSession() das evtl. noch null liefert.
       activateTrial(sessionToken);
 
-      setState({ kind: "ready" });
+      if (type === "signup" || type === "email") {
+        // Email-Confirmation: User hat beim /signup bereits ein Passwort gesetzt.
+        // Passwort-Form überspringen — direkt zum Onboarding.
+        router.replace("/onboarding");
+        return;
+      }
+      setState({ kind: "ready" }); // invite / recovery → Passwort-Form
     } catch (err) {
       if (isLinkAlreadyUsed(err)) {
         setState({
