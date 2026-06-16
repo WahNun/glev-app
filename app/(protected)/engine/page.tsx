@@ -50,6 +50,7 @@ import SnapSlider from "@/components/log/SnapSlider";
 import SaveButton from "@/components/log/SaveButton";
 import ReviewMacrosCards from "@/components/ReviewMacrosCards";
 import { usePlan } from "@/hooks/usePlan";
+import { useIsNative } from "@/lib/platform";
 import UpgradeGate from "@/components/UpgradeGate";
 
 // Extra buffer added to the bolus-fetch window so pre- and post-boluses
@@ -460,6 +461,7 @@ export default function EnginePage() {
   // page when only the query string changes.
   const { canAccess } = usePlan();
   const router = useRouter();
+  const isNative = useIsNative();
   const searchParams = useSearchParams();
   useEffect(() => {
     if (!searchParams) return;
@@ -3379,7 +3381,12 @@ export default function EnginePage() {
                 aria-checked={bolusEnabled}
                 onClick={() => {
                   if (!canAccess("engine_bolus_suggestion")) {
-                    router.push("/pro");
+                    if (isNative) {
+                      setDecisionToast("Diese Funktion erfordert Pro. Aktiviere dein Abo auf glev.app.");
+                      setTimeout(() => setDecisionToast(null), 3000);
+                    } else {
+                      router.push("/pro");
+                    }
                     return;
                   }
                   setBolusEnabled(v => !v);

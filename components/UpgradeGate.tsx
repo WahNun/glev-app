@@ -5,6 +5,7 @@ import { useLocale } from "next-intl";
 import { usePlan } from "@/hooks/usePlan";
 import { requiredPlanLabel, FEATURE_TIERS } from "@/lib/planFeatures";
 import { supabase } from "@/lib/supabase";
+import { useIsNative } from "@/lib/platform";
 
 const ACCENT = "#4F6EF7";
 
@@ -75,6 +76,7 @@ function UpgradeModal({
   onClose: () => void;
 }) {
   const locale = useLocale();
+  const isNative = useIsNative();
   const [busy, setBusy] = useState(false);
 
   const handleUpgrade = async () => {
@@ -156,26 +158,52 @@ function UpgradeModal({
           Ab <strong style={{ color: "var(--text)" }}>{planName}</strong> verfügbar
         </p>
 
-        <button
-          type="button"
-          onClick={() => void handleUpgrade()}
-          disabled={busy}
-          style={{
-            width: "100%",
-            padding: "13px 0",
-            background: busy ? `${ACCENT}88` : ACCENT,
-            color: "#fff",
-            border: "none",
-            borderRadius: 11,
-            fontSize: 14,
-            fontWeight: 700,
-            cursor: busy ? "default" : "pointer",
-            letterSpacing: "-0.01em",
-            transition: "background 0.15s",
-          }}
-        >
-          {busy ? "Weiterleitung …" : "Jetzt upgraden →"}
-        </button>
+        {isNative ? (
+          <>
+            <p style={{ margin: "2px 0", fontSize: 13, color: "var(--text-faint)", lineHeight: 1.5 }}>
+              Abos sind über glev.app verfügbar.
+            </p>
+            <button
+              type="button"
+              onClick={onClose}
+              style={{
+                width: "100%",
+                padding: "13px 0",
+                background: "var(--surface-soft)",
+                color: "var(--text)",
+                border: "1px solid var(--border)",
+                borderRadius: 11,
+                fontSize: 14,
+                fontWeight: 600,
+                cursor: "pointer",
+                letterSpacing: "-0.01em",
+              }}
+            >
+              Schließen
+            </button>
+          </>
+        ) : (
+          <button
+            type="button"
+            onClick={() => void handleUpgrade()}
+            disabled={busy}
+            style={{
+              width: "100%",
+              padding: "13px 0",
+              background: busy ? `${ACCENT}88` : ACCENT,
+              color: "#fff",
+              border: "none",
+              borderRadius: 11,
+              fontSize: 14,
+              fontWeight: 700,
+              cursor: busy ? "default" : "pointer",
+              letterSpacing: "-0.01em",
+              transition: "background 0.15s",
+            }}
+          >
+            {busy ? "Weiterleitung …" : "Jetzt upgraden →"}
+          </button>
+        )}
       </div>
     </>
   );
@@ -196,6 +224,7 @@ export default function UpgradeGate({
 }) {
   const { canAccess, loading } = usePlan();
   const locale = useLocale();
+  const isNative = useIsNative();
   const [modalOpen, setModalOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [userEmail, setUserEmail] = useState("");
@@ -321,39 +350,53 @@ export default function UpgradeGate({
             {planName}
           </div>
 
-          <button
-            type="button"
-            onClick={() => void handleUpgrade()}
-            disabled={busy}
-            style={{
-              padding: "9px 20px",
-              background: busy ? `${ACCENT}88` : ACCENT,
-              color: "#fff",
-              borderRadius: 9,
-              border: "none",
-              fontSize: 13,
-              fontWeight: 700,
-              letterSpacing: "-0.01em",
-              cursor: busy ? "default" : "pointer",
-              transition: "background 0.15s",
-              whiteSpace: "nowrap",
-            }}
-          >
-            {busy ? "Weiterleitung …" : "Upgraden →"}
-          </button>
-
-          <a
-            href={moreInfoHref}
-            style={{
+          {isNative ? (
+            <p style={{
               fontSize: 12,
               color: "var(--text-faint)",
-              textDecoration: "none",
-              marginTop: 2,
-              opacity: 0.8,
-            }}
-          >
-            Mehr Informationen
-          </a>
+              margin: "4px 0 0",
+              lineHeight: 1.5,
+              textAlign: "center",
+            }}>
+              Abos sind über glev.app verfügbar.
+            </p>
+          ) : (
+            <>
+              <button
+                type="button"
+                onClick={() => void handleUpgrade()}
+                disabled={busy}
+                style={{
+                  padding: "9px 20px",
+                  background: busy ? `${ACCENT}88` : ACCENT,
+                  color: "#fff",
+                  borderRadius: 9,
+                  border: "none",
+                  fontSize: 13,
+                  fontWeight: 700,
+                  letterSpacing: "-0.01em",
+                  cursor: busy ? "default" : "pointer",
+                  transition: "background 0.15s",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                {busy ? "Weiterleitung …" : "Upgraden →"}
+              </button>
+
+              <a
+                href={moreInfoHref}
+                style={{
+                  fontSize: 12,
+                  color: "var(--text-faint)",
+                  textDecoration: "none",
+                  marginTop: 2,
+                  opacity: 0.8,
+                }}
+              >
+                Mehr Informationen
+              </a>
+            </>
+          )}
         </div>
       </div>
     </div>

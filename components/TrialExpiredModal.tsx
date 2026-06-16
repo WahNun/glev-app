@@ -17,6 +17,7 @@
 import { useEffect, useState } from "react";
 import { useLocale } from "next-intl";
 import { supabase } from "@/lib/supabase";
+import { useIsNative } from "@/lib/platform";
 
 const ACCENT = "#4F6EF7";
 
@@ -90,6 +91,7 @@ async function startCheckout(tier: "smart" | "pro"): Promise<void> {
 
 export default function TrialExpiredModal({ forceOpen = false }: { forceOpen?: boolean }) {
   const locale = useLocale();
+  const isNative = useIsNative();
   const C = locale === "en" ? EN : DE;
 
   const [expired, setExpired] = useState(forceOpen);
@@ -209,133 +211,163 @@ export default function TrialExpiredModal({ forceOpen = false }: { forceOpen?: b
           {C.body}
         </p>
 
-        {/* Plan cards */}
-        <div
-          style={{
-            width: "100%",
-            display: "flex",
-            flexDirection: "column",
-            gap: 10,
-            marginTop: 4,
-          }}
-        >
-          {/* Pro — recommended */}
-          <button
-            type="button"
-            disabled={busy}
-            onClick={async () => {
-              if (busy) return;
-              setBusyPro(true);
-              await startCheckout("pro");
-              setBusyPro(false);
-            }}
-            style={{
-              position: "relative",
-              width: "100%",
-              background: busy ? `${ACCENT}88` : ACCENT,
-              color: "#fff",
-              border: "none",
-              borderRadius: 13,
-              padding: "18px 20px 14px",
-              cursor: busy ? "default" : "pointer",
-              textAlign: "left",
-              fontFamily: "inherit",
-              transition: "background 0.15s",
-            }}
-          >
-            {/* Recommended badge */}
-            <span
+        {isNative ? (
+          /* iOS: no checkout buttons — subscription via glev.app */
+          <>
+            <p
               style={{
-                position: "absolute",
-                top: -10,
-                left: "50%",
-                transform: "translateX(-50%)",
-                background: ACCENT,
-                border: "2px solid var(--surface)",
-                color: "#fff",
-                fontSize: 10,
-                fontWeight: 700,
-                letterSpacing: "0.06em",
-                textTransform: "uppercase",
-                padding: "2px 10px",
-                borderRadius: 20,
-                whiteSpace: "nowrap",
+                fontSize: 14,
+                color: "var(--text-muted)",
+                margin: "4px 0 8px",
+                lineHeight: 1.6,
+                textAlign: "center",
               }}
             >
-              {C.badge}
-            </span>
-            <div
-              style={{
-                fontSize: 15,
-                fontWeight: 700,
-                marginBottom: 2,
-              }}
-            >
-              {C.proLabel(busyPro)}
-            </div>
-            <div style={{ fontSize: 12, opacity: 0.85 }}>
-              {C.proSub}
-            </div>
-          </button>
+              {locale === "en"
+                ? "Subscriptions are available at glev.app."
+                : "Abos sind auf glev.app verfügbar."}
+            </p>
 
-          {/* Smart — entry option */}
-          <button
-            type="button"
-            disabled={busy}
-            onClick={async () => {
-              if (busy) return;
-              setBusySmart(true);
-              await startCheckout("smart");
-              setBusySmart(false);
-            }}
-            style={{
-              width: "100%",
-              background: "transparent",
-              color: "var(--text)",
-              border: "1px solid var(--border)",
-              borderRadius: 13,
-              padding: "14px 20px",
-              cursor: busy ? "default" : "pointer",
-              textAlign: "left",
-              fontFamily: "inherit",
-              transition: "border-color 0.15s",
-            }}
-          >
-            <div
+            <button
+              type="button"
+              onClick={async () => {
+                if (supabase) await supabase.auth.signOut();
+                window.location.href = "/login";
+              }}
               style={{
-                fontSize: 15,
-                fontWeight: 700,
-                marginBottom: 2,
+                width: "100%",
+                padding: "15px 0",
+                background: "var(--surface-soft)",
                 color: "var(--text)",
+                border: "1px solid var(--border)",
+                borderRadius: 13,
+                fontSize: 15,
+                fontWeight: 700,
+                cursor: "pointer",
+                fontFamily: "inherit",
+                letterSpacing: "-0.01em",
               }}
             >
-              {C.smartLabel(busySmart)}
-            </div>
-            <div style={{ fontSize: 12, color: "var(--text-muted)" }}>
-              {C.smartSub}
-            </div>
-          </button>
-        </div>
+              {C.signOut}
+            </button>
+          </>
+        ) : (
+          <>
+            {/* Plan cards */}
+            <div
+              style={{
+                width: "100%",
+                display: "flex",
+                flexDirection: "column",
+                gap: 10,
+                marginTop: 4,
+              }}
+            >
+              {/* Pro — recommended */}
+              <button
+                type="button"
+                disabled={busy}
+                onClick={async () => {
+                  if (busy) return;
+                  setBusyPro(true);
+                  await startCheckout("pro");
+                  setBusyPro(false);
+                }}
+                style={{
+                  position: "relative",
+                  width: "100%",
+                  background: busy ? `${ACCENT}88` : ACCENT,
+                  color: "#fff",
+                  border: "none",
+                  borderRadius: 13,
+                  padding: "18px 20px 14px",
+                  cursor: busy ? "default" : "pointer",
+                  textAlign: "left",
+                  fontFamily: "inherit",
+                  transition: "background 0.15s",
+                }}
+              >
+                <span
+                  style={{
+                    position: "absolute",
+                    top: -10,
+                    left: "50%",
+                    transform: "translateX(-50%)",
+                    background: ACCENT,
+                    border: "2px solid var(--surface)",
+                    color: "#fff",
+                    fontSize: 10,
+                    fontWeight: 700,
+                    letterSpacing: "0.06em",
+                    textTransform: "uppercase",
+                    padding: "2px 10px",
+                    borderRadius: 20,
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  {C.badge}
+                </span>
+                <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 2 }}>
+                  {C.proLabel(busyPro)}
+                </div>
+                <div style={{ fontSize: 12, opacity: 0.85 }}>
+                  {C.proSub}
+                </div>
+              </button>
 
-        {/* Logout */}
-        <button
-          type="button"
-          onClick={async () => {
-            if (supabase) await supabase.auth.signOut();
-            window.location.href = "/login";
-          }}
-          style={{
-            background: "none",
-            border: "none",
-            color: "var(--text-faint)",
-            fontSize: 13,
-            cursor: "pointer",
-            padding: "4px 8px",
-            fontFamily: "inherit",
-          }}
-        >
-          {C.signOut}
-        </button>
+              {/* Smart — entry option */}
+              <button
+                type="button"
+                disabled={busy}
+                onClick={async () => {
+                  if (busy) return;
+                  setBusySmart(true);
+                  await startCheckout("smart");
+                  setBusySmart(false);
+                }}
+                style={{
+                  width: "100%",
+                  background: "transparent",
+                  color: "var(--text)",
+                  border: "1px solid var(--border)",
+                  borderRadius: 13,
+                  padding: "14px 20px",
+                  cursor: busy ? "default" : "pointer",
+                  textAlign: "left",
+                  fontFamily: "inherit",
+                  transition: "border-color 0.15s",
+                }}
+              >
+                <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 2, color: "var(--text)" }}>
+                  {C.smartLabel(busySmart)}
+                </div>
+                <div style={{ fontSize: 12, color: "var(--text-muted)" }}>
+                  {C.smartSub}
+                </div>
+              </button>
+            </div>
+
+            {/* Logout */}
+            <button
+              type="button"
+              onClick={async () => {
+                if (supabase) await supabase.auth.signOut();
+                window.location.href = "/login";
+              }}
+              style={{
+                background: "none",
+                border: "none",
+                color: "var(--text-faint)",
+                fontSize: 13,
+                cursor: "pointer",
+                padding: "4px 8px",
+                fontFamily: "inherit",
+              }}
+            >
+              {C.signOut}
+            </button>
+          </>
+        )}
       </div>
     </div>
   );
