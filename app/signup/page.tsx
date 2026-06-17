@@ -116,7 +116,9 @@ export default function SignupPage() {
         password,
         options: {
           data: { full_name: name },
-          emailRedirectTo: `${window.location.origin}/auth/callback?next=/onboarding`,
+          emailRedirectTo: `${window.location.origin}/auth/callback?next=/onboarding&lang=${
+            (document.documentElement.lang || navigator.language || "").split("-")[0] === "de" ? "de" : "en"
+          }`,
         },
       });
 
