@@ -189,7 +189,7 @@ export const GLEV_TOOLS = [
           },
           fiber_grams: {
             type: "number",
-            description: "Optional: Ballaststoffe in Gramm. Nur setzen wenn bekannt (z. B. Linsen, Vollkornbrot, Hülsenfrüchte, Haferflocken). Weglassen wenn unsicher.",
+            description: "Ballaststoffe in Gramm. IMMER setzen wenn die aggregate-Pipeline einen Wert liefert (User-History, Open Food Facts, USDA oder GPT-Fallback). Bei GPT-Schätzung ohne DB-Daten: Schätzung basierend auf Lebensmittel-Typ angeben — z. B. Apfel ≈ 2g, Pizza ≈ 2.5g, Linsen ≈ 8g, Süßigkeiten ohne Ballaststoffe = 0. Nur weglassen wenn der Lebensmittel-Typ vollständig unbekannt ist.",
           },
           meal_type: {
             type: "string",
