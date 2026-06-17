@@ -54,6 +54,7 @@
     "@octokit/rest": "^21.1.1",
     "@react-pdf/renderer": "^4.5.1",
     "@replit/connectors-sdk": "^0.4.1",
+    "@revenuecat/purchases-capacitor": "^13.1.7",
     "@supabase/ssr": "^0.10.2",
     "@supabase/supabase-js": "^2.104.0",
     "@types/jszip": "^3.4.0",

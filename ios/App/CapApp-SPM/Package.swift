@@ -12,13 +12,14 @@ let package = Package(
     ],
     dependencies: [
         .package(url: "https://github.com/ionic-team/capacitor-swift-pm.git", exact: "8.3.1"),
-        .package(name: "CapawesomeCapacitorAppleSignIn", path: "../../../node_modules/.pnpm/@capawesome+capacitor-apple-sign-in@0.1.0_@capacitor+core@8.3.1/node_modules/@capawesome/capacitor-apple-sign-in"),
         .package(name: "CapacitorHaptics", path: "../../../node_modules/.pnpm/@capacitor+haptics@8.0.2_@capacitor+core@8.3.1/node_modules/@capacitor/haptics"),
         .package(name: "CapacitorLocalNotifications", path: "../../../node_modules/.pnpm/@capacitor+local-notifications@8.2.0_@capacitor+core@8.3.1/node_modules/@capacitor/local-notifications"),
         .package(name: "CapacitorPushNotifications", path: "../../../node_modules/.pnpm/@capacitor+push-notifications@8.0.3_@capacitor+core@8.3.1/node_modules/@capacitor/push-notifications"),
         .package(name: "CapacitorScreenOrientation", path: "../../../node_modules/.pnpm/@capacitor+screen-orientation@8.0.1_@capacitor+core@8.3.1/node_modules/@capacitor/screen-orientation"),
         .package(name: "CapacitorShare", path: "../../../node_modules/.pnpm/@capacitor+share@8.0.1_@capacitor+core@8.3.1/node_modules/@capacitor/share"),
-        .package(name: "CapgoCapacitorHealth", path: "../../../node_modules/.pnpm/@capgo+capacitor-health@8.4.8_@capacitor+core@8.3.1/node_modules/@capgo/capacitor-health")
+        .package(name: "CapawesomeCapacitorAppleSignIn", path: "../../../node_modules/.pnpm/@capawesome+capacitor-apple-sign-in@0.1.0_@capacitor+core@8.3.1/node_modules/@capawesome/capacitor-apple-sign-in"),
+        .package(name: "CapgoCapacitorHealth", path: "../../../node_modules/.pnpm/@capgo+capacitor-health@8.4.8_@capacitor+core@8.3.1/node_modules/@capgo/capacitor-health"),
+        .package(name: "RevenuecatPurchasesCapacitor", path: "../../../node_modules/.pnpm/@revenuecat+purchases-capacitor@13.1.7_@capacitor+core@8.3.1/node_modules/@revenuecat/purchases-capacitor")
     ],
     targets: [
         .target(
@@ -26,13 +27,14 @@ let package = Package(
             dependencies: [
                 .product(name: "Capacitor", package: "capacitor-swift-pm"),
                 .product(name: "Cordova", package: "capacitor-swift-pm"),
-                .product(name: "CapawesomeCapacitorAppleSignIn", package: "CapawesomeCapacitorAppleSignIn"),
                 .product(name: "CapacitorHaptics", package: "CapacitorHaptics"),
                 .product(name: "CapacitorLocalNotifications", package: "CapacitorLocalNotifications"),
                 .product(name: "CapacitorPushNotifications", package: "CapacitorPushNotifications"),
                 .product(name: "CapacitorScreenOrientation", package: "CapacitorScreenOrientation"),
                 .product(name: "CapacitorShare", package: "CapacitorShare"),
-                .product(name: "CapgoCapacitorHealth", package: "CapgoCapacitorHealth")
+                .product(name: "CapawesomeCapacitorAppleSignIn", package: "CapawesomeCapacitorAppleSignIn"),
+                .product(name: "CapgoCapacitorHealth", package: "CapgoCapacitorHealth"),
+                .product(name: "RevenuecatPurchasesCapacitor", package: "RevenuecatPurchasesCapacitor")
             ]
         )
     ]

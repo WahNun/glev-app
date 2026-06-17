@@ -8,6 +8,7 @@ import "./globals.css";
 import { PreventZoom } from "@/components/PreventZoom";
 import { Analytics } from "@vercel/analytics/next";
 import PushNotificationsProvider from "@/components/PushNotificationsProvider";
+import RevenueCatProvider from "@/components/RevenueCatProvider";
 import MealCheckReminderProvider from "@/components/MealCheckReminderProvider";
 import LandscapeGlucoseOverlay from "@/components/LandscapeGlucoseOverlay";
 import { ThemeProvider } from "@/components/ThemeProvider";
@@ -281,6 +282,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           <ThemeProvider>
             <PreventZoom />
             <PushNotificationsProvider />
+            <RevenueCatProvider />
             <MealCheckReminderProvider />
             <LandscapeGlucoseOverlay />
             {children}

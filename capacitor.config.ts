@@ -55,8 +55,10 @@ const config: CapacitorConfig & { packageClassList: string[] } = {
     "PushNotificationsPlugin",
     "ScreenOrientationPlugin",
     "SharePlugin",
+    "AppleSignInPlugin",
     "HealthPlugin",
     "GlevCriticalAlertsPlugin",
+    "PurchasesPlugin",
   ],
   server: {
     url: "https://glev.app/dashboard",

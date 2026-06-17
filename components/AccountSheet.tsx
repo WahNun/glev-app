@@ -8,6 +8,7 @@ import { supabase } from "@/lib/supabase";
 import { useIsNative } from "@/lib/platform";
 import { parseDbDate, localeToBcp47 } from "@/lib/time";
 import BottomSheet from "@/components/BottomSheet";
+import PaywallSheet from "@/components/PaywallSheet";
 import { type EffectivePlan } from "@/lib/admin/effectivePlan";
 
 const ACCENT = "#4F6EF7";
@@ -66,6 +67,7 @@ export default function AccountSheet({ open, onClose }: AccountSheetProps) {
   const [signOutConfirm, setSignOutConfirm] = useState(false);
   const [pwState, setPwState] = useState<"idle" | "sending" | "ok" | "err">("idle");
   // Retention flow: 0 = not active, 1 = discount offer, 2 = 3-month trial, 3 = feedback + cancel
+  const [paywallOpen, setPaywallOpen] = useState(false);
   const [retentionStep, setRetentionStep] = useState<0 | 1 | 2 | 3>(0);
   const [retentionLoading, setRetentionLoading] = useState(false);
   const [retentionDone, setRetentionDone] = useState<"discount" | "trial" | "cancelled" | null>(null);
@@ -663,58 +665,48 @@ export default function AccountSheet({ open, onClose }: AccountSheetProps) {
 
           {/* Upgrade card — only shown for free users (not pro/plus/beta). */}
           {plan !== null && plan !== "pro" && plan !== "plus" && plan !== "beta" && (
-            isNative ? (
-              <div
-                style={{
-                  width: "100%",
-                  padding: "14px 18px",
-                  marginBottom: 18,
-                  background: `${PURPLE}14`,
-                  border: `1px solid ${PURPLE}30`,
-                  borderRadius: 14,
-                  fontSize: 13,
-                  color: "var(--text-dim)",
-                  lineHeight: 1.5,
-                  textAlign: "center",
-                }}
-              >
-                Glev Pro & Plus sind über glev.app verfügbar.
-              </div>
-            ) : (
-              <button
-                onClick={() => { onClose(); router.push("/pro"); }}
-                style={{
-                  width: "100%", textAlign: "left", cursor: "pointer",
-                  background: `linear-gradient(135deg, ${PURPLE}30, ${ACCENT}20)`,
-                  border: `1px solid ${PURPLE}50`,
-                  borderRadius: 14, padding: "16px 18px", marginBottom: 18,
-                  display: "flex", alignItems: "center", gap: 14,
-                  color: "var(--text)",
-                }}
-              >
-                <div style={{
-                  width: 38, height: 38, borderRadius: 10, flexShrink: 0,
-                  background: `${PURPLE}30`, border: `1px solid ${PURPLE}60`,
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                }}>
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={PURPLE} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <polygon points="12 2 15 8.5 22 9.3 17 14.1 18.2 21 12 17.8 5.8 21 7 14.1 2 9.3 9 8.5 12 2" />
-                  </svg>
-                </div>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 14, fontWeight: 700, color: "var(--text-strong)", marginBottom: 2 }}>
-                    {t("upgrade_title")}
-                  </div>
-                  <div style={{ fontSize: 13, color: "var(--text-dim)", lineHeight: 1.4 }}>
-                    {t("upgrade_body")}
-                  </div>
-                </div>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text-faint)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
-                  <polyline points="9 18 15 12 9 6" />
+            <button
+              onClick={() => {
+                if (isNative) {
+                  setPaywallOpen(true);
+                } else {
+                  onClose();
+                  router.push("/pro");
+                }
+              }}
+              style={{
+                width: "100%", textAlign: "left", cursor: "pointer",
+                background: `linear-gradient(135deg, ${PURPLE}30, ${ACCENT}20)`,
+                border: `1px solid ${PURPLE}50`,
+                borderRadius: 14, padding: "16px 18px", marginBottom: 18,
+                display: "flex", alignItems: "center", gap: 14,
+                color: "var(--text)",
+              }}
+            >
+              <div style={{
+                width: 38, height: 38, borderRadius: 10, flexShrink: 0,
+                background: `${PURPLE}30`, border: `1px solid ${PURPLE}60`,
+                display: "flex", alignItems: "center", justifyContent: "center",
+              }}>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={PURPLE} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <polygon points="12 2 15 8.5 22 9.3 17 14.1 18.2 21 12 17.8 5.8 21 7 14.1 2 9.3 9 8.5 12 2" />
                 </svg>
-              </button>
-            )
+              </div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 14, fontWeight: 700, color: "var(--text-strong)", marginBottom: 2 }}>
+                  {t("upgrade_title")}
+                </div>
+                <div style={{ fontSize: 13, color: "var(--text-dim)", lineHeight: 1.4 }}>
+                  {t("upgrade_body")}
+                </div>
+              </div>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text-faint)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+                <polyline points="9 18 15 12 9 6" />
+              </svg>
+            </button>
           )}
+
+          <PaywallSheet open={paywallOpen} onClose={() => setPaywallOpen(false)} />
 
           {/* Action rows */}
           <div style={{

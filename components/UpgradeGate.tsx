@@ -6,6 +6,7 @@ import { usePlan } from "@/hooks/usePlan";
 import { requiredPlanLabel, FEATURE_TIERS } from "@/lib/planFeatures";
 import { supabase } from "@/lib/supabase";
 import { useIsNative } from "@/lib/platform";
+import PaywallSheet from "@/components/PaywallSheet";
 
 const ACCENT = "#4F6EF7";
 
@@ -78,9 +79,14 @@ function UpgradeModal({
   const locale = useLocale();
   const isNative = useIsNative();
   const [busy, setBusy] = useState(false);
+  const [paywallOpen, setPaywallOpen] = useState(false);
 
   const handleUpgrade = async () => {
     if (busy) return;
+    if (isNative) {
+      setPaywallOpen(true);
+      return;
+    }
     setBusy(true);
     const url = await startCheckout(locale, tier);
     if (url) {
@@ -158,53 +164,29 @@ function UpgradeModal({
           Ab <strong style={{ color: "var(--text)" }}>{planName}</strong> verfügbar
         </p>
 
-        {isNative ? (
-          <>
-            <p style={{ margin: "2px 0", fontSize: 13, color: "var(--text-faint)", lineHeight: 1.5 }}>
-              Abos sind über glev.app verfügbar.
-            </p>
-            <button
-              type="button"
-              onClick={onClose}
-              style={{
-                width: "100%",
-                padding: "13px 0",
-                background: "var(--surface-soft)",
-                color: "var(--text)",
-                border: "1px solid var(--border)",
-                borderRadius: 11,
-                fontSize: 14,
-                fontWeight: 600,
-                cursor: "pointer",
-                letterSpacing: "-0.01em",
-              }}
-            >
-              Schließen
-            </button>
-          </>
-        ) : (
-          <button
-            type="button"
-            onClick={() => void handleUpgrade()}
-            disabled={busy}
-            style={{
-              width: "100%",
-              padding: "13px 0",
-              background: busy ? `${ACCENT}88` : ACCENT,
-              color: "#fff",
-              border: "none",
-              borderRadius: 11,
-              fontSize: 14,
-              fontWeight: 700,
-              cursor: busy ? "default" : "pointer",
-              letterSpacing: "-0.01em",
-              transition: "background 0.15s",
-            }}
-          >
-            {busy ? "Weiterleitung …" : "Jetzt upgraden →"}
-          </button>
-        )}
+        <button
+          type="button"
+          onClick={() => void handleUpgrade()}
+          disabled={busy}
+          style={{
+            width: "100%",
+            padding: "13px 0",
+            background: busy ? `${ACCENT}88` : ACCENT,
+            color: "#fff",
+            border: "none",
+            borderRadius: 11,
+            fontSize: 14,
+            fontWeight: 700,
+            cursor: busy ? "default" : "pointer",
+            letterSpacing: "-0.01em",
+            transition: "background 0.15s",
+          }}
+        >
+          {busy ? "Weiterleitung …" : "Jetzt upgraden →"}
+        </button>
       </div>
+
+      <PaywallSheet open={paywallOpen} onClose={() => { setPaywallOpen(false); onClose(); }} />
     </>
   );
 }
@@ -226,6 +208,7 @@ export default function UpgradeGate({
   const locale = useLocale();
   const isNative = useIsNative();
   const [modalOpen, setModalOpen] = useState(false);
+  const [paywallOpen, setPaywallOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [userEmail, setUserEmail] = useState("");
 
@@ -245,6 +228,10 @@ export default function UpgradeGate({
 
   const handleUpgrade = async () => {
     if (busy) return;
+    if (isNative) {
+      setPaywallOpen(true);
+      return;
+    }
     setBusy(true);
     const url = await startCheckout(locale, tier);
     if (url) {
@@ -286,11 +273,13 @@ export default function UpgradeGate({
         {modalOpen && (
           <UpgradeModal planName={planName} tier={tier} onClose={() => setModalOpen(false)} />
         )}
+        <PaywallSheet open={paywallOpen} onClose={() => setPaywallOpen(false)} />
       </>
     );
   }
 
   return (
+    <>
     <div style={{ position: "relative" }}>
       {children && (
         <div
@@ -350,39 +339,29 @@ export default function UpgradeGate({
             {planName}
           </div>
 
-          {isNative ? (
-            <p style={{
-              fontSize: 12,
-              color: "var(--text-faint)",
-              margin: "4px 0 0",
-              lineHeight: 1.5,
-              textAlign: "center",
-            }}>
-              Abos sind über glev.app verfügbar.
-            </p>
-          ) : (
-            <>
-              <button
-                type="button"
-                onClick={() => void handleUpgrade()}
-                disabled={busy}
-                style={{
-                  padding: "9px 20px",
-                  background: busy ? `${ACCENT}88` : ACCENT,
-                  color: "#fff",
-                  borderRadius: 9,
-                  border: "none",
-                  fontSize: 13,
-                  fontWeight: 700,
-                  letterSpacing: "-0.01em",
-                  cursor: busy ? "default" : "pointer",
-                  transition: "background 0.15s",
-                  whiteSpace: "nowrap",
-                }}
-              >
-                {busy ? "Weiterleitung …" : "Upgraden →"}
-              </button>
+          <>
+            <button
+              type="button"
+              onClick={() => void handleUpgrade()}
+              disabled={busy}
+              style={{
+                padding: "9px 20px",
+                background: busy ? `${ACCENT}88` : ACCENT,
+                color: "#fff",
+                borderRadius: 9,
+                border: "none",
+                fontSize: 13,
+                fontWeight: 700,
+                letterSpacing: "-0.01em",
+                cursor: busy ? "default" : "pointer",
+                transition: "background 0.15s",
+                whiteSpace: "nowrap",
+              }}
+            >
+              {busy ? "Weiterleitung …" : "Upgraden →"}
+            </button>
 
+            {!isNative && (
               <a
                 href={moreInfoHref}
                 style={{
@@ -395,10 +374,12 @@ export default function UpgradeGate({
               >
                 Mehr Informationen
               </a>
-            </>
-          )}
+            )}
+          </>
         </div>
       </div>
     </div>
+    <PaywallSheet open={paywallOpen} onClose={() => setPaywallOpen(false)} />
+    </>
   );
 }

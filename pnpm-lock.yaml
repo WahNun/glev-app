@@ -59,6 +59,9 @@ importers:
       '@replit/connectors-sdk':
         specifier: ^0.4.1
         version: 0.4.1
+      '@revenuecat/purchases-capacitor':
+        specifier: ^13.1.7
+        version: 13.1.7(@capacitor/core@8.3.1)
       '@supabase/ssr':
         specifier: ^0.10.2
         version: 0.10.2(@supabase/supabase-js@2.105.1)
@@ -749,6 +752,14 @@ packages:
 
   '@replit/connectors-sdk@0.4.1':
     resolution: {integrity: sha512-iw0uy95+Qul8MPc/bBo8hBfYk1wm6RpBZ9sHyCpcA9A9T4zcUT9deSQxdyMyI0w3sv3+5uGmdfq1TpFTMrjD1g==}
+
+  '@revenuecat/purchases-capacitor@13.1.7':
+    resolution: {integrity: sha512-qKrJeuNgdgaNXtVBs9PA5O/G2U4s6t6RkQ7jrahewOpkD/ij20wGQsre1kd/mXDFoJdA0w9YKKMpvb8LzgqYyA==}
+    peerDependencies:
+      '@capacitor/core': '>=8.0.0'
+
+  '@revenuecat/purchases-typescript-internal-esm@18.14.1':
+    resolution: {integrity: sha512-Gw1MIPNQvcnGUGwtN94fmlcClgElC4cJURJ7Z3haeZCWAyxFvwKBxB5WtoarMyP3DMN0bKZOV0vMLu4PUE+Ggw==}
 
   '@schummar/icu-type-parser@1.21.5':
     resolution: {integrity: sha512-bXHSaW5jRTmke9Vd0h5P7BtWZG9Znqb8gSDxZnxaGSJnGwPLDPfS+3g0BKzeWqzgZPsIVZkM7m2tbo18cm5HBw==}
@@ -2505,6 +2516,13 @@ snapshots:
       '@react-pdf/stylesheet': 6.2.1
 
   '@replit/connectors-sdk@0.4.1': {}
+
+  '@revenuecat/purchases-capacitor@13.1.7(@capacitor/core@8.3.1)':
+    dependencies:
+      '@capacitor/core': 8.3.1
+      '@revenuecat/purchases-typescript-internal-esm': 18.14.1
+
+  '@revenuecat/purchases-typescript-internal-esm@18.14.1': {}
 
   '@schummar/icu-type-parser@1.21.5': {}
 

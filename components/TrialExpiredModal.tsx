@@ -18,6 +18,7 @@ import { useEffect, useState } from "react";
 import { useLocale } from "next-intl";
 import { supabase } from "@/lib/supabase";
 import { useIsNative } from "@/lib/platform";
+import PaywallSheet from "@/components/PaywallSheet";
 
 const ACCENT = "#4F6EF7";
 
@@ -98,6 +99,7 @@ export default function TrialExpiredModal({ forceOpen = false }: { forceOpen?: b
   const [loading, setLoading] = useState(!forceOpen);
   const [busySmart, setBusySmart] = useState(false);
   const [busyPro, setBusyPro] = useState(false);
+  const [paywallOpen, setPaywallOpen] = useState(false);
 
   useEffect(() => {
     if (forceOpen) return;
@@ -212,34 +214,17 @@ export default function TrialExpiredModal({ forceOpen = false }: { forceOpen?: b
         </p>
 
         {isNative ? (
-          /* iOS: no checkout buttons — subscription via glev.app */
+          /* iOS: RevenueCat Paywall */
           <>
-            <p
-              style={{
-                fontSize: 14,
-                color: "var(--text-muted)",
-                margin: "4px 0 8px",
-                lineHeight: 1.6,
-                textAlign: "center",
-              }}
-            >
-              {locale === "en"
-                ? "Subscriptions are available at glev.app."
-                : "Abos sind auf glev.app verfügbar."}
-            </p>
-
             <button
               type="button"
-              onClick={async () => {
-                if (supabase) await supabase.auth.signOut();
-                window.location.href = "/login";
-              }}
+              onClick={() => setPaywallOpen(true)}
               style={{
                 width: "100%",
                 padding: "15px 0",
-                background: "var(--surface-soft)",
-                color: "var(--text)",
-                border: "1px solid var(--border)",
+                background: ACCENT,
+                color: "#fff",
+                border: "none",
                 borderRadius: 13,
                 fontSize: 15,
                 fontWeight: 700,
@@ -248,8 +233,29 @@ export default function TrialExpiredModal({ forceOpen = false }: { forceOpen?: b
                 letterSpacing: "-0.01em",
               }}
             >
+              {locale === "en" ? "Choose a plan →" : "Plan wählen →"}
+            </button>
+
+            <button
+              type="button"
+              onClick={async () => {
+                if (supabase) await supabase.auth.signOut();
+                window.location.href = "/login";
+              }}
+              style={{
+                background: "none",
+                border: "none",
+                color: "var(--text-faint)",
+                fontSize: 13,
+                cursor: "pointer",
+                padding: "4px 8px",
+                fontFamily: "inherit",
+              }}
+            >
               {C.signOut}
             </button>
+
+            <PaywallSheet open={paywallOpen} onClose={() => { setPaywallOpen(false); setExpired(false); }} />
           </>
         ) : (
           <>
