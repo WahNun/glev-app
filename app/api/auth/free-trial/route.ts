@@ -19,7 +19,7 @@ import { cookies } from "next/headers";
 import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
 import { enqueueEmail } from "@/lib/emails/outbox";
 import { scheduleTrialEmails } from "@/lib/emails/drip-scheduler";
-import { sendCapiEvent } from "@/lib/fb-capi-server";
+import { trackEvent } from "@/lib/capi-events";
 
 async function resolveUser(req: NextRequest) {
   const url  = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || "";
@@ -83,22 +83,19 @@ export async function POST(req: NextRequest) {
     const email = user.email;
     const name  = (user.user_metadata?.full_name as string | undefined) ?? null;
 
-    // CAPI StartTrial — kein Value (Trial ist gratis, kein Zahlungsdaten erforderlich).
-    // event_id=trial-{userId} dedupliziert falls die Route doppelt aufgerufen wird
-    // (auth/callback + direkter Client-Call aus signup/page.tsx).
+    // CAPI StartTrial via Layer-One Gateway.
+    // event_id=trial-{userId} dedupliziert Doppelaufrufe (auth/callback + Client).
     if (email) {
-      sendCapiEvent(
-        { email, externalId: user.id },
-        {
-          eventName:      "StartTrial",
-          eventId:        `trial-${user.id}`,
-          eventSourceUrl: `${process.env.NEXT_PUBLIC_APP_URL ?? ""}/signup`,
-          actionSource:   "website",
-          contentName:    "Glev Free Trial",
-          contentIds:     ["glev-free-trial"],
-          contentType:    "product",
+      trackEvent("StartTrial", {
+        user: { email, external_id: user.id },
+        customData: {
+          content_name: "Glev Free Trial",
+          content_ids:  ["glev-free-trial"],
+          content_type: "product",
         },
-      ).catch((e) => console.warn("[free-trial] CAPI StartTrial failed (non-fatal):", e));
+        eventId:   `trial-${user.id}`,
+        sourceUrl: `${process.env.NEXT_PUBLIC_APP_URL ?? ""}/signup`,
+      }).catch((e) => console.warn("[free-trial] CAPI StartTrial failed (non-fatal):", e));
     }
 
     // Detect locale from Accept-Language header (best-effort)

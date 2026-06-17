@@ -5,7 +5,7 @@ import { Capacitor } from "@capacitor/core";
 import Script from "next/script";
 import GoogleAnalytics from "./GoogleAnalytics";
 
-const META_PIXEL_ID = "1388009386583284"; // Marketer-Pixel (aktiv)
+const META_PIXEL_ID = process.env.NEXT_PUBLIC_FB_PIXEL_ID ?? "1388009386583284";
 
 export default function WebOnlyTracking({ gaId }: { gaId?: string }) {
   const [mounted, setMounted] = useState(false);

@@ -6,7 +6,7 @@ import { extractFullNameFromSession } from "@/lib/stripeCheckout";
 import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
 import { enqueueEmail } from "@/lib/emails/outbox";
 import { scheduleDripEmails } from "@/lib/emails/drip-scheduler";
-import { sendCapiEvent } from "@/lib/fb-capi-server";
+import { trackEvent } from "@/lib/capi-events";
 import { isPlusPriceId } from "@/lib/stripeWebhookHelpers";
 
 export const runtime = "nodejs";
@@ -484,26 +484,23 @@ export async function POST(req: NextRequest) {
             typeof session.currency === "string" && session.currency.toUpperCase() === "USD"
               ? "USD"
               : "EUR";
-          sendCapiEvent(
-            {
+          trackEvent("Purchase", {
+            user: {
               email,
-              externalId: email,
-              subscriptionId: subscriptionId ?? undefined,
+              external_id: email,
               country: sessionCountry?.toLowerCase() ?? "de",
             },
-            {
-              eventName:      "Purchase",
-              eventId:        `purchase_${session.id}`,
-              eventSourceUrl: `${resolveAppUrl(req)}/pro/success`,
-              actionSource:   "website",
+            customData: {
               value,
               currency,
-              contentName:    planName,
-              contentIds:     [planId],
-              contentType:    "product",
-              orderId:        session.id,
+              content_name: planName,
+              content_ids:  [planId],
+              content_type: "product",
+              order_id:     session.id,
             },
-          ).catch((e) =>
+            eventId:   `purchase_${session.id}`,
+            sourceUrl: `${resolveAppUrl(req)}/pro/success`,
+          }).catch((e) =>
             // eslint-disable-next-line no-console
             console.warn("[pro/webhook] CAPI Purchase failed (non-fatal):", e),
           );
