@@ -113,7 +113,7 @@ async function syncProfilePlanByEmail(
   }
   const { error } = await sb
     .from("profiles")
-    .update({ plan })
+    .update({ plan, ...(plan ? { subscription_source: "stripe" } : {}) })
     .eq("user_id", userId);
   if (error) {
     // eslint-disable-next-line no-console

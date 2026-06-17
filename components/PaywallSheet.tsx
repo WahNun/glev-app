@@ -14,9 +14,11 @@ const PURPLE = "#A78BFA";
 type Props = {
   open: boolean;
   onClose: () => void;
+  /** Called when a purchase succeeded — caller can optimistically update tier */
+  onPurchaseSuccess?: () => void;
 };
 
-export default function PaywallSheet({ open, onClose }: Props) {
+export default function PaywallSheet({ open, onClose, onPurchaseSuccess }: Props) {
   const [offering, setOffering] = useState<PurchasesOffering | null>(null);
   const [purchasing, setPurchasing] = useState<string | null>(null);
   const isNative = Capacitor.isNativePlatform();
@@ -35,6 +37,8 @@ export default function PaywallSheet({ open, onClose }: Props) {
       const result = await Purchases.purchasePackage({ aPackage: pkg });
       const active = result.customerInfo.entitlements.active;
       if (active.glev_smart || active.glev_pro) {
+        // Optimistic: notify parent immediately so Apple Reviewer sees Pro instantly
+        onPurchaseSuccess?.();
         onClose();
       }
     } catch (e: unknown) {
@@ -54,6 +58,7 @@ export default function PaywallSheet({ open, onClose }: Props) {
       const r = await Purchases.restorePurchases();
       const active = r.customerInfo.entitlements.active;
       if (active.glev_smart || active.glev_pro) {
+        onPurchaseSuccess?.();
         onClose();
       }
     } catch (e) {
@@ -65,12 +70,16 @@ export default function PaywallSheet({ open, onClose }: Props) {
 
   return (
     <BottomSheet open={open} onClose={onClose} title="Glev Premium">
+      {/* LUCAS: background image goes here */}
+      {/* LUCAS: hero copy goes here */}
+
       {!isNative ? null : !offering ? (
         <div style={{ padding: "24px 0", textAlign: "center", color: "var(--text-faint)", fontSize: 14 }}>
           Lade Angebote …
         </div>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          {/* LUCAS: package card styling pass coming separately */}
           {offering.availablePackages.map((pkg) => {
             const isBusy = purchasing === pkg.identifier;
             const hasIntro = !!pkg.product.introPrice;
@@ -124,6 +133,24 @@ export default function PaywallSheet({ open, onClose }: Props) {
             {purchasing === "restore" ? "Wird gesucht …" : "Käufe wiederherstellen"}
           </button>
 
+          <button
+            type="button"
+            onClick={onClose}
+            style={{
+              width: "100%",
+              padding: "11px 0",
+              background: "transparent",
+              color: "var(--text-faint)",
+              border: "none",
+              fontSize: 13,
+              cursor: "pointer",
+              fontFamily: "inherit",
+            }}
+          >
+            Abbrechen
+          </button>
+
+          {/* Privacy + Terms — required by Apple */}
           <div style={{ textAlign: "center", fontSize: 11, color: "var(--text-faint)", lineHeight: 1.5, marginTop: 4 }}>
             Durch den Kauf stimmst du den{" "}
             <a href="https://glev.app/legal?tab=agb" style={{ color: PURPLE, textDecoration: "none" }}>

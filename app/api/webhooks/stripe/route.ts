@@ -219,6 +219,7 @@ export async function POST(req: NextRequest) {
         .update({
           subscription_status: 'beta',
           plan: 'beta',
+          subscription_source: 'stripe',
         })
         .eq('email', email)
         .select('id');
