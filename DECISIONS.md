@@ -439,3 +439,5 @@ Neue Tabelle `public.glev_ops_users` (id, email, password_hash, role, name, must
 | 2026-06-18 | Apple Sign In nonce-Mismatch fix | [BUGFIX] handleAppleSignIn übergab nonce nur an Capacitor-Plugin (Apple hashes in JWT), nicht an Supabase signInWithIdToken. Supabase erwartet beide oder keinen. Jetzt wird der raw nonce in einer Variable gehalten und an beide Calls übergeben. AuthApiError "Passed nonce and nonce in id_token should either both exist or not" behoben. |
 
 | 2026-06-18 | Apple Sign In SHA256-Nonce-Hash | [BUGFIX] @capawesome/capacitor-apple-sign-in@0.1.0 hashed nonce nicht clientseitig — Apple packt raw nonce als JWT-claim. Supabase erwartete Hash(raw_nonce) == JWT.nonce. Fix: Web Crypto API SHA-256 explizit, hashed nonce an Plugin, raw nonce an Supabase. AuthApiError "Nonces mismatch" behoben. |
+
+| 2026-06-18 | Apple-Debug-Toast revert | [CLEANUP] Apple-Sign-In Inline-Debug-Error wieder durch generischen t.apple_error Toast ersetzt. Bug-Fix-Diagnose (commits 3576d880, 216fd786, 2f20fec6) abgeschlossen. |

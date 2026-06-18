@@ -185,7 +185,7 @@ export default function LoginPage() {
     } catch (err) {
       console.error("[apple-signin]", err);
       const errorText = err instanceof Error ? `${err.name}: ${err.message}` : String(err);
-      setError(`Apple-Debug: ${errorText}`);
+      setError(t.apple_error);
       setAppleLoading(false);
     }
   }
