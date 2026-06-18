@@ -3,6 +3,8 @@
 import React, { useState, useEffect, useId, useCallback } from "react";
 import { usePlan } from "@/hooks/usePlan";
 import UpgradeGate from "@/components/UpgradeGate";
+import PaywallSheet from "@/components/PaywallSheet";
+import { CLUSTER_CONFIGS, isClusterLocked, type ClusterConfig } from "@/types/InsightsCluster";
 import useSWR, { mutate as swrMutate } from "swr";
 import RefreshingBar from "@/components/RefreshingBar";
 import { useLocale, useTranslations } from "next-intl";
@@ -250,7 +252,7 @@ export default function InsightsPage() {
   // Carb-unit selector — feeds the per-type "avg carbs" line and the
   // "Avg insulin" tile sublabel. All aggregates are computed in grams
   // upstream; only the rendered string switches to BE/KE/g.
-  const { canAccess } = usePlan();
+  const { canAccess, plan, trialActive } = usePlan();
   const carbUnit = useCarbUnit();
   const tInsights = useTranslations("insights");
   const tChips = useTranslations("chips");
@@ -289,6 +291,7 @@ export default function InsightsPage() {
   // grid cell correctly resizes when the user expands the panel.
   const [relinkOpen, setRelinkOpen]         = useState(false);
   const [pairingTooltipOpen, setPairingTooltipOpen] = useState(false);
+  const [clusterPaywallOpen, setClusterPaywallOpen] = useState(false);
   // Biological sex — gates the cycle half of the "Zyklus & Symptome"
   // card. Male users see a symptoms-only variant (cycle stats hidden,
   // card retitled). Null/unset is treated as "show everything" so
@@ -4242,15 +4245,109 @@ export default function InsightsPage() {
     })(),
   ];
 
+  // ─── Cluster rendering prep ───────────────────────────────────────────────
+  // Build a lookup from card id → SortableItem so each cluster section can
+  // quickly assemble its filtered card list without re-scanning `items`.
+  const visibleItems = items.filter(it => it.node !== null);
+  const itemById = new Map(visibleItems.map(it => [it.id, it as SortableItem]));
+
+  // Per-card dynamic context lines — same data the previous single-pager used.
+  const insightsDynamicById: Record<string, string | null> = (() => {
+    const dyn: Record<string, string | null> = {};
+    if (b7.n >= MIN_DATAPOINTS) {
+      const sign = tirDelta > 0 ? "+" : tirDelta < 0 ? "" : "±";
+      dyn["time-in-range"] = tInsights("swipe_dyn_tir", { pct: b7.inR, delta: `${sign}${tirDelta}` });
+    }
+    if (last7Avg != null) {
+      dyn["gmi-a1c"] = tInsights("swipe_dyn_gmi", {
+        avg: Math.round(last7Avg),
+        gmi: gmi != null ? gmi.toFixed(1) : "—",
+      });
+      dyn["glucose-trend"] = tInsights("swipe_dyn_trend", {
+        avg: Math.round(last7Avg),
+        delta: bgDelta != null ? (bgDelta > 0 ? `+${bgDelta}` : `${bgDelta}`) : "—",
+      });
+    }
+    dyn["hypo-events"] = tInsights("swipe_dyn_hypo", {
+      count: readings7.filter(r => r.v < HYPO_THRESHOLD_MGDL).length,
+    });
+    dyn["hyper-events"] = tInsights("swipe_dyn_hyper", { count: hyperCount7d });
+    if (cvPct != null) {
+      dyn["glucose-variability"] = tInsights("swipe_dyn_cv", { cv: cvPct.toFixed(1) });
+    }
+    if (total > 0) {
+      dyn["meal-evaluation"] = tInsights("swipe_dyn_meal_eval", {
+        good: goodAll, total, rate: goodRate.toFixed(0),
+      });
+      dyn["performance-tiles"] = tInsights("swipe_dyn_perf", {
+        icr: estICR, rate: goodRate.toFixed(0),
+      });
+      dyn["meal-type"] = tInsights("swipe_dyn_meal_count", { n: total });
+      dyn["time-of-day"] = tInsights("swipe_dyn_meal_count", { n: total });
+    }
+    if (adaptiveICR.global != null) {
+      dyn["adaptive-engine"] = tInsights("swipe_dyn_engine", {
+        engine: adaptiveICR.global.toFixed(1),
+        user: userIcr,
+        n: adaptiveICR.sampleSize,
+      });
+    }
+    if (tddAvg7 != null) {
+      dyn["tdd"] = tInsights("swipe_dyn_tdd", {
+        tdd: tddAvg7.toFixed(1),
+        bolus: tddAvg7Bolus != null ? tddAvg7Bolus.toFixed(1) : "—",
+        basal: tddAvg7Basal != null ? tddAvg7Basal.toFixed(1) : "—",
+      });
+    }
+    if (enginePattern.sampleSize > 0) {
+      dyn["patterns"] = tInsights("swipe_dyn_pattern", {
+        type: enginePattern.label,
+        n: enginePattern.sampleSize,
+      });
+    }
+    if (exerciseLogs.length > 0) {
+      dyn["workout-outcomes"] = tInsights("swipe_dyn_workouts", { n: exerciseLogs.length });
+      dyn["workout-bg-response"] = tInsights("swipe_dyn_workouts", { n: exerciseLogs.length });
+      dyn["workout-patterns"] = tInsights("swipe_dyn_workouts", { n: exerciseLogs.length });
+      dyn["workout-type-patterns"] = tInsights("swipe_dyn_workouts", { n: exerciseLogs.length });
+    }
+    if (activity.context.todaySteps != null) {
+      dyn["daily-steps"] = tInsights("swipe_dyn_daily_steps", {
+        steps: activity.context.todaySteps.toLocaleString(locale),
+      });
+    }
+    if (items.find(it => it.id === "active-day-outcomes")?.node) {
+      dyn["active-day-outcomes"] = tInsights("swipe_dyn_active_day_outcomes", {
+        days: activity.rows.length,
+      });
+    }
+    if (symptomLogs.length > 0 || menstrualLogs.length > 0) {
+      dyn["cycle-symptoms"] = tInsights("swipe_dyn_cycle", {
+        symptoms: symptomLogs.length, cycle: menstrualLogs.length,
+      });
+    }
+    if (postBolusChecks.length > 0) {
+      dyn["post-bolus-trend"] = tInsights("swipe_dyn_post_bolus_trend", {
+        n: postBolusChecks.length,
+      });
+    }
+    return dyn;
+  })();
+
+  const insightsLastDataAtMs: number | null = (() => {
+    const timestamps: number[] = [];
+    for (const m of meals) timestamps.push(parseDbTs(m.created_at));
+    for (const l of insulinLogs) timestamps.push(parseDbTs(l.created_at));
+    for (const l of exerciseLogs) timestamps.push(parseDbTs(l.created_at));
+    for (const f of fingersticks) timestamps.push(parseDbTs(f.measured_at));
+    return timestamps.length > 0 ? Math.max(...timestamps) : null;
+  })();
+
   return (
     // 480px max-width keeps the cards in their natural mockup
     // proportions on tablet/desktop instead of stretching them out.
     <div style={{ maxWidth:480, margin:"0 auto" }}>
-      {/* Persistent semantic heading for screen readers — keeps a
-          stable `h1` landmark on the page even after the transient
-          banner below unmounts. Visually hidden via the
-          screen-reader-only style snippet, matches the title that the
-          banner displays. */}
+      {/* Persistent semantic heading for screen readers */}
       <h1
         style={{
           position: "absolute",
@@ -4261,136 +4358,118 @@ export default function InsightsPage() {
         Insights
       </h1>
       <RefreshingBar visible={primaryValidating} />
-      {/* Transient header hint: shows the page title + interaction
-          subtitle briefly on entry, then auto-dismisses on the user's
-          first interaction (or after a backstop timeout) so the swipe
-          pager can claim the vertical space below. Wrapped in its own
-          component so the listener wiring stays scoped. */}
       <InsightsHeaderHint
         subtitle={tInsights("header_subtitle", { n: total })}
       />
-
-      {/* Inline anchor stepper — pairs with the 4 mode chips in the
-          mobile header (Day/Week/Month/Year). The chip group only
-          switches mode; this row walks the user back/forward through
-          periods (◀ Today ▶ / ◀ This Week ▶ / …) without any tap-to-
-          open dropdown. 2026-05-18 user request. */}
       <ScopeAnchorStepper
         mode={scopeMode}
         anchor={scopeAnchor}
         onStep={stepScopeAnchor}
       />
 
-      {/* Swipe-focused layout (Task #316). Replaces the legacy vertical
-          SortableCardGrid feed: a single dominant card sits in the top
-          ~58% of the visible area and the user pages horizontally; the
-          bottom ~42% renders a context block tied to the active card. */}
-      <InsightsSwipePager
-        items={items.filter(it => it.node !== null)}
-        dynamicById={(() => {
-          // Per-card live data lines. These are computed from the same
-          // in-scope aggregates the cards themselves use, so the context
-          // panel always mirrors what the user is looking at on the
-          // focused card — not just static copy. When a value isn't
-          // meaningful for the active scope (e.g. CV% with too few
-          // readings) we omit the line entirely.
-          const dyn: Record<string, string | null> = {};
-          if (b7.n >= MIN_DATAPOINTS) {
-            const sign = tirDelta > 0 ? "+" : tirDelta < 0 ? "" : "±";
-            dyn["time-in-range"] = tInsights("swipe_dyn_tir", { pct: b7.inR, delta: `${sign}${tirDelta}` });
-          }
-          if (last7Avg != null) {
-            dyn["gmi-a1c"] = tInsights("swipe_dyn_gmi", {
-              avg: Math.round(last7Avg),
-              gmi: gmi != null ? gmi.toFixed(1) : "—",
-            });
-            dyn["glucose-trend"] = tInsights("swipe_dyn_trend", {
-              avg: Math.round(last7Avg),
-              delta: bgDelta != null ? (bgDelta > 0 ? `+${bgDelta}` : `${bgDelta}`) : "—",
-            });
-          }
-          dyn["hypo-events"] = tInsights("swipe_dyn_hypo", {
-            count: readings7.filter(r => r.v < HYPO_THRESHOLD_MGDL).length,
-          });
-          dyn["hyper-events"] = tInsights("swipe_dyn_hyper", { count: hyperCount7d });
-          if (cvPct != null) {
-            dyn["glucose-variability"] = tInsights("swipe_dyn_cv", { cv: cvPct.toFixed(1) });
-          }
-          if (total > 0) {
-            dyn["meal-evaluation"] = tInsights("swipe_dyn_meal_eval", {
-              good: goodAll, total, rate: goodRate.toFixed(0),
-            });
-            dyn["performance-tiles"] = tInsights("swipe_dyn_perf", {
-              icr: estICR, rate: goodRate.toFixed(0),
-            });
-            dyn["meal-type"] = tInsights("swipe_dyn_meal_count", { n: total });
-            dyn["time-of-day"] = tInsights("swipe_dyn_meal_count", { n: total });
-          }
-          if (adaptiveICR.global != null) {
-            dyn["adaptive-engine"] = tInsights("swipe_dyn_engine", {
-              engine: adaptiveICR.global.toFixed(1),
-              user: userIcr,
-              n: adaptiveICR.sampleSize,
-            });
-          }
-          if (tddAvg7 != null) {
-            dyn["tdd"] = tInsights("swipe_dyn_tdd", {
-              tdd: tddAvg7.toFixed(1),
-              bolus: tddAvg7Bolus != null ? tddAvg7Bolus.toFixed(1) : "—",
-              basal: tddAvg7Basal != null ? tddAvg7Basal.toFixed(1) : "—",
-            });
-          }
-          if (enginePattern.sampleSize > 0) {
-            dyn["patterns"] = tInsights("swipe_dyn_pattern", {
-              type: enginePattern.label,
-              n: enginePattern.sampleSize,
-            });
-          }
-          if (exerciseLogs.length > 0) {
-            dyn["workout-outcomes"] = tInsights("swipe_dyn_workouts", { n: exerciseLogs.length });
-            dyn["workout-bg-response"] = tInsights("swipe_dyn_workouts", { n: exerciseLogs.length });
-            dyn["workout-patterns"] = tInsights("swipe_dyn_workouts", { n: exerciseLogs.length });
-            dyn["workout-type-patterns"] = tInsights("swipe_dyn_workouts", { n: exerciseLogs.length });
-          }
-          if (activity.context.todaySteps != null) {
-            dyn["daily-steps"] = tInsights("swipe_dyn_daily_steps", {
-              steps: activity.context.todaySteps.toLocaleString(locale),
-            });
-          }
-          // Only surface the swipe-pager context line when the card
-          // itself is actually rendering — `items` already encodes
-          // the full gating (14+ step days AND ≥3 classified meals
-          // on EACH side), so checking node !== null keeps the
-          // dynamic line and the card in lock-step.
-          if (items.find(it => it.id === "active-day-outcomes")?.node) {
-            dyn["active-day-outcomes"] = tInsights("swipe_dyn_active_day_outcomes", {
-              days: activity.rows.length,
-            });
-          }
-          if (symptomLogs.length > 0 || menstrualLogs.length > 0) {
-            dyn["cycle-symptoms"] = tInsights("swipe_dyn_cycle", {
-              symptoms: symptomLogs.length, cycle: menstrualLogs.length,
-            });
-          }
-          if (postBolusChecks.length > 0) {
-            dyn["post-bolus-trend"] = tInsights("swipe_dyn_post_bolus_trend", {
-              n: postBolusChecks.length,
-            });
-          }
-          return dyn;
-        })()}
-        lastDataAtMs={(() => {
-          // Newest timestamp across every data source feeding this page.
-          // Renders as the "Stand: ..." footnote in the context block so
-          // the user knows how fresh the numbers are.
-          const timestamps: number[] = [];
-          for (const m of meals) timestamps.push(parseDbTs(m.created_at));
-          for (const l of insulinLogs) timestamps.push(parseDbTs(l.created_at));
-          for (const l of exerciseLogs) timestamps.push(parseDbTs(l.created_at));
-          for (const f of fingersticks) timestamps.push(parseDbTs(f.measured_at));
-          return timestamps.length > 0 ? Math.max(...timestamps) : null;
-        })()}
-        locale={locale}
+      {/* Cluster sections — each cluster renders its own swipe pager.
+          Workout cluster (Plus-only) renders a lock UI instead. */}
+      {CLUSTER_CONFIGS.map((cluster: ClusterConfig) => {
+        const clusterItems = cluster.cardIds
+          .map(id => itemById.get(id))
+          .filter((it): it is SortableItem => it !== undefined);
+        const locked = isClusterLocked(cluster, plan, trialActive);
+
+        // Skip empty clusters that aren't locked (e.g. sleep with no data)
+        if (clusterItems.length === 0 && !locked) return null;
+
+        return (
+          <div key={cluster.id} style={{ marginBottom: 32 }}>
+            {/* ── Cluster header ── */}
+            <div style={{
+              display: "flex", alignItems: "center", gap: 8,
+              padding: "0 4px 10px",
+            }}>
+              <span style={{
+                fontSize: 11, fontWeight: 700, letterSpacing: "0.08em",
+                textTransform: "uppercase", color: "var(--text-dim)", flex: 1,
+              }}>
+                {cluster.label}
+              </span>
+              {locked && (
+                <span style={{
+                  fontSize: 10, fontWeight: 700, letterSpacing: "0.06em",
+                  textTransform: "uppercase",
+                  padding: "2px 8px", borderRadius: 20,
+                  background: "#a78bfa22", color: "#7c3aed",
+                }}>
+                  Glev+
+                </span>
+              )}
+            </div>
+
+            {locked ? (
+              /* ── Plus cluster lock UI ── */
+              <div style={{
+                position: "relative", borderRadius: 16, overflow: "hidden",
+                background: "var(--surface)", border: "1px solid var(--border)",
+                minHeight: 180,
+              }}>
+                {/* Blurred skeleton placeholder */}
+                <div style={{
+                  filter: "blur(5px)", opacity: 0.35,
+                  padding: "24px", pointerEvents: "none",
+                  display: "flex", flexDirection: "column", gap: 12,
+                }}>
+                  <div style={{ height: 12, width: "55%", background: "var(--border-soft)", borderRadius: 4 }}/>
+                  <div style={{ height: 44, background: "var(--border-soft)", borderRadius: 8 }}/>
+                  <div style={{ height: 10, width: "80%", background: "var(--border-soft)", borderRadius: 4 }}/>
+                  <div style={{ height: 10, width: "65%", background: "var(--border-soft)", borderRadius: 4 }}/>
+                </div>
+                {/* Lock overlay */}
+                <div style={{
+                  position: "absolute", inset: 0,
+                  display: "flex", flexDirection: "column",
+                  alignItems: "center", justifyContent: "center",
+                  gap: 10, padding: "24px",
+                }}>
+                  <div style={{ fontSize: 28, lineHeight: 1 }}>🔒</div>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: "var(--text)", textAlign: "center" }}>
+                    {cluster.label} — Glev+
+                  </div>
+                  <p style={{
+                    margin: 0, fontSize: 13, color: "var(--text-muted)",
+                    textAlign: "center", lineHeight: 1.4,
+                  }}>
+                    Workout-Auswertungen sind in Glev+ verfügbar
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setClusterPaywallOpen(true)}
+                    style={{
+                      marginTop: 4, padding: "11px 22px",
+                      background: "#7c3aed", color: "#fff",
+                      border: "none", borderRadius: 10,
+                      fontSize: 13, fontWeight: 700,
+                      cursor: "pointer", fontFamily: "inherit",
+                    }}
+                  >
+                    Glev+ entdecken →
+                  </button>
+                </div>
+              </div>
+            ) : clusterItems.length > 0 ? (
+              <InsightsSwipePager
+                items={clusterItems}
+                dynamicById={insightsDynamicById}
+                lastDataAtMs={insightsLastDataAtMs}
+                locale={locale}
+              />
+            ) : null}
+          </div>
+        );
+      })}
+
+      <PaywallSheet
+        open={clusterPaywallOpen}
+        onClose={() => setClusterPaywallOpen(false)}
+        onPurchaseSuccess={() => {}}
+        initialTier="plus"
       />
     </div>
   );

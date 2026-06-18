@@ -21,6 +21,7 @@ export type UseSubscriptionResult = {
   tier: EffectivePlan | null;
   source: SubscriptionSource;
   loading: boolean;
+  hasPlus: boolean;
   setOptimisticTier: (tier: EffectivePlan) => void;
 };
 
@@ -62,5 +63,5 @@ export function useSubscription(): UseSubscriptionResult {
     setLoading(false);
   }, []);
 
-  return { tier, source, loading, setOptimisticTier };
+  return { tier, source, loading, hasPlus: tier === "plus", setOptimisticTier };
 }
