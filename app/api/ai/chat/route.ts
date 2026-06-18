@@ -22,6 +22,8 @@ import {
 } from "@/lib/ai/glevTools";
 import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
 import { callWithRetry, defaultGetRetryAfterSec } from "@/lib/ai/retryWithRateLimit";
+import { computeEffectivePlan } from "@/lib/admin/effectivePlan";
+import { canAccess } from "@/lib/planFeatures";
 
 // Maximum number of sequential tool-call rounds before we stop calling
 // OpenAI with `tools` and force a streamed final answer. Two is enough
@@ -473,26 +475,40 @@ async function loadActiveSystemPrompt(): Promise<string> {
 }
 
 /**
- * Checks whether `user_settings.feature_flags.ai_voice` is `true` for
- * the given user. Returns a 403 NextResponse when the flag is absent or
- * false, and `null` when the check passes (request may proceed).
+ * Checks whether the user is allowed to use Glev AI.
  *
+ * Access is granted when EITHER:
+ *   1. Admin has set ai_voice = true in user_settings.feature_flags
+ *      (Friends & Family / beta-tester override)
+ *   2. User has Glev Smart, Pro, or Plus subscription (plan-gated)
+ *
+ * Returns a 403 NextResponse when neither condition is met, null otherwise.
  * Exported for unit testing (dependency-injection of the Supabase client).
  */
 export async function checkChatFlag(
   sb: SupabaseClient,
   userId: string,
 ): Promise<NextResponse | null> {
-  const { data: settingsRow } = await sb
-    .from("user_settings")
-    .select("feature_flags")
-    .eq("user_id", userId)
-    .maybeSingle();
-  const featureFlags = (settingsRow?.feature_flags ?? {}) as Record<string, unknown>;
-  if (featureFlags.ai_voice !== true) {
-    return errorResponse("PERMISSION_DENIED", 403);
-  }
-  return null;
+  // Parallel: feature-flag + profile plan check
+  const [settingsResult, profileResult] = await Promise.all([
+    sb.from("user_settings").select("feature_flags").eq("user_id", userId).maybeSingle(),
+    sb.from("profiles").select("manual_plan_override, manual_plan_expires_at, plan, trial_end_at").eq("user_id", userId).maybeSingle(),
+  ]);
+
+  const featureFlags = (settingsResult.data?.feature_flags ?? {}) as Record<string, unknown>;
+  if (featureFlags.ai_voice === true) return null; // admin override → allow
+
+  const p = profileResult.data;
+  const trialActive = p?.trial_end_at ? Date.parse(p.trial_end_at) > Date.now() : false;
+  const effectivePlan = computeEffectivePlan({
+    manual_plan_override: p?.manual_plan_override ?? null,
+    manual_plan_expires_at: p?.manual_plan_expires_at ?? null,
+    plan: p?.plan ?? null,
+  });
+
+  if (canAccess("glev_ai", effectivePlan, trialActive)) return null;
+
+  return errorResponse("PERMISSION_DENIED", 403);
 }
 
 /**

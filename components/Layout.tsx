@@ -16,6 +16,7 @@ import { useGlevAI, type AIState } from "@/lib/useGlevAI";
 import { GlevAIProvider } from "@/lib/glevAIContext";
 import { resolveFabAction } from "@/lib/fabAction";
 import { useFeatureFlag } from "@/lib/featureFlags";
+import { useGlevAIAccess } from "@/lib/useGlevAIAccess";
 import { useScreenContext } from "@/hooks/useScreenContext";
 import { EngineHeaderProvider, useEngineHeader } from "@/lib/engineHeaderContext";
 import TrialCountdownBanner from "@/components/TrialCountdownBanner";
@@ -132,7 +133,7 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
   // (sourced from `profiles.ai_consent_at`), modal/sheet open state,
   // sessionStorage-backed conversation history, and the streaming
   // fetch to /api/ai/chat. See DECISIONS.md D-013.
-  const aiVoiceEnabled = useFeatureFlag("ai_voice");
+  const aiVoiceEnabled = useGlevAIAccess();
   const voiceIntentEnabled = useFeatureFlag("voice_intent_routing") === true;
   // Fullscreen AI chat state — only used on /engine. The sheet variant
   // (glevAi.sheetOpen) is used on all other tabs.

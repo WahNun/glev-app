@@ -43,6 +43,7 @@ export const FEATURE_TIERS: Record<string, FeatureTier> = {
   history_60d:             "all",
 
   // ── Ab Plan S (Smart + Pro + Plus + aktiver Trial) ───────────────────────
+  glev_ai:                 "smart",
   cgm_sync:                "smart",
   apple_health_sync:       "smart",
   cgm_autofill:            "smart",
@@ -75,6 +76,7 @@ export const FEATURE_TIERS: Record<string, FeatureTier> = {
   since_last_appointment:  "plus",
   unlimited_history:       "plus",
   early_feature_access:    "plus",
+  insights_workout_cluster: "plus",
 };
 
 /**

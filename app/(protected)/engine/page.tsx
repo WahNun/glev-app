@@ -34,6 +34,7 @@ import { useEngineHeader } from "@/lib/engineHeaderContext";
 import { useEngineSourceHeader } from "@/lib/engineSourceHeaderContext";
 import { useVoiceRecording } from "@/lib/voiceRecordingContext";
 import { useFeatureFlag } from "@/lib/featureFlags";
+import { useGlevAIAccess } from "@/lib/useGlevAIAccess";
 import { useGlevAIContext } from "@/lib/glevAIContext";
 import { fetchLatestCgm } from "@/components/CgmFetchButton";
 import { findCgmReadingNearTime } from "@/lib/postMealCgmAutoFill";
@@ -521,7 +522,7 @@ export default function EnginePage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams]);
   const [isMobile, setIsMobile] = useState(false);
-  const aiVoiceEnabled = useFeatureFlag("ai_voice");
+  const aiVoiceEnabled = useGlevAIAccess();
   // When Glev AI consent is active the legacy food-parser chat panel
   // (EngineChatPanel / "AI FOOD PARSER") is hidden — users interact
   // exclusively via the global Glev AI sheet instead.

@@ -1,10 +1,12 @@
 "use client";
 
-import { useEffect } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useGlevAIContext } from "@/lib/glevAIContext";
 import GlevAIChatSheet from "@/components/GlevAIChatSheet";
+import { useGlevAIAccess } from "@/lib/useGlevAIAccess";
 import { useFeatureFlag } from "@/lib/featureFlags";
+import PaywallSheet from "@/components/PaywallSheet";
 
 /**
  * /glev-ai — fullscreen Glev AI chat page.
@@ -25,9 +27,10 @@ import { useFeatureFlag } from "@/lib/featureFlags";
  */
 export default function GlevAIPage() {
   const router = useRouter();
-  const aiVoiceEnabled = useFeatureFlag("ai_voice");
+  const glevAiAccess = useGlevAIAccess();
   const voiceIntentEnabled = useFeatureFlag("voice_intent_routing") === true;
   const glevAi = useGlevAIContext();
+  const [paywallOpen, setPaywallOpen] = useState(false);
 
   // Auto-start mic on mount.
   useEffect(() => {
@@ -37,18 +40,29 @@ export default function GlevAIPage() {
     return () => window.clearTimeout(timer);
   }, []);
 
-  // Redirect non-consent / non-AI users away from this page.
+  // No-access → open PaywallSheet (stays on this page, no redirect).
   useEffect(() => {
-    if (aiVoiceEnabled === null) return; // still loading
-    if (aiVoiceEnabled === false) {
-      router.replace("/dashboard");
+    if (glevAiAccess === null) return; // still loading
+    if (glevAiAccess === false) {
+      setPaywallOpen(true);
       return;
     }
+    // Access granted but consent not yet given → back to dashboard.
     if (!glevAi.consentGranted) {
       router.replace("/dashboard");
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [aiVoiceEnabled, glevAi.consentGranted]);
+  }, [glevAiAccess, glevAi.consentGranted]);
+
+  if (glevAiAccess === false || paywallOpen) {
+    return (
+      <PaywallSheet
+        open={true}
+        onClose={() => router.back()}
+        initialTier="smart"
+      />
+    );
+  }
 
   return (
     <GlevAIChatSheet

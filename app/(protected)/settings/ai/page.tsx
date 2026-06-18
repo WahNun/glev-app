@@ -5,7 +5,9 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { supabase } from "@/lib/supabase";
-import { useFeatureFlag } from "@/lib/featureFlags";
+import { useGlevAIAccess } from "@/lib/useGlevAIAccess";
+import { useIsNative } from "@/lib/platform";
+import PaywallSheet from "@/components/PaywallSheet";
 import { type TtsSpeed, TTS_SPEED_KEY, TTS_SPEED_EVENT } from "@/hooks/useTTS";
 
 const ACCENT = "#4F6EF7";
@@ -14,7 +16,9 @@ const BORDER = "var(--border)";
 export default function AiSettingsPage() {
   const t = useTranslations("settings");
   const router = useRouter();
-  const aiVoiceEnabled = useFeatureFlag("ai_voice");
+  const glevAiAccess = useGlevAIAccess();
+  const isNative = useIsNative();
+  const [paywallOpen, setPaywallOpen] = useState(false);
 
   const [aiConsentGranted, setAiConsentGranted] = useState<boolean | null>(null);
   const [aiConsentBusy, setAiConsentBusy] = useState(false);
@@ -236,12 +240,20 @@ export default function AiSettingsPage() {
     }
   }, [aiConsentBusy, aiScopeBusy, aiConsentGranted, aiScopeGlucose, aiScopeIob, aiScopeHistory, aiScopeFeedback, t]);
 
-  if (aiVoiceEnabled === false) {
-    router.replace("/settings");
-    return null;
-  }
+  if (glevAiAccess === null) return null; // loading
 
-  if (aiVoiceEnabled === null) {
+  if (glevAiAccess === false) {
+    if (isNative) {
+      return (
+        <PaywallSheet
+          open={true}
+          onClose={() => router.back()}
+          initialTier="smart"
+        />
+      );
+    }
+    // Web: go to pricing page
+    router.replace("/pro");
     return null;
   }
 
