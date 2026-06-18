@@ -435,3 +435,5 @@ Neue Tabelle `public.glev_ops_users` (id, email, password_hash, role, name, must
 | 2026-06-18 | Apple-Login-Button Logo Aspect-Ratio Fix | [BUGFIX] SVG width/height von 16x20 (ratio 0.8) auf 22x27 (ratio 0.815) angepasst, matched viewBox-Aspect 0.814. preserveAspectRatio="xMidYMid meet" hinzugefügt zur defensiven Verhinderung von Stretching. gap zwischen Logo und Text von 8 auf 10 angehoben für visuell ausgewogenes Spacing. Apple-Blatt rendert jetzt unverzerrt. Konform mit Apple Brand Guidelines (mindestens 100% Capital-Letter-Height). |
 
 | 2026-06-18 | Apple-Login Inline-Error Debug | [DEBUG] Login-Error Toast zeigt jetzt Konkret-Message statt generischem Text. Temporär für Diagnose. Nach Fix wieder durch t.apple_error ersetzen. |
+
+| 2026-06-18 | Apple Sign In nonce-Mismatch fix | [BUGFIX] handleAppleSignIn übergab nonce nur an Capacitor-Plugin (Apple hashes in JWT), nicht an Supabase signInWithIdToken. Supabase erwartet beide oder keinen. Jetzt wird der raw nonce in einer Variable gehalten und an beide Calls übergeben. AuthApiError "Passed nonce and nonce in id_token should either both exist or not" behoben. |
