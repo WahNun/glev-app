@@ -13,13 +13,15 @@ import {
 const ACCENT = "#4F6EF7";
 const GREEN  = "#22D3A0";
 
-type Tier     = "smart" | "pro";
+type Tier     = "smart" | "pro" | "plus";
 type Interval = "monthly" | "yearly";
 
 type Props = {
   open: boolean;
   onClose: () => void;
   onPurchaseSuccess?: () => void;
+  /** Which tier tab is pre-selected when the sheet opens. Defaults to "pro". */
+  initialTier?: Tier;
 };
 
 // Match RevenueCat package identifiers: smart_monthly, smart_yearly, pro_monthly, pro_yearly
@@ -51,14 +53,16 @@ function fmtMonthlyEquivalent(pkg: PurchasesPackage, locale: string): string {
   }
 }
 
-export default function PaywallSheet({ open, onClose, onPurchaseSuccess }: Props) {
+const PLUS_PURPLE = "#7c3aed";
+
+export default function PaywallSheet({ open, onClose, onPurchaseSuccess, initialTier = "pro" }: Props) {
   const t      = useTranslations("paywall");
   const locale = useLocale();
 
   const [offering,      setOffering]      = useState<PurchasesOffering | null>(null);
   const [offeringState, setOfferingState] = useState<"loading" | "ready" | "empty">("loading");
   const [mounted,       setMounted]       = useState(false);
-  const [tier,          setTier]          = useState<Tier>("pro");
+  const [tier,          setTier]          = useState<Tier>(initialTier);
   const [interval,      setInterval]      = useState<Interval>("yearly");
   const [purchasing,    setPurchasing]    = useState(false);
   const isNative = Capacitor.isNativePlatform();
@@ -79,8 +83,8 @@ export default function PaywallSheet({ open, onClose, onPurchaseSuccess }: Props
 
   // Reset state each time sheet opens
   useEffect(() => {
-    if (open) { setTier("pro"); setInterval("yearly"); setOfferingState("loading"); setOffering(null); }
-  }, [open]);
+    if (open) { setTier(initialTier); setInterval("yearly"); setOfferingState("loading"); setOffering(null); }
+  }, [open, initialTier]);
 
   useEffect(() => { setMounted(true); }, []);
 
@@ -98,7 +102,7 @@ export default function PaywallSheet({ open, onClose, onPurchaseSuccess }: Props
       try {
         const result = await Purchases.purchasePackage({ aPackage: pkg });
         const active = result.customerInfo.entitlements.active;
-        if (active.glev_smart || active.glev_pro) {
+        if (active.glev_smart || active.glev_pro || active.glev_plus) {
           onPurchaseSuccess?.();
           onClose();
         }
@@ -118,7 +122,7 @@ export default function PaywallSheet({ open, onClose, onPurchaseSuccess }: Props
     try {
       const r = await Purchases.restorePurchases();
       const active = r.customerInfo.entitlements.active;
-      if (active.glev_smart || active.glev_pro) {
+      if (active.glev_smart || active.glev_pro || active.glev_plus) {
         onPurchaseSuccess?.();
         onClose();
       }
@@ -201,13 +205,21 @@ export default function PaywallSheet({ open, onClose, onPurchaseSuccess }: Props
     t("feature_pro_5"),
     t("feature_pro_6"),
   ];
-  const features = tier === "smart" ? smartFeatures : proFeatures;
+  const plusFeatures: string[] = [
+    t("plus.bullet_1"),
+    t("plus.bullet_2"),
+    t("plus.bullet_3"),
+    t("plus.bullet_4"),
+  ];
+  const features = tier === "smart" ? smartFeatures : tier === "plus" ? plusFeatures : proFeatures;
 
   const ctaLabel = purchasing
     ? t("cta_loading")
     : tier === "smart"
       ? t("cta_smart")
-      : t("cta_pro");
+      : tier === "plus"
+        ? t("plus.cta")
+        : t("cta_pro");
 
   return createPortal(
     /* ── A) ROOT CONTAINER ─────────────────────────────────────── */
@@ -317,30 +329,34 @@ export default function PaywallSheet({ open, onClose, onPurchaseSuccess }: Props
           width: "calc(100% - 48px)",
         }}
       >
-        {(["pro", "smart"] as Tier[]).map((t2) => (
-          <button
-            key={t2}
-            type="button"
-            onClick={() => setTier(t2)}
-            style={{
-              flex: 1,
-              padding: "10px 16px",
-              borderRadius: 8,
-              fontSize: 14,
-              fontWeight: 600,
-              letterSpacing: "-0.005em",
-              cursor: "pointer",
-              border: "none",
-              fontFamily: "inherit",
-              transition: "background 0.15s, color 0.15s",
-              background: tier === t2 ? "var(--surface)" : "transparent",
-              color: tier === t2 ? "var(--text)" : "var(--text-muted)",
-              boxShadow: tier === t2 ? "0 1px 3px rgba(0,0,0,0.3)" : "none",
-            }}
-          >
-            {t2 === "pro" ? "Pro" : "Smart"}
-          </button>
-        ))}
+        {(["smart", "pro", "plus"] as Tier[]).map((t2) => {
+          const isPlus = t2 === "plus";
+          const activeColor = isPlus ? PLUS_PURPLE : "var(--text)";
+          return (
+            <button
+              key={t2}
+              type="button"
+              onClick={() => setTier(t2)}
+              style={{
+                flex: 1,
+                padding: "10px 8px",
+                borderRadius: 8,
+                fontSize: 13,
+                fontWeight: 600,
+                letterSpacing: "-0.005em",
+                cursor: "pointer",
+                border: "none",
+                fontFamily: "inherit",
+                transition: "background 0.15s, color 0.15s",
+                background: tier === t2 ? "var(--surface)" : "transparent",
+                color: tier === t2 ? activeColor : "var(--text-muted)",
+                boxShadow: tier === t2 ? "0 1px 3px rgba(0,0,0,0.3)" : "none",
+              }}
+            >
+              {t2 === "smart" ? "Smart" : t2 === "plus" ? "Glev+" : "Pro"}
+            </button>
+          );
+        })}
       </div>
 
       {/* ── E) PACKAGE-CARDS ───────────────────────────────────── */}
@@ -356,6 +372,7 @@ export default function PaywallSheet({ open, onClose, onPurchaseSuccess }: Props
           boxSizing: "border-box",
         }}
       >
+      <>
         {/* Yearly card */}
         <button
           type="button"
@@ -365,13 +382,13 @@ export default function PaywallSheet({ open, onClose, onPurchaseSuccess }: Props
             position: "relative",
             width: "100%",
             background: "var(--surface)",
-            border: `2px solid ${ACCENT}`,
+            border: `2px solid ${tier === "plus" ? PLUS_PURPLE : ACCENT}`,
             borderRadius: 16,
             padding: "20px 24px",
             cursor: purchasing || !yearly ? "default" : "pointer",
             textAlign: "left",
             fontFamily: "inherit",
-            boxShadow: `0 8px 24px ${ACCENT}20`,
+            boxShadow: `0 8px 24px ${tier === "plus" ? PLUS_PURPLE : ACCENT}20`,
             opacity: purchasing ? 0.75 : 1,
             transition: "transform 0.1s",
           }}
@@ -387,7 +404,7 @@ export default function PaywallSheet({ open, onClose, onPurchaseSuccess }: Props
               position: "absolute",
               top: -10,
               right: 16,
-              background: ACCENT,
+              background: tier === "plus" ? PLUS_PURPLE : ACCENT,
               color: "#fff",
               fontSize: 10,
               fontWeight: 700,
@@ -395,7 +412,7 @@ export default function PaywallSheet({ open, onClose, onPurchaseSuccess }: Props
               textTransform: "uppercase",
               padding: "4px 10px",
               borderRadius: 999,
-              boxShadow: `0 4px 12px ${ACCENT}66`,
+              boxShadow: `0 4px 12px ${tier === "plus" ? PLUS_PURPLE : ACCENT}66`,
               whiteSpace: "nowrap",
             }}
           >
@@ -458,6 +475,7 @@ export default function PaywallSheet({ open, onClose, onPurchaseSuccess }: Props
           </div>
           <p style={{ margin: 0, fontSize: 12, color: "var(--text-muted)" }}>{t("trial_label")}</p>
         </button>
+      </>
       </div>
 
       {/* ── F) FEATURE-LIST ────────────────────────────────────── */}
@@ -522,7 +540,7 @@ export default function PaywallSheet({ open, onClose, onPurchaseSuccess }: Props
             width: "100%",
             maxWidth: 480,
             margin: "0 auto",
-            background: ACCENT,
+            background: tier === "plus" ? PLUS_PURPLE : ACCENT,
             color: "#fff",
             border: "none",
             borderRadius: 14,
@@ -530,8 +548,8 @@ export default function PaywallSheet({ open, onClose, onPurchaseSuccess }: Props
             fontSize: 16,
             fontWeight: 700,
             letterSpacing: "-0.005em",
-            boxShadow: `0 8px 24px ${ACCENT}55`,
-            cursor: !chosen || purchasing ? "wait" : "pointer",
+            boxShadow: tier === "plus" ? `0 8px 24px ${PLUS_PURPLE}44` : `0 8px 24px ${ACCENT}55`,
+            cursor: !chosen || purchasing ? "default" : "pointer",
             opacity: !chosen || purchasing ? 0.5 : 1,
             fontFamily: "inherit",
             transition: "transform 0.1s, opacity 0.15s",
