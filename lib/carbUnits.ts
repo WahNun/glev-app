@@ -14,7 +14,7 @@ export type CarbUnit = "g" | "BE" | "KE";
 
 export const CARB_UNITS: Record<
   CarbUnit,
-  { label: string; gPerUnit: number; description: string; step: number; placeholder: string }
+  { label: string; gPerUnit: number; description: string; step: number; placeholder: string; icrSuffix: string }
 > = {
   g: {
     label: "g KH",
@@ -22,6 +22,7 @@ export const CARB_UNITS: Record<
     description: "Gramm Kohlenhydrate (international)",
     step: 1,
     placeholder: "z.B. 60",
+    icrSuffix: "g/IE",
   },
   BE: {
     label: "BE",
@@ -29,6 +30,7 @@ export const CARB_UNITS: Record<
     description: "Broteinheit — 1 BE = 12g KH (Deutschland, Österreich)",
     step: 0.5,
     placeholder: "z.B. 5",
+    icrSuffix: "BE/IE",
   },
   KE: {
     label: "KE",
@@ -36,6 +38,7 @@ export const CARB_UNITS: Record<
     description: "Kohlenhydrateinheit — 1 KE = 10g KH (Schweiz)",
     step: 0.5,
     placeholder: "z.B. 6",
+    icrSuffix: "KE/IE",
   },
 };
 

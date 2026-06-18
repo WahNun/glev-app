@@ -18,6 +18,7 @@
 import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
+import { useCarbUnit, type UseCarbUnitResult } from "@/hooks/useCarbUnit";
 import {
   fetchIcrSchedule,
   saveIcrSchedule,
@@ -36,6 +37,7 @@ const PINK   = "#FF2D78";
 
 export default function IcrSchedulePage() {
   const t = useTranslations("icrSchedule");
+  const carbUnit = useCarbUnit();
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving]   = useState(false);
@@ -187,6 +189,7 @@ export default function IcrSchedulePage() {
             placeholder={placeholders[idx]}
             onChange={(patch) => updateSlot(idx, patch)}
             t={t}
+            carbUnit={carbUnit}
           />
         ))}
       </div>
@@ -234,12 +237,13 @@ export default function IcrSchedulePage() {
 }
 
 function SlotCard({
-  slot, placeholder, onChange, t,
+  slot, placeholder, onChange, t, carbUnit,
 }: {
   slot: IcrSlot;
   placeholder: string;
   onChange: (patch: Partial<IcrSlot>) => void;
   t: ReturnType<typeof useTranslations>;
+  carbUnit: UseCarbUnitResult;
 }) {
   const [startStr, setStartStr] = useState(minutesToHHMM(slot.startMinute));
   const [endStr,   setEndStr]   = useState(minutesToHHMM(slot.endMinute));
@@ -358,7 +362,7 @@ function SlotCard({
       {/* ICR value */}
       <div>
         <label style={{ display: "block", fontSize: 11, color: "var(--text-faint)", marginBottom: 4 }}>
-          {t("slot_icr_label")}
+          {{ g: t("slot_icr_label_g"), BE: t("slot_icr_label_BE"), KE: t("slot_icr_label_KE") }[carbUnit.unit]}
         </label>
         <SnapSlider
           value={slot.icrGPerUnit}
@@ -366,9 +370,9 @@ function SlotCard({
           min={2}
           max={40}
           step={1}
-          unit="g/IE"
+          unit={carbUnit.icrUnitSuffix}
           accent={ACCENT}
-          ariaLabel={t("slot_icr_label")}
+          ariaLabel={{ g: t("slot_icr_label_g"), BE: t("slot_icr_label_BE"), KE: t("slot_icr_label_KE") }[carbUnit.unit]}
         />
         <div style={{
           display: "flex",

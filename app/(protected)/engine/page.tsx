@@ -3709,7 +3709,7 @@ export default function EnginePage() {
                         {tEngine("dose_disclaimer")}
                       </div>
                       <div style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 12, flexWrap: "wrap" }}>
-                        <span style={{ color: "var(--text-muted)" }}>{tEngine("icr_label")}: {carbUnit.displayICR(adaptedICR)}</span>
+                        <span style={{ color: "var(--text-muted)" }}>{{ g: tEngine("icr_label_g"), BE: tEngine("icr_label_BE"), KE: tEngine("icr_label_KE") }[carbUnit.unit]}: {carbUnit.displayICR(adaptedICR)}</span>
                         <span
                           title={tEngine(`conf_explain_${result.confidence}` as never)}
                           style={{

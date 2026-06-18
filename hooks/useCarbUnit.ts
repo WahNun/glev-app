@@ -33,6 +33,7 @@ export interface UseCarbUnitResult {
   step: number;
   placeholder: string;
   description: string;
+  icrUnitSuffix: string;
   setUnit: (next: CarbUnit) => void;
   display: (grams: number | null | undefined) => string;
   toGrams: (valueInUnit: number) => number;
@@ -191,6 +192,7 @@ export function useCarbUnit(): UseCarbUnitResult {
     step: config.step,
     placeholder: config.placeholder,
     description: config.description,
+    icrUnitSuffix: config.icrSuffix,
     setUnit,
     display,
     toGrams,
