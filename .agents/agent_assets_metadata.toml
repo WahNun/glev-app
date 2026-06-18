@@ -228,3 +228,9 @@ id = "TP32K0v_fYoErbiyluWJy"
 uri = "file://outputs/insights-mockup.png"
 type = "image"
 title = "Insights Mockup — Zyklus unten"
+
+[[outputs]]
+id = "yUpTmysNaicu-az4tAC1B"
+uri = "file://docs/insights-overview-spec.md"
+type = "text"
+title = "Insights Overview — Claude Code Prompt Spec"
