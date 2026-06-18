@@ -1154,7 +1154,10 @@
     "cluster_cycle_symptoms_title": "Zyklus & Schlaf",
     "cluster_cycle_symptoms_count": "{n, plural, one {# Karte} other {# Karten}}",
     "cluster_workout_upgrade_cta": "Glev+ entdecken →",
-    "cluster_workout_upgrade_body": "Workout-Auswertungen sind in Glev+ verfügbar"
+    "cluster_workout_upgrade_body": "Workout-Auswertungen sind in Glev+ verfügbar",
+    "detail": {
+      "back": "Zurück"
+    }
   },
   "settings": {
     "title": "Einstellungen",

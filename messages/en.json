@@ -1154,7 +1154,10 @@
     "cluster_cycle_symptoms_title": "Cycle & Sleep",
     "cluster_cycle_symptoms_count": "{n, plural, one {# card} other {# cards}}",
     "cluster_workout_upgrade_cta": "Discover Glev+ →",
-    "cluster_workout_upgrade_body": "Workout analytics are available in Glev+"
+    "cluster_workout_upgrade_body": "Workout analytics are available in Glev+",
+    "detail": {
+      "back": "Back"
+    }
   },
   "settings": {
     "title": "Settings",

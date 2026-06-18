@@ -264,6 +264,7 @@ export function InsightsClusterView({ clusterId }: { clusterId: InsightsCluster 
   // Carb-unit selector — feeds the per-type "avg carbs" line and the
   // "Avg insulin" tile sublabel. All aggregates are computed in grams
   // upstream; only the rendered string switches to BE/KE/g.
+  const router = useRouter();
   const { canAccess, plan, trialActive } = usePlan();
   // Cluster-Level-Gate is final: when the user has access to this cluster's
   // feature flag, all per-card UpgradeGate wrappers are bypassed.
@@ -4364,6 +4365,42 @@ export function InsightsClusterView({ clusterId }: { clusterId: InsightsCluster 
     {/* 480px max-width keeps the cards in their natural mockup
         proportions on tablet/desktop instead of stretching them out. */}
     <div style={{ maxWidth:480, margin:"0 auto" }}>
+      <header style={{
+        display: "flex",
+        alignItems: "center",
+        gap: 12,
+        padding: "12px 16px",
+        position: "sticky",
+        top: 0,
+        background: "var(--bg)",
+        zIndex: 10,
+      }}>
+        <button
+          onClick={() => router.push("/insights")}
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 4,
+            padding: "8px 12px",
+            background: "transparent",
+            border: "none",
+            color: "var(--text)",
+            fontSize: 15,
+            fontWeight: 500,
+            cursor: "pointer",
+            borderRadius: 8,
+          }}
+          aria-label="Zurück zur Übersicht"
+        >
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="15 18 9 12 15 6" />
+          </svg>
+          <span>{tInsights("detail.back")}</span>
+        </button>
+        <h1 style={{ fontSize: 17, fontWeight: 500, margin: 0, color: "var(--text)" }}>
+          {CLUSTER_CONFIGS.find(c => c.id === clusterId)?.label ?? "Insights"}
+        </h1>
+      </header>
       {/* Persistent semantic heading for screen readers */}
       <h1
         style={{
