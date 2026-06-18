@@ -40,14 +40,12 @@ export const CLUSTER_CONFIGS: ClusterConfig[] = [
     id: "meals-bolus",
     label: "Mahlzeiten & Bolus",
     tint: "#22D3A0",
-    requiresTier: "pro",
+    requiresTier: "smart",
     cardIds: [
       "meal-evaluation",
       "post-bolus-trend",
-      "tdd",
       "meal-type",
       "time-of-day",
-      "performance-tiles",
     ],
   },
   {
@@ -57,6 +55,7 @@ export const CLUSTER_CONFIGS: ClusterConfig[] = [
     requiresTier: "pro",
     cardIds: [
       "adaptive-engine",
+      "tdd",
       "patterns",
     ],
   },
@@ -70,6 +69,7 @@ export const CLUSTER_CONFIGS: ClusterConfig[] = [
       "workout-bg-response",
       "workout-patterns",
       "workout-type-patterns",
+      "performance-tiles",
       "daily-steps",
       "active-day-outcomes",
     ],

@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { useLocale } from "next-intl";
 import { usePlan } from "@/hooks/usePlan";
 import { useSubscription } from "@/hooks/useSubscription";
+import { useInsightsGateBypassed } from "@/lib/insightsGateBypass";
 import { requiredPlanLabel, FEATURE_TIERS } from "@/lib/planFeatures";
 import { supabase } from "@/lib/supabase";
 import { useIsNative } from "@/lib/platform";
@@ -238,6 +239,7 @@ export default function UpgradeGate({
   const { source } = useSubscription();
   const locale = useLocale();
   const isNative = useIsNative();
+  const clusterBypassed = useInsightsGateBypassed();
   const [modalOpen, setModalOpen] = useState(false);
   const [paywallOpen, setPaywallOpen] = useState(false);
   const [optimisticPro, setOptimisticPro] = useState(false);
@@ -251,7 +253,7 @@ export default function UpgradeGate({
       .catch(() => {});
   }, []);
 
-  if (loading || canAccess(feature)) {
+  if (loading || canAccess(feature) || clusterBypassed) {
     return <>{children}</>;
   }
 

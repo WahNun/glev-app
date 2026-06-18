@@ -66,6 +66,7 @@ import { fetchCgmSamples, type ContinuousReading } from "@/lib/cgmSamplesClient"
 import { fetchPostBolusChecksRaw, type PostBolusCheckRaw } from "@/lib/mealTimelineChecks";
 import { supabase } from "@/lib/supabase";
 import { fetchCycleLoggingEnabled } from "@/lib/cyclePrefs";
+import { InsightsGateBypassCtx } from "@/lib/insightsGateBypass";
 
 // Extra buffer added to the bolus-fetch window so pre- and post-boluses
 // at the edge of the 90-day meal window (up to ±30 min away from the
@@ -247,6 +248,15 @@ function mergeContinuousReadings(
   return keptEvents.concat(filtered.map(r => ({ v: r.v, t: r.t })));
 }
 
+// Maps a cluster ID to its planFeatures flag — clusters without a flag (glucose-basics)
+// keep per-card gates active since they have no cluster-level gate.
+const CLUSTER_FEATURE_FLAG: Partial<Record<InsightsCluster, string>> = {
+  "meals-bolus":      "insights_meals_bolus_cluster",
+  "adaptive-engine":  "insights_adaptive_engine_cluster",
+  "workout-activity": "insights_workout_activity_cluster",
+  "cycle-symptoms":   "insights_cycle_symptoms_cluster",
+};
+
 export function InsightsClusterView({ clusterId }: { clusterId: InsightsCluster }) {
   // Chip-namespace translator (Task #279) — used to localize meal-type
   // headings on the per-type breakdown cards. Falls back to English
@@ -255,6 +265,10 @@ export function InsightsClusterView({ clusterId }: { clusterId: InsightsCluster 
   // "Avg insulin" tile sublabel. All aggregates are computed in grams
   // upstream; only the rendered string switches to BE/KE/g.
   const { canAccess, plan, trialActive } = usePlan();
+  // Cluster-Level-Gate is final: when the user has access to this cluster's
+  // feature flag, all per-card UpgradeGate wrappers are bypassed.
+  const clusterFlag = CLUSTER_FEATURE_FLAG[clusterId];
+  const bypassCardGates = clusterFlag ? canAccess(clusterFlag) : false;
   const carbUnit = useCarbUnit();
   const tInsights = useTranslations("insights");
   const tChips = useTranslations("chips");
@@ -4346,8 +4360,9 @@ export function InsightsClusterView({ clusterId }: { clusterId: InsightsCluster 
   })();
 
   return (
-    // 480px max-width keeps the cards in their natural mockup
-    // proportions on tablet/desktop instead of stretching them out.
+    <InsightsGateBypassCtx.Provider value={bypassCardGates}>
+    {/* 480px max-width keeps the cards in their natural mockup
+        proportions on tablet/desktop instead of stretching them out. */}
     <div style={{ maxWidth:480, margin:"0 auto" }}>
       {/* Persistent semantic heading for screen readers */}
       <h1
@@ -4471,6 +4486,7 @@ export function InsightsClusterView({ clusterId }: { clusterId: InsightsCluster 
         initialTier="plus"
       />
     </div>
+    </InsightsGateBypassCtx.Provider>
   );
 }
 
@@ -6199,7 +6215,7 @@ export default function InsightsPage() {
                 {ICON_CHEVRON}
               </div>
 
-              {/* Lock dim overlay */}
+              {/* Lock dim overlay — z-index: 1 so badge (z:2) renders above it */}
               {locked && (
                 <div style={{
                   position: "absolute",
@@ -6207,10 +6223,11 @@ export default function InsightsPage() {
                   background: "rgba(0,0,0,0.38)",
                   borderRadius: 16,
                   pointerEvents: "none",
+                  zIndex: 1,
                 }} />
               )}
 
-              {/* Tier badge */}
+              {/* Tier badge — z-index: 2 ensures it's always above the dim overlay */}
               {locked && badge && (
                 <div style={{
                   position: "absolute",
