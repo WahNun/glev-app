@@ -7,6 +7,7 @@ import { usePlan } from "@/hooks/usePlan";
 import { useIsNative } from "@/lib/platform";
 import { getHistoryCutoffISO, clampFromToPlan } from "@/lib/historyLimit";
 import UpgradeGate from "@/components/UpgradeGate";
+import PaywallSheet from "@/components/PaywallSheet";
 import { supabase } from "@/lib/supabase";
 import {
   fetchAllMeals,
@@ -326,6 +327,7 @@ export default function ExportPanel() {
   const { unit: carbUnit, label: carbUnitLabel } = useCarbUnit();
   const [busy, setBusy] = useState<Kind | null>(null);
   const [msg, setMsg]   = useState<{ kind: "ok" | "err"; text: string } | null>(null);
+  const [paywallOpen, setPaywallOpen] = useState(false);
   // Which data kinds to include in the bulk CSV zip. Restored from
   // localStorage so the clinician's last selection survives page reloads
   // and fresh panel opens. All four on only on the very first visit.
@@ -1491,8 +1493,7 @@ export default function ExportPanel() {
               <button
                 onClick={() => {
                   if (isNative) {
-                    setMsg({ kind: "err", text: "Diese Funktion erfordert Pro. Aktiviere dein Abo auf glev.app." });
-                    setTimeout(() => setMsg(null), 4000);
+                    setPaywallOpen(true);
                   } else {
                     router.push("/pro");
                   }
@@ -1556,8 +1557,7 @@ export default function ExportPanel() {
               <button
                 onClick={() => {
                   if (isNative) {
-                    setMsg({ kind: "err", text: "Diese Funktion erfordert Pro. Aktiviere dein Abo auf glev.app." });
-                    setTimeout(() => setMsg(null), 4000);
+                    setPaywallOpen(true);
                   } else {
                     router.push("/pro");
                   }
@@ -1630,6 +1630,13 @@ export default function ExportPanel() {
       }}>
         {t("carb_unit_note", { unit: carbUnitLabel })}
       </div>
+
+      <PaywallSheet
+        open={paywallOpen}
+        onClose={() => setPaywallOpen(false)}
+        onPurchaseSuccess={() => setPaywallOpen(false)}
+        initialTier="plus"
+      />
     </div>
   );
 }
