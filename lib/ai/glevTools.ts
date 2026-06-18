@@ -1488,7 +1488,22 @@ async function createPendingAction(
   summary: string,
   clientPayload?: Record<string, unknown>,
 ): Promise<PendingActionEnvelope | { error: string }> {
-  const expiresAt = new Date(Date.now() + PENDING_TTL_MS).toISOString();
+  const now = Date.now();
+  const expiresAt = new Date(now + PENDING_TTL_MS).toISOString();
+
+  // Supersede any unconfirmed same-kind chips from previous turns.
+  // Same-turn chips (e.g. two log_meal_entry calls in one AI response)
+  // are created within milliseconds — using a 30-second cutoff preserves
+  // them while cleaning up orphaned chips from earlier conversations.
+  const supersedeBefore = new Date(now - 30_000).toISOString();
+  await sb
+    .from("ai_pending_actions")
+    .update({ used_at: new Date(now).toISOString() })
+    .eq("user_id", userId)
+    .eq("kind", kind)
+    .is("used_at", null)
+    .lt("created_at", supersedeBefore);
+
   const { data, error } = await sb
     .from("ai_pending_actions")
     .insert({
