@@ -28,15 +28,6 @@ const clusters = [
     kpiLabel: "Ø Bolus",
   },
   {
-    id: "cycle-symptoms",
-    title: "Zyklus & Symptome",
-    cardCountLabel: "1 Karte",
-    tint: "#FF2D78",
-    icon: "moon",
-    kpi: "Phase 2",
-    kpiLabel: "aktuell",
-  },
-  {
     id: "adaptive-engine",
     title: "Adaptive Engine & Insulin",
     cardCountLabel: "3 Karten",
@@ -54,6 +45,15 @@ const clusters = [
     kpi: "8.241",
     kpiLabel: "Ø Schritte/Tag",
     locked: true,
+  },
+  {
+    id: "cycle-symptoms",
+    title: "Zyklus & Symptome",
+    cardCountLabel: "1 Karte",
+    tint: "#FF2D78",
+    icon: "moon",
+    kpi: "Phase 2",
+    kpiLabel: "aktuell",
   },
 ];
 
