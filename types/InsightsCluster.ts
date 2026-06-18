@@ -2,12 +2,19 @@ import type { FeatureTier } from "@/lib/planFeatures";
 import type { EffectivePlan } from "@/lib/admin/effectivePlan";
 import { canAccess } from "@/lib/planFeatures";
 
-export type InsightsCluster = "glucose" | "patterns" | "workout" | "sleep";
+export type InsightsCluster =
+  | "glucose-basics"
+  | "meals-bolus"
+  | "adaptive-engine"
+  | "workout-activity"
+  | "cycle-symptoms";
 
 export type ClusterConfig = {
   id: InsightsCluster;
   /** Display label shown in the cluster section header. */
   label: string;
+  /** Accent color used for the overview card tint. */
+  tint: string;
   /** Minimum tier required to view the cluster's cards. */
   requiresTier: FeatureTier;
   /** Ordered card IDs belonging to this cluster. */
@@ -16,8 +23,9 @@ export type ClusterConfig = {
 
 export const CLUSTER_CONFIGS: ClusterConfig[] = [
   {
-    id: "glucose",
-    label: "Glukose",
+    id: "glucose-basics",
+    label: "Glukose-Basics",
+    tint: "#4F6EF7",
     requiresTier: "pro",
     cardIds: [
       "time-in-range",
@@ -29,23 +37,33 @@ export const CLUSTER_CONFIGS: ClusterConfig[] = [
     ],
   },
   {
-    id: "patterns",
-    label: "Muster",
+    id: "meals-bolus",
+    label: "Mahlzeiten & Bolus",
+    tint: "#22D3A0",
     requiresTier: "pro",
     cardIds: [
       "meal-evaluation",
       "post-bolus-trend",
-      "adaptive-engine",
       "tdd",
-      "patterns",
       "meal-type",
       "time-of-day",
       "performance-tiles",
     ],
   },
   {
-    id: "workout",
+    id: "adaptive-engine",
+    label: "Adaptiver Engine",
+    tint: "#FF9500",
+    requiresTier: "pro",
+    cardIds: [
+      "adaptive-engine",
+      "patterns",
+    ],
+  },
+  {
+    id: "workout-activity",
     label: "Workout",
+    tint: "#a78bfa",
     requiresTier: "plus",
     cardIds: [
       "workout-outcomes",
@@ -57,20 +75,17 @@ export const CLUSTER_CONFIGS: ClusterConfig[] = [
     ],
   },
   {
-    id: "sleep",
-    label: "Schlaf & Zyklus",
+    id: "cycle-symptoms",
+    label: "Zyklus & Schlaf",
+    tint: "#FF2D78",
     requiresTier: "all",
     cardIds: ["cycle-symptoms"],
   },
 ];
 
 /**
- * Returns true only for clusters that need a cluster-level lock UI.
- *
- * Glucose and Patterns have per-card UpgradeGate wrappers already — showing
- * a redundant cluster-level blur on top would create Plus vs Pro confusion
- * (ABBRUCH condition). Only the Workout cluster (Plus-only, no per-card gates)
- * gets the cluster-level lock.
+ * Returns true only for the Workout cluster (Plus-only).
+ * All other clusters use per-card UpgradeGate wrappers instead.
  */
 export function isClusterLocked(
   cluster: ClusterConfig,

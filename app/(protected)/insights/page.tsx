@@ -1,10 +1,11 @@
 "use client";
 
 import React, { useState, useEffect, useId, useCallback } from "react";
+import { useRouter } from "next/navigation";
 import { usePlan } from "@/hooks/usePlan";
 import UpgradeGate from "@/components/UpgradeGate";
 import PaywallSheet from "@/components/PaywallSheet";
-import { CLUSTER_CONFIGS, isClusterLocked, type ClusterConfig } from "@/types/InsightsCluster";
+import { CLUSTER_CONFIGS, isClusterLocked, type ClusterConfig, type InsightsCluster } from "@/types/InsightsCluster";
 import useSWR, { mutate as swrMutate } from "swr";
 import RefreshingBar from "@/components/RefreshingBar";
 import { useLocale, useTranslations } from "next-intl";
@@ -245,7 +246,7 @@ function mergeContinuousReadings(
   return keptEvents.concat(filtered.map(r => ({ v: r.v, t: r.t })));
 }
 
-export default function InsightsPage() {
+export function InsightsClusterView({ clusterId }: { clusterId: InsightsCluster }) {
   // Chip-namespace translator (Task #279) — used to localize meal-type
   // headings on the per-type breakdown cards. Falls back to English
   // labels via chipLabelsFrom() when keys are missing.
@@ -4355,12 +4356,9 @@ export default function InsightsPage() {
           overflow: "hidden", clip: "rect(0,0,0,0)", whiteSpace: "nowrap", border: 0,
         }}
       >
-        Insights
+        {CLUSTER_CONFIGS.find(c => c.id === clusterId)?.label ?? "Insights"}
       </h1>
       <RefreshingBar visible={primaryValidating} />
-      <InsightsHeaderHint
-        subtitle={tInsights("header_subtitle", { n: total })}
-      />
       <ScopeAnchorStepper
         mode={scopeMode}
         anchor={scopeAnchor}
@@ -4369,7 +4367,7 @@ export default function InsightsPage() {
 
       {/* Cluster sections — each cluster renders its own swipe pager.
           Workout cluster (Plus-only) renders a lock UI instead. */}
-      {CLUSTER_CONFIGS.map((cluster: ClusterConfig) => {
+      {CLUSTER_CONFIGS.filter((c) => c.id === clusterId).map((cluster: ClusterConfig) => {
         const clusterItems = cluster.cardIds
           .map(id => itemById.get(id))
           .filter((it): it is SortableItem => it !== undefined);
@@ -5971,6 +5969,146 @@ function InsightFlipTile({ tile }: { tile: InsightTile }) {
       <div style={{ transition:"opacity 0.15s", ...(flipped ? backShell : frontShell) }}>
         {flipped ? backContent : frontContent}
       </div>
+    </div>
+  );
+}
+
+// ─── Insights Overview Page (drill-in pattern) ───────────────────────────────
+// Renders 5 cluster cards. Tap → /insights/{clusterId}.
+// Workout cluster shows lock overlay + PaywallSheet when tapped.
+
+function clusterTitleKey(id: InsightsCluster): string {
+  return `cluster_${id.replace(/-/g, "_")}_title` as string;
+}
+function clusterCountKey(id: InsightsCluster): string {
+  return `cluster_${id.replace(/-/g, "_")}_count` as string;
+}
+
+export default function InsightsPage() {
+  const { plan, trialActive } = usePlan();
+  const router = useRouter();
+  const t = useTranslations("insights");
+  const [paywallOpen, setPaywallOpen] = useState(false);
+
+  return (
+    <div style={{ maxWidth: 480, margin: "0 auto", padding: "4px 0 32px" }}>
+      <h1
+        style={{
+          position: "absolute",
+          width: 1, height: 1, padding: 0, margin: -1,
+          overflow: "hidden", clip: "rect(0,0,0,0)", whiteSpace: "nowrap", border: 0,
+        }}
+      >
+        Insights
+      </h1>
+
+      <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+        {CLUSTER_CONFIGS.map((cluster) => {
+          const locked = isClusterLocked(cluster, plan, trialActive);
+          const cardCount = cluster.cardIds.length;
+
+          return (
+            <button
+              key={cluster.id}
+              type="button"
+              onClick={() => {
+                if (locked) {
+                  setPaywallOpen(true);
+                } else {
+                  router.push(`/insights/${cluster.id}`);
+                }
+              }}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 16,
+                padding: "18px 20px",
+                background: "var(--surface)",
+                border: `1px solid var(--border)`,
+                borderRadius: 16,
+                cursor: "pointer",
+                textAlign: "left",
+                fontFamily: "inherit",
+                width: "100%",
+                position: "relative",
+                overflow: "hidden",
+              }}
+            >
+              {/* Accent stripe */}
+              <div style={{
+                position: "absolute",
+                left: 0,
+                top: 0,
+                bottom: 0,
+                width: 4,
+                background: cluster.tint,
+                borderRadius: "16px 0 0 16px",
+              }} />
+
+              {/* Content */}
+              <div style={{ flex: 1, paddingLeft: 4 }}>
+                <div style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 8,
+                  marginBottom: 4,
+                }}>
+                  <span style={{
+                    fontSize: 15,
+                    fontWeight: 700,
+                    color: "var(--text)",
+                  }}>
+                    {t(clusterTitleKey(cluster.id))}
+                  </span>
+                  {locked && (
+                    <span style={{
+                      fontSize: 10,
+                      fontWeight: 700,
+                      letterSpacing: "0.06em",
+                      textTransform: "uppercase",
+                      padding: "2px 7px",
+                      borderRadius: 20,
+                      background: "#a78bfa22",
+                      color: "#7c3aed",
+                    }}>
+                      Glev+
+                    </span>
+                  )}
+                </div>
+                <div style={{ fontSize: 13, color: "var(--text-dim)" }}>
+                  {t(clusterCountKey(cluster.id), { n: cardCount })}
+                </div>
+                {locked && (
+                  <div style={{
+                    fontSize: 12,
+                    color: "var(--text-muted)",
+                    marginTop: 4,
+                  }}>
+                    {t("cluster_workout_upgrade_body")}
+                  </div>
+                )}
+              </div>
+
+              {/* Chevron */}
+              <div style={{
+                fontSize: 18,
+                color: locked ? "#7c3aed" : cluster.tint,
+                fontWeight: 300,
+                flexShrink: 0,
+              }}>
+                {locked ? "🔒" : "›"}
+              </div>
+            </button>
+          );
+        })}
+      </div>
+
+      <PaywallSheet
+        open={paywallOpen}
+        onClose={() => setPaywallOpen(false)}
+        onPurchaseSuccess={() => {}}
+        initialTier="plus"
+      />
     </div>
   );
 }

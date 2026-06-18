@@ -1141,7 +1141,20 @@
     "post_bolus_trend_range": "{min}–{max} mg/dL",
     "swipe_ctx_post-bolus-trend_title": "Post-Bolus BZ nach Mahlzeittyp",
     "swipe_ctx_post-bolus-trend_body": "Zeigt, wie deine BZ-Werte nach verschiedenen Mahlzeittypen tendenziell landen. Wenn ein Typ regelmäßig deutlich höher oder tiefer als andere abschneidet, ist das ein guter Gesprächspunkt für dein Diabetologen-Team. Kein Dosierungsratschlag.",
-    "swipe_dyn_post_bolus_trend": "{n, plural, one {# Post-Check} other {# Post-Checks}} mit BZ-Wert"
+    "swipe_dyn_post_bolus_trend": "{n, plural, one {# Post-Check} other {# Post-Checks}} mit BZ-Wert",
+    "overview_back": "Insights",
+    "cluster_glucose_basics_title": "Glukose-Basics",
+    "cluster_glucose_basics_count": "{n, plural, one {# Karte} other {# Karten}}",
+    "cluster_meals_bolus_title": "Mahlzeiten & Bolus",
+    "cluster_meals_bolus_count": "{n, plural, one {# Karte} other {# Karten}}",
+    "cluster_adaptive_engine_title": "Adaptiver Engine",
+    "cluster_adaptive_engine_count": "{n, plural, one {# Karte} other {# Karten}}",
+    "cluster_workout_activity_title": "Workout",
+    "cluster_workout_activity_count": "{n, plural, one {# Karte} other {# Karten}}",
+    "cluster_cycle_symptoms_title": "Zyklus & Schlaf",
+    "cluster_cycle_symptoms_count": "{n, plural, one {# Karte} other {# Karten}}",
+    "cluster_workout_upgrade_cta": "Glev+ entdecken →",
+    "cluster_workout_upgrade_body": "Workout-Auswertungen sind in Glev+ verfügbar"
   },
   "settings": {
     "title": "Einstellungen",
