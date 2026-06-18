@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useState, useCallback } from "react";
+import { createPortal } from "react-dom";
 import Image from "next/image";
 import { useTranslations, useLocale } from "next-intl";
 import { Capacitor } from "@capacitor/core";
@@ -54,22 +55,40 @@ export default function PaywallSheet({ open, onClose, onPurchaseSuccess }: Props
   const t      = useTranslations("paywall");
   const locale = useLocale();
 
-  const [offering,   setOffering]   = useState<PurchasesOffering | null>(null);
-  const [tier,       setTier]       = useState<Tier>("pro");
-  const [interval,   setInterval]   = useState<Interval>("yearly");
-  const [purchasing, setPurchasing] = useState(false);
+  const [offering,      setOffering]      = useState<PurchasesOffering | null>(null);
+  const [offeringState, setOfferingState] = useState<"loading" | "ready" | "empty">("loading");
+  const [mounted,       setMounted]       = useState(false);
+  const [tier,          setTier]          = useState<Tier>("pro");
+  const [interval,      setInterval]      = useState<Interval>("yearly");
+  const [purchasing,    setPurchasing]    = useState(false);
   const isNative = Capacitor.isNativePlatform();
 
   useEffect(() => {
     if (!open || !isNative) return;
     Purchases.getOfferings()
-      .then((r) => setOffering(r.current ?? null))
-      .catch((e) => console.warn("[PaywallSheet] getOfferings failed:", e));
+      .then((r) => {
+        const o = r.current ?? null;
+        setOffering(o);
+        setOfferingState(o && o.availablePackages.length > 0 ? "ready" : "empty");
+      })
+      .catch((e) => {
+        console.warn("[PaywallSheet] getOfferings failed:", e);
+        setOfferingState("empty");
+      });
   }, [open, isNative]);
 
-  // Reset tier/interval each time sheet opens
+  // Reset state each time sheet opens
   useEffect(() => {
-    if (open) { setTier("pro"); setInterval("yearly"); }
+    if (open) { setTier("pro"); setInterval("yearly"); setOfferingState("loading"); setOffering(null); }
+  }, [open]);
+
+  useEffect(() => { setMounted(true); }, []);
+
+  useEffect(() => {
+    if (!open) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => { document.body.style.overflow = prev; };
   }, [open]);
 
   const buy = useCallback(
@@ -110,7 +129,58 @@ export default function PaywallSheet({ open, onClose, onPurchaseSuccess }: Props
     }
   }, [purchasing, onClose, onPurchaseSuccess]);
 
-  if (!open) return null;
+  if (!open || !mounted) return null;
+  if (!isNative) return null;
+
+  const closeBtn = (
+    <button
+      type="button"
+      onClick={onClose}
+      aria-label="Schließen"
+      style={{ position: "absolute", top: 12, right: 12, width: 44, height: 44, display: "flex", alignItems: "center", justifyContent: "center", background: "transparent", border: "none", cursor: "pointer", color: "var(--text-muted)", borderRadius: 10 }}
+    >
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+      </svg>
+    </button>
+  );
+
+  const sharedBg: React.CSSProperties = {
+    position: "fixed",
+    inset: 0,
+    zIndex: 9999,
+    background: `radial-gradient(ellipse 80% 60% at 50% 0%, ${ACCENT}22 0%, transparent 60%), radial-gradient(ellipse 60% 40% at 100% 100%, ${GREEN}14 0%, transparent 55%), var(--bg)`,
+    color: "var(--text)",
+  };
+
+  if (offeringState === "loading") {
+    return createPortal(
+      <div role="dialog" aria-modal="true" style={{ ...sharedBg, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 16 }}>
+        {closeBtn}
+        <p style={{ margin: 0, fontSize: 16, color: "var(--text-muted)" }}>Paywall lädt…</p>
+      </div>,
+      document.body
+    );
+  }
+
+  if (offeringState === "empty") {
+    return createPortal(
+      <div role="dialog" aria-modal="true" style={{ ...sharedBg, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 16, padding: "0 32px", textAlign: "center" }}>
+        {closeBtn}
+        <p style={{ margin: 0, fontSize: 15, color: "var(--text-muted)", lineHeight: 1.5 }}>
+          Subscriptions noch nicht verfügbar — bitte später erneut versuchen.
+        </p>
+        <button
+          type="button"
+          onClick={onClose}
+          style={{ padding: "12px 24px", background: ACCENT, color: "#fff", border: "none", borderRadius: 12, fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}
+        >
+          Schließen
+        </button>
+      </div>,
+      document.body
+    );
+  }
 
   const pkgs   = offering?.availablePackages ?? [];
   const monthly = pickPkg(pkgs, tier, "monthly");
@@ -139,7 +209,7 @@ export default function PaywallSheet({ open, onClose, onPurchaseSuccess }: Props
       ? t("cta_smart")
       : t("cta_pro");
 
-  return (
+  return createPortal(
     /* ── A) ROOT CONTAINER ─────────────────────────────────────── */
     <div
       role="dialog"
@@ -515,6 +585,7 @@ export default function PaywallSheet({ open, onClose, onPurchaseSuccess }: Props
         </div>
         <p style={{ margin: 0, lineHeight: 1.4 }}>{t("renewal_notice")}</p>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

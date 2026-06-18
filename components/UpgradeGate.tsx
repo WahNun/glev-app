@@ -374,7 +374,7 @@ export default function UpgradeGate({
           <>
             <button
               type="button"
-              onClick={() => void handleUpgrade()}
+              onClick={(e) => { e.stopPropagation(); void handleUpgrade(); }}
               disabled={busy}
               style={{
                 padding: "9px 20px",
