@@ -316,7 +316,7 @@ export default function LoginPage() {
                 onClick={handleAppleSignIn}
                 disabled={appleLoading}
                 style={{
-                  display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+                  display: "flex", alignItems: "center", justifyContent: "center", gap: 10,
                   width: "100%", padding: "13px",
                   background: appleLoading ? "#333" : "#000",
                   border: "none", borderRadius: 12,
@@ -327,7 +327,7 @@ export default function LoginPage() {
                 }}
               >
                 {/* Apple logo — SF-like glyph via inline SVG */}
-                <svg width="16" height="20" viewBox="0 0 814 1000" fill="white" xmlns="http://www.w3.org/2000/svg">
+                <svg width="22" height="27" viewBox="0 0 814 1000" fill="white" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg">
                   <path d="M788.1 340.9c-5.8 4.5-108.2 62.2-108.2 190.5 0 148.4 130.3 200.9 134.2 202.2-.6 3.2-20.7 71.9-68.7 141.9-42.8 61.6-87.5 123.1-155.5 123.1s-85.5-39.5-164-39.5c-76 0-103.7 40.8-165.9 40.8s-105-57.8-155.5-127.4C46 790.7 0 663 0 541.8c0-207.3 135.3-317 268.4-317 70.1 0 128.4 46.4 172.5 46.4 42.4 0 109.2-49.1 190.5-49.1 30.8 0 111.9 2.6 167.1 98.3zm-180.5-114.9c-34.6 40.6-92.7 71.4-148.8 71.4-7.7 0-15.4-.6-22.4-2 0-4.5.7-9 .7-13.4 0-38.9 18.6-79.9 50.9-110.7 32.3-30.8 83.2-53.3 127.4-55.3 1.3 7.7 1.9 15.4 1.9 22.4 0 37.6-16 77.9-9.7 87.6z"/>
                 </svg>
                 {appleLoading ? "…" : t.apple_signin}
