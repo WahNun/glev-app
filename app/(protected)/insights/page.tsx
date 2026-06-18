@@ -65,6 +65,7 @@ import { useCarbUnit } from "@/hooks/useCarbUnit";
 import { fetchCgmSamples, type ContinuousReading } from "@/lib/cgmSamplesClient";
 import { fetchPostBolusChecksRaw, type PostBolusCheckRaw } from "@/lib/mealTimelineChecks";
 import { supabase } from "@/lib/supabase";
+import { fetchCycleLoggingEnabled } from "@/lib/cyclePrefs";
 
 // Extra buffer added to the bolus-fetch window so pre- and post-boluses
 // at the edge of the 90-day meal window (up to ±30 min away from the
@@ -5973,25 +5974,132 @@ function InsightFlipTile({ tile }: { tile: InsightTile }) {
   );
 }
 
-// ─── Insights Overview Page (drill-in pattern) ───────────────────────────────
-// Renders 5 cluster cards. Tap → /insights/{clusterId}.
-// Workout cluster shows lock overlay + PaywallSheet when tapped.
+// ─── Insights Overview Page (drill-in, polished) ─────────────────────────────
+// 5 Cluster-Cards mit Gradient + Icon + KPI-Preview + tier-spezifischem Lock.
+// Zyklus-Cluster nur wenn cycle_logging_enabled === true.
 
-function clusterTitleKey(id: InsightsCluster): string {
-  return `cluster_${id.replace(/-/g, "_")}_title` as string;
+type OverviewTier = "free" | "smart" | "pro" | "plus";
+
+type ClusterDef = {
+  id: InsightsCluster;
+  title: string;
+  tint: string;
+  icon: React.ReactNode;
+  featureFlag: string | null;
+  requiresTier: OverviewTier;
+  requiresCycleEnabled?: boolean;
+};
+
+// Inline SVG icons (Lucide-equivalent paths) — no external dep needed.
+function SvgIcon({ path, size = 22, color }: { path: React.ReactNode; size?: number; color: string }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round">
+      {path}
+    </svg>
+  );
 }
-function clusterCountKey(id: InsightsCluster): string {
-  return `cluster_${id.replace(/-/g, "_")}_count` as string;
-}
+
+const ICON_DROPLET = (c: string) => (
+  <SvgIcon color={c} path={<path d="M12 22a7 7 0 0 0 7-7c0-2-1-3.9-3-5.5s-3.5-4-4-6.5c-.5 2.5-2 4.9-4 6.5C6 11.1 5 13 5 15a7 7 0 0 0 7 7z"/>}/>
+);
+const ICON_UTENSILS = (c: string) => (
+  <SvgIcon color={c} path={<><path d="M3 2v7c0 1.1.9 2 2 2h4a2 2 0 0 0 2-2V2"/><path d="M7 2v20"/><path d="M21 15V2a5 5 0 0 0-5 5v6c0 1.1.9 2 2 2h3Zm0 0v7"/></>}/>
+);
+const ICON_CPU = (c: string) => (
+  <SvgIcon color={c} path={<><rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/><path d="M15 2v2M9 2v2M15 20v2M9 20v2M2 15h2M2 9h2M20 15h2M20 9h2"/></>}/>
+);
+const ICON_ACTIVITY = (c: string) => (
+  <SvgIcon color={c} path={<polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>}/>
+);
+const ICON_MOON = (c: string) => (
+  <SvgIcon color={c} path={<path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/>}/>
+);
+const ICON_LOCK = (c: string) => (
+  <SvgIcon color={c} size={15} path={<><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></>}/>
+);
+const ICON_CHEVRON = (
+  <SvgIcon color="rgba(255,255,255,0.18)" size={18} path={<path d="m9 18 6-6-6-6"/>}/>
+);
+
+const TIER_BADGE: Record<string, { bg: string; label: string }> = {
+  smart: { bg: "#22D3A0", label: "SMART" },
+  pro:   { bg: "#4F6EF7", label: "PRO" },
+  plus:  { bg: "#7F77DD", label: "GLEV+" },
+};
 
 export default function InsightsPage() {
-  const { plan, trialActive } = usePlan();
+  const { canAccess } = usePlan();
   const router = useRouter();
-  const t = useTranslations("insights");
   const [paywallOpen, setPaywallOpen] = useState(false);
+  const [paywallTier, setPaywallTier] = useState<"smart" | "pro" | "plus">("smart");
+  const [cycleEnabled, setCycleEnabled] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    fetchCycleLoggingEnabled().then(setCycleEnabled).catch(() => setCycleEnabled(false));
+  }, []);
+
+  const clusterDefs: ClusterDef[] = [
+    {
+      id: "glucose-basics",
+      title: "Glukose",
+      tint: "#4F6EF7",
+      icon: ICON_DROPLET("#4F6EF7"),
+      featureFlag: null,
+      requiresTier: "free",
+    },
+    {
+      id: "meals-bolus",
+      title: "Mahlzeiten",
+      tint: "#22D3A0",
+      icon: ICON_UTENSILS("#22D3A0"),
+      featureFlag: "insights_meals_bolus_cluster",
+      requiresTier: "smart",
+    },
+    {
+      id: "adaptive-engine",
+      title: "Engine",
+      tint: "#FF9500",
+      icon: ICON_CPU("#FF9500"),
+      featureFlag: "insights_adaptive_engine_cluster",
+      requiresTier: "pro",
+    },
+    {
+      id: "workout-activity",
+      title: "Workout",
+      tint: "#7F77DD",
+      icon: ICON_ACTIVITY("#7F77DD"),
+      featureFlag: "insights_workout_activity_cluster",
+      requiresTier: "plus",
+    },
+    {
+      id: "cycle-symptoms",
+      title: "Zyklus",
+      tint: "#FF2D78",
+      icon: ICON_MOON("#FF2D78"),
+      featureFlag: "insights_cycle_symptoms_cluster",
+      requiresTier: "smart",
+      requiresCycleEnabled: true,
+    },
+  ];
+
+  // Filter out cycle cluster if cycle logging is disabled
+  const visibleClusters = clusterDefs.filter((c) => {
+    if (c.requiresCycleEnabled && cycleEnabled !== true) return false;
+    return true;
+  });
+
+  function handleTap(def: ClusterDef, locked: boolean) {
+    if (locked && def.requiresTier !== "free") {
+      setPaywallTier(def.requiresTier as "smart" | "pro" | "plus");
+      setPaywallOpen(true);
+    } else if (!locked) {
+      router.push(`/insights/${def.id}`);
+    }
+  }
 
   return (
-    <div style={{ maxWidth: 480, margin: "0 auto", padding: "4px 0 32px" }}>
+    <div style={{ maxWidth: 480, margin: "0 auto", padding: "0 16px 32px" }}>
+      {/* Semantic heading */}
       <h1
         style={{
           position: "absolute",
@@ -6002,29 +6110,36 @@ export default function InsightsPage() {
         Insights
       </h1>
 
+      {/* Page header */}
+      <div style={{ padding: "0 0 20px" }}>
+        <div style={{ fontSize: 28, fontWeight: 700, color: "var(--text)", lineHeight: 1.15 }}>
+          Insights
+        </div>
+        <div style={{ fontSize: 13, color: "var(--text-dim)", marginTop: 4 }}>
+          Karte tippen zum Eintauchen
+        </div>
+      </div>
+
+      {/* Cluster cards */}
       <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-        {CLUSTER_CONFIGS.map((cluster) => {
-          const locked = isClusterLocked(cluster, plan, trialActive);
-          const cardCount = cluster.cardIds.length;
+        {visibleClusters.map((def) => {
+          const cfg = CLUSTER_CONFIGS.find((c) => c.id === def.id);
+          const cardCount = cfg?.cardIds.length ?? 0;
+          const locked = def.featureFlag ? !canAccess(def.featureFlag) : false;
+          const badge = TIER_BADGE[def.requiresTier];
 
           return (
             <button
-              key={cluster.id}
+              key={def.id}
               type="button"
-              onClick={() => {
-                if (locked) {
-                  setPaywallOpen(true);
-                } else {
-                  router.push(`/insights/${cluster.id}`);
-                }
-              }}
+              onClick={() => handleTap(def, locked)}
               style={{
                 display: "flex",
                 alignItems: "center",
                 gap: 16,
-                padding: "18px 20px",
-                background: "var(--surface)",
-                border: `1px solid var(--border)`,
+                padding: "20px",
+                background: `linear-gradient(135deg, ${def.tint}1a 0%, transparent 50%), var(--surface)`,
+                border: "1px solid var(--border)",
                 borderRadius: 16,
                 cursor: "pointer",
                 textAlign: "left",
@@ -6032,72 +6147,84 @@ export default function InsightsPage() {
                 width: "100%",
                 position: "relative",
                 overflow: "hidden",
+                minHeight: 100,
+                opacity: locked ? 0.72 : 1,
+                transition: "opacity 0.2s",
               }}
             >
               {/* Accent stripe */}
               <div style={{
                 position: "absolute",
-                left: 0,
-                top: 0,
-                bottom: 0,
+                left: 0, top: 0, bottom: 0,
                 width: 4,
-                background: cluster.tint,
+                background: def.tint,
                 borderRadius: "16px 0 0 16px",
               }} />
 
-              {/* Content */}
-              <div style={{ flex: 1, paddingLeft: 4 }}>
+              {/* Icon box */}
+              <div style={{
+                width: 44, height: 44, flexShrink: 0,
+                background: `${def.tint}26`,
+                borderRadius: 12,
+                display: "flex", alignItems: "center", justifyContent: "center",
+                marginLeft: 8,
+              }}>
+                {def.icon}
+              </div>
+
+              {/* Text block */}
+              <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 8,
-                  marginBottom: 4,
+                  display: "flex", alignItems: "center", gap: 6,
                 }}>
                   <span style={{
-                    fontSize: 15,
-                    fontWeight: 700,
-                    color: "var(--text)",
+                    fontSize: 17, fontWeight: 500, color: "var(--text)",
+                    whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
                   }}>
-                    {t(clusterTitleKey(cluster.id))}
+                    {def.title}
                   </span>
                   {locked && (
-                    <span style={{
-                      fontSize: 10,
-                      fontWeight: 700,
-                      letterSpacing: "0.06em",
-                      textTransform: "uppercase",
-                      padding: "2px 7px",
-                      borderRadius: 20,
-                      background: "#a78bfa22",
-                      color: "#7c3aed",
-                    }}>
-                      Glev+
+                    <span style={{ opacity: 0.7, flexShrink: 0, display: "flex", alignItems: "center" }}>
+                      {ICON_LOCK("rgba(255,255,255,0.6)")}
                     </span>
                   )}
                 </div>
-                <div style={{ fontSize: 13, color: "var(--text-dim)" }}>
-                  {t(clusterCountKey(cluster.id), { n: cardCount })}
+                <div style={{ fontSize: 13, color: "var(--text-dim)", marginTop: 2 }}>
+                  {cardCount} Karten
                 </div>
-                {locked && (
-                  <div style={{
-                    fontSize: 12,
-                    color: "var(--text-muted)",
-                    marginTop: 4,
-                  }}>
-                    {t("cluster_workout_upgrade_body")}
-                  </div>
-                )}
               </div>
 
               {/* Chevron */}
-              <div style={{
-                fontSize: 18,
-                color: locked ? "#7c3aed" : cluster.tint,
-                fontWeight: 300,
-                flexShrink: 0,
-              }}>
-                {locked ? "🔒" : "›"}
+              <div style={{ flexShrink: 0 }}>
+                {ICON_CHEVRON}
               </div>
+
+              {/* Lock dim overlay */}
+              {locked && (
+                <div style={{
+                  position: "absolute",
+                  inset: 0,
+                  background: "rgba(0,0,0,0.38)",
+                  borderRadius: 16,
+                  pointerEvents: "none",
+                }} />
+              )}
+
+              {/* Tier badge */}
+              {locked && badge && (
+                <div style={{
+                  position: "absolute",
+                  top: 12, right: 12,
+                  fontSize: 11, fontWeight: 700, letterSpacing: "0.07em",
+                  padding: "3px 10px",
+                  borderRadius: 20,
+                  background: badge.bg,
+                  color: "#fff",
+                  zIndex: 2,
+                }}>
+                  {badge.label}
+                </div>
+              )}
             </button>
           );
         })}
@@ -6107,7 +6234,7 @@ export default function InsightsPage() {
         open={paywallOpen}
         onClose={() => setPaywallOpen(false)}
         onPurchaseSuccess={() => {}}
-        initialTier="plus"
+        initialTier={paywallTier}
       />
     </div>
   );

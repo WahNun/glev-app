@@ -93,5 +93,5 @@ export function isClusterLocked(
   trialActive: boolean,
 ): boolean {
   if (cluster.requiresTier !== "plus") return false;
-  return !canAccess("insights_workout_cluster", plan, trialActive);
+  return !canAccess("insights_workout_activity_cluster", plan, trialActive);
 }

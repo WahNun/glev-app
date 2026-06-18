@@ -76,7 +76,10 @@ export const FEATURE_TIERS: Record<string, FeatureTier> = {
   since_last_appointment:  "plus",
   unlimited_history:       "plus",
   early_feature_access:    "plus",
-  insights_workout_cluster: "plus",
+  insights_meals_bolus_cluster:     "smart",
+  insights_cycle_symptoms_cluster:  "smart",
+  insights_adaptive_engine_cluster: "pro",
+  insights_workout_activity_cluster: "plus",
 };
 
 /**
