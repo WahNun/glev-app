@@ -1915,6 +1915,7 @@ export default function EnginePage() {
       // clear the form and return to Step 1. This avoids the surprise of
       // the screen jumping away the moment they hit Save.
       setWizardSavedDose(result.dose);
+      if (typeof window !== "undefined") window.dispatchEvent(new CustomEvent("glev:meal-ai-saved"));
     } catch (e) {
       hapticError();
       setConfirmErr(e instanceof Error ? e.message : "Save failed");
@@ -1990,6 +1991,7 @@ export default function EnginePage() {
       // Same post-save state as handleWizardSave so both paths converge
       // on the identical "✓ Gespeichert — N IE geloggt" confirmation.
       setWizardSavedDose(0);
+      if (typeof window !== "undefined") window.dispatchEvent(new CustomEvent("glev:meal-ai-saved"));
     } catch (e) {
       hapticError();
       setConfirmErr(e instanceof Error ? e.message : "Save failed");
@@ -2064,6 +2066,7 @@ export default function EnginePage() {
       logDebug("ENGINE.SAVE_DIRECT_BOLUS", { id: saved.id, carbs: cNum, glucose: gNum, mealType: cls, insulinUnits: iNum });
       hapticSuccess();
       setWizardSavedDose(iNum);
+      if (typeof window !== "undefined") window.dispatchEvent(new CustomEvent("glev:meal-ai-saved"));
     } catch (e) {
       hapticError();
       setConfirmErr(e instanceof Error ? e.message : "Save failed");
@@ -2140,6 +2143,7 @@ export default function EnginePage() {
       logDebug("ENGINE.SAVE_EAGER_BOLUS", { id: saved.id, carbs: cNum, glucose: gNum, mealType: cls, insulinUnits: dose });
       hapticSuccess();
       setWizardSavedDose(dose);
+      if (typeof window !== "undefined") window.dispatchEvent(new CustomEvent("glev:meal-ai-saved"));
     } catch (e) {
       hapticError();
       setConfirmErr(e instanceof Error ? e.message : "Save failed");
@@ -2232,6 +2236,7 @@ export default function EnginePage() {
       // is contextual UI, not a save confirmation, so without this toast
       // users had no signal that the row actually persisted.
       setDecisionToast(tEngine("toast_meal_saved"));
+      if (typeof window !== "undefined") window.dispatchEvent(new CustomEvent("glev:meal-ai-saved"));
       setTimeout(() => setDecisionToast(null), 2500);
       logDebug("ENGINE.CONFIRM_LOG", { id: saved.id, carbs: cNum, insulin: iNum, glucose: gNum, mealType: cls });
       hapticSuccess();

@@ -47,6 +47,7 @@ export type PendingActionState =
   | "pending"
   | "confirming"
   | "confirmed"
+  | "engine_opened"  // meal chip: navigated to Engine, save not yet confirmed
   | "cancelled"
   | "error";
 
@@ -467,6 +468,29 @@ export function useGlevAI(opts?: {
     }, 1_000);
     return () => clearTimeout(id);
   }, [rateLimitCountdown]);
+
+  // Listen for glev:meal-ai-saved (dispatched by the Engine page after saveMeal).
+  // Transitions all engine_opened chips to confirmed and clears the meal nav queue.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const handler = () => {
+      setMessages((prev) =>
+        prev.map((m) => ({
+          ...m,
+          pendingActions: m.pendingActions?.map((pa) =>
+            pa.state === "engine_opened"
+              ? { ...pa, state: "confirmed" as PendingActionState }
+              : pa,
+          ),
+        })),
+      );
+      setPendingMealNavQueue([]);
+      pendingMealQueueRef.current = [];
+    };
+    window.addEventListener("glev:meal-ai-saved", handler);
+    return () => window.removeEventListener("glev:meal-ai-saved", handler);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Stable ref so the countdown effect can call sendMessage without
   // being listed as a dependency (avoids infinite loop risk).
@@ -1003,28 +1027,27 @@ export function useGlevAI(opts?: {
         pendingMealNavQueue.find((item) => item.token === token) ??
         pendingMealQueueRef.current.find((item) => item.token === token);
 
-      if (match) {
-        // Remove from whichever queue the item was in.
-        setPendingMealNavQueue((prev) => prev.filter((item) => item.token !== token));
-        pendingMealQueueRef.current = pendingMealQueueRef.current.filter(
-          (item) => item.token !== token,
-        );
-        if (typeof window !== "undefined") {
-          try {
-            sessionStorage.setItem("glev_pending_meal", JSON.stringify(match.mealPrep));
-            sessionStorage.setItem("glev_engine_back_to", "/glev-ai");
-          } catch { /* ignore quota / privacy errors */ }
-          window.dispatchEvent(new CustomEvent("glev:meal-prefill"));
-        }
-        optsRef.current?.onNavigate?.("/engine");
+      if (!match) return;
+
+      // Write meal data every time (re-navigation after back needs fresh sessionStorage
+      // because the Engine page clears glev_pending_meal on mount).
+      if (typeof window !== "undefined") {
+        try {
+          sessionStorage.setItem("glev_pending_meal", JSON.stringify(match.mealPrep));
+          sessionStorage.setItem("glev_engine_back_to", "/glev-ai");
+        } catch { /* ignore quota / privacy errors */ }
+        window.dispatchEvent(new CustomEvent("glev:meal-prefill"));
       }
-      // Mark the chip as confirmed locally — no server call, no DB insert.
-      // The actual meal row is created by the Engine save flow. Calling
-      // confirmAction here would trigger execLogMealEntry → duplicate entry.
-      // The ai_pending_actions row expires naturally after its TTL.
-      if (match) {
-        setMessages((prev) => patchAction(prev, messageId, token, { state: "confirmed" }));
-      }
+      // Keep the item in pendingMealNavQueue — do NOT remove it yet.
+      // It stays so that "Macros prüfen →" re-navigation (second tap) can
+      // re-write sessionStorage without needing to reconstruct from payload.
+      // Cleared by the glev:meal-ai-saved handler when the meal is saved.
+
+      // Transition chip to engine_opened (not confirmed) — chip stays visible
+      // with a "Macros prüfen →" CTA so the user can navigate back into the
+      // Engine after returning to the chat.
+      setMessages((prev) => patchAction(prev, messageId, token, { state: "engine_opened" }));
+      optsRef.current?.onNavigate?.("/engine");
     },
   };
 }

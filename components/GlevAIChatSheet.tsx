@@ -61,6 +61,8 @@ const COPY = {
     read_aloud:            "Vorlesen",
     meal_fallback:         "Mahlzeit",
     open_engine_chip:      "Engine öffnen",
+    engine_opened_label:   "Im Engine geöffnet · noch nicht gespeichert",
+    macros_review:         "Macros prüfen →",
     n_of_total:            (n: number, total: number) => `${n} von ${total}`,
     details_expand:        "Details ⌄",
     details_collapse:      "Details ⌃",
@@ -116,6 +118,8 @@ const COPY = {
     read_aloud:            "Read aloud",
     meal_fallback:         "Meal",
     open_engine_chip:      "Open Engine",
+    engine_opened_label:   "Opened in Engine · not saved yet",
+    macros_review:         "Review macros →",
     n_of_total:            (n: number, total: number) => `${n} of ${total}`,
     details_expand:        "Details ⌄",
     details_collapse:      "Details ⌃",
@@ -587,6 +591,33 @@ function PendingActionWidget({
         <div style={{ color: "#7ee0a0", fontWeight: 600, fontSize: 13 }}>
           {isMeal ? t.confirmed_engine : t.confirmed_saved}
         </div>
+      </div>
+    );
+  }
+  if (pa.state === "engine_opened" && isMeal) {
+    return (
+      <div style={{ ...baseCard, borderColor: "rgba(139,92,246,0.3)" }}>
+        {summary}
+        <div style={{ color: "var(--text-muted)", fontSize: 12 }}>
+          {t.engine_opened_label}
+        </div>
+        <button
+          type="button"
+          onClick={onOpenEngine}
+          style={{
+            width: "100%",
+            padding: "9px 12px",
+            borderRadius: 8,
+            border: "none",
+            background: "rgba(139,92,246,0.2)",
+            color: "var(--accent, #8b5cf6)",
+            fontWeight: 600,
+            fontSize: 13,
+            cursor: "pointer",
+          }}
+        >
+          {t.macros_review}
+        </button>
       </div>
     );
   }

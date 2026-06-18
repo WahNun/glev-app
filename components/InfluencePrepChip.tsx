@@ -30,7 +30,7 @@ const COPY = {
 
 interface Props {
   payload: InfluencePrepPayload;
-  state: "pending" | "confirming" | "confirmed" | "cancelled" | "error";
+  state: "pending" | "confirming" | "confirmed" | "engine_opened" | "cancelled" | "error";
   onConfirm: () => void;
   onCancel: () => void;
   error?: string;
