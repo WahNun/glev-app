@@ -132,17 +132,24 @@ function topLevelSource(items: NutritionItem[]): AggregateSource {
   // DB lookups AND the GPT estimate fell over means the totals can't
   // be trusted for insulin dosing. The UI MUST surface this clearly.
   if (items.some((i) => i.source === "unknown")) return "unknown";
-  // user_history / user_confirmed count as "database" for the UI
-  // badge — they're DB-backed and skipped the GPT estimator. Same
-  // confidence semantics for the dose recommender.
+
   const isDbLike = (s: NutritionSource) =>
     s === "open_food_facts" || s === "usda" ||
     s === "user_history"   || s === "user_confirmed";
-  const allEstimated = items.every((i) => i.source === "estimated");
-  if (allEstimated) return "estimated";
+
   const anyEstimated = items.some((i) => i.source === "estimated");
   if (anyEstimated && items.some((i) => isDbLike(i.source))) return "mixed";
-  return anyEstimated ? "estimated" : "database";
+  if (items.every((i) => i.source === "estimated")) return "estimated";
+
+  // All items resolved from a single source — return specific badge so
+  // the UI can say "Aus deinen Logs / Open Food Facts / USDA" instead
+  // of the generic "Datenbank ✓".
+  if (items.every((i) => i.source === "user_history" || i.source === "user_confirmed")) return "user_history";
+  if (items.every((i) => i.source === "open_food_facts")) return "open_food_facts";
+  if (items.every((i) => i.source === "usda")) return "usda";
+
+  // Mix of different DB sources (e.g. OFF item + USDA item) — generic.
+  return "database";
 }
 
 export interface AggregateOptions {
@@ -218,6 +225,19 @@ export async function aggregateNutrition(
   const calories = Math.round(totals.carbs * 4 + totals.protein * 4 + totals.fat * 9);
 
   const nutritionSource = topLevelSource(finalItems);
+
+  // Compute the minimum occurrence count across all user-history-resolved
+  // items so the UI badge can show "Basiert auf X vorherigen Einträgen".
+  let historyMinOccurrences: number | undefined;
+  if (nutritionSource === "user_history" && opts.userHistory) {
+    const counts: number[] = [];
+    for (const it of finalItems) {
+      const hit = opts.userHistory.get(normalizeFoodName(it.name));
+      if (hit) counts.push(hit.occurrences);
+    }
+    if (counts.length > 0) historyMinOccurrences = Math.min(...counts);
+  }
+
   const srcCounts = finalItems.reduce<Record<string, number>>((acc, it) => {
     acc[it.source] = (acc[it.source] ?? 0) + 1;
     return acc;
@@ -228,5 +248,6 @@ export async function aggregateNutrition(
     items: finalItems,
     totals: { ...totals, calories },
     nutritionSource,
+    ...(historyMinOccurrences !== undefined ? { historyMinOccurrences } : {}),
   };
 }

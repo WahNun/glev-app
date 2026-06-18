@@ -990,15 +990,21 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
             // diluted — architect flagged this explicitly. The
             // "Source:" prefix is dropped (context = engine header).
             const isUnknown = sourceHdr.source === "unknown";
-            const dotColor = sourceHdr.source === "database"
-              ? "#22D3A0"
-              : sourceHdr.source === "mixed"
-                ? "#FF9500"
-                : sourceHdr.source === "estimated"
-                  ? "#FF2D78"
+            // Green for all DB-backed sources; orange for mixed; pink for estimated; red for unknown.
+            const isGreen = sourceHdr.source === "database" || sourceHdr.source === "user_history"
+              || sourceHdr.source === "open_food_facts" || sourceHdr.source === "usda";
+            const dotColor = isGreen ? "#22D3A0"
+              : sourceHdr.source === "mixed" ? "#FF9500"
+                : sourceHdr.source === "estimated" ? "#FF2D78"
                   : "#FF6B6B";
             const label = tEngineHdr(`nutrition_source_${sourceHdr.source}`);
-            const tip   = tEngineHdr(`nutrition_source_explain_${sourceHdr.source}`);
+            // For user_history with a count, the tooltip includes the precise
+            // "Basiert auf X vorherigen Einträgen" text; other sources use the
+            // static explain key.
+            const baseTip = tEngineHdr(`nutrition_source_explain_${sourceHdr.source}`);
+            const tip = sourceHdr.source === "user_history" && sourceHdr.historyCount != null
+              ? tEngineHdr("nutrition_source_explain_user_history_count", { count: sourceHdr.historyCount })
+              : baseTip;
             return (
               <div
                 title={tip}

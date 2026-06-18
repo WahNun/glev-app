@@ -793,17 +793,18 @@ export default function EnginePage() {
   // refinements) returns a `nutritionSource` field, and reset alongside
   // the macro fields on every new-meal flow.
   const [nutritionSource, setNutritionSource] =
-    useState<"database" | "mixed" | "estimated" | "unknown" | null>(null);
+    useState<import("@/lib/nutrition/types").AggregateSource | null>(null);
+  const [historyMinOccurrences, setHistoryMinOccurrences] = useState<number | null>(null);
   // Mirror nutritionSource into the global app-header context so the
   // provenance pill renders next to the brand lockup on mobile (see
   // Layout.tsx). Clearing on unmount prevents the pill from sticking
   // around when the user navigates to another route mid-flow.
   useEffect(() => {
-    sourceHdr.setSource(nutritionSource);
+    sourceHdr.setSource(nutritionSource, historyMinOccurrences ?? undefined);
     // Depend on the stable setter only — the provider value object is
     // freshly allocated each render, so depending on `sourceHdr` itself
     // would re-run this effect every render with the same value.
-  }, [nutritionSource, sourceHdr.setSource]);
+  }, [nutritionSource, historyMinOccurrences, sourceHdr.setSource]);
   useEffect(() => {
     return () => { sourceHdr.setSource(null); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1418,6 +1419,7 @@ export default function EnginePage() {
       // New voice take → drop any prior pipeline state so a stale 'unknown'
       // badge or stale per-item breakdown can't bleed into this take.
       setNutritionSource(null);
+      setHistoryMinOccurrences(null);
       setParsedItems([]);
       const preferred = ["audio/webm;codecs=opus", "audio/webm", "audio/mp4", "audio/mpeg"]
         .find(t => MediaRecorder.isTypeSupported(t));
@@ -1563,8 +1565,10 @@ export default function EnginePage() {
       // Capture the macro provenance from the two-stage nutrition pipeline
       // (Open Food Facts + USDA + GPT-fallback). Surfaced as a Step 2 badge.
       const ns = pData.nutritionSource;
-      setNutritionSource(
-        ns === "database" || ns === "mixed" || ns === "estimated" || ns === "unknown" ? ns : null,
+      const validSources = ["database","user_history","open_food_facts","usda","mixed","estimated","unknown"];
+      setNutritionSource(validSources.includes(ns) ? ns : null);
+      setHistoryMinOccurrences(
+        typeof pData.historyMinOccurrences === "number" ? pData.historyMinOccurrences : null,
       );
       // Seed the chat panel — Lucas 2026-05-12: drop the chatty "Got it"
       // opener and the "Tell me if anything's off" follow-up. The user
@@ -2267,6 +2271,7 @@ export default function EnginePage() {
     setDesc(""); setInsulin(""); setResult(null); setResultICRSource(null); setTranscript("");
     setAiMealType(null);
     setNutritionSource(null);
+    setHistoryMinOccurrences(null);
     setParsedItems([]);
     setPortionSuggestions(new Map());
     setDismissedSuggestions(new Set());

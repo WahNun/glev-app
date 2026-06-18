@@ -96,6 +96,9 @@ export async function POST(req: NextRequest) {
     description: parsed.description,
     // New fields surfaced by the two-stage pipeline:
     nutritionSource: aggregated.nutritionSource,
+    ...(aggregated.historyMinOccurrences !== undefined
+      ? { historyMinOccurrences: aggregated.historyMinOccurrences }
+      : {}),
     raw: parsed.raw,
   });
 }

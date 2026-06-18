@@ -12,27 +12,46 @@ import { createContext, useContext, useState, useCallback, useMemo, type ReactNo
  * clears it (setSource(null)) when leaving Step 2 or starting a
  * fresh meal so other pages don't inherit a stale pill.
  *
- * Values mirror `nutritionSource` in app/(protected)/engine/page.tsx:
- *   "database"  → all macros from Open Food Facts + USDA (green)
- *   "mixed"     → DB + AI estimate blend (orange)
- *   "estimated" → pure AI estimation (pink)
- *   "unknown"   → pipeline couldn't price any ingredient (red+pulse)
- *   null        → no source recorded → hide the pill
+ * Values mirror `AggregateSource` in lib/nutrition/types.ts:
+ *   "user_history"   → all items from per-user food log ("Aus deinen Logs")
+ *   "open_food_facts"→ all items from Open Food Facts
+ *   "usda"           → all items from USDA FoodData Central
+ *   "database"       → mix of DB sources (green)
+ *   "mixed"          → DB + AI estimate blend (orange)
+ *   "estimated"      → pure AI estimation (pink)
+ *   "unknown"        → pipeline couldn't price any ingredient (red+pulse)
+ *   null             → no source recorded → hide the pill
+ *
+ * `historyCount` is only set when source === "user_history" and carries
+ * the min occurrence count across resolved items, used for the badge text
+ * "Basiert auf X vorherigen Einträgen".
  */
-export type NutritionSource = "database" | "mixed" | "estimated" | "unknown";
+export type NutritionSource =
+  | "database"
+  | "user_history"
+  | "open_food_facts"
+  | "usda"
+  | "mixed"
+  | "estimated"
+  | "unknown";
 
 export interface EngineSourceHeaderState {
-  source:    NutritionSource | null;
-  setSource: (s: NutritionSource | null) => void;
+  source:       NutritionSource | null;
+  historyCount: number | null;
+  setSource:    (s: NutritionSource | null, historyCount?: number) => void;
 }
 
 const EngineSourceHeaderContext = createContext<EngineSourceHeaderState | null>(null);
 
 export function EngineSourceHeaderProvider({ children }: { children: ReactNode }) {
   const [source, setSourceState] = useState<NutritionSource | null>(null);
-  const setSource = useCallback((s: NutritionSource | null) => setSourceState(s), []);
+  const [historyCount, setHistoryCount] = useState<number | null>(null);
+  const setSource = useCallback((s: NutritionSource | null, count?: number) => {
+    setSourceState(s);
+    setHistoryCount(count ?? null);
+  }, []);
   // Memoize to prevent Layout (both parent and consumer) from looping.
-  const value = useMemo(() => ({ source, setSource }), [source, setSource]);
+  const value = useMemo(() => ({ source, historyCount, setSource }), [source, historyCount, setSource]);
 
   return (
     <EngineSourceHeaderContext.Provider value={value}>
@@ -47,7 +66,7 @@ export function useEngineSourceHeader(): EngineSourceHeaderState {
     // Safe no-op fallback for unwrapped routes (unit tests, auth
     // screens). Returning a stub avoids throwing in any consumer
     // rendered outside the provider tree.
-    return { source: null, setSource: () => {} };
+    return { source: null, historyCount: null, setSource: () => {} };
   }
   return ctx;
 }
