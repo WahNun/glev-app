@@ -145,10 +145,18 @@ export default function LoginPage() {
     setError(null);
     try {
       const { AppleSignIn, SignInScope } = await import("@capawesome/capacitor-apple-sign-in");
-      const nonce = crypto.randomUUID();
+      const rawNonce = crypto.randomUUID();
+      const hashBuffer = await crypto.subtle.digest(
+        "SHA-256",
+        new TextEncoder().encode(rawNonce),
+      );
+      const hashedNonce = Array.from(new Uint8Array(hashBuffer))
+        .map((b) => b.toString(16).padStart(2, "0"))
+        .join("");
+
       const result = await AppleSignIn.signIn({
         scopes: [SignInScope.Email, SignInScope.FullName],
-        nonce,
+        nonce: hashedNonce,
       });
 
       const { idToken } = result;
@@ -157,7 +165,7 @@ export default function LoginPage() {
       const { data, error: authError } = await supabase.auth.signInWithIdToken({
         provider: "apple",
         token: idToken,
-        nonce,
+        nonce: rawNonce,
       });
 
       if (authError) throw authError;
