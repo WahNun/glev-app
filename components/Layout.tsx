@@ -23,7 +23,6 @@ import { EngineHeaderProvider, useEngineHeader } from "@/lib/engineHeaderContext
 import TrialCountdownBanner from "@/components/TrialCountdownBanner";
 import { EngineSourceHeaderProvider, useEngineSourceHeader } from "@/lib/engineSourceHeaderContext";
 import { EngineWizardStepProvider, useEngineWizardStep } from "@/lib/engineWizardStepContext";
-import { VoiceRecordingProvider, useVoiceRecording } from "@/lib/voiceRecordingContext";
 import {
   ScopeHeaderProvider, useScopeHeader,
   type ScopeMode,
@@ -101,9 +100,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       <EngineSourceHeaderProvider>
         <EngineWizardStepProvider>
           <ScopeHeaderProvider>
-            <VoiceRecordingProvider>
-              <LayoutInner>{children}</LayoutInner>
-            </VoiceRecordingProvider>
+            <LayoutInner>{children}</LayoutInner>
           </ScopeHeaderProvider>
         </EngineWizardStepProvider>
       </EngineSourceHeaderProvider>
@@ -160,10 +157,6 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
-  // Voice-recording bridge: while the engine is recording, the FAB's
-  // tap means "stop recording" (not "open quick-add"), and a "Speak"
-  // pill appears in the header as a global cue + secondary stop tap.
-  const voice = useVoiceRecording();
   const headerTts = useTTS();
 
   // TTS speaking state — driven by glev:tts-speaking CustomEvents from
@@ -187,29 +180,8 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
     return () => window.removeEventListener("glev:chat-position-changed", handler);
   }, []);
 
-  // arrowHint: briefly show the swipe-up arrow when voice recording starts
-  // while the chat sheet is closed and chatPosition === "swipe".
-  // Auto-clears after 2.4 s — matches the flicker animation duration.
-  const [arrowHint, setArrowHint] = useState(false);
-  const arrowHintTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  useEffect(() => {
-    if (voice.recording && !glevAi.sheetOpen && chatPosition === "swipe" && aiVoiceEnabled) {
-      setArrowHint(true);
-      if (arrowHintTimer.current) clearTimeout(arrowHintTimer.current);
-      arrowHintTimer.current = setTimeout(() => setArrowHint(false), 2400);
-    }
-    // When recording stops or chat opens, hide arrow immediately.
-    if (!voice.recording || glevAi.sheetOpen) {
-      if (arrowHintTimer.current) { clearTimeout(arrowHintTimer.current); arrowHintTimer.current = null; }
-      setArrowHint(false);
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [voice.recording, glevAi.sheetOpen, chatPosition, aiVoiceEnabled]);
-
   // aiThinking: true while the chat sheet's STT mic is active (user
   // speaking into the chat) OR while the AI is streaming a reply.
-  // Kept separate from voice.recording (engine STT) so both can be true
-  // simultaneously without interfering with each other.
   const [aiThinking, setAiThinking] = useState(false);
   useEffect(() => {
     function onTtsSpeaking(e: Event) {
@@ -310,7 +282,6 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
       if (typeof navigator !== "undefined" && "vibrate" in navigator) {
         try { navigator.vibrate?.(15); } catch { /* noop */ }
       }
-      if (voice.recording) return;
       setQuickAddOpen(true);
     }, 500);
   };
@@ -318,11 +289,7 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
     fabClearTimer();
     if (!fabLongFiredRef.current) {
       fabPointerHandledRef.current = true;
-      if (voice.recording) {
-        voice.requestStop();
-      } else {
-        runFabShortTap();
-      }
+      runFabShortTap();
     }
   };
   const fabHandlePointerCancel = () => {
@@ -335,11 +302,7 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
       fabPointerHandledRef.current = false;
       return;
     }
-    if (voice.recording) {
-      voice.requestStop();
-    } else {
-      runFabShortTap();
-    }
+    runFabShortTap();
   };
 
   // Dispatches the FAB short-tap. When ai_voice is enabled and consent is
@@ -455,18 +418,6 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
 
   const navTo = (path: string) => {
     hapticSelection();
-    // 2026-05-18 round 7 (TestFlight tap loss fix): defer voice stop into
-    // a microtask so its setState cascade (recording=false, engine page
-    // teardown, re-render) cannot run synchronously between this call and
-    // the router.push below. Previously a tab tap during an active voice
-    // recording would (a) trigger the capture-phase tap-anywhere-stop
-    // listener in VoiceRecordingProvider AND (b) call requestStop again
-    // here — the resulting double-flush sometimes left React in a state
-    // where the router.push appeared to be queued but never committed on
-    // WKWebView, looking like the tap was "dead".
-    if (voice.recording) {
-      queueMicrotask(() => { try { voice.requestStop(); } catch {} });
-    }
     setPendingPath(path);
     router.push(path);
   };
@@ -1098,33 +1049,7 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
               </button>
             </>
           ) : (
-            <>
-              <CgmStatusPill locale={locale} />
-              {voice.recording && (
-                <button
-                  type="button"
-                  onClick={voice.requestStop}
-                  aria-label={locale === "en" ? "Stop voice recording" : "Sprachaufnahme beenden"}
-                  style={{
-                    display: "inline-flex", alignItems: "center", gap: 8,
-                    height: 32, padding: "0 12px", borderRadius: 99,
-                    background: `${ACCENT}1f`,
-                    border: `1px solid ${ACCENT}`,
-                    color: ACCENT,
-                    fontSize: 13, fontWeight: 700, letterSpacing: "-0.005em",
-                    cursor: "pointer",
-                    animation: "glevMicPulse 1.4s ease-in-out infinite",
-                    WebkitTapHighlightColor: "transparent",
-                  }}
-                >
-                  <span style={{
-                    width: 8, height: 8, borderRadius: "50%", background: ACCENT,
-                    boxShadow: `0 0 8px ${ACCENT}`,
-                  }} aria-hidden="true" />
-                  Speak
-                </button>
-              )}
-            </>
+            <CgmStatusPill locale={locale} />
           )}
         </div>
       </header>
@@ -1340,8 +1265,8 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
             See fabHandle* handlers above for the interaction logic. */}
         <MobileGlevFab
           label={tNav("glev")}
-          active={quickAddOpen || voice.recording}
-          recording={!!(voice.recording || aiThinking || (aiVoiceEnabled && glevAi.streaming))}
+          active={quickAddOpen}
+          recording={!!(aiThinking || (aiVoiceEnabled && glevAi.streaming))}
           speaking={aiVoiceEnabled ? ttsSpeaking : false}
           sheetOpen={aiVoiceEnabled
             ? (pathname.startsWith("/engine")
@@ -1358,7 +1283,7 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
                     ? false
                     : !glevAi.sheetOpen))
             : false}
-          showArrow={arrowHint}
+          showArrow={false}
           aiState={aiVoiceEnabled ? glevAi.aiState : "idle"}
           audioAnalyserRef={glevAi.audioAnalyserRef}
         />
@@ -1409,8 +1334,8 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
         onClick={fabHandleClick}
         data-glev-fab-hit="true"
         aria-haspopup="dialog"
-        aria-expanded={quickAddOpen || voice.recording}
-        aria-label={voice.recording ? (locale === "en" ? "Glev — stop recording" : "Glev — Aufnahme beenden") : "Glev"}
+        aria-expanded={quickAddOpen}
+        aria-label="Glev"
         style={{
           position: "fixed",
           bottom: "calc(26px + var(--safe-bottom))",
@@ -1830,16 +1755,11 @@ function MobileTab({
 
   // 2026-05-18 round 7 (TestFlight footer-tap loss fix):
   // Previously this tab fired navigation from `onClick` only. On iOS
-  // WKWebView the synthesised click event would intermittently be lost:
-  //   1. Right after a route swap: React re-mounts the entire nav row
-  //      below new RSC output. The button DOM node the WebKit hit-test
-  //      resolved at touchstart is no longer the node that receives the
-  //      click — so the handler never runs, and the tap feels "dead".
-  //   2. While a voice recording is active: VoiceRecordingProvider's
-  //      capture-phase pointerdown listener calls setRecording(false)
-  //      BEFORE the click bubbles. That synchronous state cascade
-  //      tore down the engine page mid-dispatch and the click event
-  //      was sometimes never delivered to this button at all.
+  // WKWebView the synthesised click event would intermittently be lost
+  // right after a route swap: React re-mounts the entire nav row below
+  // new RSC output, so the button DOM node the WebKit hit-test resolved
+  // at touchstart is no longer the node that receives the click — the
+  // handler never runs and the tap feels "dead".
   // Mirror the Glev FAB: act on `pointerup` directly (which fires before
   // the click is synthesized), with movement/cancel guards so a vertical
   // scroll gesture started on the nav doesn't accidentally navigate.

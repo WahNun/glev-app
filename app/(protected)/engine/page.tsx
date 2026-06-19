@@ -470,17 +470,6 @@ export default function EnginePage() {
       setTab(t);
     }
   }, [searchParams]);
-  // Auto-start the voice recording when the user lands on /engine via
-  // the quick-add "Voice" entry (?voice=1). The bottom-nav Glev FAB
-  // doubles as the STOP control once recording is live (see
-  // voiceRecordingContext + Layout.tsx). We only fire once per landing
-  // — a guard ref prevents StrictMode double-invoke and prevents a
-  // second take if the user navigates back without a fresh ?voice=1.
-  // Per-trigger signature. We do NOT use a plain `hasFired` boolean
-  // because the URL gets stripped via window.history.replaceState
-  // below — that doesn't notify Next, so a later `router.push(...?voice=1)`
-  // from the bottom-nav Glev FAB would update searchParams but a
-  // boolean latch would still be true and we'd skip the auto-start.
   const [isMobile, setIsMobile] = useState(false);
   const aiVoiceEnabled = useGlevAIAccess();
   // When Glev AI consent is active the legacy food-parser chat panel
