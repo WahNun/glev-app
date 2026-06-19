@@ -199,11 +199,20 @@ function safeReadHistory(): GlevChatMessage[] {
 function safeWriteHistory(history: GlevChatMessage[]) {
   if (typeof window === "undefined") return;
   try {
-    const trimmed = history.slice(-MAX_HISTORY).map((m) => ({
-      id: m.id,
-      role: m.role,
-      content: m.content,
-    }));
+    const trimmed = history.slice(-MAX_HISTORY).map((m) => {
+      const base = { id: m.id, role: m.role, content: m.content };
+      if (!m.pendingActions?.length) return base;
+      // Persist non-terminal chips so they survive session restores (app
+      // backgrounded on iOS, page refresh). Normalize confirming → pending
+      // because mid-flight confirms have unknown outcome after reload.
+      const actions = m.pendingActions
+        .filter((a) => a.state !== "cancelled" && a.state !== "confirmed")
+        .map((a) => ({
+          ...a,
+          state: (a.state === "confirming" ? "pending" : a.state) as PendingActionState,
+        }));
+      return actions.length ? { ...base, pendingActions: actions } : base;
+    });
     window.sessionStorage.setItem(HISTORY_KEY, JSON.stringify(trimmed));
   } catch {
     /* ignore quota / privacy errors */
@@ -1028,17 +1037,41 @@ export function useGlevAI(opts?: {
       // Search the flushed state queue first, then fall back to the ref queue
       // (items live in the ref while the stream is still running, and are
       // only moved to state after streaming ends).
-      const match =
+      const queueMatch =
         pendingMealNavQueue.find((item) => item.token === token) ??
         pendingMealQueueRef.current.find((item) => item.token === token);
 
-      if (!match) return;
+      // Fallback: reconstruct mealPrep from the chip payload when the queue is
+      // empty (session restored, app backgrounded + killed, or queue cleared).
+      // The chip's payload carries the same macro data as the meal_prep frame.
+      let mealPrep: MealQueueItem["mealPrep"] | null = queueMatch?.mealPrep ?? null;
+      if (!mealPrep) {
+        for (const m of messages) {
+          if (m.id !== messageId) continue;
+          const pa = m.pendingActions?.find((a) => a.token === token);
+          if (pa?.payload) {
+            const p = pa.payload as MealPendingPayload;
+            mealPrep = {
+              input_text: p.input_text ?? "",
+              carbs: p.carbs_grams ?? 0,
+              protein: p.protein_grams ?? null,
+              fat: p.fat_grams ?? null,
+              fiber: p.fiber_grams ?? null,
+              ...(p.meal_time_explicit && p.logged_at ? { meal_time: p.logged_at } : {}),
+              ...(p.nutritionSource ? { nutritionSource: p.nutritionSource } : {}),
+            };
+          }
+          break;
+        }
+      }
+
+      if (!mealPrep) return;
 
       // Write meal data every time (re-navigation after back needs fresh sessionStorage
       // because the Engine page clears glev_pending_meal on mount).
       if (typeof window !== "undefined") {
         try {
-          sessionStorage.setItem("glev_pending_meal", JSON.stringify(match.mealPrep));
+          sessionStorage.setItem("glev_pending_meal", JSON.stringify(mealPrep));
           sessionStorage.setItem("glev_engine_back_to", "/glev-ai");
         } catch { /* ignore quota / privacy errors */ }
         window.dispatchEvent(new CustomEvent("glev:meal-prefill"));

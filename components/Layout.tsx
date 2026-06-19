@@ -1400,7 +1400,12 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
               onSend={glevAi.sendMessage}
               onConfirmAction={glevAi.confirmAction}
               onCancelAction={glevAi.cancelAction}
-              onOpenEngineForMeal={glevAi.openEngineForMeal}
+              onOpenEngineForMeal={async (messageId, token) => {
+                await glevAi.openEngineForMeal(messageId, token);
+                // Close the fullscreen overlay so the macros step is visible
+                // after "Macros prüfen →" is tapped while already on /engine.
+                setGlevAiFullscreenOpen(false);
+              }}
               onQuickSaveAction={glevAi.quickSaveAction}
               onDetailOpen={glevAi.navigateToLogScreen}
               onClearChat={glevAi.clearMessages}
