@@ -226,6 +226,7 @@ function MealChipExpanded({
   timeStr,
   itemsForExpand: initialItems,
   mealPrepId,
+  nutritionSource,
   totalAlcoholG = 0,
   showQueueBadge,
   mealChipIndex,
@@ -243,6 +244,8 @@ function MealChipExpanded({
   itemsForExpand: Array<ParsedFood>;
   /** Phase 3: id for Realtime refinement subscription. */
   mealPrepId?: string;
+  /** Top-level nutrition provenance from the aggregator (AggregateSource). */
+  nutritionSource?: string | null;
   /** Dual-Emission: total alcohol grams across items — shows ⇄ indicator. */
   totalAlcoholG?: number;
   showQueueBadge: boolean;
@@ -391,9 +394,15 @@ function MealChipExpanded({
           const badge = aggregateBadge(
             itemsForExpand.map((it) => ({ source: (it.source ?? "estimated") as NutritionSource })),
           );
+          // Prefer the top-level nutritionSource from the aggregator when it
+          // signals "user_history" — aggregateBadge collapses all DB sources
+          // to "verified" so we'd lose the distinction without this check.
           const src: NutritionSource =
-            badge === "verified" ? "open_food_facts" :
-            badge === "mixed"    ? "user_history"    : "estimated";
+            (nutritionSource === "user_history" || nutritionSource === "user_confirmed")
+              ? "user_history"
+              : badge === "verified" ? "open_food_facts"
+              : badge === "mixed"    ? "user_history"
+              : "estimated";
           return (
             <span style={{ opacity: badgesTransitioning ? 0 : 1, transition: "opacity 0.25s ease" }}>
               <SourceBadge source={src} />
@@ -688,6 +697,7 @@ function PendingActionWidget({
     const itemsForExpand: Array<ParsedFood> = p?.items ?? [];
     const mealPrepId = p?.meal_prep_id;
     const totalAlcoholG = p?.total_alcohol_g ?? 0;
+    const nutritionSource = p?.nutritionSource ?? null;
 
     return (
       <MealChipExpanded
@@ -699,6 +709,7 @@ function PendingActionWidget({
         timeStr={timeStr}
         itemsForExpand={itemsForExpand}
         mealPrepId={mealPrepId}
+        nutritionSource={nutritionSource}
         totalAlcoholG={totalAlcoholG}
         showQueueBadge={showQueueBadge}
         mealChipIndex={mealChipIndex}
