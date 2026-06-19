@@ -84,24 +84,12 @@ export type QuickAddItem = {
 // CTA) imports this list so the two stay in sync automatically.
 // "Mahlzeit loggen" is intentionally NOT here — the Glev item already
 // routes to the meal voice flow; see QuickAddMenu.tsx for the rationale.
-/**
- * Decorate a quick-add href just before navigation. Voice-start URLs
- * (`?voice=1`) get a `vt=<timestamp>` cache-buster appended so the
- * engine page's auto-start effect treats every click as a fresh
- * trigger — even when the user is already on /engine (where two
- * identical `voice=1` pushes would otherwise dedupe in the engine
- * page's per-token guard and silently swallow the second tap). See
- * app/(protected)/engine/page.tsx voiceLastTokenRef. Pass-through for
- * all other hrefs.
- */
 export function decorateQuickAddHref(href: string): string {
-  if (!href.includes("voice=1")) return href;
-  const sep = href.includes("?") ? "&" : "?";
-  return `${href}${sep}vt=${Date.now()}`;
+  return href;
 }
 
 export const QUICK_ADD_ITEMS: QuickAddItem[] = [
-  { key: "open_engine",     href: "/engine?tab=engine&voice=1", icon: QA_ICONS.engine    },
+  { key: "open_engine",     href: "/engine?tab=engine",         icon: QA_ICONS.engine    },
   { key: "log_insulin",     href: "/engine?tab=bolus",       icon: QA_ICONS.syringe   },
   { key: "measure_glucose", href: "/engine?tab=fingerstick", icon: QA_ICONS.droplet   },
   { key: "log_activity",    href: "/engine?tab=exercise",    icon: QA_ICONS.run       },
