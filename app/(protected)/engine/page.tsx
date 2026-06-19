@@ -526,7 +526,9 @@ export default function EnginePage() {
   // When Glev AI consent is active the legacy food-parser chat panel
   // (EngineChatPanel / "AI FOOD PARSER") is hidden — users interact
   // exclusively via the global Glev AI sheet instead.
-  const { consentGranted: glevAiConsented } = useGlevAIContext();
+  // consentLoaded gates the switch so the old panel never flashes for
+  // consented users during the Supabase fetch window.
+  const { consentGranted: glevAiConsented, consentLoaded } = useGlevAIContext();
   const [meals, setMeals]     = useState<Meal[]>([]);
   const [adaptedICR, setAdaptedICR] = useState(15);
   const [selectedICR, setSelectedICR] = useState<'static' | 'adaptive'>('adaptive');
@@ -2856,7 +2858,7 @@ export default function EnginePage() {
                   (chatPanelNode below) owns the voice/text input, so this
                   pill is desktop-only. Hidden when Glev AI consent is active —
                   the fullscreen Glev AI chat auto-opens and is the primary UI. */}
-              {!isMobile && !glevAiConsented && (
+              {!isMobile && consentLoaded && !glevAiConsented && (
                 <button
                   type="button"
                   onClick={() => recording ? stopRecording() : startRecording()}
@@ -2908,7 +2910,7 @@ export default function EnginePage() {
                   always rendered on mobile regardless of ai_voice flag.
                   Hidden when Glev AI consent is active — users use the
                   global Glev AI sheet instead. */}
-              {isMobile && !glevAiConsented && chatPanelNode}
+              {isMobile && consentLoaded && !glevAiConsented && chatPanelNode}
               {(() => {
                 const anyMacro =
                   (Number(carbs)   || 0) > 0 ||
@@ -3948,7 +3950,7 @@ export default function EnginePage() {
               internal message scroller works as expected and the input row
               never disappears below the fold. minHeight 480 protects the
               experience on shorter viewports (e.g. landscape laptops). */}
-          {!isMobile && aiVoiceEnabled && !glevAiConsented && (
+          {!isMobile && aiVoiceEnabled && consentLoaded && !glevAiConsented && (
             <aside
               style={{
                 position: "sticky",
