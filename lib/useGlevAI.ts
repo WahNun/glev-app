@@ -78,6 +78,8 @@ export type MealPendingPayload = {
   glucose_before: number | null;
   /** Stable ID used to subscribe to meal_prep_refinements Realtime channel. */
   meal_prep_id?:  string;
+  /** Top-level nutrition source from the aggregator pipeline. */
+  nutritionSource?: string;
   /** Per-item breakdown with resolved sources. Present when aggregator ran. */
   items?:         ParsedFood[];
   /** Total alcohol in grams across all items — triggers Dual-Emission. */
@@ -131,6 +133,8 @@ export type MealQueueItem = {
     /** ISO-8601 meal time (with UTC offset) set by the AI when the user
      *  named a historical time ("vor 3 Minuten"). Absent = treat as now. */
     meal_time?: string;
+    /** Top-level nutrition source from the aggregator pipeline. */
+    nutritionSource?: string;
   };
   /** Display label derived from input_text (max 40 chars). */
   label: string;
@@ -629,6 +633,7 @@ export function useGlevAI(opts?: {
                 protein: number | null;
                 fat: number | null;
                 fiber: number | null;
+                nutritionSource?: string;
               };
             }
             let parsed: SseFrame | null = null;

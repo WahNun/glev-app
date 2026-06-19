@@ -673,6 +673,7 @@ export default function EnginePage() {
         fat?: number | null;
         fiber?: number | null;
         meal_time?: string;
+        nutritionSource?: string;
       };
       if (typeof mp.input_text === "string" && mp.input_text) setDesc(mp.input_text);
       if (typeof mp.carbs === "number" && Number.isFinite(mp.carbs)) {
@@ -697,6 +698,10 @@ export default function EnginePage() {
           setMealTime(new Date(d.getTime() - off).toISOString().slice(0, 16));
         }
       }
+      if (typeof mp.nutritionSource === "string") {
+        const validSources = ["database","user_history","open_food_facts","usda","mixed","estimated","unknown"];
+        setNutritionSource(validSources.includes(mp.nutritionSource) ? mp.nutritionSource as import("@/lib/nutrition/types").AggregateSource : null);
+      }
       // Stay on the engine tab and advance to step 1 (macros review) so the
       // macro cards are immediately visible on both mobile and desktop.
       // Switching to "log" would get downgraded to "bolus" on mobile (line ~1130).
@@ -719,7 +724,7 @@ export default function EnginePage() {
         const mp = JSON.parse(raw) as {
           input_text?: string; carbs?: number;
           protein?: number | null; fat?: number | null; fiber?: number | null;
-          meal_time?: string;
+          meal_time?: string; nutritionSource?: string;
         };
         if (typeof mp.input_text === "string" && mp.input_text) setDesc(mp.input_text);
         if (typeof mp.carbs === "number" && Number.isFinite(mp.carbs))
@@ -738,6 +743,10 @@ export default function EnginePage() {
             const off = d.getTimezoneOffset() * 60_000;
             setMealTime(new Date(d.getTime() - off).toISOString().slice(0, 16));
           }
+        }
+        if (typeof mp.nutritionSource === "string") {
+          const validSources = ["database","user_history","open_food_facts","usda","mixed","estimated","unknown"];
+          setNutritionSource(validSources.includes(mp.nutritionSource) ? mp.nutritionSource as import("@/lib/nutrition/types").AggregateSource : null);
         }
         // Same as mount handler — engine tab + step 1 (macros), not "log".
         setTab("engine");

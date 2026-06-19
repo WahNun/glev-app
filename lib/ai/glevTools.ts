@@ -46,7 +46,7 @@ import {
 } from "@/lib/iob";
 import { aggregateNutrition } from "@/lib/nutrition/aggregate";
 import { getCachedUserHistory } from "@/lib/nutrition/userHistoryCache";
-import type { ParsedFoodItem } from "@/lib/nutrition/types";
+import type { ParsedFoodItem, AggregateSource } from "@/lib/nutrition/types";
 import { applyAlcoholFallback, sumAlcoholG, hasAlcoholKeyword } from "@/lib/ai/alcoholFallback";
 
 // ── Tool definitions (Mistral function-calling schema) ───────────────
@@ -181,15 +181,15 @@ export const GLEV_TOOLS = [
           },
           protein_grams: {
             type: "number",
-            description: "Optional: Eiweiß in Gramm.",
+            description: "Eiweiß in Gramm. IMMER setzen — eigene Schätzung wenn kein DB-Wert vorliegt (z. B. Hähnchen ≈ 30g/100g, Pizza ≈ 11g/100g, Haferflocken ≈ 13g/100g).",
           },
           fat_grams: {
             type: "number",
-            description: "Optional: Fett in Gramm.",
+            description: "Fett in Gramm. IMMER setzen — eigene Schätzung wenn kein DB-Wert vorliegt (z. B. Pizza ≈ 10g/100g, Haferflocken ≈ 7g/100g, Hähnchenbrust ≈ 3g/100g).",
           },
           fiber_grams: {
             type: "number",
-            description: "Ballaststoffe in Gramm. IMMER setzen wenn die aggregate-Pipeline einen Wert liefert (User-History, Open Food Facts, USDA oder GPT-Fallback). Bei GPT-Schätzung ohne DB-Daten: Schätzung basierend auf Lebensmittel-Typ angeben — z. B. Apfel ≈ 2g, Pizza ≈ 2.5g, Linsen ≈ 8g, Süßigkeiten ohne Ballaststoffe = 0. Nur weglassen wenn der Lebensmittel-Typ vollständig unbekannt ist.",
+            description: "Ballaststoffe in Gramm. IMMER setzen — eigene Schätzung wenn kein DB-Wert vorliegt (z. B. Apfel ≈ 2g, Pizza ≈ 2.5g, Linsen ≈ 8g, Süßigkeiten ≈ 0g).",
           },
           meal_type: {
             type: "string",
@@ -216,7 +216,7 @@ export const GLEV_TOOLS = [
             },
           },
         },
-        required: ["input_text", "carbs_grams", "items"],
+        required: ["input_text", "carbs_grams", "protein_grams", "fat_grams", "fiber_grams", "items"],
       },
     },
   },
@@ -1626,34 +1626,68 @@ async function toolLogMealEntry(
   const mealPrepId = crypto.randomUUID();
 
   // Helper: run aggregator, log metrics, write refinement row.
-  async function runAggregator(targetId: string): Promise<import("@/lib/meals").ParsedFood[] | undefined> {
-    if (!aggregatorEnabled || rawItems.length === 0) return undefined;
+  // Returns items + nutritionSource, or undefined on hard failure.
+  async function runAggregator(targetId: string): Promise<
+    { items: import("@/lib/meals").ParsedFood[]; nutritionSource: AggregateSource } | undefined
+  > {
+    if (!aggregatorEnabled) return undefined;
     const t0 = Date.now();
     try {
-      const parsedItems: ParsedFoodItem[] = rawItems.map((i) => ({
-        name:               String(i.name),
-        grams:              Number(i.grams),
-        is_branded:         false,
-        search_term_en:     String(i.name),
-        search_term_de:     String(i.name),
-        quantity_specified: true,
-      }));
+      // When rawItems is empty (Mistral didn't provide items[] or all were
+      // filtered), synthesize a single item from inputText at 100g so the
+      // aggregator can resolve user-history / OFF / USDA per-100g values.
+      // Results are then scaled to match the AI-provided carbs estimate.
+      const usingFallback = rawItems.length === 0;
+      const parsedItems: ParsedFoodItem[] = usingFallback
+        ? (inputText ? [{
+            name:               inputText.slice(0, 100),
+            grams:              100,
+            is_branded:         false,
+            search_term_en:     inputText.slice(0, 100),
+            search_term_de:     inputText.slice(0, 100),
+            quantity_specified: false,
+          }] : [])
+        : rawItems.map((i) => ({
+            name:               String(i.name),
+            grams:              Number(i.grams),
+            is_branded:         false,
+            search_term_en:     String(i.name),
+            search_term_de:     String(i.name),
+            quantity_specified: true,
+          }));
+
+      if (parsedItems.length === 0) return undefined;
+
       const userHistory = await getCachedUserHistory(
         sb, userId, parsedItems.map((p) => p.name),
       ).catch(() => new Map());
 
       const agg = await aggregateNutrition(parsedItems, { userHistory });
-      const resolved: import("@/lib/meals").ParsedFood[] = agg.items.map((it) => ({
+
+      let resolved: import("@/lib/meals").ParsedFood[] = agg.items.map((it) => ({
         name: it.name, grams: it.grams, carbs: it.carbs,
         protein: it.protein, fat: it.fat, fiber: it.fiber, source: it.source,
       }));
 
+      // Scale fallback results: the synthetic item was at 100g, so per-item
+      // values are per-100g. Scale to match the AI-provided carbs estimate
+      // so the output reflects the actual portion size.
+      if (usingFallback && agg.totals.carbs > 0 && carbs > 0) {
+        const scale = carbs / agg.totals.carbs;
+        resolved = resolved.map((it) => ({
+          ...it,
+          carbs:   Math.round(it.carbs   * scale),
+          protein: Math.round(it.protein * scale),
+          fat:     Math.round(it.fat     * scale),
+          fiber:   Math.round(it.fiber   * scale),
+          grams:   Math.round(it.grams   * scale),
+        }));
+      }
+
       const dbHits  = agg.items.filter((i) => i.source !== "estimated" && i.source !== "unknown").length;
       const estCnt  = agg.items.length - dbHits;
       const elapsed = Date.now() - t0;
-      console.log(`[meal_prep] id=${targetId} aggregator: ${agg.items.length} items, ${dbHits} db-hits, ${estCnt} estimates, ${elapsed}ms`);
-      // [DIAGNOSE-TP1] Aggregator output — TEMPORÄR, entfernen nach Diagnose
-      console.log(`[DIAGNOSE-TP1] agg.nutritionSource=${agg.nutritionSource} totals=${JSON.stringify(agg.totals)} items=${JSON.stringify(agg.items.map(i => ({ n: i.name, p: i.protein, f: i.fat, src: i.source })))}`);
+      console.log(`[meal_prep] id=${targetId} aggregator: ${agg.items.length} items, ${dbHits} db-hits, ${estCnt} estimates, ${elapsed}ms fallback=${usingFallback}`);
 
       if (optimisticEnabled) {
         // Fire-and-forget: write refinement row; Realtime notifies the client.
@@ -1663,7 +1697,7 @@ async function toolLogMealEntry(
             .upsert({ id: targetId, user_id: userId, items_refined: resolved, status: "completed", completed_at: new Date().toISOString() }, { onConflict: "id" })
         ).catch((e: unknown) => console.error("[meal_prep] refinement write failed:", e));
       }
-      return resolved;
+      return { items: resolved, nutritionSource: agg.nutritionSource };
     } catch (aggErr) {
       console.error(`[meal_prep] id=${targetId} aggregator error (fallback to Mistral macros):`, aggErr);
       if (optimisticEnabled) {
@@ -1677,6 +1711,7 @@ async function toolLogMealEntry(
   }
 
   let resolvedItems: import("@/lib/meals").ParsedFood[] | undefined;
+  let resolvedNutritionSource: AggregateSource | undefined;
   let resolvedCarbs   = carbs;
   let resolvedProtein = protein;
   let resolvedFat     = fat;
@@ -1685,8 +1720,10 @@ async function toolLogMealEntry(
 
   if (aggregatorEnabled && !optimisticEnabled) {
     // Synchronous path (Phase 2): await aggregator before returning.
-    resolvedItems = await runAggregator(mealPrepId);
-    if (resolvedItems) {
+    const aggResult = await runAggregator(mealPrepId);
+    if (aggResult) {
+      resolvedItems = aggResult.items;
+      resolvedNutritionSource = aggResult.nutritionSource;
       const totals = resolvedItems.reduce(
         (acc, it) => ({ carbs: acc.carbs + it.carbs, protein: acc.protein + it.protein, fat: acc.fat + it.fat, fiber: acc.fiber + it.fiber }),
         { carbs: 0, protein: 0, fat: 0, fiber: 0 },
@@ -1741,12 +1778,10 @@ async function toolLogMealEntry(
     meal_time_explicit:  loggedAtExplicit,
     glucose_before:      glucoseBefore,
     meal_prep_id:        mealPrepId,
+    ...(resolvedNutritionSource ? { nutritionSource: resolvedNutritionSource } : {}),
     ...(resolvedItems ? { items: resolvedItems } : {}),
     ...(totalAlcoholG > 0 ? { total_alcohol_g: Math.round(totalAlcoholG * 10) / 10 } : {}),
   };
-
-  // [DIAGNOSE-TP2] mealParams before createPendingAction — TEMPORÄR, entfernen nach Diagnose
-  console.log(`[DIAGNOSE-TP2] mealParams: carbs=${mealParams.carbs_grams} protein=${mealParams.protein_grams} fat=${mealParams.fat_grams} fiber=${mealParams.fiber_grams} items_count=${(mealParams as Record<string,unknown>).items ? (mealParams as unknown as {items: unknown[]}).items.length : 0}`);
   const tzField = userTimezone ? { _user_timezone: userTimezone } : {};
 
   if (totalAlcoholG > 0) {
