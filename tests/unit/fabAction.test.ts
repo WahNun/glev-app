@@ -64,7 +64,7 @@ test("engine + no AI: legacy navigate", () => {
     sheetOpen: false,
     fullscreenOpen: false,
   });
-  expect(action).toEqual({ type: "legacy-navigate" });
+  expect(action).toEqual({ type: "open-paywall" });
 });
 
 test("engine sub-path (/engine/something) is also handled as engine", () => {
@@ -99,7 +99,7 @@ test("/glev-ai + no AI: legacy navigate", () => {
     sheetOpen: false,
     fullscreenOpen: false,
   });
-  expect(action).toEqual({ type: "legacy-navigate" });
+  expect(action).toEqual({ type: "open-paywall" });
 });
 
 // ── Non-engine pages — primary AI+consent flow ──────────────────────────────
@@ -150,7 +150,7 @@ test("settings + AI+consent: navigates to /glev-ai", () => {
 
 // ── Non-engine + AI but no consent ──────────────────────────────────────────
 
-test("dashboard + AI but no consent: shows consent modal (not legacy-navigate)", () => {
+test("dashboard + AI but no consent: shows consent modal (not open-paywall)", () => {
   const action = resolveFabAction({
     pathname: "/dashboard",
     aiVoiceEnabled: true,
@@ -162,9 +162,9 @@ test("dashboard + AI but no consent: shows consent modal (not legacy-navigate)",
   expect(action).toEqual({ type: "consent-modal" });
 });
 
-// ── Legacy fallback (no AI feature flag) ────────────────────────────────────
+// ── Free-user fallback (no AI feature flag) ──────────────────────────────────
 
-test("no AI flag: legacy navigate (router.replace path)", () => {
+test("no AI flag: open-paywall (Smart-tier PaywallSheet)", () => {
   const action = resolveFabAction({
     pathname: "/dashboard",
     aiVoiceEnabled: false,
@@ -172,13 +172,13 @@ test("no AI flag: legacy navigate (router.replace path)", () => {
     sheetOpen: false,
     fullscreenOpen: false,
   });
-  expect(action).toEqual({ type: "legacy-navigate" });
+  expect(action).toEqual({ type: "open-paywall" });
 });
 
-test("no AI flag, on entries after a save: legacy navigate (nav-flash fix)", () => {
+test("no AI flag, on entries after a save: open-paywall (no nav-flash)", () => {
   // Regression guard: this was the nav-flash scenario — user saved an entry
-  // and was still on /entries; FAB used to router.push (add to stack) → flash.
-  // Now we return legacy-navigate (which uses router.replace in Layout.tsx).
+  // and was still on /entries; FAB used to router.push/replace to /engine.
+  // Now we show the PaywallSheet in-place — no navigation, no flash.
   const action = resolveFabAction({
     pathname: "/entries",
     aiVoiceEnabled: false,
@@ -186,13 +186,13 @@ test("no AI flag, on entries after a save: legacy navigate (nav-flash fix)", () 
     sheetOpen: false,
     fullscreenOpen: false,
   });
-  expect(action).toEqual({ type: "legacy-navigate" });
+  expect(action).toEqual({ type: "open-paywall" });
 });
 
 // ── Edge cases ───────────────────────────────────────────────────────────────
 
-test("consentGranted=true but aiVoiceEnabled=false: legacy navigate", () => {
-  // Consent without flag is meaningless — should still fall back to legacy.
+test("consentGranted=true but aiVoiceEnabled=false: open-paywall", () => {
+  // Consent without flag is meaningless — should still show paywall.
   const action = resolveFabAction({
     pathname: "/dashboard",
     aiVoiceEnabled: false,
@@ -200,5 +200,5 @@ test("consentGranted=true but aiVoiceEnabled=false: legacy navigate", () => {
     sheetOpen: false,
     fullscreenOpen: false,
   });
-  expect(action).toEqual({ type: "legacy-navigate" });
+  expect(action).toEqual({ type: "open-paywall" });
 });

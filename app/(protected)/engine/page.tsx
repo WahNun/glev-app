@@ -29,10 +29,9 @@ import FingerstickLogCard from "@/components/FingerstickLogCard";
 import { CycleForm, SymptomForm } from "@/components/CycleSymptomForms";
 import { InfluenceForm } from "@/components/InfluenceLogForm";
 import GlevLogo from "@/components/GlevLogo";
-import EngineChatPanel, { type SeedMessage } from "@/components/EngineChatPanel";
+import EngineChatPanel from "@/components/EngineChatPanel";
 import { useEngineHeader } from "@/lib/engineHeaderContext";
 import { useEngineSourceHeader } from "@/lib/engineSourceHeaderContext";
-import { useVoiceRecording } from "@/lib/voiceRecordingContext";
 import { useFeatureFlag } from "@/lib/featureFlags";
 import { useGlevAIAccess } from "@/lib/useGlevAIAccess";
 import { useGlevAIContext } from "@/lib/glevAIContext";
@@ -471,62 +470,14 @@ export default function EnginePage() {
       setTab(t);
     }
   }, [searchParams]);
-  // Auto-start the voice recording when the user lands on /engine via
-  // the quick-add "Voice" entry (?voice=1). The bottom-nav Glev FAB
-  // doubles as the STOP control once recording is live (see
-  // voiceRecordingContext + Layout.tsx). We only fire once per landing
-  // — a guard ref prevents StrictMode double-invoke and prevents a
-  // second take if the user navigates back without a fresh ?voice=1.
-  // Per-trigger signature. We do NOT use a plain `hasFired` boolean
-  // because the URL gets stripped via window.history.replaceState
-  // below — that doesn't notify Next, so a later `router.push(...?voice=1)`
-  // from the bottom-nav Glev FAB would update searchParams but a
-  // boolean latch would still be true and we'd skip the auto-start.
-  // Result before this fix: after the first take, tapping the Glev FAB
-  // again did nothing (user report 2026-05-17: "dann ist es aktuell
-  // unmöglich die spracheingabe per einfachen klick auf glev button
-  // fortzusetzen sobald einmal angehalten hat"). We now stamp a
-  // monotonically growing token into the URL (?voice=1&vt=<ts>) on
-  // every push and remember the last token we acted on — every fresh
-  // FAB tap carries a new token and therefore re-triggers.
-  const voiceLastTokenRef = useRef<string | null>(null);
-  useEffect(() => {
-    if (!searchParams) return;
-    if (searchParams.get("voice") !== "1") return;
-    const token = searchParams.get("vt") ?? "init";
-    if (voiceLastTokenRef.current === token) return;
-    voiceLastTokenRef.current = token;
-    // Strip the ?voice=1 from the URL so a refresh / back-navigation
-    // doesn't auto-record a second time. History replace keeps the
-    // current scroll position and doesn't add to the back stack.
-    if (typeof window !== "undefined") {
-      const u = new URL(window.location.href);
-      u.searchParams.delete("voice");
-      u.searchParams.delete("vt");
-      // Preserve the existing window.history.state payload (Next App
-      // Router stores its own routing state there for back/forward +
-      // cache restoration). Passing `null` here would wipe that and
-      // corrupt subsequent navigation; reusing the current state is
-      // the documented escape hatch when you only want to mutate the
-      // URL without triggering a Next navigation.
-      window.history.replaceState(window.history.state, "", u.pathname + (u.search ? u.search : "") + u.hash);
-    }
-    // Defer one tick so the rest of the engine page (mediaRec refs,
-    // speechAvail probe) has a chance to settle before we kick off
-    // getUserMedia.
-    const id = setTimeout(() => { void startRecording(); }, 0);
-    return () => clearTimeout(id);
-    // startRecording reads stable refs / state setters, so it doesn't
-    // need to be in the dep list and re-running on its identity would
-    // just create an extra auto-start race.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchParams]);
   const [isMobile, setIsMobile] = useState(false);
   const aiVoiceEnabled = useGlevAIAccess();
   // When Glev AI consent is active the legacy food-parser chat panel
   // (EngineChatPanel / "AI FOOD PARSER") is hidden — users interact
   // exclusively via the global Glev AI sheet instead.
-  const { consentGranted: glevAiConsented } = useGlevAIContext();
+  // consentLoaded gates the switch so the old panel never flashes for
+  // consented users during the Supabase fetch window.
+  const { consentGranted: glevAiConsented, consentLoaded } = useGlevAIContext();
   const [meals, setMeals]     = useState<Meal[]>([]);
   const [adaptedICR, setAdaptedICR] = useState(15);
   const [selectedICR, setSelectedICR] = useState<'static' | 'adaptive'>('adaptive');
@@ -785,17 +736,8 @@ export default function EnginePage() {
   // scannable; user expands by tapping the chevron.
   const [reasoningExpanded, setReasoningExpanded] = useState(false);
 
-  // Voice input state — feeds the macro fields by transcribing → /api/parse-food.
-  const [recording, setRecording]   = useState(false);
+  // Voice input state — feeds the macro fields via the new Voxtral AI path.
   const [parsing, setParsing]       = useState(false);
-  const [transcript, setTranscript] = useState("");
-  const [voiceErr, setVoiceErr]     = useState("");
-  // Capture the AI-supplied meal classification from the most recent
-  // /api/parse-food round-trip. The GPT classifier and lib/meals.classifyMeal
-  // share the same rules now, so the AI value is the canonical answer when
-  // available. Cleared on every new recording so a stale AI label can't
-  // bleed into a freshly typed meal. Falls back to classifyMeal() when null.
-  const [aiMealType, setAiMealType] = useState<string | null>(null);
   // Provenance of the macros currently in the form, surfaced as a badge
   // in Step 2 next to the macros section header. Updated whenever
   // /api/parse-food (voice + initial chat) or /api/chat-macros (chat
@@ -840,51 +782,6 @@ export default function EnginePage() {
   const [portionSuggestions, setPortionSuggestions] = useState<Map<string, { suggestedGrams: number; displayName: string }>>(new Map());
   // Set of raw item names the user has dismissed this session.
   const [dismissedSuggestions, setDismissedSuggestions] = useState<Set<string>>(new Set());
-  const [speechAvail, setSpeechAvail] = useState(true);
-  const mediaRecRef    = useRef<MediaRecorder | null>(null);
-  const recordingStopTsRef = useRef<number | null>(null);
-  const audioChunksRef = useRef<Blob[]>([]);
-  // Bridge local recording state up to the global chrome so the
-  // bottom-nav Glev FAB can act as the stop control and the header
-  // can render the "Speak" pill (see lib/voiceRecordingContext).
-  const voiceCtx = useVoiceRecording();
-  useEffect(() => {
-    voiceCtx.setRecording(recording);
-  }, [recording, voiceCtx]);
-  useEffect(() => {
-    voiceCtx.registerStopHandler(() => {
-      // Guard: only stop if a recording is actually live; otherwise
-      // ignore so a stray FAB tap can't dispatch into the MediaRecorder.
-      if (mediaRecRef.current && mediaRecRef.current.state !== "inactive") {
-        stopRecording();
-      }
-    });
-    return () => voiceCtx.unregisterStopHandler();
-    // stopRecording is a stable in-component function; including it
-    // would re-register on every render with no behavioural change.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [voiceCtx]);
-  // Defensive unmount cleanup: if the user navigates away from /engine
-  // while a recording is still live, we must (1) stop the MediaRecorder
-  // so its onstop fires and tracks are released, (2) hard-stop any
-  // surviving stream tracks so the OS mic indicator goes away, and
-  // (3) reset the global recording flag — otherwise the bottom-nav
-  // Glev FAB would stay stuck in "stop" mode globally, blocking the
-  // quick-add sheet on every other screen.
-  useEffect(() => {
-    return () => {
-      const rec = mediaRecRef.current;
-      if (rec && rec.state !== "inactive") {
-        try { rec.stop(); } catch { /* noop */ }
-        try { rec.stream?.getTracks().forEach(t => t.stop()); } catch { /* noop */ }
-      }
-      voiceCtx.setRecording(false);
-    };
-    // We intentionally run this cleanup ONLY on unmount, not on every
-    // render. The cleanup reads refs/setters that are stable across
-    // renders, so an empty dep list is the correct contract here.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
   // Load insulin type from user_settings on mount. Falls back to 'rapid'
   // if not set or the DB is unreachable (fetchInsulinType always resolves).
@@ -922,24 +819,11 @@ export default function EnginePage() {
   const [decisionToast, setDecisionToast] = useState<string | null>(null);
   // Inline error inside the insulin sub-mode (validation + PATCH failures).
   const [decisionInsulinErr, setDecisionInsulinErr] = useState<string | null>(null);
-  const [chatSeed,    setChatSeed]    = useState<SeedMessage | null>(null);
   const [chatExpanded, setChatExpanded] = useState(false);
-  // Track whether the user has ever used voice input. Drives the
-  // collapsed-state hint on the AI FOOD PARSER chip ("▸ Tippe um
-  // Details zu sehen") — once they've spoken once, the hint disappears
-  // permanently for that session because the auto-expand on parse
-  // already taught them the panel exists.
-  const [hasUsedVoice, setHasUsedVoice] = useState(false);
   // Ref on the AI FOOD PARSER mobile wrapper so the post-transcription
   // sequence (fields fill → reasoning expands → scrollIntoView) can
   // bring the panel into view smoothly.
   const chatPanelRef = useRef<HTMLDivElement | null>(null);
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    const ok = !!(navigator.mediaDevices && typeof navigator.mediaDevices.getUserMedia === "function" && typeof MediaRecorder !== "undefined");
-    if (!ok) setSpeechAvail(false);
-  }, []);
 
   // On-mount Junction CGM auto-fill — fetch the latest glucose reading via
   // /api/cgm/glucose (Junction LibreView path; the existing LibreLink-Up
@@ -1412,246 +1296,6 @@ export default function EnginePage() {
     };
   }, []);
 
-  async function startRecording() {
-    // Idempotency guard: never start a second recorder while one is
-    // already live or being torn down. Without this, the StrictMode
-    // double-invoke of the auto-start effect (or a real double-tap
-    // of the Glev FAB before `recording=true` propagates) could race
-    // two getUserMedia calls and leave one MediaRecorder orphaned.
-    if (recording) return;
-    const live = mediaRecRef.current;
-    if (live && live.state !== "inactive") return;
-    setVoiceErr(""); setTranscript("");
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      audioChunksRef.current = [];
-      // New voice take → drop any prior pipeline state so a stale 'unknown'
-      // badge or stale per-item breakdown can't bleed into this take.
-      setNutritionSource(null);
-      setHistoryMinOccurrences(null);
-      setParsedItems([]);
-      const preferred = ["audio/webm;codecs=opus", "audio/webm", "audio/mp4", "audio/mpeg"]
-        .find(t => MediaRecorder.isTypeSupported(t));
-      const rec = new MediaRecorder(stream, preferred ? { mimeType: preferred } : undefined);
-      rec.ondataavailable = (e) => { if (e.data.size > 0) audioChunksRef.current.push(e.data); };
-      rec.onstop = async () => {
-        stream.getTracks().forEach(t => t.stop());
-        const actualType = rec.mimeType || preferred || "audio/webm";
-        const blob = new Blob(audioChunksRef.current, { type: actualType });
-        if (blob.size === 0) return;
-        // Flip the global "user has spoken at least once" flag so the
-        // bottom-nav Glev FAB switches its short-tap action from
-        // "open quick-add menu" to "start a new voice take" (see
-        // lib/voiceRecordingContext + Layout.tsx MobileGlevFab).
-        voiceCtx.markSpoken();
-        const tBlob = Date.now();
-        const tStop = recordingStopTsRef.current ?? tBlob;
-        // eslint-disable-next-line no-console
-        console.log("[PERF voice/engine] stop → blob built:", tBlob - tStop, "ms · blob:", Math.round(blob.size / 1024), "KB ·", actualType);
-        const ext = actualType.includes("mp4")  ? "m4a"
-                 : actualType.includes("mpeg") ? "mp3"
-                 : actualType.includes("ogg")  ? "ogg"
-                 : "webm";
-        await handleVoice(blob, ext);
-      };
-      rec.start();
-      mediaRecRef.current = rec;
-      setRecording(true);
-      // Flip the "has spoken at least once" flag as soon as the mic
-      // actually starts capturing — not only after a non-empty blob
-      // lands (markSpoken below in onstop). Otherwise a user whose
-      // first take produced no speech ("Keine Sprache erkannt") would
-      // leave hasSpoken=false, and the bottom-nav Glev FAB would
-      // fall back to opening the quick-add sheet instead of starting
-      // a fresh take on a simple tap (user report 2026-05-17). The
-      // markSpoken in onstop is now redundant but harmless and we
-      // keep it as a belt-and-braces guarantee.
-      voiceCtx.markSpoken();
-    } catch (e) {
-      setVoiceErr(e instanceof Error ? e.message : tEngine("voice_mic_failed"));
-      setRecording(false);
-    }
-    // Reset the AI-supplied meal label at the START of every new recording
-    // so a stale parse-food result can't be reused for a different meal.
-    setAiMealType(null);
-  }
-
-  function stopRecording() {
-    recordingStopTsRef.current = Date.now();
-    mediaRecRef.current?.stop();
-    setRecording(false);
-  }
-
-  async function handleVoice(blob: Blob, ext = "webm") {
-    const tHandlerStart = Date.now();
-    const tStop = recordingStopTsRef.current ?? tHandlerStart;
-    setParsing(true); setVoiceErr("");
-    try {
-      const fd = new FormData();
-      fd.append("audio", blob, `voice.${ext}`);
-      const tTrFetch0 = Date.now();
-      const tRes = await fetch("/api/transcribe", { method: "POST", body: fd });
-      const tData = await tRes.json();
-      const tTranscribeDone = Date.now();
-      // eslint-disable-next-line no-console
-      console.log("[PERF voice/engine] /api/transcribe round-trip:", tTranscribeDone - tTrFetch0, "ms");
-      if (!tRes.ok || !tData.text) throw new Error(tData.error || "Empty transcript");
-      const text = tData.text as string;
-      setTranscript(text);
-
-      const tPfFetch0 = Date.now();
-      // eslint-disable-next-line no-console
-      console.log("[PERF voice/engine] transcribe → parse start gap:", tPfFetch0 - tTranscribeDone, "ms");
-      const pRes = await fetch("/api/parse-food", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        // locale: ensures the GPT-emitted `description` comes back in the
-        // user's UI language (de/en) instead of always English.
-        body: JSON.stringify({ text, locale }),
-      });
-      const pData = await pRes.json();
-      const tParseDone = Date.now();
-      // eslint-disable-next-line no-console
-      console.log("[PERF voice/engine] /api/parse-food round-trip:", tParseDone - tPfFetch0, "ms");
-      const t = pData.totals || {};
-      // SAFETY: when the aggregator marks the meal as 'unknown' (at
-      // least one ingredient where both DB lookups AND the GPT estimate
-      // failed) we DO NOT auto-fill the macro fields — the totals are
-      // unreliable and dosing insulin from them would be unsafe. The
-      // form keeps its current values; the chat seed below tells the
-      // user to enter macros manually.
-      const safeToAutofill = pData.nutritionSource !== "unknown";
-      if (safeToAutofill) {
-        // /api/parse-food returns macros in GRAMS; the carbs input field
-        // displays the user's chosen unit (g/BE/KE), so convert before
-        // writing it into form state. Other macros stay in grams.
-        if (t.carbs   != null) setCarbs(String(carbUnit.fromGrams(Number(t.carbs))));
-        if (t.fiber   != null) setFiber(String(t.fiber));
-        if (t.protein != null) setProtein(String(t.protein));
-        if (t.fat     != null) setFat(String(t.fat));
-      }
-      // Capture the per-item breakdown so the saved meal preserves
-      // provenance in meals.parsed_json. Falls back to [] when the
-      // response shape is malformed (older clients shouldn't break).
-      const validItems = Array.isArray(pData.items)
-        ? pData.items.filter((it: unknown) => it && typeof it === "object")
-        : [];
-      setParsedItems(validItems);
-      // Phase B: batch-fetch per-user portion suggestions for all
-      // parsed items. Fire-and-forget — failures are silent so they
-      // cannot interfere with the primary parse flow.
-      if (validItems.length > 0) {
-        const names = (validItems as Array<{ name: string }>).map((it) => it.name).join(",");
-        void fetch(`/api/food-history/suggest?names=${encodeURIComponent(names)}`)
-          .then((r) => r.ok ? r.json() : { suggestions: {} })
-          .then((d: { suggestions?: Record<string, { suggestedGrams: number; displayName: string }> }) => {
-            const m = new Map<string, { suggestedGrams: number; displayName: string }>();
-            for (const [k, v] of Object.entries(d.suggestions ?? {})) m.set(k, v);
-            setPortionSuggestions(m);
-            setDismissedSuggestions(new Set());
-          })
-          .catch(() => {});
-      } else {
-        setPortionSuggestions(new Map());
-        setDismissedSuggestions(new Set());
-      }
-      // eslint-disable-next-line no-console
-      console.log("[PERF voice/engine] parse response → form fields filled:", Date.now() - tParseDone, "ms");
-      // eslint-disable-next-line no-console
-      console.log("[PERF voice/engine] TOTAL (stop → form filled):", Date.now() - tStop, "ms");
-      if (typeof pData.description === "string" && pData.description.trim()) {
-        setDesc(pData.description.trim());
-      }
-      // Capture the AI classification so handleConfirmLog can prefer it
-      // over the deterministic classifyMeal fallback. Validate against the
-      // four canonical labels so a malformed response can't slip through.
-      const aiCls = pData.mealType;
-      if (typeof aiCls === "string" && ["FAST_CARBS", "HIGH_FAT", "HIGH_PROTEIN", "BALANCED", "HIGH_FIBER"].includes(aiCls)) {
-        setAiMealType(aiCls);
-      } else {
-        setAiMealType(null);
-      }
-      // Capture the macro provenance from the two-stage nutrition pipeline
-      // (Open Food Facts + USDA + GPT-fallback). Surfaced as a Step 2 badge.
-      const ns = pData.nutritionSource;
-      const validSources = ["database","user_history","open_food_facts","usda","mixed","estimated","unknown"];
-      setNutritionSource(validSources.includes(ns) ? ns : null);
-      setHistoryMinOccurrences(
-        typeof pData.historyMinOccurrences === "number" ? pData.historyMinOccurrences : null,
-      );
-      // Seed the chat panel — Lucas 2026-05-12: drop the chatty "Got it"
-      // opener and the "Tell me if anything's off" follow-up. The user
-      // wants the macros front-and-centre on first reply, not a
-      // conversation starter that asks for confirmation. We now show
-      // ONLY the macros line (when the parser found numbers) plus the
-      // captured description as a single short line so the user can
-      // sanity-check what was heard. If the parser failed to extract
-      // macros (unknown source / empty totals) we keep a compact "konnte
-      // nicht erkennen — bitte ergänzen" hint so the user isn't left
-      // staring at an empty card.
-      const chatLines: string[] = [];
-      const macroBits: string[] = [];
-      if (t.carbs   != null) macroBits.push(`${t.carbs}${tEngine("carbs_short")}`);
-      if (t.protein != null) macroBits.push(`${t.protein}${tEngine("protein_short")}`);
-      if (t.fat     != null) macroBits.push(`${t.fat}${tEngine("fat_short")}`);
-      if (t.fiber   != null) macroBits.push(`${t.fiber}${tEngine("fiber_short")}`);
-      if (macroBits.length) {
-        chatLines.push(macroBits.join(" · "));
-      } else {
-        chatLines.push(tEngine("voice_chat_no_macros"));
-      }
-      const descLine = typeof pData.description === "string" && pData.description.trim()
-        ? pData.description.trim()
-        : text;
-      chatLines.push(descLine);
-      setChatSeed({ id: Date.now(), content: chatLines.join("\n\n") });
-      logDebug("ENGINE.VOICE", { text, totals: t });
-      // Voice submission implies the user is logging a meal *now* — pull
-      // the latest CGM reading in parallel so the glucose-before field is
-      // populated automatically. Fire-and-forget: failures are logged via
-      // handlePullCgm itself and don't surface here.
-      void handlePullCgm();
-      // Sequential UX flow: macros are now filled → expand the AI FOOD
-      // PARSER panel and scroll it into view so the user sees GPT's
-      // reasoning right after their words become numbers. 300ms delay
-      // lets the macro fields finish their re-render first so the user
-      // perceives "fields fill → panel opens" instead of both at once.
-      setHasUsedVoice(true);
-      setTimeout(() => {
-        setChatExpanded(true);
-        // block: "center" keeps both the freshly-filled fields and the
-        // newly-opened reasoning panel visible without jumping the
-        // viewport too aggressively.
-        chatPanelRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
-      }, 300);
-      // No auto-advance (Lucas 2026-05-12, second pass): the form
-      // fields are autopopulated immediately on parse, but the user
-      // explicitly wants to keep the manual "Weiter zu Makros prüfen →"
-      // tap so they can review the chat seed (macros line + parsed
-      // description) on Step 1 before committing. Earlier auto-advance
-      // attempt was reverted same session — do NOT re-introduce.
-    } catch (e) {
-      // eslint-disable-next-line no-console
-      console.log("[PERF voice/engine] FAILED after:", Date.now() - tStop, "ms");
-      // FIX B (locale-aware 2026-05-18): Map cryptic native messages to
-      // actionable hints in the user's UI language. We previously hard-coded
-      // German strings here which surfaced as "Keine Sprache erkannt …" even
-      // when the rest of the UI was English. Anything we don't recognise
-      // still shows the raw message rather than a useless generic fallback.
-      const raw = e instanceof Error ? e.message : "";
-      const friendly =
-        /empty transcript/i.test(raw)              ? tEngine("voice_err_no_speech") :
-        /permission denied|not allowed/i.test(raw) ? tEngine("voice_err_mic_denied") :
-        /failed to fetch|networkerror/i.test(raw)  ? tEngine("voice_err_network") :
-        raw                                         ? raw :
-                                                      tEngine("voice_err_processing_failed");
-      setVoiceErr(friendly);
-    } finally {
-      setParsing(false);
-      recordingStopTsRef.current = null;
-    }
-  }
-
   // Pull the latest glucose reading for the engine's glucose-before field.
   //
   // Source priority:
@@ -1659,9 +1303,8 @@ export default function EnginePage() {
   //      blood is the gold standard, so a fresh fingerstick outranks CGM.
   //   2. Latest CGM reading via /api/cgm/latest (LibreLinkUp).
   //
-  // Triggered both by the "CGM" button and automatically after a successful
-  // voice meal-submission (see handleVoice below) so the glucose-before
-  // field always reflects the user's level at meal time.
+  // Triggered by the "CGM" button so the glucose-before field reflects
+  // the user's level at meal time.
   async function handlePullCgm() {
     if (cgmPulling) return;
     // Race-guard: if the user has already set a past meal time (> 5 min ago)
@@ -1868,11 +1511,6 @@ export default function EnginePage() {
     const gNum = Number.isFinite(gParsed) ? gParsed : null;
     // Same classification + calorie pipeline as handleConfirmLog so the
     // saved row is identical except for the insulin_units field.
-    // Immer deterministisch klassifizieren — die GPT-Antwort
-    // (aiMealType) wird NICHT mehr blind bevorzugt, weil sie aus dem
-    // initialen Voice-Parse stammt und nach User-Korrektur der Macros
-    // veraltet wäre (Bug-Fall 2026-05-04: 24g-Whey-Shake, GPT sagte
-    // HIGH_FAT, klassifyMeal sagt korrekt HIGH_PROTEIN).
     const cls = classifyMeal(cNum, pNum, fNum, fbNum);
     const cal   = computeCalories(cNum, pNum, fNum);
     const mealIso = mealTime ? new Date(mealTime).toISOString() : new Date().toISOString();
@@ -1883,7 +1521,7 @@ export default function EnginePage() {
     const preMealTrend = await getCurrentTrendArrow();
     try {
       const saved = await saveMeal({
-        inputText: desc.trim() || transcript.trim() || "(manual entry)",
+        inputText: desc.trim() || "(manual entry)",
         // PERSIST PROVENANCE: when the two-stage pipeline produced a
         // per-item breakdown (voice/chat parse), save its full shape so
         // meals.parsed_json (jsonb) carries every ingredient's `source`
@@ -1959,11 +1597,6 @@ export default function EnginePage() {
     const fbNum = parseFloat(fiber)   || 0;
     const gParsed = glucose.trim() === "" ? NaN : parseFloat(glucose);
     const gNum = Number.isFinite(gParsed) ? gParsed : null;
-    // Immer deterministisch klassifizieren — die GPT-Antwort
-    // (aiMealType) wird NICHT mehr blind bevorzugt, weil sie aus dem
-    // initialen Voice-Parse stammt und nach User-Korrektur der Macros
-    // veraltet wäre (Bug-Fall 2026-05-04: 24g-Whey-Shake, GPT sagte
-    // HIGH_FAT, klassifyMeal sagt korrekt HIGH_PROTEIN).
     const cls = classifyMeal(cNum, pNum, fNum, fbNum);
     const cal   = computeCalories(cNum, pNum, fNum);
     const mealIso = mealTime ? new Date(mealTime).toISOString() : new Date().toISOString();
@@ -1972,7 +1605,7 @@ export default function EnginePage() {
     const preMealTrendNoBolus = await getCurrentTrendArrow();
     try {
       const saved = await saveMeal({
-        inputText: desc.trim() || transcript.trim() || "(manual entry)",
+        inputText: desc.trim() || "(manual entry)",
         // PERSIST PROVENANCE: when the two-stage pipeline produced a
         // per-item breakdown (voice/chat parse), save its full shape so
         // meals.parsed_json (jsonb) carries every ingredient's `source`
@@ -2049,7 +1682,7 @@ export default function EnginePage() {
     const preMealTrendDirect = await getCurrentTrendArrow();
     try {
       const saved = await saveMeal({
-        inputText: desc.trim() || transcript.trim() || "(manual entry)",
+        inputText: desc.trim() || "(manual entry)",
         // PERSIST PROVENANCE: when the two-stage pipeline produced a
         // per-item breakdown (voice/chat parse), save its full shape so
         // meals.parsed_json (jsonb) carries every ingredient's `source`
@@ -2131,7 +1764,7 @@ export default function EnginePage() {
     const preMealTrendEager = await getCurrentTrendArrow();
     try {
       const saved = await saveMeal({
-        inputText: desc.trim() || transcript.trim() || "(manual entry)",
+        inputText: desc.trim() || "(manual entry)",
         parsedJson: parsedItems.length > 0
           ? parsedItems
           : [{ name: desc.trim() || "meal", grams: 0, carbs: cNum, protein: pNum, fat: fNum, fiber: fbNum }],
@@ -2190,16 +1823,6 @@ export default function EnginePage() {
     const pNum  = parseFloat(protein) || 0;
     const fNum  = parseFloat(fat)     || 0;
     const fbNum = parseFloat(fiber)   || 0;
-    // AI classification wins when /api/parse-food provided one — both
-    // sources share the same FAST_CARBS / HIGH_FAT / HIGH_PROTEIN /
-    // BALANCED rules, but the AI sees richer context (sugar fraction,
-    // ingredient identity) and resolves edge cases the macro-only
-    // fallback can't. Falls back to classifyMeal() for typed entries.
-    // Immer deterministisch klassifizieren — die GPT-Antwort
-    // (aiMealType) wird NICHT mehr blind bevorzugt, weil sie aus dem
-    // initialen Voice-Parse stammt und nach User-Korrektur der Macros
-    // veraltet wäre (Bug-Fall 2026-05-04: 24g-Whey-Shake, GPT sagte
-    // HIGH_FAT, klassifyMeal sagt korrekt HIGH_PROTEIN).
     const cls = classifyMeal(cNum, pNum, fNum, fbNum);
     const cal   = computeCalories(cNum, pNum, fNum);
     // Evaluation is no longer pre-computed at save time — lifecycleFor
@@ -2215,7 +1838,7 @@ export default function EnginePage() {
     const preMealTrendConfirm = await getCurrentTrendArrow();
     try {
       const saved = await saveMeal({
-        inputText: desc.trim() || transcript.trim() || "(manual entry)",
+        inputText: desc.trim() || "(manual entry)",
         // PERSIST PROVENANCE: when the two-stage pipeline produced a
         // per-item breakdown (voice/chat parse), save its full shape so
         // meals.parsed_json (jsonb) carries every ingredient's `source`
@@ -2277,8 +1900,7 @@ export default function EnginePage() {
       setGlucoseProvenance(null);
     }
     setCarbs(""); setProtein(""); setFat(""); setFiber("");
-    setDesc(""); setInsulin(""); setResult(null); setResultICRSource(null); setTranscript("");
-    setAiMealType(null);
+    setDesc(""); setInsulin(""); setResult(null); setResultICRSource(null);
     setNutritionSource(null);
     setHistoryMinOccurrences(null);
     setParsedItems([]);
@@ -2524,12 +2146,10 @@ export default function EnginePage() {
             patch.fat > 0   || patch.fiber > 0;
           if (hasMacros) void handlePullCgm();
         }}
-        seed={chatSeed}
         isMobile={isMobile}
         expanded={true}
         onToggleExpanded={() => { /* always expanded */ }}
         parsing={parsing}
-        hasUsedVoice={hasUsedVoice}
       />
     </div>
   );
@@ -2808,17 +2428,7 @@ export default function EnginePage() {
           )}
 
           {/* ───────── STEP 1: AI Chat-Panel (full screen).
-              The page-content Sprechen button was removed (2026-05-17):
-              the bottom-nav Glev FAB now owns the start/stop voice
-              gesture (start via quick-add "Voice" with ?voice=1
-              auto-start, stop by tapping the FAB again), and the
-              global header surfaces the "Speak" recording-state pill.
-              That frees Step 1 to be a single full-screen AI parser
-              field — the EngineChatPanel — so the user can chat or
-              dictate without competing controls on the same screen.
-              Voice path: quick-add → /engine?voice=1 → auto-record →
-              handleVoice → /api/parse-food → fields fill → auto-
-              advance to Step 2.
+              Voice path: GlevAIChatSheet → useVoxtral → /api/transcribe/mistral/stream.
               Chat path: user types into EngineChatPanel → /api/chat-
               macros → AI replies → onPatch fills the form → if
               macros come back populated, auto-advance to Step 2. */}
@@ -2852,53 +2462,6 @@ export default function EnginePage() {
                 ? "calc(100svh - 180px - var(--nav-top-safe))"
                 : undefined,
             }}>
-              {/* Start/stop control for desktop. On mobile the EngineChatPanel
-                  (chatPanelNode below) owns the voice/text input, so this
-                  pill is desktop-only. Hidden when Glev AI consent is active —
-                  the fullscreen Glev AI chat auto-opens and is the primary UI. */}
-              {!isMobile && !glevAiConsented && (
-                <button
-                  type="button"
-                  onClick={() => recording ? stopRecording() : startRecording()}
-                  disabled={parsing || !speechAvail}
-                  aria-label={recording ? tEngine("voice_aria_stop") : tEngine("voice_aria_start")}
-                  style={{
-                    display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 12,
-                    width: "100%", maxWidth: 280, height: 52, borderRadius: 26,
-                    alignSelf: "center",
-                    background: recording ? `${ACCENT}1f` : SURFACE,
-                    border: `1px solid ${recording ? ACCENT : `${ACCENT}55`}`,
-                    color: "var(--text)",
-                    fontSize: 15, fontWeight: 700, letterSpacing: "-0.01em",
-                    cursor: parsing || !speechAvail ? "not-allowed" : "pointer",
-                    boxShadow: recording ? `0 0 0 1px ${ACCENT}66, 0 0 22px ${ACCENT}33` : `0 0 0 1px ${ACCENT}22`,
-                    opacity: parsing || !speechAvail ? 0.55 : 1,
-                    transition: "background 0.2s, border-color 0.2s, opacity 0.2s, box-shadow 0.2s",
-                  }}
-                >
-                  <span aria-hidden="true" style={{
-                    display: "inline-flex",
-                    filter: `drop-shadow(0 0 ${recording ? 8 : 4}px ${ACCENT}${recording ? "cc" : "55"})`,
-                    transition: "filter 0.25s",
-                  }}>
-                    <GlevLogo size={22} color={ACCENT} bg="transparent"/>
-                  </span>
-                  {recording ? tEngine("voice_btn_stop") : parsing ? tEngine("voice_btn_processing") : tEngine("voice_btn_speak")}
-                </button>
-              )}
-              {voiceErr && (
-                <div style={{ fontSize: 13, color: PINK, textAlign: "center", maxWidth: 360, alignSelf: "center" }}>{voiceErr}</div>
-              )}
-              {/* FIX B: Explain WHY the Sprechen button is disabled when the
-                  browser doesn't expose MediaRecorder + getUserMedia (iOS
-                  Safari < 14.5, embedded webviews, http://). Without this
-                  hint the button just appears greyed out with no recourse,
-                  and users don't realise they can fall back to the chat. */}
-              {!speechAvail && !voiceErr && (
-                <div style={{ fontSize: 13, color: "var(--text-muted)", textAlign: "center", maxWidth: 360, lineHeight: 1.4 }}>
-                  {tEngine("voice_unavailable_hint")}
-                </div>
-              )}
               {/* Mobile-only mount of the chat panel. On desktop the same
                   chatPanelNode lives in the sticky right sidebar (rendered
                   next to this wizard column) so the chat stays visible
@@ -2908,14 +2471,14 @@ export default function EnginePage() {
                   always rendered on mobile regardless of ai_voice flag.
                   Hidden when Glev AI consent is active — users use the
                   global Glev AI sheet instead. */}
-              {isMobile && !glevAiConsented && chatPanelNode}
+              {isMobile && consentLoaded && !glevAiConsented && chatPanelNode}
               {(() => {
                 const anyMacro =
                   (Number(carbs)   || 0) > 0 ||
                   (Number(protein) || 0) > 0 ||
                   (Number(fat)     || 0) > 0 ||
                   (Number(fiber)   || 0) > 0;
-                const ready = hasUsedVoice || anyMacro;
+                const ready = anyMacro;
                 if (!ready) return null;
                 return (
                   <button
@@ -3948,7 +3511,7 @@ export default function EnginePage() {
               internal message scroller works as expected and the input row
               never disappears below the fold. minHeight 480 protects the
               experience on shorter viewports (e.g. landscape laptops). */}
-          {!isMobile && aiVoiceEnabled && !glevAiConsented && (
+          {!isMobile && aiVoiceEnabled && consentLoaded && !glevAiConsented && (
             <aside
               style={{
                 position: "sticky",

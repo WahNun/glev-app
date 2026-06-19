@@ -5,26 +5,14 @@
 //   2026-05-17 / 18 (most recently: pointerup-based MobileTab,
 //   microtask-deferred voice stop). Each regression so far was only
 //   caught by the user manually tapping through a TestFlight build.
-//   This spec exercises the two failure modes that have historically
-//   been broken:
+//   This spec guards against rapid tab-switching right after a route
+//   swap: the MobileTab button is re-mounted under fresh RSC output on
+//   every tap, so a synthesised click on the OLD DOM node would be lost.
+//   We navigate on `pointerup` (fires before click), but a future
+//   refactor could regress that.
 //
-//     1. Rapid tab-switching right after a route swap. The MobileTab
-//        button is re-mounted under fresh RSC output on every tap, so
-//        a synthesised click on the OLD DOM node would be lost. We now
-//        navigate on `pointerup` (fires before click), but a future
-//        refactor could regress that.
-//
-//     2. Tapping a tab while a voice recording is live. The
-//        VoiceRecordingProvider installs a capture-phase `pointerdown`
-//        listener (tap-anywhere-to-stop) that tears down the engine
-//        page mid-dispatch. Previously this could swallow the tap on
-//        the destination tab; the current fix lets the tab navigate
-//        AND lets the capture-phase listener stop the recording.
-//
-// We assert two things in each scenario:
+// We assert:
 //   * The URL changed within a tight budget (400 ms after the tap).
-//   * Where relevant, the voice-recording UI flipped back to its
-//     idle state (FAB aria-label drops the "Aufnahme beenden" suffix).
 //
 // Implementation notes:
 //   * Mobile viewport (393×852) + `hasTouch` so the bottom nav is
@@ -188,141 +176,5 @@ test.describe("Mobile bottom-nav tap reliability", () => {
         await expect(tabButton(page, tab.name)).toHaveAttribute("aria-current", "page");
       }
     }
-  });
-
-  test("tapping a tab while voice recording is live navigates AND stops the recording", async ({ page, context, baseURL }) => {
-    // Stub the browser's media stack so the engine page's
-    // `startRecording()` can resolve without a real microphone:
-    //   * `navigator.mediaDevices.getUserMedia` returns a no-op
-    //     MediaStream-shaped object.
-    //   * `MediaRecorder` is replaced with a minimal class that calls
-    //     the registered `ondataavailable` + `onstop` handlers
-    //     synchronously on `.stop()` so the engine's stop path runs
-    //     to completion the same way it would in a real browser.
-    //
-    // `addInitScript` registers the patch on the BrowserContext, so it
-    // re-applies on every navigation (including the post-router.push
-    // load of /engine?voice=1) — without that, only the very first
-    // page would carry the patch.
-    await context.addInitScript(() => {
-      // Minimal fake MediaStream: has a `getTracks()` returning a
-      // stoppable track so the engine's onstop cleanup
-      // (`stream.getTracks().forEach(t => t.stop())`) doesn't throw.
-      class FakeMediaStream {
-        getTracks() {
-          return [{ stop() { /* no-op */ } }];
-        }
-      }
-      const md = navigator.mediaDevices as MediaDevices | undefined;
-      if (md) {
-        Object.defineProperty(md, "getUserMedia", {
-          configurable: true,
-          value: async () => new FakeMediaStream() as unknown as MediaStream,
-        });
-      }
-      // MediaRecorder stub. Engine uses: new MediaRecorder(stream, {mimeType}),
-      // .ondataavailable, .onstop, .start(), .stop(), .state, .mimeType,
-      // and MediaRecorder.isTypeSupported(t).
-      class FakeMediaRecorder {
-        public state: "inactive" | "recording" | "paused" = "inactive";
-        public mimeType: string;
-        public ondataavailable: ((e: { data: Blob }) => void) | null = null;
-        public onstop: (() => void) | null = null;
-        constructor(_stream: MediaStream, opts?: { mimeType?: string }) {
-          this.mimeType = opts?.mimeType ?? "audio/webm";
-        }
-        static isTypeSupported(_t: string) { return true; }
-        start() { this.state = "recording"; }
-        stop() {
-          this.state = "inactive";
-          // Emit a tiny dummy chunk so the engine's onstop builds a
-          // non-empty Blob and progresses normally. The actual handleVoice
-          // POST may 4xx — that's fine for this test; we only assert on
-          // the recording-state UI flip + the route change.
-          try { this.ondataavailable?.({ data: new Blob(["x"], { type: this.mimeType }) }); } catch { /* noop */ }
-          try { this.onstop?.(); } catch { /* noop */ }
-        }
-      }
-      (window as unknown as { MediaRecorder: typeof FakeMediaRecorder }).MediaRecorder = FakeMediaRecorder;
-    });
-
-    await context.clearCookies();
-    await pinLocale(context, baseURL!);
-    await loginAsTestUser(page, test.info().workerIndex);
-
-    // Pre-warm /engine + /insights + /dashboard so neither dev-compile
-    // time nor first-paint of engine's heavy bundle can mask a real
-    // bug. We end on /dashboard because that's where the FAB tap
-    // below originates — same starting point as a real TestFlight
-    // user who's reading their dashboard and taps the centre button
-    // to dictate a meal.
-    await page.goto("/engine", { waitUntil: "domcontentloaded", timeout: 60_000 });
-    await page.waitForURL(/\/engine/, { timeout: 60_000 });
-    await page.goto("/insights", { waitUntil: "domcontentloaded", timeout: 60_000 });
-    await page.waitForURL(/\/insights/, { timeout: 60_000 });
-    await page.goto("/dashboard", { waitUntil: "domcontentloaded", timeout: 60_000 });
-    await page.waitForURL(/\/dashboard/, { timeout: 60_000 });
-
-    // The Glev FAB is the centre slot in the bottom nav. Its
-    // aria-label is just "Glev" when idle and "Glev — Aufnahme beenden"
-    // while recording — that's the same observable the bottom-nav
-    // chrome itself uses to render the recording state, so we use it
-    // as the canonical "recording? yes/no" probe.
-    const fab = page.locator("nav.glev-mobile-nav [data-glev-fab='true']");
-    await expect(fab).toBeVisible({ timeout: 30_000 });
-    await expect(fab).toHaveAttribute("aria-label", "Glev", { timeout: 15_000 });
-
-    // Drive recording through the REAL gesture chain users perform on
-    // TestFlight: a SHORT tap on the FAB. MobileGlevFab handles
-    // pointerdown (arms a 500 ms long-press timer) → pointerup
-    // (clears the timer before it fires, runs `onShortPress`). The
-    // short-press handler in Layout.tsx calls
-    //   router.push(`/engine?tab=engine&voice=1&vt=${Date.now()}`)
-    // which lands on the engine page, whose auto-start effect reads
-    // `voice=1` and invokes `startRecording()` — the same code path
-    // the deep-link variant uses, but exercised through the actual
-    // pointer events so a regression in the FAB pointer plumbing
-    // (e.g. long-press timer never clearing, capture-phase listener
-    // swallowing the gesture) shows up here.
-    //
-    // `.click()` dispatches pointerdown → pointerup → click in well
-    // under 50 ms, so the long-press timer never fires.
-    await fab.click();
-    await page.waitForURL(/voice=1/, { timeout: 30_000 });
-
-    // Wait until the auto-start effect has flipped voice.recording →
-    // true. With the addInitScript media stub above, `startRecording`
-    // resolves synchronously and `setRecording(true)` lands within a
-    // couple of React commits.
-    await expect(fab).toHaveAttribute(
-      "aria-label",
-      /Aufnahme beenden/,
-      { timeout: 15_000 },
-    );
-
-    // Now the failure mode under test: tap a different tab. The user
-    // expects (a) the route to change to that tab AND (b) the recording
-    // to stop. Historically EITHER could break — the capture-phase
-    // pointerdown listener that stops the recording could swallow the
-    // click, OR the click could fire but the stop handler could not.
-    const insightsBtn = tabButton(page, /^Insights$/);
-    await expect(insightsBtn).toBeVisible();
-
-    const t0 = Date.now();
-    await insightsBtn.click();
-
-    // (a) Route changed within the tight budget. Same logic as the
-    // first test: a lost tap manifests as the 5 s waitForURL timeout,
-    // not as a marginally-over-budget pass.
-    await page.waitForURL(/\/insights/, { timeout: 5_000 });
-    const elapsed = Date.now() - t0;
-    expect(elapsed, `insights tap during recording took ${elapsed}ms`)
-      .toBeLessThanOrEqual(800); // looser than the rapid-switch budget — engine teardown is heavier
-
-    // (b) Recording stopped: the FAB aria-label drops the
-    // "Aufnahme beenden" suffix and returns to the idle "Glev" label.
-    // We poll because the engine page's stopRecording → onstop is
-    // async (MediaRecorder onstop fires on the next tick).
-    await expect(fab).toHaveAttribute("aria-label", "Glev", { timeout: 10_000 });
   });
 });
