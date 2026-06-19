@@ -215,6 +215,30 @@ export async function provisionMetaLead(
     });
   }
 
+  // CRM notify an Beautyflow — fire-and-forget, darf nie provisionMetaLead scheitern lassen
+  fetch(`${APP_URL}/api/crm/signup-notification`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      name:          name ?? null,
+      email,
+      phone:         phone ?? null,
+      date_of_birth: null,
+      uses_cgm:      null,
+      sensor_type:   null,
+      user_id:       userId,
+      trial_end_at:  null,
+      signed_up_at:  new Date().toISOString(),
+      plan:          "meta_lead",
+      source_url:    "https://www.facebook.com",
+      locale:        effectiveLocale,
+      user_agent:    null,
+    }),
+  }).catch((e) => {
+    // eslint-disable-next-line no-console
+    console.error("[meta-lead-provisioning] CRM notify failed (non-fatal):", e);
+  });
+
   // Gebrandete Email via Resend — nur wenn ein Link vorhanden ist
   if (inviteUrl) {
     const resendKey = process.env.RESEND_API_KEY;
