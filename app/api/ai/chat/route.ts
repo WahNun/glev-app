@@ -981,6 +981,8 @@ export async function handleChatPost(
                 result.pending_action.payload
               ) {
                 const p = result.pending_action.payload as Record<string, unknown>;
+                // [DIAGNOSE-TP3] meal_prep SSE frame — TEMPORÄR, entfernen nach Diagnose
+                console.log(`[DIAGNOSE-TP3] meal_prep frame: carbs=${p.carbs_grams} protein=${p.protein_grams} fat=${p.fat_grams} fiber=${p.fiber_grams} items_count=${Array.isArray((p as Record<string,unknown>).items) ? (p as unknown as {items: unknown[]}).items.length : 'no-items'}`);
                 send(
                   JSON.stringify({
                     meal_prep: {

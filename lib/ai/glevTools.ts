@@ -1652,6 +1652,8 @@ async function toolLogMealEntry(
       const estCnt  = agg.items.length - dbHits;
       const elapsed = Date.now() - t0;
       console.log(`[meal_prep] id=${targetId} aggregator: ${agg.items.length} items, ${dbHits} db-hits, ${estCnt} estimates, ${elapsed}ms`);
+      // [DIAGNOSE-TP1] Aggregator output — TEMPORÄR, entfernen nach Diagnose
+      console.log(`[DIAGNOSE-TP1] agg.nutritionSource=${agg.nutritionSource} totals=${JSON.stringify(agg.totals)} items=${JSON.stringify(agg.items.map(i => ({ n: i.name, p: i.protein, f: i.fat, src: i.source })))}`);
 
       if (optimisticEnabled) {
         // Fire-and-forget: write refinement row; Realtime notifies the client.
@@ -1743,6 +1745,8 @@ async function toolLogMealEntry(
     ...(totalAlcoholG > 0 ? { total_alcohol_g: Math.round(totalAlcoholG * 10) / 10 } : {}),
   };
 
+  // [DIAGNOSE-TP2] mealParams before createPendingAction — TEMPORÄR, entfernen nach Diagnose
+  console.log(`[DIAGNOSE-TP2] mealParams: carbs=${mealParams.carbs_grams} protein=${mealParams.protein_grams} fat=${mealParams.fat_grams} fiber=${mealParams.fiber_grams} items_count=${(mealParams as Record<string,unknown>).items ? (mealParams as unknown as {items: unknown[]}).items.length : 0}`);
   const tzField = userTimezone ? { _user_timezone: userTimezone } : {};
 
   if (totalAlcoholG > 0) {
