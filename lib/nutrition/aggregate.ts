@@ -54,12 +54,18 @@ async function resolveItem(
     const key = normalizeFoodName(item.name);
     const hit = key ? history.get(key) : undefined;
     if (hit) {
-      // Safety: the history loader already filtered out all-zero rows
-      // and impossible per-100g values, so this hit is trustworthy.
-      return {
-        per100: hit.per100,
-        source: hit.source === "user_confirmed" ? "user_confirmed" : "user_history",
-      };
+      // user_confirmed = explicit chat-macros correction, always trusted.
+      if (hit.source === "user_confirmed") {
+        return { per100: hit.per100, source: "user_confirmed" };
+      }
+      // Passive history: require ≥3 occurrences before trusting the cached
+      // macros for T1D dosing. A single logged banana could be a typo or
+      // a one-off unusual portion — fall through to OFF/USDA/GPT until
+      // at least 3 entries have been blended into the average.
+      if (hit.occurrences >= 3) {
+        return { per100: hit.per100, source: "user_history" };
+      }
+      // < 3 occurrences: fall through to OFF / USDA / GPT below.
     }
   }
 
