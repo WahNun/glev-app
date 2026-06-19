@@ -9,6 +9,7 @@ import GlevLockup from "@/components/GlevLockup";
 import GlevLogo from "@/components/GlevLogo";
 import AccountSheet from "@/components/AccountSheet";
 import DashboardQuickAddSheet from "@/components/DashboardQuickAddSheet";
+import PaywallSheet from "@/components/PaywallSheet";
 import GlevAIButton from "@/components/GlevAIButton";
 import GlevAIConsentModal from "@/components/GlevAIConsentModal";
 import GlevAIChatSheet from "@/components/GlevAIChatSheet";
@@ -117,6 +118,7 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
   const locale = useLocale();
   const [aboutOpen, setAboutOpen] = useState(false);
   const [signOutConfirm, setSignOutConfirm] = useState(false);
+  const [fabPaywallOpen, setFabPaywallOpen] = useState(false);
   // The mobile-header AccountSheet trigger was removed in the
   // 2026-05-17 header-decluttering revision (header now only carries
   // the brand lockup + the recording-state pill). Konto/Profil flows
@@ -379,11 +381,9 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
         router.push("/glev-ai");
         break;
 
-      case "legacy-navigate":
-        // No AI feature flag — navigate to Engine voice mode.
-        // replace (not push) avoids stacking /engine on top of the previous
-        // entry page — which was causing the "nav-flash" after a save.
-        router.replace(`/engine?voice=1&vt=${Date.now()}`);
+      case "open-paywall":
+        // Free user (no AI flag): show Smart-tier PaywallSheet.
+        setFabPaywallOpen(true);
         break;
     }
   };
@@ -1441,6 +1441,13 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
           Fingerstick, Activity, Cycle, Symptoms and Influences all sit
           one tap away regardless of which screen the user is on. */}
       <DashboardQuickAddSheet open={quickAddOpen} onClose={() => setQuickAddOpen(false)} />
+
+      {/* PaywallSheet for free users who tap the FAB without an AI plan. */}
+      <PaywallSheet
+        open={fabPaywallOpen}
+        onClose={() => setFabPaywallOpen(false)}
+        initialTier="smart"
+      />
 
       {/* Glev AI Phase 2 (Task #651): consent modal on first tap of
           the floating AI button, streaming chat sheet thereafter. The
