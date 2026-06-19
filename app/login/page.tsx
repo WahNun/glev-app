@@ -184,7 +184,6 @@ export default function LoginPage() {
       window.location.replace("/dashboard");
     } catch (err) {
       console.error("[apple-signin]", err);
-      const errorText = err instanceof Error ? `${err.name}: ${err.message}` : String(err);
       setError(t.apple_error);
       setAppleLoading(false);
     }
