@@ -687,7 +687,7 @@
 ### [DEV] Test-Suite reparieren — Typecheck-Fehler bereinigen
 **Status:** offen (kein Datum)
 **Priorität:** P2
-**Plan:** Pre-existing Errors: `mealBolusMirror.test.ts` (`parsedJson readonly []`), `telegramIntegration.test.ts` (spawn type, beforeAll/afterAll). Fix: `parsedJson: [] as ParsedFood[]` in Test-Fixtures. `import { test, beforeAll, afterAll } from '@playwright/test'` korrigieren.
+**Plan:** Pre-existing Errors: `mealBolusMirror.test.ts` (`parsedJson readonly []`). Fix: `parsedJson: [] as ParsedFood[]` in Test-Fixtures. `import { test, beforeAll, afterAll } from '@playwright/test'` korrigieren.
 **Abhängigkeiten:** keine
 
 ### [DEV] Nav-Tab Verifikation auf iOS — Saved-Screen Fix
@@ -770,17 +770,6 @@
 **Plan:** `.github/workflows/android-release.yml`: Trigger `push to main`. Steps: `pnpm build`, `npx cap sync android`, `./gradlew bundleRelease`. Keystore via GitHub Secrets. Upload AAB als Artifact.
 **Abhängigkeiten:** Android Capacitor Setup
 
-### Telegram Bot: /api/telegram/webhook — Antwort empfangen + Whisper
-**Status:** offen (kein Datum)
-**Priorität:** Backlog
-**Plan:** `app/api/telegram/webhook/route.ts`: Webhook-Endpoint für Telegram. Bot-Token aus `TELEGRAM_BOT_TOKEN` Secret. Voice-Message → Whisper-Transkription → In Glev-Log speichern.
-**Abhängigkeiten:** keine
-
-### Telegram Bot: agent_messages Supabase-Tabelle + notify-telegram.mjs
-**Status:** offen (kein Datum)
-**Priorität:** Backlog
-**Plan:** Migration: `agent_messages(id, user_id, direction, text, created_at)`. `scripts/notify-telegram.mjs` sendet eine Nachricht via Bot-API an Lucas.
-**Abhängigkeiten:** Telegram Bot Webhook
 
 ### Apple Health Integration — Replit Prompt ausführen
 **Status:** offen (kein Datum)

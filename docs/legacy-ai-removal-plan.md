@@ -109,7 +109,7 @@ This is the OLD voice path: `engine.startRecording → MediaRecorder → /api/tr
 | `lib/nutrition/estimate.ts` | GPT fallback nutrition estimator. T1D safety contract. |
 | `lib/macroEnrich.ts` | GPT enrichment for Google Sheets import. Active. |
 | `lib/ai/openaiClient.ts` | Shared OpenAI client. Multiple active callers. |
-| `app/api/telegram/webhook/route.ts` | Telegram bot STT (OpenAI Whisper). Separate feature. |
+| ~~`app/api/telegram/webhook/route.ts`~~ | ~~Telegram bot STT (OpenAI Whisper). Separate feature.~~ — **entfernt 2026-06-20** |
 
 ---
 
@@ -152,7 +152,7 @@ lib/ai/openaiClient.ts callers (all ACTIVE):
   - lib/macroEnrich.ts
   - lib/nutrition/parseFood.ts
   - lib/nutrition/estimate.ts
-  - app/api/telegram/webhook/route.ts (Whisper transcription)
+  - ~~app/api/telegram/webhook/route.ts (Whisper transcription)~~ — **entfernt 2026-06-20**
 ```
 
 ---

@@ -29,11 +29,8 @@
 | `hooks/useVoxtral.ts` | 46–47 | `STT_STREAM_ROUTE` + `STT_REST_ROUTE` Konstanten |
 | `hooks/useVoxtral.ts` | 98, 355 | `transcribeWithFallback` — aktive Kernfunktion |
 
-### LIVE — Telegram Bot (Whisper-1, unabhängig vom Legacy-Rip-Out)
-| Datei | Zeile | Kontext |
-|---|---|---|
-| `app/api/telegram/webhook/route.ts` | 196 | `async function transcribeVoice(...)` via OpenAI whisper-1 |
-| `app/api/telegram/webhook/route.ts` | 444 | `inboundText = await transcribeVoice(buffer, mimeType)` |
+### ~~LIVE — Telegram Bot (Whisper-1)~~ — entfernt 2026-06-20
+~~`app/api/telegram/webhook/route.ts`~~ — Datei gelöscht im Zuge der Telegram-Removal (chore/remove-telegram-integration).
 
 ### LIVE — Tests für aktive Voxtral-Pipeline
 | Datei | Scope |
