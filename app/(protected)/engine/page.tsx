@@ -394,7 +394,7 @@ function aiMetaForSource(
   source: import("@/lib/nutrition/types").AggregateSource | null,
 ): { aiSource: string; aiModelId?: string } | null {
   switch (source) {
-    case "estimated":       return { aiSource: "openai",       aiModelId: "gpt-4o-mini" };
+    case "estimated":       return { aiSource: "mistral",      aiModelId: "mistral-small-3" };
     case "vision_estimate": return { aiSource: "pixtral",      aiModelId: "pixtral-12b-2409" };
     case "user_history":    return { aiSource: "user_history" };
     case "open_food_facts": return { aiSource: "off" };

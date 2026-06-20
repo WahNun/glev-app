@@ -48,7 +48,8 @@ export function getOpenAIClient(): OpenAI {
 
 /**
  * Returns an OpenAI-SDK client pointed at Mistral's OpenAI-compatible API.
- * Used by /api/ai/chat for vision-capable turns (Pixtral).
+ * Used by all user-facing AI routes (chat, nutrition parsing, intent
+ * classification, macro refinement) after the 2026-06-20 EU consolidation.
  * Throws a clear error when MISTRAL_API_KEY is missing so route handlers
  * can return 503 instead of crashing with an opaque 500.
  */

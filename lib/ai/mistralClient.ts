@@ -8,10 +8,11 @@ let cached: Mistral | null = null;
  * missing so route handlers can return a 503 instead of crashing
  * with an opaque 500.
  *
- * Mistral powers the user-facing Glev AI chat (streaming bubbles).
- * Nutrition parsing keeps using OpenAI (`getOpenAIClient`) — the
- * two are intentionally separate so swapping one provider does not
- * affect the other.
+ * All user-facing AI pipelines run on Mistral (EU infrastructure) after
+ * the 2026-06-20 consolidation sprint. Chat, nutrition parsing, intent
+ * classification, and macro refinement all use `getMistralChatClient()`
+ * from lib/ai/openaiClient. This native Mistral SDK client handles STT,
+ * TTS, and Dev Cockpit AI (separate credential buckets below).
  */
 export function getMistralClient(): Mistral {
   const apiKey = process.env.MISTRAL_API_KEY;

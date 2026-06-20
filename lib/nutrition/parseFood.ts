@@ -1,4 +1,4 @@
-import { getOpenAIClient } from "@/lib/ai/openaiClient";
+import { getMistralChatClient } from "@/lib/ai/openaiClient";
 import type { ParsedFoodItem } from "./types";
 
 /**
@@ -90,7 +90,7 @@ export interface ParseFoodResult {
 
 // 6s hard ceiling for the GPT parser (lowered from 8s 2026-05-04 as
 // part of the voice-latency fix). A typical 1-3 item meal completes
-// in ~1.5s; allowing 6s still covers gpt-4o-mini's tail without
+// in ~1.5s; allowing 6s still covers mistral-small-3's tail without
 // holding the whole pipeline hostage when OpenAI is degraded.
 const PARSE_TIMEOUT_MS = 6000;
 
@@ -107,7 +107,7 @@ export async function parseFoodText(
   // behaviour for callers that don't pass a locale.
   locale: "de" | "en" = "de",
 ): Promise<ParseFoodResult> {
-  const openai = getOpenAIClient();
+  const openai = getMistralChatClient();
   const langName = locale === "en" ? "English" : "German";
   const systemPrompt =
     PARSER_PROMPT +
@@ -116,20 +116,8 @@ export async function parseFoodText(
     `"search_term_de" remain as specified above.`;
   const completion = await openai.chat.completions.create(
     {
-      model: "gpt-4o-mini",
-      // Strict json_schema response_format (vs the previous json_object
-      // mode) guarantees a schema-conformant payload from the model.
-      // No more markdown fence cleanup, no more parse-failure throws,
-      // and the model spends fewer tokens negotiating shape — directly
-      // shaving latency vs the old free-form JSON prompt.
-      response_format: {
-        type: "json_schema",
-        json_schema: {
-          name: "parsed_food",
-          strict: true,
-          schema: PARSER_SCHEMA,
-        },
-      },
+      model: "mistral-small-3",
+      response_format: { type: "json_object" },
       temperature: 0.1,
       // 350 tokens fits a 4-5 item meal (~70 tokens per item including
       // bilingual search terms). Lowered from 600 — fewer output
@@ -147,10 +135,6 @@ export async function parseFoodText(
   let parsed: { items?: unknown[]; description?: string } = {};
   try { parsed = JSON.parse(raw); }
   catch {
-    // Defensive: strict json_schema mode should make this unreachable,
-    // but if the model refuses or produces a `refusal` message the raw
-    // content can still be non-JSON. Preserve the prior error shape so
-    // upstream handlers (/api/parse-food, voice flow) keep working.
     throw new Error("LLM returned unparseable JSON: " + raw.slice(0, 200));
   }
 
