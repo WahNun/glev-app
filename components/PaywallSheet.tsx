@@ -2,6 +2,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { createPortal } from "react-dom";
 import Image from "next/image";
+import { useRouter } from "next/navigation";
 import { useTranslations, useLocale } from "next-intl";
 import { Capacitor } from "@capacitor/core";
 import {
@@ -58,6 +59,7 @@ const PLUS_PURPLE = "#7c3aed";
 export default function PaywallSheet({ open, onClose, onPurchaseSuccess, initialTier = "pro" }: Props) {
   const t      = useTranslations("paywall");
   const locale = useLocale();
+  const router = useRouter();
 
   const [offering,      setOffering]      = useState<PurchasesOffering | null>(null);
   const [offeringState, setOfferingState] = useState<"loading" | "ready" | "empty">("loading");
@@ -190,6 +192,8 @@ export default function PaywallSheet({ open, onClose, onPurchaseSuccess, initial
   const monthly = pickPkg(pkgs, tier, "monthly");
   const yearly  = pickPkg(pkgs, tier, "yearly");
   const chosen  = interval === "yearly" ? yearly : monthly;
+
+  const tierTitle = tier === "smart" ? "Smart" : tier === "plus" ? "Glev+" : "Pro";
 
   const smartFeatures: string[] = [
     t("feature_smart_1"),
@@ -421,7 +425,7 @@ export default function PaywallSheet({ open, onClose, onPurchaseSuccess, initial
 
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 6 }}>
             <span style={{ fontSize: 16, fontWeight: 700, color: "var(--text)" }}>
-              {t("label_yearly")}
+              {tierTitle} · {t("label_yearly")}
             </span>
             <span>
               <span style={{ fontSize: 22, fontWeight: 700, letterSpacing: "-0.01em", color: "var(--text)" }}>
@@ -464,7 +468,7 @@ export default function PaywallSheet({ open, onClose, onPurchaseSuccess, initial
         >
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 4 }}>
             <span style={{ fontSize: 16, fontWeight: 700, color: "var(--text)" }}>
-              {t("label_monthly")}
+              {tierTitle} · {t("label_monthly")}
             </span>
             <span>
               <span style={{ fontSize: 22, fontWeight: 700, letterSpacing: "-0.01em", color: "var(--text)" }}>
@@ -593,13 +597,21 @@ export default function PaywallSheet({ open, onClose, onPurchaseSuccess, initial
           {purchasing ? t("restoring") : t("restore")}
         </button>
         <div style={{ display: "flex", gap: 6, justifyContent: "center", alignItems: "center" }}>
-          <a href="/datenschutz" target="_blank" rel="noopener noreferrer" style={{ color: "var(--text-muted)", textDecoration: "none" }}>
+          <button
+            type="button"
+            onClick={() => { onClose(); router.push("/legal"); }}
+            style={{ background: "none", border: "none", color: ACCENT, fontSize: 12, cursor: "pointer", fontFamily: "inherit", padding: "2px 0", textDecoration: "underline" }}
+          >
             {t("privacy")}
-          </a>
+          </button>
           <span aria-hidden>·</span>
-          <a href="/agb" target="_blank" rel="noopener noreferrer" style={{ color: "var(--text-muted)", textDecoration: "none" }}>
+          <button
+            type="button"
+            onClick={() => { onClose(); router.push("/legal?tab=agb"); }}
+            style={{ background: "none", border: "none", color: ACCENT, fontSize: 12, cursor: "pointer", fontFamily: "inherit", padding: "2px 0", textDecoration: "underline" }}
+          >
             {t("terms")}
-          </a>
+          </button>
         </div>
         <p style={{ margin: 0, lineHeight: 1.4 }}>{t("renewal_notice")}</p>
       </div>
