@@ -211,22 +211,31 @@ export default function BottomSheet({
                   click would otherwise land on whatever's behind the
                   sheet ("ghost click"). Pointerup + preventDefault
                   blocks that. */}
+              {/* 44×44 tap area (Apple HIG minimum) wrapping the 28×28 visual pill */}
               <IosTapButton
                 onAct={onClose}
                 ariaLabel="Close"
                 style={{
+                  width: 44, height: 44, borderRadius: 99,
+                  background: "transparent",
+                  border: "none",
+                  color: "var(--text-dim)", cursor: "pointer",
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  padding: 0, flexShrink: 0,
+                }}
+              >
+                <span style={{
                   width: 28, height: 28, borderRadius: 99,
                   background: "var(--surface-soft)",
                   border: `1px solid ${BORDER}`,
-                  color: "var(--text-dim)", cursor: "pointer",
                   display: "flex", alignItems: "center", justifyContent: "center",
-                  padding: 0,
-                }}
-              >
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-                  <line x1="6" y1="6" x2="18" y2="18"/>
-                  <line x1="18" y1="6" x2="6" y2="18"/>
-                </svg>
+                  flexShrink: 0, pointerEvents: "none",
+                }}>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                    <line x1="6" y1="6" x2="18" y2="18"/>
+                    <line x1="18" y1="6" x2="6" y2="18"/>
+                  </svg>
+                </span>
               </IosTapButton>
             </div>
           )}

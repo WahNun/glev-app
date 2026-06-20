@@ -1217,9 +1217,13 @@ function DashboardCluster({
     });
   }, [cards.length]);
 
+  // Single-card clusters (e.g. glucose) use `height: auto` so CSS media
+  // queries can resize the card on orientation change without the overflow:hidden
+  // clipping it at the stale JS-measured height for 220ms. Multi-card clusters
+  // still use the measured height so the pager animation stays smooth.
   const activeMeasured = heights[active];
   const scrollerHeight: React.CSSProperties["height"] =
-    activeMeasured != null ? activeMeasured : "auto";
+    cards.length === 1 ? "auto" : (activeMeasured != null ? activeMeasured : "auto");
 
   // ── Render ──────────────────────────────────────────────────────────
   return (
@@ -1250,7 +1254,9 @@ function DashboardCluster({
         style={{
           overflow: "hidden",
           height: scrollerHeight,
-          transition: "height 220ms ease",
+          // Transition only for multi-card pager — single-card clusters
+          // let CSS drive height so orientation changes are flicker-free.
+          transition: cards.length > 1 ? "height 220ms ease" : undefined,
           // Allow vertical page scroll; horizontal is handled manually.
           touchAction: cards.length > 1 ? "pan-y" : "auto",
           userSelect: "none",
