@@ -2,7 +2,7 @@ import { NextRequest, NextResponse, after } from "next/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import OpenAI from "openai";
 import { authedClient, type AuthOk, type AuthErr } from "@/app/api/insulin/_helpers";
-import { getOpenAIClient } from "@/lib/ai/openaiClient";
+import { getMistralChatClient } from "@/lib/ai/openaiClient";
 import { GLEV_CHAT_SYSTEM_PROMPT } from "@/lib/ai/glevChatPrompt";
 import { errorResponse } from "@/lib/api/errorResponse";
 import { getUserFriendlyMessage } from "@/lib/ai/errorMessages";
@@ -519,7 +519,7 @@ export async function checkChatFlag(
  * - `auth`: pre-resolved auth result. When omitted `handleChatPost` calls
  *   `authedClient(req)` itself (production path).
  * - `getOpenAI`: factory that returns an OpenAI client. When omitted the
- *   real `getOpenAIClient()` is used. Tests can pass a spy here to assert
+ *   real `getMistralChatClient()` is used. Tests can pass a spy here to assert
  *   that no OpenAI call occurs when the feature-flag gate blocks early.
  * - `timeoutMs`: stream timeout in milliseconds. Defaults to 18 000. Tests
  *   can lower this to make timeout scenarios fast.
@@ -598,7 +598,7 @@ export async function handleChatPost(
   const attachments: ChatAttachment[] = v.body.attachments ?? [];
 
   // 5. OpenAI client
-  const _getOpenAI = deps.getOpenAI ?? getOpenAIClient;
+  const _getOpenAI = deps.getOpenAI ?? getMistralChatClient;
   let client;
   try {
     client = _getOpenAI();
@@ -816,7 +816,7 @@ export async function handleChatPost(
 
           const completion = await callOpenAIWithRetry(
             () => client.chat.completions.create({
-              model: "gpt-4o-mini",
+              model: "pixtral-12b-2409",
               max_tokens: 300,
               temperature: 0.4,
               messages,
@@ -1146,7 +1146,7 @@ export async function handleChatPost(
 
         const streamResult = await callOpenAIWithRetry(
           () => client.chat.completions.create({
-            model: "gpt-4o-mini",
+            model: "pixtral-12b-2409",
             max_tokens: hasImages ? 512 : 300,
             temperature: 0.4,
             messages,

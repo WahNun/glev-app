@@ -78,7 +78,8 @@ const COPY = {
     send:                  "Senden",
     attach_too_large:      "Datei zu groß (max. 5 MB)",
     attach_limit:          "Maximal 3 Anhänge erlaubt",
-    attach_heic:           "HEIC-Format nicht unterstützt – bitte JPEG/PNG verwenden.",
+    attach_heic:           "HEIC-Konvertierung fehlgeschlagen – bitte als JPEG exportieren.",
+    attach_converting:     "Konvertiere HEIC …",
     attach_uploading:      "Lädt hoch …",
     attach_remove:         "Anhang entfernen",
   },
@@ -136,7 +137,8 @@ const COPY = {
     send:                  "Send",
     attach_too_large:      "File too large (max 5 MB)",
     attach_limit:          "Max 3 attachments",
-    attach_heic:           "HEIC format not supported – please use JPEG/PNG.",
+    attach_heic:           "HEIC conversion failed – please export as JPEG.",
+    attach_converting:     "Converting HEIC …",
     attach_uploading:      "Uploading …",
     attach_remove:         "Remove attachment",
   },
@@ -1286,7 +1288,7 @@ export default function GlevAIChatSheet({
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const addFiles = useCallback((files: FileList | File[]) => {
+  const addFiles = useCallback(async (files: FileList | File[]) => {
     const arr = Array.from(files);
     if (pendingAttachments.length + arr.length > 3) {
       setAttachToast(t.attach_limit);
@@ -1300,13 +1302,28 @@ export default function GlevAIChatSheet({
         return;
       }
       const nameLower = file.name.toLowerCase();
-      if (
+      const isHeic =
         file.type === "image/heic" || file.type === "image/heif" ||
-        nameLower.endsWith(".heic") || nameLower.endsWith(".heif")
-      ) {
-        setAttachToast(t.attach_heic);
-        setTimeout(() => setAttachToast(null), 5000);
-        return;
+        nameLower.endsWith(".heic") || nameLower.endsWith(".heif");
+      if (isHeic) {
+        setAttachToast(t.attach_converting);
+        try {
+          const heic2any = (await import("heic2any")).default;
+          const result = await heic2any({ blob: file, toType: "image/jpeg", quality: 0.85 });
+          const jpegBlob = Array.isArray(result) ? result[0] : result;
+          const jpegName = file.name.replace(/\.hei[cf]$/i, ".jpg");
+          const jpegFile = new File([jpegBlob], jpegName, { type: "image/jpeg" });
+          setAttachToast(null);
+          const preview = URL.createObjectURL(jpegFile);
+          setPendingAttachments((prev) => [
+            ...prev,
+            { id: `${Date.now()}-${Math.random()}`, file: jpegFile, preview, mimeType: "image/jpeg", fileName: jpegFile.name },
+          ]);
+        } catch {
+          setAttachToast(t.attach_heic);
+          setTimeout(() => setAttachToast(null), 5000);
+        }
+        continue;
       }
       const preview = file.type.startsWith("image/") ? URL.createObjectURL(file) : null;
       setPendingAttachments((prev) => [
@@ -1315,7 +1332,7 @@ export default function GlevAIChatSheet({
       ]);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pendingAttachments.length, t.attach_limit, t.attach_too_large]);
+  }, [pendingAttachments.length, t.attach_limit, t.attach_too_large, t.attach_converting, t.attach_heic]);
 
   const removeAttachment = useCallback((id: string) => {
     setPendingAttachments((prev) => {
