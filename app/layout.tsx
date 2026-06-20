@@ -15,6 +15,7 @@ import { ThemeProvider } from "@/components/ThemeProvider";
 import CookieBanner from "@/components/CookieBanner";
 import WebOnlyTracking from "@/components/WebOnlyTracking";
 import ServiceWorkerRegistration from "@/components/ServiceWorkerRegistration";
+import SplashScreenHider from "@/components/SplashScreenHider";
 
 
 // Single inline bootstrap script that runs BEFORE React hydrates.
@@ -289,6 +290,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
             <Analytics />
             <CookieBanner />
             <ServiceWorkerRegistration />
+            <SplashScreenHider />
           </ThemeProvider>
         </NextIntlClientProvider>
       </body>
