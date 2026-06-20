@@ -781,6 +781,7 @@ export async function handleChatPost(
         // confused and called both. We reject the duplicate with a stub so no
         // second influence card appears in the UI.
         let alcoholDualEmittedThisRequest = false;
+        let mealPrepEmittedThisRequest = false;
         for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
           if (timedOut || closed) return;
 
@@ -944,6 +945,7 @@ export async function handleChatPost(
               // then both pending_actions so the client renders two chips.
               pendingEmittedThisRound = true;
               alcoholDualEmittedThisRequest = true; // block any subsequent log_influence_entry(alcohol)
+              mealPrepEmittedThisRequest = true;
               const [mealAction, inflAction] = result.dual_pending_actions;
               const mp = mealAction.payload as Record<string, unknown> | undefined;
               if (mp) {
@@ -968,11 +970,12 @@ export async function handleChatPost(
                 content: JSON.stringify({
                   status: "awaiting_user_confirmation",
                   kind: "log_meal_entry+log_influence_entry",
-                  note: "Zwei Bestätigungs-Buttons erscheinen automatisch: Mahlzeit + Alkohol-Einflussfaktor. Antworte mit EINEM kurzen Satz ('Soll ich Mahlzeit und Alkohol-Einflussfaktor so speichern?').",
+                  note: "Chip erscheint automatisch. Kein weiterer Text nötig.",
                 }),
               });
             } else if (isPendingActionEnvelope(result)) {
               pendingEmittedThisRound = true;
+              if (result.pending_action.kind === "log_meal_entry") mealPrepEmittedThisRequest = true;
               // For log_meal_entry: emit meal_prep BEFORE pending_action so the
               // client can queue the macro data and associate the token when
               // pending_action arrives (useGlevAI assigns token to the last
@@ -1005,8 +1008,9 @@ export async function handleChatPost(
                   status: "awaiting_user_confirmation",
                   kind: result.pending_action.kind,
                   summary: result.pending_action.summary,
-                  note:
-                    "Bestätigung erfolgt durch UI-Button. Antworte mit EINEM kurzen Satz, der natürlich zur Aktion überleitet (z. B. 'Soll ich das so speichern?'). Stelle KEINE Rückfragen nach Daten, frage NICHT erneut nach Bestätigung — der Button erscheint automatisch.",
+                  note: result.pending_action.kind === "log_meal_entry"
+                    ? "Chip erscheint automatisch. Kein weiterer Text nötig."
+                    : "Bestätigung erfolgt durch UI-Button. Antworte mit EINEM kurzen Satz, der natürlich zur Aktion überleitet. Stelle KEINE Rückfragen — der Button erscheint automatisch.",
                 }),
               });
             } else if (isNavigateEnvelope(result)) {
@@ -1066,6 +1070,13 @@ export async function handleChatPost(
         }
 
         if (timedOut || closed) return;
+
+        // Meal-log turns: chip IS the full response — skip streaming phase.
+        if (mealPrepEmittedThisRequest) {
+          send("[DONE]");
+          safeClose();
+          return;
+        }
 
         // ── Phase 2: stream the final answer ────────────────────────
         // gpt-4o-mini handles both text and image inputs natively (vision built-in).
