@@ -7,7 +7,7 @@ import type { IntentEnvelope } from "@/lib/ai/intentClassifier";
  * POST /api/ai/classify-intent
  *
  * Classifies a voice transcript into a Glev intent envelope using a
- * compact mistral-small-3 call. Called by lib/ai/intentClassifier when the
+ * compact mistral-small-latest call. Called by lib/ai/intentClassifier when the
  * fast-path regex heuristics don't match.
  *
  * Auth: requires a valid Supabase session (401 otherwise).
@@ -87,7 +87,7 @@ export async function POST(req: NextRequest) {
   try {
     const openai = getMistralChatClient();
     const response = await openai.chat.completions.create({
-      model: "mistral-small-3",
+      model: "mistral-small-latest",
       messages: [
         { role: "system", content: CLASSIFICATION_PROMPT },
         { role: "user", content: transcript },

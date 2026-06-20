@@ -488,3 +488,5 @@ Neue Tabelle `public.glev_ops_users` (id, email, password_hash, role, name, must
 | 2026-06-20 | Telegram-Integration komplett entfernt | [CLEANUP] Webhook-Route, Scripts, Tests, Dependency-Scripts, agent_messages-Tabelle (Migration 20260620120000_drop_agent_messages.sql). Telegram war Dev-Notification-Pfad mit OpenAI Whisper-1 (US-Infrastruktur) — passt nicht zur EU-Konsolidierungs-Linie und wird von keinem Glev-App-User direkt genutzt. |
 
 | 2026-06-21 | Hotfix: NutritionSource Type-Sync | [BUGFIX] vision_estimate fehlte in NutritionSource (nur in AggregateSource hinzugefügt bei PR #23). 5h Production-Build-Outage. Strategy A: lokalen NutritionSource-Type aus engineSourceHeaderContext.tsx entfernt, AggregateSource aus lib/nutrition/types.ts direkt importiert. |
+
+| 2026-06-21 | Mistral-Identifier Hotfix | [BUGFIX] mistral-large-2.1 → mistral-large-latest, mistral-small-3 → mistral-small-latest. Mistral-Support hat die `-latest` Identifier als die gültigen bestätigt. Behebt die UPSTREAM_ERROR 400 empty body auf /api/ai/chat seit PR #30. |
