@@ -14,7 +14,7 @@ import IntentConfirmChip, { intentLabel } from "@/components/IntentConfirmChip";
 import GlevLogo from "@/components/GlevLogo";
 import { getActionMeta } from "@/lib/ai/pendingActions";
 import SourceBadge from "@/components/SourceBadge";
-import { aggregateBadge } from "@/lib/nutrition/badgeFor";
+import { aggregateBadge, aggregateSourceLabel } from "@/lib/nutrition/badgeFor";
 import { supabase } from "@/lib/supabase";
 import ResetButton from "@/components/ResetButton";
 
@@ -78,6 +78,7 @@ const COPY = {
     send:                  "Senden",
     attach_too_large:      "Datei zu groß (max. 5 MB)",
     attach_limit:          "Maximal 3 Anhänge erlaubt",
+    attach_heic:           "HEIC-Format nicht unterstützt – bitte JPEG/PNG verwenden.",
     attach_uploading:      "Lädt hoch …",
     attach_remove:         "Anhang entfernen",
   },
@@ -135,6 +136,7 @@ const COPY = {
     send:                  "Send",
     attach_too_large:      "File too large (max 5 MB)",
     attach_limit:          "Max 3 attachments",
+    attach_heic:           "HEIC format not supported – please use JPEG/PNG.",
     attach_uploading:      "Uploading …",
     attach_remove:         "Remove attachment",
   },
@@ -392,6 +394,25 @@ function MealChipExpanded({
         </div>
         {/* Aggregate badge from real sources; fades during Realtime refinement. */}
         {(() => {
+          // Vision estimate: show a dedicated 📷 Foto badge.
+          if (nutritionSource === "vision_estimate") {
+            return (
+              <span
+                style={{ opacity: badgesTransitioning ? 0 : 1, transition: "opacity 0.25s ease" }}
+                title="Vision-Schätzung"
+              >
+                <span style={{
+                  display: "inline-flex", alignItems: "center", gap: 3,
+                  fontSize: 10, fontWeight: 600, letterSpacing: "0.04em",
+                  padding: "1px 5px", borderRadius: 6,
+                  background: "rgba(59,130,246,0.12)", color: "#60a5fa",
+                  whiteSpace: "nowrap", flexShrink: 0,
+                }}>
+                  📷 {aggregateSourceLabel(nutritionSource)}
+                </span>
+              </span>
+            );
+          }
           const badge = aggregateBadge(
             itemsForExpand.map((it) => ({ source: (it.source ?? "estimated") as NutritionSource })),
           );
@@ -1276,6 +1297,15 @@ export default function GlevAIChatSheet({
       if (file.size > 5 * 1024 * 1024) {
         setAttachToast(t.attach_too_large);
         setTimeout(() => setAttachToast(null), 3000);
+        return;
+      }
+      const nameLower = file.name.toLowerCase();
+      if (
+        file.type === "image/heic" || file.type === "image/heif" ||
+        nameLower.endsWith(".heic") || nameLower.endsWith(".heif")
+      ) {
+        setAttachToast(t.attach_heic);
+        setTimeout(() => setAttachToast(null), 5000);
         return;
       }
       const preview = file.type.startsWith("image/") ? URL.createObjectURL(file) : null;
