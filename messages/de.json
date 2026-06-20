@@ -1610,7 +1610,10 @@
       "bg_warn_title": "Hintergrund-Sync hat gestoppt",
       "bg_warn_body": "Seit mehr als 6 Stunden kam keine Lieferung vom Hintergrund-Observer. Das kann passieren, wenn iOS die Berechtigung widerrufen hat, deine Session abgelaufen ist oder die App neu gestartet werden muss. Tippe „Neu einrichten“, um die Berechtigung zu erneuern, und öffne die App danach erneut.",
       "bg_rearm_btn": "Neu einrichten",
-      "bg_rearm_success": "Berechtigung aktualisiert — schließe die App einmal und öffne sie wieder, damit der Hintergrund-Observer sich neu registriert."
+      "bg_rearm_success": "Berechtigung aktualisiert — schließe die App einmal und öffne sie wieder, damit der Hintergrund-Observer sich neu registriert.",
+      "activity_sync_section_label": "Activity-Daten",
+      "activity_sync_description": "Schritte, Active Energy und Workouts aus Apple Health in Glev importieren — unabhängig davon, woher deine Glukosewerte kommen.",
+      "activity_sync_toggle_label": "Apple Health Activity synchronisieren"
     },
     "status": {
       "title": "CGM-Verbindung",
