@@ -42,7 +42,7 @@ export type AggregateSource =
   | "usda"            // every item from USDA FoodData Central
   | "mixed"           // at least one DB hit AND at least one GPT estimate
   | "estimated"       // every item fell back to GPT estimate
-  | "vision_estimate" // macros estimated from a meal photo (gpt-4o-mini vision)
+  | "vision_estimate" // macros estimated from a meal photo (pixtral-12b-2409 vision)
   | "unknown";        // at least one item failed even GPT estimate (hard warning)
 
 /**

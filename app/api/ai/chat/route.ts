@@ -239,8 +239,8 @@ type ChatBody = {
   // Europe/Berlin.
   timezone?: string | null;
   /** Optional file attachments uploaded via /api/ai/upload.
-   *  Images → gpt-4o-mini (vision built-in).
-   *  PDFs   → text prepended to message, then gpt-4o-mini. */
+   *  Images → pixtral-12b-2409 (vision) in Phase 1.
+   *  PDFs   → text prepended to message, then mistral-large-2.1. */
   attachments?: ChatAttachment[];
 };
 
@@ -597,7 +597,7 @@ export async function handleChatPost(
   const timezone: string | null = v.body.timezone ?? null;
   const attachments: ChatAttachment[] = v.body.attachments ?? [];
 
-  // 5. OpenAI client
+  // 5. Mistral client (via OpenAI-compat SDK)
   const _getOpenAI = deps.getOpenAI ?? getMistralChatClient;
   let client;
   try {
@@ -659,8 +659,8 @@ export async function handleChatPost(
   const pdfAttachments   = attachments.filter((a) => a.mimeType === "application/pdf");
   const hasImages = imageAttachments.length > 0;
 
-  // Pre-Phase-1: attach images to the last user message NOW so gpt-4o-mini
-  // (vision built-in) can see the food photo in the tool-call round and
+  // Pre-Phase-1: attach images to the last user message NOW so pixtral-12b-2409
+  // can see the food photo in the tool-call round and
   // fire log_meal_entry.  Without this, images were only appended in Phase 2
   // where tools are not available — so the model described the food in text
   // instead of logging it.
@@ -816,7 +816,7 @@ export async function handleChatPost(
 
           const completion = await callOpenAIWithRetry(
             () => client.chat.completions.create({
-              model: "pixtral-12b-2409",
+              model: hasImages ? "pixtral-12b-2409" : "mistral-large-2.1",
               max_tokens: 300,
               temperature: 0.4,
               messages,
@@ -1146,7 +1146,7 @@ export async function handleChatPost(
 
         const streamResult = await callOpenAIWithRetry(
           () => client.chat.completions.create({
-            model: "pixtral-12b-2409",
+            model: "mistral-large-2.1",
             max_tokens: hasImages ? 512 : 300,
             temperature: 0.4,
             messages,

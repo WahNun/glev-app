@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getOpenAIClient } from "@/lib/ai/openaiClient";
+import { getMistralChatClient } from "@/lib/ai/openaiClient";
 import { parseFoodText } from "@/lib/nutrition/parseFood";
 import { aggregateNutrition } from "@/lib/nutrition/aggregate";
 import {
@@ -8,6 +8,31 @@ import {
   parseFoodName,
 } from "@/lib/nutrition/userFoodHistory";
 import { authedClient } from "@/app/api/insulin/_helpers";
+import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
+
+const RATE_LIMIT_MAX = 30;
+const RATE_LIMIT_WINDOW_MS = 60_000;
+
+async function isRateLimited(userId: string): Promise<boolean> {
+  let admin;
+  try { admin = getSupabaseAdmin(); } catch { return false; }
+  const cutoff = new Date(Date.now() - RATE_LIMIT_WINDOW_MS).toISOString();
+  const { count, error } = await admin
+    .from("ai_rate_limit_hits")
+    .select("id", { count: "exact", head: true })
+    .eq("user_id", userId)
+    .gte("hit_at", cutoff);
+  if (error) return false;
+  return (count ?? 0) >= RATE_LIMIT_MAX;
+}
+
+async function addRateLimitHit(userId: string): Promise<void> {
+  let admin;
+  try { admin = getSupabaseAdmin(); } catch { return; }
+  const now = Date.now();
+  await admin.from("ai_rate_limit_hits").insert({ user_id: userId, hit_at: new Date(now).toISOString() });
+  void admin.from("ai_rate_limit_hits").delete().eq("user_id", userId).lt("hit_at", new Date(now - RATE_LIMIT_WINDOW_MS).toISOString());
+}
 
 /**
  * Chat-macros refines an already-logged meal. The flow is:
@@ -70,6 +95,22 @@ CRITICAL rules:
 interface ChatMessage { role: "user" | "assistant" | "system"; content: string }
 
 export async function POST(req: NextRequest) {
+  // Auth + rate limit (best-effort: unauthenticated requests are allowed
+  // through but won't be rate-limited since there's no stable user id).
+  let userId: string | null = null;
+  let sb: Awaited<ReturnType<typeof authedClient>>["sb"] = null;
+  try {
+    const auth = await authedClient(req);
+    if (auth.user && auth.sb) { userId = auth.user.id; sb = auth.sb; }
+  } catch { /* no-op */ }
+
+  if (userId) {
+    if (await isRateLimited(userId)) {
+      return NextResponse.json({ error: "Rate limit exceeded. Try again in a minute." }, { status: 429, headers: { "Retry-After": "60" } });
+    }
+    void addRateLimitHit(userId);
+  }
+
   const body = await req.json().catch(() => ({})) as {
     messages?: ChatMessage[];
     macros?:   { carbs?: number; protein?: number; fat?: number; fiber?: number };
@@ -106,7 +147,7 @@ food databases, not guesses):
   };
 
   let openai;
-  try { openai = getOpenAIClient(); }
+  try { openai = getMistralChatClient(); }
   catch (e) { return NextResponse.json({ error: e instanceof Error ? e.message : "AI not configured" }, { status: 503 }); }
 
   let raw = "";
@@ -114,7 +155,7 @@ food databases, not guesses):
   let chatReply = "";
   try {
     const completion = await openai.chat.completions.create({
-      model: "gpt-5",
+      model: "mistral-small-3",
       messages: [
         { role: "system", content: localizedSystemPrompt },
         ctx,
@@ -153,12 +194,7 @@ food databases, not guesses):
   // Load history so re-aggregation sees personal cache hits, then
   // record the resulting items back as source='user_confirmed' so the
   // refined values stick (passive saveMeal writes won't downgrade them).
-  let userId: string | null = null;
-  let sb: Awaited<ReturnType<typeof authedClient>>["sb"] = null;
-  try {
-    const auth = await authedClient(req);
-    if (auth.user && auth.sb) { userId = auth.user.id; sb = auth.sb; }
-  } catch { /* no auth → behave like before Phase B */ }
+  // (userId + sb already resolved at the top of this handler.)
 
   // DB-backed re-aggregation: parse the chat description with the same
   // structured GPT parser, then route through history → OFF → USDA. If
