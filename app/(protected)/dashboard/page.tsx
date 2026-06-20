@@ -24,7 +24,7 @@ import MealEntryLightExpand from "@/components/MealEntryLightExpand";
 import PendingGlucoseStrip from "@/components/PendingGlucoseStrip";
 import CurrentDayGlucoseCard from "@/components/CurrentDayGlucoseCard";
 import MacroRing from "@/components/MacroRing";
-import SkeletonBlock from "@/components/SkeletonBlock";
+import GlevLoadingPattern from "@/components/GlevLoadingPattern";
 import GlevLogo from "@/components/GlevLogo";
 import { hapticSelection } from "@/lib/haptics";
 import { parseDbDate, parseDbTs, localeToBcp47 } from "@/lib/time";
@@ -627,16 +627,7 @@ export default function DashboardPage() {
   // so the visible UI never jumps when data arrives. Feels much faster
   // than the old centered spinner because the user sees the page shape
   // immediately instead of staring at a tiny spinner on a blank screen.
-  if (loading) return (
-    <div style={{ padding:"16px 16px 0", display:"flex", flexDirection:"column", gap:16 }}>
-      <style>{`@keyframes glevPulse{0%,100%{opacity:.55}50%{opacity:.85}}`}</style>
-      <SkeletonBlock height={56} />
-      <SkeletonBlock height={180} />
-      <SkeletonBlock height={140} />
-      <SkeletonBlock height={140} />
-      <SkeletonBlock height={220} />
-    </div>
-  );
+  if (loading) return <GlevLoadingPattern />;
 
   const cards = buildCards(meals, t);
   const rateCards = cards.filter(c => c.key !== "control");
