@@ -3062,7 +3062,7 @@ export default function EnginePage() {
                               {chip.label}
                             </span>
                             <span style={{ fontFamily: "var(--font-mono)", fontSize: 16, fontWeight: 800, color: isSel ? ACCENT : "var(--text-strong)", letterSpacing: "-0.02em", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                              1 : {Math.round(chip.icr * 10) / 10}
+                              1 : {carbUnit.fromGrams(chip.icr)}{carbUnit.unit !== "g" ? <span style={{ fontSize: 11, marginLeft: 2, fontWeight: 600 }}>{carbUnit.unit}</span> : ""}
                             </span>
                             {chip.dose !== null && (
                               <span style={{ fontFamily: "var(--font-mono)", fontSize: 13, fontWeight: 700, color: isSel ? ACCENT : "var(--text-dim)", whiteSpace: "nowrap" }}>
