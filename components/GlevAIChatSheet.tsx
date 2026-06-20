@@ -397,12 +397,17 @@ function MealChipExpanded({
           // Prefer the top-level nutritionSource from the aggregator when it
           // signals "user_history" — aggregateBadge collapses all DB sources
           // to "verified" so we'd lose the distinction without this check.
-          const src: NutritionSource =
-            (nutritionSource === "user_history" || nutritionSource === "user_confirmed")
-              ? "user_history"
-              : badge === "verified" ? "open_food_facts"
-              : badge === "mixed"    ? "user_history"
-              : "estimated";
+          const src: NutritionSource = (() => {
+            if (nutritionSource === "user_history" || nutritionSource === "user_confirmed") return "user_history";
+            if (itemsForExpand.length > 0) {
+              if (badge === "verified") return nutritionSource === "usda" ? "usda" : "open_food_facts";
+              return "estimated";
+            }
+            // No per-item data — use top-level nutritionSource directly.
+            if (nutritionSource === "open_food_facts" || nutritionSource === "database") return "open_food_facts";
+            if (nutritionSource === "usda") return "usda";
+            return "estimated";
+          })();
           return (
             <span style={{ opacity: badgesTransitioning ? 0 : 1, transition: "opacity 0.25s ease" }}>
               <SourceBadge source={src} />
