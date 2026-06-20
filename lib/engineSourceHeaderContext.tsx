@@ -1,6 +1,7 @@
 "use client";
 
 import { createContext, useContext, useState, useCallback, useMemo, type ReactNode } from "react";
+import type { AggregateSource } from "@/lib/nutrition/types";
 
 /**
  * Bridges the engine page's `nutritionSource` state into the global
@@ -26,27 +27,18 @@ import { createContext, useContext, useState, useCallback, useMemo, type ReactNo
  * the min occurrence count across resolved items, used for the badge text
  * "Basiert auf X vorherigen Einträgen".
  */
-export type NutritionSource =
-  | "database"
-  | "user_history"
-  | "open_food_facts"
-  | "usda"
-  | "mixed"
-  | "estimated"
-  | "unknown";
-
 export interface EngineSourceHeaderState {
-  source:       NutritionSource | null;
+  source:       AggregateSource | null;
   historyCount: number | null;
-  setSource:    (s: NutritionSource | null, historyCount?: number) => void;
+  setSource:    (s: AggregateSource | null, historyCount?: number) => void;
 }
 
 const EngineSourceHeaderContext = createContext<EngineSourceHeaderState | null>(null);
 
 export function EngineSourceHeaderProvider({ children }: { children: ReactNode }) {
-  const [source, setSourceState] = useState<NutritionSource | null>(null);
+  const [source, setSourceState] = useState<AggregateSource | null>(null);
   const [historyCount, setHistoryCount] = useState<number | null>(null);
-  const setSource = useCallback((s: NutritionSource | null, count?: number) => {
+  const setSource = useCallback((s: AggregateSource | null, count?: number) => {
     setSourceState(s);
     setHistoryCount(count ?? null);
   }, []);

@@ -486,3 +486,5 @@ Neue Tabelle `public.glev_ops_users` (id, email, password_hash, role, name, must
 | 2026-06-20 | Paywall Apple-Sub-Compliance | [FIX] Privacy + AGB Tap-Links im PaywallSheet ergänzt (Routes /legal + /legal?tab=agb). Plan-Cards zeigen jetzt Tier-Name (Smart/Pro/Glev+) + Länge (Jährlich/Monatlich) + Preis. Footer-Links von <a href target=_blank> auf router.push() umgestellt für In-App-Navigation. Konformität mit Guideline 3.1.2(c) für nächste Apple Review. |
 
 | 2026-06-20 | Telegram-Integration komplett entfernt | [CLEANUP] Webhook-Route, Scripts, Tests, Dependency-Scripts, agent_messages-Tabelle (Migration 20260620120000_drop_agent_messages.sql). Telegram war Dev-Notification-Pfad mit OpenAI Whisper-1 (US-Infrastruktur) — passt nicht zur EU-Konsolidierungs-Linie und wird von keinem Glev-App-User direkt genutzt. |
+
+| 2026-06-21 | Hotfix: NutritionSource Type-Sync | [BUGFIX] vision_estimate fehlte in NutritionSource (nur in AggregateSource hinzugefügt bei PR #23). 5h Production-Build-Outage. Strategy A: lokalen NutritionSource-Type aus engineSourceHeaderContext.tsx entfernt, AggregateSource aus lib/nutrition/types.ts direkt importiert. |
