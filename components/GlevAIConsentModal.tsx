@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import ResetButton from "@/components/ResetButton";
 
 const ACCENT = "#4F6EF7";
 const SHEET_BG = "var(--surface)";
@@ -81,17 +82,22 @@ export default function GlevAIConsentModal({ open, onDismiss, onActivate }: Prop
           overflowY: "auto",
         }}
       >
-        <h2
-          id="glev-ai-consent-title"
-          style={{
-            fontSize: 18,
-            fontWeight: 700,
-            margin: "0 0 12px",
-            lineHeight: 1.3,
-          }}
-        >
-          Glev Intelligence aktivieren
-        </h2>
+        {/* Title row: heading + revoke button top-right */}
+        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 12 }}>
+          <h2
+            id="glev-ai-consent-title"
+            style={{
+              fontSize: 18,
+              fontWeight: 700,
+              margin: 0,
+              lineHeight: 1.3,
+              flex: 1,
+            }}
+          >
+            Glev Intelligence aktivieren
+          </h2>
+          <ResetButton onRevoked={onDismiss} style={{ marginTop: -6, marginRight: -8 }} />
+        </div>
 
         <p style={{ fontSize: 14, lineHeight: 1.55, color: "var(--text-strong)", margin: "0 0 10px" }}>
           Glev AI hilft dir, Muster in deinen Mahlzeiten, Glukosewerten und Boli
