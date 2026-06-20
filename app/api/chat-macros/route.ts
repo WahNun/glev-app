@@ -155,7 +155,7 @@ food databases, not guesses):
   let chatReply = "";
   try {
     const completion = await openai.chat.completions.create({
-      model: "mistral-small-3",
+      model: "mistral-small-latest",
       messages: [
         { role: "system", content: localizedSystemPrompt },
         ctx,

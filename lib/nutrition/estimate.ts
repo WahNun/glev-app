@@ -63,7 +63,7 @@ export async function estimateItemNutrition(
   try {
     const completion = await openai.chat.completions.create(
       {
-        model: "mistral-small-3",
+        model: "mistral-small-latest",
         response_format: { type: "json_object" },
         temperature: 0.1,
         max_tokens: 100,

@@ -2,7 +2,9 @@
 
 _Stand: 2026-06-20 | Branch: `docs/ai-infrastructure-audit` | Diagnose-only — kein Code verändert_
 
-> **Update 2026-06-20 — nach `feat/llm-consolidation-mistral`:** Alle 5 User-Pipelines (Chat, Voice-Intent, parse-food, chat-macros, Aggregator/Estimate) laufen jetzt auf Mistral (EU). Chat Phase 1 nutzt `mistral-large-2.1` (oder `pixtral-12b-2409` wenn Bild), Phase 2 immer `mistral-large-2.1`. Nutrition-Parsing, Estimate, Intent-Klassifikation und Chat-Macros auf `mistral-small-3`. gpt-5 in chat-macros eliminiert (~100× Cost-Reduction). Rate-Limit (30 req/min) auf parse-food + chat-macros ergänzt.
+> **Update 2026-06-20 — nach `feat/llm-consolidation-mistral`:** Alle 5 User-Pipelines (Chat, Voice-Intent, parse-food, chat-macros, Aggregator/Estimate) laufen jetzt auf Mistral (EU). Chat Phase 1 nutzt `mistral-large-latest` (oder `pixtral-12b-2409` wenn Bild), Phase 2 immer `mistral-large-latest`. Nutrition-Parsing, Estimate, Intent-Klassifikation und Chat-Macros auf `mistral-small-latest`. gpt-5 in chat-macros eliminiert (~100× Cost-Reduction). Rate-Limit (30 req/min) auf parse-food + chat-macros ergänzt.
+>
+> **Update 2026-06-21 — Hotfix Identifier:** Mistral-Support hat bestätigt dass `mistral-large-2.1` und `mistral-small-3` ungültige Identifier sind. Korrektur: `mistral-large-latest` + `mistral-small-latest`.
 
 ---
 

@@ -240,7 +240,7 @@ type ChatBody = {
   timezone?: string | null;
   /** Optional file attachments uploaded via /api/ai/upload.
    *  Images → pixtral-12b-2409 (vision) in Phase 1.
-   *  PDFs   → text prepended to message, then mistral-large-2.1. */
+   *  PDFs   → text prepended to message, then mistral-large-latest. */
   attachments?: ChatAttachment[];
 };
 
@@ -816,7 +816,7 @@ export async function handleChatPost(
 
           const completion = await callOpenAIWithRetry(
             () => client.chat.completions.create({
-              model: hasImages ? "pixtral-12b-2409" : "mistral-large-2.1",
+              model: hasImages ? "pixtral-12b-2409" : "mistral-large-latest",
               max_tokens: 300,
               temperature: 0.4,
               messages,
@@ -1146,7 +1146,7 @@ export async function handleChatPost(
 
         const streamResult = await callOpenAIWithRetry(
           () => client.chat.completions.create({
-            model: "mistral-large-2.1",
+            model: "mistral-large-latest",
             max_tokens: hasImages ? 512 : 300,
             temperature: 0.4,
             messages,

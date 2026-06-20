@@ -90,7 +90,7 @@ export interface ParseFoodResult {
 
 // 6s hard ceiling for the GPT parser (lowered from 8s 2026-05-04 as
 // part of the voice-latency fix). A typical 1-3 item meal completes
-// in ~1.5s; allowing 6s still covers mistral-small-3's tail without
+// in ~1.5s; allowing 6s still covers mistral-small-latest's tail without
 // holding the whole pipeline hostage when OpenAI is degraded.
 const PARSE_TIMEOUT_MS = 6000;
 
@@ -116,7 +116,7 @@ export async function parseFoodText(
     `"search_term_de" remain as specified above.`;
   const completion = await openai.chat.completions.create(
     {
-      model: "mistral-small-3",
+      model: "mistral-small-latest",
       response_format: { type: "json_object" },
       temperature: 0.1,
       // 350 tokens fits a 4-5 item meal (~70 tokens per item including
