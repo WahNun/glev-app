@@ -724,10 +724,10 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
             /* Task #363: vertical padding is now derived from the
                --nav-top-total / --nav-bottom-total CSS variables
                defined in app/globals.css — single source of truth for
-               header & footer chrome geometry. Buffer of 8 px under
-               the footer prevents sub-pixel scroll rounding from
-               leaking a strip of the next card under the labels. */
-            padding: calc(var(--nav-top-total) + 4px) 16px calc(var(--nav-bottom-total) + 8px) !important;
+               header & footer chrome geometry. Buffer of 40 px under
+               the footer ensures the last card clears the floating
+               nav pill on every screen without a local override. */
+            padding: calc(var(--nav-top-total) + 4px) 16px calc(var(--nav-bottom-total) + 40px) !important;
           }
           .glev-entry-row   { grid-template-columns: 1fr auto auto !important; gap: 10px !important; padding: 14px 16px !important; }
           .glev-entry-hide-mobile { display: none !important; }
