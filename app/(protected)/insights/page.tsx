@@ -4972,15 +4972,15 @@ function InsightsSwipePager({
     });
   }, [items.length]);
 
-  // Pager height for the active card. Tracks the measured natural
-  // height exactly (plus the slot's vertical padding) so the bottom
-  // edge of the card sits flush against the context box below — no
-  // 320px floor, no blank space when a short KPI card is in focus.
-  // The first-paint fallback only applies until the first
-  // measurement arrives.
-  const activeMeasured = heights[active];
-  const pagerHeight = activeMeasured != null
-    ? activeMeasured + SLOT_PAD_V
+  // Pager height: max across ALL measured cards in this cluster so
+  // every card renders at identical height (Task 2026-06-20 sizing fix).
+  // Short KPI cards grow to match the tallest sibling; the slot's
+  // flex-start alignment then top-anchors each card so extra whitespace
+  // falls at the bottom rather than splitting above/below.
+  const allMeasuredHeights = Object.values(heights);
+  const maxMeasured = allMeasuredHeights.length > 0 ? Math.max(...allMeasuredHeights) : null;
+  const pagerHeight = maxMeasured != null
+    ? maxMeasured + SLOT_PAD_V
     : FIRST_PAINT_H;
 
   // Translation helper — returns localized title/body for a given card
@@ -5068,7 +5068,7 @@ function InsightsSwipePager({
                 // feels identical across screens.
                 padding: "6px 14px",
                 display: "flex",
-                alignItems: "center",
+                alignItems: "flex-start",
                 justifyContent: "center",
                 overflow: "hidden",
               }}
