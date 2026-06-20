@@ -447,6 +447,11 @@ export default function AppleHealthSettingsCard() {
         </div>
       )}
 
+      {/* BG source section label */}
+      <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", color: "var(--text-dim)" }}>
+        {tAh("bg_source_section_label")}
+      </div>
+
       {/* Source toggle */}
       <div
         style={{

@@ -113,6 +113,19 @@ function useAppleHealthConnected(): boolean {
   return connected;
 }
 
+function useAppleHealthActivityConnected(): boolean {
+  const [enabled, setEnabled] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/health/activity-sync", { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : Promise.reject()))
+      .then((data) => { if (!cancelled) setEnabled(data?.enabled === true); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, []);
+  return enabled;
+}
+
 type SheetKey = "libre2" | "nightscout" | "dexcom" | "apple_health" | "setup_request";
 
 export default function CgmSettingsPage() {
@@ -122,6 +135,7 @@ export default function CgmSettingsPage() {
   const cgmConnected = useCgmConnected();
   const nightscoutConnected = useNightscoutConnected();
   const appleHealthConnected = useAppleHealthConnected();
+  const appleHealthActivityConnected = useAppleHealthActivityConnected();
   const [isNativePlatform, setIsNativePlatform] = useState(false);
   const cgmSetupHandledRef = useRef(false);
 
@@ -209,7 +223,15 @@ export default function CgmSettingsPage() {
           }
           label={t("row_apple_health")}
           subtitle={isNativePlatform ? undefined : t("subtitle_only_iphone")}
-          rightAdornment={appleHealthConnected ? <ConnectedDot label={t("status_connected")} /> : undefined}
+          rightAdornment={
+            appleHealthConnected && appleHealthActivityConnected
+              ? <ConnectedDot label={t("status_ah_glucose_activity")} />
+              : appleHealthConnected
+              ? <ConnectedDot label={t("status_connected")} />
+              : appleHealthActivityConnected
+              ? <ConnectedDot label={t("status_ah_activity_only")} />
+              : undefined
+          }
           ariaLabel={t("row_open_aria", { label: t("row_apple_health") })}
           onClick={() => setOpenSheet("apple_health")}
         />
