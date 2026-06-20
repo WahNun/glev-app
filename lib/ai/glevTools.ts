@@ -215,6 +215,10 @@ export const GLEV_TOOLS = [
               required: ["name", "grams"],
             },
           },
+          from_photo: {
+            type: "boolean",
+            description: "Auf true setzen, wenn die Mahlzeit direkt aus einem Foto analysiert wurde (Vision-Analyse).",
+          },
         },
         required: ["input_text", "carbs_grams", "protein_grams", "fat_grams", "fiber_grams", "items"],
       },
@@ -1754,6 +1758,12 @@ async function toolLogMealEntry(
           ...(typeof i.alcohol_g === "number" && i.alcohol_g > 0 ? { alcohol_g: i.alcohol_g } : {}),
         }))
       : undefined;
+  }
+
+  // When the AI analysed a food photo, override the aggregator's top-level
+  // source so the UI badge shows "📷 Foto" instead of "✨ KI".
+  if (args.from_photo === true) {
+    resolvedNutritionSource = "vision_estimate";
   }
 
   // ── Dual-Emission: Alkohol-Erkennung ──────────────────────────────

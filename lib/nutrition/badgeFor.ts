@@ -53,3 +53,29 @@ export function sourceLabel(source: NutritionSource, locale: "de" | "en" = "de")
     default:                return "KI";
   }
 }
+
+/** Human-readable label for a top-level AggregateSource (used in MealChipExpanded header badge). */
+export function aggregateSourceLabel(source: string, locale: "de" | "en" = "de"): string {
+  if (locale === "en") {
+    switch (source) {
+      case "vision_estimate": return "Photo";
+      case "user_history":    return "Logs";
+      case "open_food_facts": return "OFF";
+      case "usda":            return "USDA";
+      case "database":        return "DB";
+      case "mixed":           return "Mixed";
+      case "unknown":         return "Unknown";
+      default:                return "AI";
+    }
+  }
+  switch (source) {
+    case "vision_estimate": return "Foto";
+    case "user_history":    return "Logs";
+    case "open_food_facts": return "OFF";
+    case "usda":            return "USDA";
+    case "database":        return "DB";
+    case "mixed":           return "Gemischt";
+    case "unknown":         return "Unbekannt";
+    default:                return "KI";
+  }
+}
