@@ -2,6 +2,8 @@
 
 ## Decisions
 
+| 2026-06-21 | Bottom-Nav-Overlap FINAL | [BUGFIX] PR #12 Buffer 40px hat nicht gereicht. Root cause: `zoom: 1.12` auf `.glev-main` (dem Scroll-Container) lässt WKWebView die sichtbare CSS-Range auf `clientHeight/z` schrumpfen → letztes Content-Item landet bei `(H−pb)×z` in Viewport-px statt `H−pb`. Mit pb=148 auf iPhone 14 Pro (H=844): 779.5 pt, Nav-Top=736 pt → 43.5 pt Overlap. Final Fix: Buffer 40→120 pt in `components/Layout.tsx:730` (`calc(--nav-bottom-total + 120px)`). Gibt ≥35 pt Clearance auf allen aktuellen iOS-Geräten. Diagnose: `docs/bottom-nav-overlap-final-diagnose.md`. Screenshots im PR-Body. |
+
 ### D-001 · Password-reset redirectTo must be /auth/confirm for BOTH routes (CORRECTED 2026-06-04)
 
 > **⚠️ Rewritten 2026-06-04 with end-to-end evidence.** Earlier versions of D-001

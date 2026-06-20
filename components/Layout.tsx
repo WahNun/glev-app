@@ -724,10 +724,18 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
             /* Task #363: vertical padding is now derived from the
                --nav-top-total / --nav-bottom-total CSS variables
                defined in app/globals.css — single source of truth for
-               header & footer chrome geometry. Buffer of 40 px under
-               the footer ensures the last card clears the floating
-               nav pill on every screen without a local override. */
-            padding: calc(var(--nav-top-total) + 4px) 16px calc(var(--nav-bottom-total) + 40px) !important;
+               header & footer chrome geometry.
+
+               2026-06-21 hotfix (bottom-nav-overlap-final): Buffer must
+               compensate for zoom: 1.12 on .glev-main. Because .glev-main
+               is both the zoom host and the scroll container, WKWebView
+               scroll geometry shrinks the visible CSS range at max-scroll
+               to clientHeight/z (= ~754 px on a 844-px screen). The last
+               content item's viewport Y at max-scroll = (H − pb) × z.
+               For no overlap: (H − pb) × z ≤ (H − N) − 16 px clearance.
+               Worst-case iPhone 15 Pro Max (H=932): requires buffer ≥ 115 px.
+               120 px gives ≥ 24 px clearance on every current iOS device. */
+            padding: calc(var(--nav-top-total) + 4px) 16px calc(var(--nav-bottom-total) + 120px) !important;
           }
           .glev-entry-row   { grid-template-columns: 1fr auto auto !important; gap: 10px !important; padding: 14px 16px !important; }
           .glev-entry-hide-mobile { display: none !important; }
