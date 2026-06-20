@@ -3969,7 +3969,7 @@ export function InsightsClusterView({ clusterId }: { clusterId: InsightsCluster 
         // Trefferquote dynamic color: ≥ 70 % → GREEN, ≥ 50 % → ORANGE, < 50 % → PINK.
         const goodRateColor = goodRate >= 70 ? GREEN : goodRate >= 50 ? ORANGE : PINK;
         return (
-          <div style={{ minHeight: CARD_MIN_H }}>
+          <div style={{ minHeight: `max(${CARD_MIN_H}, var(--glev-card-h, 0px))` }}>
             {/* Card header — gives the tile grid a title and tap-to-flip hint */}
             <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
               <CardLabel text={tInsights("card_performance_title")} />
@@ -4743,7 +4743,10 @@ function InsightsSwipePager({
   // an oversized slot" pass. ResizeObserver still drives pagerHeight
   // from the active card's natural height, so taller cards just grow
   // the slot as before.
-  const SLOT_PAD_V = 6;
+  // Total vertical padding of each slot (padding: "6px 14px" → 6px top + 6px bottom).
+  // Must match the slot's padding declaration below so pagerHeight leaves exactly
+  // enough room for the tallest card without clipping.
+  const SLOT_PAD_V = 12;
   // First-paint fallback — used only until the ResizeObserver lands
   // the first measurement. Small enough that any real card will
   // measure taller and replace it immediately; large enough that
@@ -4975,14 +4978,16 @@ function InsightsSwipePager({
 
   // Pager height: max across ALL measured cards in this cluster so
   // every card renders at identical height (Task 2026-06-20 sizing fix).
-  // Short KPI cards grow to match the tallest sibling; the slot's
-  // flex-start alignment then top-anchors each card so extra whitespace
-  // falls at the bottom rather than splitting above/below.
+  // targetCardH is injected into each slot via the CSS custom property
+  // --glev-card-h so FlipCard's minHeight = max(CARD_MIN_H, targetCardH),
+  // which forces short KPI cards to grow to match the tallest sibling.
   const allMeasuredHeights = Object.values(heights);
   const maxMeasured = allMeasuredHeights.length > 0 ? Math.max(...allMeasuredHeights) : null;
   const pagerHeight = maxMeasured != null
     ? maxMeasured + SLOT_PAD_V
     : FIRST_PAINT_H;
+  // The height each card content area should fill (slot area = pagerHeight - SLOT_PAD_V).
+  const targetCardH = maxMeasured ?? 0;
 
   // Translation helper — returns localized title/body for a given card
   // id, falling back to a generic "swipe to learn more" copy when the
@@ -5076,7 +5081,7 @@ function InsightsSwipePager({
             >
               <div
                 ref={(el) => { itemRefs.current[idx] = el; }}
-                style={{ width: "100%" }}
+                style={{ width: "100%", "--glev-card-h": `${targetCardH}px` } as React.CSSProperties}
               >
                 {it.node}
               </div>
@@ -5916,10 +5921,12 @@ function FlipCard({
       aria-pressed={flipped}
     >
       {/* FLIP STAGE — CSS grid stacks front + back in the same cell so
-          each face is rendered exactly once. Card height = max(front, back). */}
+          each face is rendered exactly once. Card height = max(front, back).
+          --glev-card-h is set by the pager slot to the cluster-wide max measured
+          height, so every card fills the slot regardless of its own content. */}
       <div style={{
         display:"grid",
-        minHeight: minHeight || undefined,
+        minHeight: `max(${minHeight || "0px"}, var(--glev-card-h, 0px))`,
         transformStyle:"preserve-3d",
         transition:"transform 0.55s cubic-bezier(0.4,0,0.2,1)",
         transform: flipped ? "rotateY(180deg)" : "rotateY(0deg)",
