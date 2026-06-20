@@ -36,13 +36,14 @@ export type NutritionSource =
 // badge can say "Aus deinen Logs / Open Food Facts / USDA" instead of
 // the generic "Datenbank ✓" bucket.
 export type AggregateSource =
-  | "database"       // mix of DB sources (OFF + USDA), or generic fallback
-  | "user_history"   // every item from the per-user food log
-  | "open_food_facts"// every item from Open Food Facts
-  | "usda"           // every item from USDA FoodData Central
-  | "mixed"          // at least one DB hit AND at least one GPT estimate
-  | "estimated"      // every item fell back to GPT estimate
-  | "unknown";       // at least one item failed even GPT estimate (hard warning)
+  | "database"        // mix of DB sources (OFF + USDA), or generic fallback
+  | "user_history"    // every item from the per-user food log
+  | "open_food_facts" // every item from Open Food Facts
+  | "usda"            // every item from USDA FoodData Central
+  | "mixed"           // at least one DB hit AND at least one GPT estimate
+  | "estimated"       // every item fell back to GPT estimate
+  | "vision_estimate" // macros estimated from a meal photo (gpt-4o-mini vision)
+  | "unknown";        // at least one item failed even GPT estimate (hard warning)
 
 /**
  * Structured item produced by the GPT parser. NO macros — those are
