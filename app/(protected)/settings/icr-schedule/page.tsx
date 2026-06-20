@@ -262,6 +262,14 @@ function SlotCard({
     if (m != null) onChange({ endMinute: m });
   }
 
+  const icrLabel = { g: t("slot_icr_label_g"), BE: t("slot_icr_label_BE"), KE: t("slot_icr_label_KE") }[carbUnit.unit];
+  const unitCfg = {
+    g:  { min: 2,   max: 40, step: 1,   ticks: [5, 10, 15, 20, 25, 30] as number[] },
+    BE: { min: 0.5, max: 5,  step: 0.5, ticks: [0.5, 1, 1.5, 2, 2.5, 3] as number[] },
+    KE: { min: 0.5, max: 5,  step: 0.5, ticks: [0.5, 1, 1.5, 2, 2.5, 3] as number[] },
+  }[carbUnit.unit];
+  const displayICRValue = carbUnit.fromGrams(slot.icrGPerUnit);
+
   return (
     <div
       style={{
@@ -362,17 +370,17 @@ function SlotCard({
       {/* ICR value */}
       <div>
         <label style={{ display: "block", fontSize: 11, color: "var(--text-faint)", marginBottom: 4 }}>
-          {{ g: t("slot_icr_label_g"), BE: t("slot_icr_label_BE"), KE: t("slot_icr_label_KE") }[carbUnit.unit]}
+          {icrLabel}
         </label>
         <SnapSlider
-          value={slot.icrGPerUnit}
-          onChange={(v) => onChange({ icrGPerUnit: v })}
-          min={2}
-          max={40}
-          step={1}
+          value={displayICRValue}
+          onChange={(v) => onChange({ icrGPerUnit: carbUnit.toGrams(v) })}
+          min={unitCfg.min}
+          max={unitCfg.max}
+          step={unitCfg.step}
           unit={carbUnit.icrUnitSuffix}
           accent={ACCENT}
-          ariaLabel={{ g: t("slot_icr_label_g"), BE: t("slot_icr_label_BE"), KE: t("slot_icr_label_KE") }[carbUnit.unit]}
+          ariaLabel={icrLabel}
         />
         <div style={{
           display: "flex",
@@ -381,17 +389,22 @@ function SlotCard({
           paddingLeft: 2,
           paddingRight: 2,
         }}>
-          {[5, 10, 15, 20, 25, 30].map((tick) => (
+          {unitCfg.ticks.map((tick) => (
             <span key={tick} style={{
               fontSize: 10,
-              color: slot.icrGPerUnit === tick ? ACCENT : "var(--text-ghost)",
-              fontWeight: slot.icrGPerUnit === tick ? 700 : 400,
+              color: displayICRValue === tick ? ACCENT : "var(--text-ghost)",
+              fontWeight: displayICRValue === tick ? 700 : 400,
               transition: "color 150ms ease",
             }}>
               {tick}
             </span>
           ))}
         </div>
+        {carbUnit.unit !== "g" && (
+          <div style={{ fontSize: 11, color: "var(--text-faint)", marginTop: 4, textAlign: "right" }}>
+            ({slot.icrGPerUnit} g KH / IE)
+          </div>
+        )}
       </div>
     </div>
   );
