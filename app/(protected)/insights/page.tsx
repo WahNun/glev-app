@@ -4374,6 +4374,7 @@ export function InsightsClusterView({ clusterId }: { clusterId: InsightsCluster 
         top: 0,
         background: "var(--bg)",
         zIndex: 10,
+        borderBottom: "1px solid var(--border-soft)",
       }}>
         <button
           onClick={() => router.push("/insights")}
