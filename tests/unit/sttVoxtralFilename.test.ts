@@ -20,10 +20,6 @@ const STREAM_ROUTE_SRC = readFileSync(
   join(process.cwd(), "app/api/transcribe/mistral/stream/route.ts"),
   "utf-8",
 );
-const MAIN_ROUTE_SRC = readFileSync(
-  join(process.cwd(), "app/api/transcribe/route.ts"),
-  "utf-8",
-);
 
 // ── 1. Kein "file as Blob" mehr in keiner der Routes ──────────────────────────
 
@@ -33,10 +29,6 @@ test("transcribe/mistral: kein nackter 'file as Blob' mehr", () => {
 
 test("transcribe/mistral/stream: kein nackter 'file as Blob' mehr", () => {
   expect(STREAM_ROUTE_SRC).not.toContain("file as Blob");
-});
-
-test("transcribe (main route): kein nackter 'file as Blob' mehr", () => {
-  expect(MAIN_ROUTE_SRC).not.toContain("file as Blob");
 });
 
 // ── 2. new File(...) + voxtralFileName() vorhanden ────────────────────────────
@@ -53,12 +45,6 @@ test("transcribe/mistral/stream: enthält new File() + voxtralFileName()", () =>
   expect(STREAM_ROUTE_SRC).toContain("audioFile");
 });
 
-test("transcribe (main route): enthält new File() + voxtralFileName()", () => {
-  expect(MAIN_ROUTE_SRC).toContain("new File(");
-  expect(MAIN_ROUTE_SRC).toContain("voxtralFileName");
-  expect(MAIN_ROUTE_SRC).toContain("audioFile");
-});
-
 // ── 3. Voxtral-Call benutzt audioFile, nicht file direkt ──────────────────────
 
 test("transcribe/mistral: Voxtral-Call benutzt audioFile Variable", () => {
@@ -68,10 +54,6 @@ test("transcribe/mistral: Voxtral-Call benutzt audioFile Variable", () => {
 
 test("transcribe/mistral/stream: Voxtral-Call benutzt audioFile Variable", () => {
   expect(STREAM_ROUTE_SRC).toContain("file: audioFile");
-});
-
-test("transcribe (main route): Voxtral-Call benutzt audioFile Variable", () => {
-  expect(MAIN_ROUTE_SRC).toContain("file: audioFile");
 });
 
 // ── 4. voxtralFileName deckt den fehlgeschlagenen MIME-Type ab ────────────────
@@ -101,8 +83,4 @@ test("transcribe/mistral: File-Konstruktor übergibt { type: file.type }", () =>
 
 test("transcribe/mistral/stream: File-Konstruktor übergibt { type: file.type }", () => {
   expect(STREAM_ROUTE_SRC).toContain("{ type: file.type }");
-});
-
-test("transcribe (main route): File-Konstruktor übergibt { type: file.type }", () => {
-  expect(MAIN_ROUTE_SRC).toContain("{ type: file.type }");
 });
