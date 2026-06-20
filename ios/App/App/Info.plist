@@ -30,8 +30,12 @@
 	<string>Glev liest deine Glukosewerte aus Apple Health, damit du sie in deinem Diabetes-Tagebuch dokumentieren und im Verlauf nachvollziehen kannst. Glev ist eine Dokumentations-App, kein Medizinprodukt.</string>
 	<key>NSHealthUpdateUsageDescription</key>
 	<string>Glev kann optional Mahlzeit-Kohlenhydrate in Apple Health schreiben, damit du sie in anderen Apps siehst. Glev ist eine Dokumentations-App, kein Medizinprodukt.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>Glev nutzt die Kamera, um Fotos deiner Mahlzeit für die KI-Macro-Erkennung aufzunehmen.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Glev nutzt dein Mikrofon damit du Mahlzeiten einsprechen kannst — tippen ist nicht nötig.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Glev nutzt die Foto-Mediathek, um bestehende Mahlzeit-Fotos für die KI-Macro-Erkennung auszuwählen.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
 	<string>Glev wandelt deine Spracheingabe in Text um um Mahlzeiten automatisch zu erfassen.</string>
 	<key>UIBackgroundModes</key>
