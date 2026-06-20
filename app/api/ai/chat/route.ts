@@ -653,6 +653,35 @@ export async function handleChatPost(
   // adding the read-only tool layer (Phase 3 / Task 1). Write-tools
   // come in Task 2 behind a UI-confirmation gate.
 
+  // Hoist attachment filters so both Phase 1 (tool-call round) and Phase 2
+  // (streaming) share the same references without re-computing.
+  const imageAttachments = attachments.filter((a) => a.mimeType.startsWith("image/"));
+  const pdfAttachments   = attachments.filter((a) => a.mimeType === "application/pdf");
+  const hasImages = imageAttachments.length > 0;
+
+  // Pre-Phase-1: attach images to the last user message NOW so gpt-4o-mini
+  // (vision built-in) can see the food photo in the tool-call round and
+  // fire log_meal_entry.  Without this, images were only appended in Phase 2
+  // where tools are not available — so the model described the food in text
+  // instead of logging it.
+  if (hasImages) {
+    const lastUserIdx = messages.length - 1;
+    if (messages[lastUserIdx]?.role === "user" && typeof messages[lastUserIdx].content === "string") {
+      const textContent = messages[lastUserIdx].content as string;
+      messages[lastUserIdx] = {
+        role: "user",
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        content: [
+          { type: "text", text: textContent },
+          ...imageAttachments.map((a) => ({
+            type: "image_url" as const,
+            image_url: { url: a.url },
+          })),
+        ] as any,
+      };
+    }
+  }
+
   const timeoutMs = deps.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   const _sleep = deps.sleep ?? ((ms: number) => new Promise((r) => setTimeout(r, ms)));
 
@@ -1079,10 +1108,9 @@ export async function handleChatPost(
         }
 
         // ── Phase 2: stream the final answer ────────────────────────
-        // gpt-4o-mini handles both text and image inputs natively (vision built-in).
-        // PDFs are prepended as text so OpenAI receives the actual document content.
-        const imageAttachments = attachments.filter((a) => a.mimeType.startsWith("image/"));
-        const pdfAttachments   = attachments.filter((a) => a.mimeType === "application/pdf");
+        // imageAttachments / pdfAttachments / hasImages are hoisted above Phase 1.
+        // Images were already applied to the user message before Phase 1 so the
+        // model could call log_meal_entry; no re-application needed here.
 
         // Extract text from PDF attachments and prepend to the last user
         // message so OpenAI receives the actual document content.
@@ -1112,28 +1140,6 @@ export async function handleChatPost(
             messages[lastUserIdx] = {
               ...messages[lastUserIdx],
               content: `${pdfParts.join("\n\n")}\n\n${messages[lastUserIdx].content as string}`,
-            };
-          }
-        }
-
-        const hasImages = imageAttachments.length > 0;
-
-        // For vision: replace the last user message with a content-array
-        // that includes the text plus image_url objects (OpenAI format).
-        if (hasImages) {
-          const lastUserIdx = messages.length - 1;
-          if (messages[lastUserIdx]?.role === "user") {
-            const textContent = messages[lastUserIdx].content as string;
-            messages[lastUserIdx] = {
-              role: "user",
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              content: [
-                { type: "text", text: textContent },
-                ...imageAttachments.map((a) => ({
-                  type: "image_url" as const,
-                  image_url: { url: a.url },
-                })),
-              ],
             };
           }
         }
