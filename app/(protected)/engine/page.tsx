@@ -4,7 +4,7 @@ import React, { useState, useEffect, useRef, useMemo } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { useTranslations, useLocale } from "next-intl";
 import { localeToBcp47 } from "@/lib/time";
-import { fetchMealsForEngine, classifyMeal, computeCalories, saveMeal, deleteMeal, updateMeal, type Meal } from "@/lib/meals";
+import { fetchMealsForEngine, classifyMeal, computeCalories, saveMeal, deleteMeal, updateMeal, type Meal, type SaveMealInput } from "@/lib/meals";
 import { getCurrentTrendArrow } from "@/lib/cgm/trendArrow";
 import { scheduleJobsForLog } from "@/lib/cgmJobs";
 import { TYPE_COLORS } from "@/lib/mealTypes";
@@ -389,6 +389,22 @@ function TrendArrow({ trend, t }: { trend: TrendClass; t: EngineTranslator }): R
   );
 }
 
+// Maps the aggregator's nutritionSource to the audit layer's ai_source + ai_model_id.
+function aiMetaForSource(
+  source: import("@/lib/nutrition/types").AggregateSource | null,
+): { aiSource: string; aiModelId?: string } | null {
+  switch (source) {
+    case "estimated":       return { aiSource: "openai",       aiModelId: "gpt-4o-mini" };
+    case "vision_estimate": return { aiSource: "pixtral",      aiModelId: "pixtral-12b-2409" };
+    case "user_history":    return { aiSource: "user_history" };
+    case "open_food_facts": return { aiSource: "off" };
+    case "usda":            return { aiSource: "usda" };
+    case "mixed":           return { aiSource: "aggregator" };
+    case "database":        return { aiSource: "aggregator" };
+    default:                return null;
+  }
+}
+
 export default function EnginePage() {
   // Aliased to tEngine because a local `t` already shadows the
   // common translation handle inside the searchParams effect below
@@ -651,7 +667,20 @@ export default function EnginePage() {
       }
       if (typeof mp.nutritionSource === "string") {
         const validSources = ["database","user_history","open_food_facts","usda","mixed","estimated","unknown"];
-        setNutritionSource(validSources.includes(mp.nutritionSource) ? mp.nutritionSource as import("@/lib/nutrition/types").AggregateSource : null);
+        const resolvedSrc = validSources.includes(mp.nutritionSource) ? mp.nutritionSource as import("@/lib/nutrition/types").AggregateSource : null;
+        setNutritionSource(resolvedSrc);
+        // Capture AI estimate snapshot for the audit layer.
+        const aiMeta = aiMetaForSource(resolvedSrc);
+        if (aiMeta && typeof mp.carbs === "number") {
+          setAiEstimateSnapshot({
+            carbsGrams:   mp.carbs,
+            proteinGrams: typeof mp.protein === "number" ? mp.protein : null,
+            fatGrams:     typeof mp.fat    === "number" ? mp.fat    : null,
+            fiberGrams:   typeof mp.fiber  === "number" ? mp.fiber  : null,
+            aiSource:     aiMeta.aiSource,
+            aiModelId:    aiMeta.aiModelId ?? null,
+          });
+        }
       }
       // Stay on the engine tab and advance to step 1 (macros review) so the
       // macro cards are immediately visible on both mobile and desktop.
@@ -697,7 +726,19 @@ export default function EnginePage() {
         }
         if (typeof mp.nutritionSource === "string") {
           const validSources = ["database","user_history","open_food_facts","usda","mixed","estimated","unknown"];
-          setNutritionSource(validSources.includes(mp.nutritionSource) ? mp.nutritionSource as import("@/lib/nutrition/types").AggregateSource : null);
+          const resolvedSrc2 = validSources.includes(mp.nutritionSource) ? mp.nutritionSource as import("@/lib/nutrition/types").AggregateSource : null;
+          setNutritionSource(resolvedSrc2);
+          const aiMeta2 = aiMetaForSource(resolvedSrc2);
+          if (aiMeta2 && typeof mp.carbs === "number") {
+            setAiEstimateSnapshot({
+              carbsGrams:   mp.carbs,
+              proteinGrams: typeof mp.protein === "number" ? mp.protein : null,
+              fatGrams:     typeof mp.fat    === "number" ? mp.fat    : null,
+              fiberGrams:   typeof mp.fiber  === "number" ? mp.fiber  : null,
+              aiSource:     aiMeta2.aiSource,
+              aiModelId:    aiMeta2.aiModelId ?? null,
+            });
+          }
         }
         // Same as mount handler — engine tab + step 1 (macros), not "log".
         setTab("engine");
@@ -746,6 +787,9 @@ export default function EnginePage() {
   const [nutritionSource, setNutritionSource] =
     useState<import("@/lib/nutrition/types").AggregateSource | null>(null);
   const [historyMinOccurrences, setHistoryMinOccurrences] = useState<number | null>(null);
+  // Snapshot of the AI estimate at prefill time — passed to saveMeal so the
+  // audit layer can compare original estimate vs final user values.
+  const [aiEstimateSnapshot, setAiEstimateSnapshot] = useState<SaveMealInput["aiEstimate"]>(null);
   // Mirror nutritionSource into the global app-header context so the
   // provenance pill renders next to the brand lockup on mobile (see
   // Layout.tsx). Clearing on unmount prevents the pill from sticking
@@ -1552,6 +1596,7 @@ export default function EnginePage() {
         // saveMeal mirrors the bolus into insulin_logs automatically;
         // passing the brand name here avoids a second insertInsulinLog call.
         insulinName: getInsulinSettings().insulinBrandBolus?.trim() || null,
+        aiEstimate: aiEstimateSnapshot,
       });
       // Schedule CGM auto-fetches at +1h / +2h after meal time. Fire-and-forget;
       // failures (e.g. no CGM connected) are silent.
@@ -1628,6 +1673,7 @@ export default function EnginePage() {
         createdAt: mealIso,
         mealTime: mealIso,
         preMealTrend: preMealTrendNoBolus,
+        aiEstimate: aiEstimateSnapshot,
       });
       void scheduleJobsForLog({ logId: saved.id, logType: "meal", refTimeIso: mealIso });
       // Task #215: if user accepted a bolus suggestion, link it now.
@@ -1705,6 +1751,7 @@ export default function EnginePage() {
         mealTime: mealIso,
         preMealTrend: preMealTrendDirect,
         insulinName: getInsulinSettings().insulinBrandBolus?.trim() || null,
+        aiEstimate: aiEstimateSnapshot,
       });
       void scheduleJobsForLog({ logId: saved.id, logType: "meal", refTimeIso: mealIso });
       // Task #215: if user accepted a bolus suggestion, link it now.
@@ -1782,6 +1829,7 @@ export default function EnginePage() {
         mealTime: mealIso,
         preMealTrend: preMealTrendEager,
         insulinName: getInsulinSettings().insulinBrandBolus?.trim() || null,
+        aiEstimate: aiEstimateSnapshot,
       });
       void scheduleJobsForLog({ logId: saved.id, logType: "meal", refTimeIso: mealIso });
       // Task #215: if user accepted a bolus suggestion, link it now.
@@ -1860,6 +1908,7 @@ export default function EnginePage() {
         createdAt: mealIso,
         mealTime: mealIso,
         preMealTrend: preMealTrendConfirm,
+        aiEstimate: aiEstimateSnapshot,
       });
       // Task #215: if user accepted a bolus suggestion, link it now.
       if (linkedBolusId) { updateInsulinLogLink(linkedBolusId, saved.id).catch(() => {}); }
@@ -1902,6 +1951,7 @@ export default function EnginePage() {
     setCarbs(""); setProtein(""); setFat(""); setFiber("");
     setDesc(""); setInsulin(""); setResult(null); setResultICRSource(null);
     setNutritionSource(null);
+    setAiEstimateSnapshot(null);
     setHistoryMinOccurrences(null);
     setParsedItems([]);
     setPortionSuggestions(new Map());
@@ -2126,6 +2176,21 @@ export default function EnginePage() {
           // current source stays).
           if (patch.nutritionSource !== undefined && patch.nutritionSource !== null) {
             setNutritionSource(patch.nutritionSource);
+            // Update AI estimate snapshot so the audit layer reflects the latest
+            // chat-derived estimate (not the initial prefill).
+            if (patch.nutritionSource !== "unknown" && patch.carbs > 0) {
+              const aiMetaPatch = aiMetaForSource(patch.nutritionSource);
+              if (aiMetaPatch) {
+                setAiEstimateSnapshot({
+                  carbsGrams:   Number(patch.carbs),
+                  proteinGrams: Number(patch.protein) || null,
+                  fatGrams:     Number(patch.fat)     || null,
+                  fiberGrams:   Number(patch.fiber)   || null,
+                  aiSource:     aiMetaPatch.aiSource,
+                  aiModelId:    aiMetaPatch.aiModelId ?? null,
+                });
+              }
+            }
           }
           // Forward per-item breakdown so the next save persists
           // each ingredient's source into meals.parsed_json.
