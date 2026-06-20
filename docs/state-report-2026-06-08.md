@@ -90,7 +90,7 @@
 | `short_links` | URL-Shortener-Tabelle (`glev.app/s/<token>` → Ziel-URL) |
 | `message_templates` | SMS-Templates (invite, bulk, reminder) — DB-gespeichert |
 | `sms_optout_events` | SMS-Opt-out-Tracking |
-| `agent_messages` | Telegram-Agent-Nachrichten-Queue (Inbox Daemon) |
+| ~~`agent_messages`~~ | ~~Telegram-Agent-Nachrichten-Queue (Inbox Daemon)~~ — **entfernt 2026-06-20** (Migration: 20260620120000_drop_agent_messages.sql) |
 | `replit_queue` | Replit-Task-Queue für Agent-Handoffs |
 | `admin_audit_log` | Audit-Log für Admin-Aktionen in /glev-ops |
 | `admin_tts_config` | Konfiguration für TTS-Stimmen (Mistral) |
@@ -119,7 +119,7 @@
 | Bucket | Zweck |
 |---|---|
 | `sound-assets` | Alarm-WAV-Dateien (glev_low_alarm.wav, glev_high_alarm.wav, glev_elevated.wav) |
-| `agent-files` | Datei-Anhänge vom Telegram-Bot-Agent |
+| ~~`agent-files`~~ | ~~Datei-Anhänge vom Telegram-Bot-Agent~~ — **entfernt 2026-06-20** |
 
 ### RLS-Status (Übersicht)
 RLS ist aktiviert auf den meisten User-Tabellen (`meals`, `profiles`, `insulin_logs`, `exercise_logs`, `user_feedback`, etc.). Admin-Tabellen (`dev_cockpit_*`, `admin_audit_log`) haben RLS an aber keine User-Policies (nur service_role Zugriff). `user_feedback` erlaubt nur INSERT für User (kein SELECT — Privacy). Vollständige Policy-Liste im Supabase Dashboard.
@@ -131,7 +131,7 @@ RLS ist aktiviert auf den meisten User-Tabellen (`meals`, `profiles`, `insulin_l
 | Pfad im Code | Modell (aktuell) | Zweck | Temperatur | Structured Output | Env-Var |
 |---|---|---|---|---|---|
 | `app/api/transcribe/route.ts` | `gpt-4o-mini-transcribe` | Voice-STT (Mikrofon-Input aus Glev AI Chat) | — | Nein (plain text) | `AI_INTEGRATIONS_OPENAI_API_KEY` / `OPENAI_API_KEY` |
-| `app/api/telegram/webhook/route.ts` | `whisper-1` | Telegram-Bot Audio-Transkription | — | Nein | `OPENAI_API_KEY` |
+| ~~`app/api/telegram/webhook/route.ts`~~ | ~~`whisper-1`~~ | ~~Telegram-Bot Audio-Transkription~~ | — | — | — | **entfernt 2026-06-20** |
 | `lib/nutrition/parseFood.ts` | `gpt-4o-mini` | Free-form Text → strukturierte Mahlzeit-Items (bilingual search terms) | 0.1 | Ja (JSON) | `AI_INTEGRATIONS_OPENAI_API_KEY` / `OPENAI_API_KEY` |
 | `lib/nutrition/estimate.ts` | `gpt-4o-mini` | Makro-Schätzung als Safety-Net wenn OFF/USDA-Lookup scheitert | 0.1 | Ja (JSON) | `AI_INTEGRATIONS_OPENAI_API_KEY` / `OPENAI_API_KEY` |
 | `app/api/chat-macros/route.ts` | `gpt-5` | Chat-Makros / Autocomplete-Vorschläge | — | `[unklar — bitte verifizieren]` | `AI_INTEGRATIONS_OPENAI_API_KEY` / `OPENAI_API_KEY` |

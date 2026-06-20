@@ -24,13 +24,6 @@ Glev is a Type 1 Diabetes insulin decision-support system designed to provide pe
    - [ ] Wurde eine **explizite Nicht-Entscheidung** getroffen — etwas, das bewusst *nicht* gemacht wird und das spätere Agents kennen müssen?
    - [ ] Wurde eine **E-Mail-, Webhook- oder Cron-Infrastruktur** eingerichtet oder wesentlich verändert?
    - **Wenn ja zu einer Frage:** neuen `### D-XXX · Titel (YYYY-MM-DD)`-Eintrag in `## Decisions` schreiben, mit Begründung und `**Nicht wieder öffnen:**`-Satz. `finalize-task.sh` erinnert dich, falls du Architektur-Grenz-Dateien (z. B. `supabase/`, `middleware.ts`, `lib/emails/`, `next.config.*`) berührt hast.
-4. **Lucas per Telegram fragen (optional, vor Task-Abschluss):** Wenn eine offene Richtungsfrage besteht — also etwas, das Lucas als Product-Owner entscheiden muss und das die weitere Implementierung beeinflusst — den Agenten-Messenger nutzen, bevor `finalize-task.sh` aufgerufen wird:
-   - **Direkt (nur Frage):** `node scripts/ask-telegram.mjs TASK_GID "Frage?"` → gibt die Antwort auf stdout aus oder `TIMEOUT`/`SKIPPED`.
-   - **Mit Optionen:** `node scripts/ask-telegram.mjs TASK_GID "Frage?" "Option A" "Option B"` → nummeriert die Optionen in der Telegram-Nachricht.
-   - **Im Finalize-Flow:** `bash scripts/finalize-task.sh TASK_GID --ask "Frage?" "Option A" "Option B"` → fragt Lucas vor dem Commit und setzt dann fort.
-   - **Wann fragen?** Nur bei echten Richtungsfragen (z. B. UX-Entscheidungen, Scope-Abgrenzungen, Breaking Changes). Keine technischen Implementierungsdetails — die entscheidet der Agent selbst.
-   - **Wenn Secrets fehlen:** Das Script gibt `SKIPPED` aus und bricht nicht ab — der Agent fährt ohne Antwort fort.
-   - **Wenn kein Reply innerhalb 10 Minuten:** Das Script gibt `TIMEOUT` aus — der Agent fährt mit einer vernünftigen Default-Entscheidung fort und notiert sie im Fix Log.
 
 ## Compliance Backlog (nicht akut — vor MDR-Einreichung abarbeiten)
 
