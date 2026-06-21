@@ -17,7 +17,7 @@ import SourceBadge from "@/components/SourceBadge";
 import { aggregateBadge, aggregateSourceLabel } from "@/lib/nutrition/badgeFor";
 import { supabase } from "@/lib/supabase";
 import ResetButton from "@/components/ResetButton";
-import MealConfidenceModal from "@/components/MealConfidenceModal";
+import { computeItemConfidence } from "@/lib/nutrition/confidence";
 
 const ACCENT = "#8b5cf6";
 const SHEET_BG = "var(--surface)";
@@ -69,6 +69,13 @@ const COPY = {
     details_expand:        "Details ⌄",
     details_collapse:      "Details ⌃",
     ai_source_label:       "KI",
+    conf_carbs:            "KH",
+    conf_protein:          "Eiweiß",
+    conf_fat:              "Fett",
+    conf_fiber:            "Ballaststoffe",
+    conf_breakdown:        "Aufschlüsselung KH",
+    conf_label:            "Konfidenz",
+    conf_enter_own:        "Eigenen Wert eingeben",
     mic_stop:              "Aufnahme stoppen",
     mic_start:             "Spracheingabe starten",
     mic_rate_limit:        (sec: number) => `Bitte ${sec} Sek. warten`,
@@ -128,6 +135,13 @@ const COPY = {
     details_expand:        "Details ⌄",
     details_collapse:      "Details ⌃",
     ai_source_label:       "AI",
+    conf_carbs:            "Carbs",
+    conf_protein:          "Protein",
+    conf_fat:              "Fat",
+    conf_fiber:            "Fiber",
+    conf_breakdown:        "Carbs breakdown",
+    conf_label:            "Confidence",
+    conf_enter_own:        "Enter own value",
     mic_stop:              "Stop recording",
     mic_start:             "Start voice input",
     mic_rate_limit:        (sec: number) => `Wait ${sec} sec`,
@@ -264,8 +278,10 @@ function MealChipExpanded({
   onCancel: () => void;
   onOpenEngine?: () => void;
 }) {
-  const [confidenceOpen, setConfidenceOpen] = useState(false);
+  const [expanded, setExpanded] = useState(false);
   const [itemsForExpand, setItemsForExpand] = useState<Array<ParsedFood>>(initialItems);
+  const rawLocale = useLocale();
+  const expandLocale: "de" | "en" = rawLocale === "en" ? "en" : "de";
   const [badgesTransitioning, setBadgesTransitioning] = useState(false);
 
   // Phase 3 Realtime: subscribe to meal_prep_refinements for this mealPrepId.
@@ -474,11 +490,11 @@ function MealChipExpanded({
         </div>
       )}
 
-      {/* Action row: [Details ⌄] [Engine öffnen →] */}
+      {/* Action row: [Details ⌄/⌃] [Engine öffnen →] */}
       <div style={{ display: "flex", gap: 8 }}>
         <button
           type="button"
-          onClick={() => setConfidenceOpen(true)}
+          onClick={() => setExpanded((v) => !v)}
           disabled={inactive}
           style={{
             flex: 1,
@@ -492,7 +508,7 @@ function MealChipExpanded({
             cursor: inactive ? "default" : "pointer",
           }}
         >
-          {t.details_expand}
+          {expanded ? t.details_collapse : t.details_expand}
         </button>
         <button
           type="button"
@@ -518,13 +534,132 @@ function MealChipExpanded({
         </button>
       </div>
 
-      {/* Confidence modal — opened by Details ⌄ */}
-      <MealConfidenceModal
-        items={itemsForExpand.length > 0 ? itemsForExpand : [{ name: mealName, grams: 0, carbs: 0, protein: 0, fat: 0, fiber: 0 }]}
-        isOpen={confidenceOpen}
-        onClose={() => setConfidenceOpen(false)}
-        onEditMacros={onOpenEngine}
-      />
+      {/* Inline confidence expand — toggles with Details ⌄/⌃ */}
+      {expanded && (
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            gap: 10,
+            padding: "10px 12px",
+            background: "var(--surface-alt, rgba(255,255,255,0.03))",
+            borderRadius: 10,
+            border: "1px solid var(--border)",
+          }}
+        >
+          {(itemsForExpand.length > 0 ? itemsForExpand : [{ name: mealName, grams: 0, carbs: 0, protein: 0, fat: 0, fiber: 0 } as ParsedFood]).map((item, i) => {
+            const conf = computeItemConfidence(item, expandLocale);
+            const ciStr = (v: number, ci: number) =>
+              v === 0 && ci < 0.15 ? "0 g" : `${v.toFixed(1)} ±${Math.max(0.1, ci).toFixed(1)} g`;
+            const confColor = conf.overallPct >= 85 ? "#34d399" : conf.overallPct >= 70 ? "#fbbf24" : "#f87171";
+            return (
+              <div
+                key={i}
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 6,
+                  paddingBottom: i < (itemsForExpand.length || 1) - 1 ? 10 : 0,
+                  borderBottom: i < (itemsForExpand.length || 1) - 1 ? "1px solid var(--border)" : "none",
+                }}
+              >
+                {/* Item header */}
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+                  <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text-strong)" }}>
+                    {item.name}
+                    {item.grams > 0 && (
+                      <span style={{ color: "var(--text-muted)", fontWeight: 400, marginLeft: 4 }}>
+                        {item.grams}g
+                      </span>
+                    )}
+                  </div>
+                  <span
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      padding: "1px 6px",
+                      borderRadius: 8,
+                      fontSize: 10,
+                      fontWeight: 700,
+                      background: `${confColor}22`,
+                      color: confColor,
+                      border: `1px solid ${confColor}44`,
+                      whiteSpace: "nowrap",
+                      flexShrink: 0,
+                    }}
+                  >
+                    {conf.overallPct}%
+                  </span>
+                </div>
+
+                {/* Macro rows with ±CI */}
+                <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                  {([
+                    { label: t.conf_carbs,   c: conf.carbs,   val: item.carbs },
+                    { label: t.conf_protein, c: conf.protein, val: item.protein },
+                    { label: t.conf_fat,     c: conf.fat,     val: item.fat },
+                    { label: t.conf_fiber,   c: conf.fiber,   val: item.fiber },
+                  ]).map(({ label, c, val }) => (
+                    <div
+                      key={label}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        fontSize: 11,
+                      }}
+                    >
+                      <span style={{ color: "var(--text-muted)", minWidth: 80 }}>{label}:</span>
+                      <span style={{ color: "var(--text-body)", fontVariantNumeric: "tabular-nums" }}>
+                        {ciStr(val, c.ci)}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+
+                {/* KH breakdown detail lines */}
+                {conf.carbs.details.length > 0 && (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 2, paddingTop: 4, borderTop: "1px solid var(--border)" }}>
+                    <div style={{ fontSize: 10, color: "var(--text-muted)", fontWeight: 600 }}>
+                      {t.conf_breakdown}:
+                    </div>
+                    {conf.carbs.details.map((line, j) => (
+                      <div key={j} style={{ fontSize: 10, color: "var(--text-body)", paddingLeft: 6 }}>
+                        • {line}
+                      </div>
+                    ))}
+                    <div style={{ fontSize: 10, color: "var(--text-muted)", paddingTop: 2 }}>
+                      {t.conf_label}: {conf.overallPct}%
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+
+          {/* "Eigenen Wert eingeben" — delegates to Engine macro edit */}
+          {onOpenEngine && (
+            <button
+              type="button"
+              onClick={onOpenEngine}
+              style={{
+                width: "100%",
+                padding: "8px 10px",
+                borderRadius: 8,
+                border: "1px solid var(--border)",
+                background: "transparent",
+                color: "var(--text-body)",
+                fontSize: 12,
+                fontWeight: 500,
+                cursor: "pointer",
+                marginTop: 2,
+              }}
+            >
+              {t.conf_enter_own}
+            </button>
+          )}
+        </div>
+      )}
     </div>
   );
 }

@@ -503,3 +503,5 @@ Neue Tabelle `public.glev_ops_users` (id, email, password_hash, role, name, must
 | 2026-06-21 | Bottom-Nav-Overlap Hotfix Insights-Detail | [BUGFIX] PR #37 globaler .glev-main Buffer 120px hat Insights-Cluster-Detail nicht erreicht — innerer Scroll-Container brauchte eigenes padding-bottom. Helper-Class .glev-cluster-scroll in globals.css für künftige Cluster-Surfaces. |
 
 | 2026-06-21 | Mini-Preview Confidence-Modal | [FEATURE] MealConfidenceModal zeigt pro Item KH ±Spanne + Quelle-Aufschlüsselung + Konfidenz-%. lib/nutrition/confidence.ts berechnet CI je nach nutritionSource (user_history → σ, off/usda → DB-Varianz, ki → Heuristik). Details-Button in MealChipExpanded öffnet Bottom-Sheet-Modal statt Inline-Expand. T1D-User sieht Konfidenz statt nur Quelle. „Eigenen Wert eingeben" delegiert an onOpenEngine (Engine-Macros-Edit-Flow). |
+
+| 2026-06-21 | Confidence inline statt Modal | [BUGFIX] PR #45 Reverse-Korrektur: Bottom-Sheet-Modal zurückgebaut, Konfidenz-Aufschlüsselung als erweiterter Inline-Expand in MealChipExpanded. Layout außerhalb des Expand-Bereichs unverändert. `expanded`-State wiederhergestellt, `confidenceOpen`/MealConfidenceModal gelöscht. |
