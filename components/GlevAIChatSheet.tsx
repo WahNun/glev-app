@@ -194,8 +194,11 @@ interface Props {
    * "fullscreen" — fixed overlay that fills the content area between header
    *                and nav. No backdrop, no drag handle, fade-in animation,
    *                back-button instead of X. Used on /engine.
+   * "inline"     — no fixed positioning, no backdrop, no drag handle, no header.
+   *                Flows in the document as a flex column. Used in Engine Step 0
+   *                for consented users.
    */
-  variant?: "sheet" | "fullscreen";
+  variant?: "sheet" | "fullscreen" | "inline";
 }
 
 
@@ -1277,6 +1280,7 @@ export default function GlevAIChatSheet({
   const locale = useLocale();
   const t = locale === "en" ? COPY.en : COPY.de;
   const isFullscreen = variant === "fullscreen";
+  const isInline = variant === "inline";
   const [input, setInput] = useState("");
   const [sttError, setSttError] = useState<string | null>(null);
   const [sttPartial, setSttPartial] = useState<string | null>(null);
@@ -1587,7 +1591,7 @@ export default function GlevAIChatSheet({
       `}</style>
 
       {/* Backdrop — sheet mode only */}
-      {!isFullscreen && (
+      {!isFullscreen && !isInline && (
         <div
           onClick={onClose}
           role="presentation"
@@ -1606,12 +1610,23 @@ export default function GlevAIChatSheet({
         />
       )}
 
-      {/* Sheet / Fullscreen container */}
+      {/* Sheet / Fullscreen / Inline container */}
       <div
-        role="dialog"
-        aria-modal="true"
+        role={isInline ? undefined : "dialog"}
+        aria-modal={isInline ? undefined : "true"}
         aria-label="Glev AI Chat"
-        style={isFullscreen ? {
+        style={isInline ? {
+          display: "flex",
+          flexDirection: "column",
+          width: "100%",
+          flex: "1 1 0",
+          minHeight: 0,
+          background: SHEET_BG,
+          color: "var(--text)",
+          overflow: "hidden",
+          borderRadius: 14,
+          border: "1px solid var(--border-soft)",
+        } : isFullscreen ? {
           position: "fixed",
           top: "var(--nav-top-total)",
           bottom: "var(--nav-bottom-total)",
@@ -1648,7 +1663,7 @@ export default function GlevAIChatSheet({
         }}
       >
         {/* Drag handle — sheet mode only, swipe down ≥ 80 px to close */}
-        {!isFullscreen && (
+        {!isFullscreen && !isInline && (
           <div
             aria-hidden="true"
             onTouchStart={handleDragStart}
@@ -1679,7 +1694,8 @@ export default function GlevAIChatSheet({
           </div>
         )}
 
-        {/* Header strip: close/back (left) + reset button (right) */}
+        {/* Header strip: close/back (left) + reset button (right) — hidden in inline mode */}
+        {!isInline && (
         <div
           style={{
             flexShrink: 0,
@@ -1735,6 +1751,7 @@ export default function GlevAIChatSheet({
           {/* Revoke AI access */}
           <ResetButton onRevoked={() => { onClearChat?.(); onClose(); }} />
         </div>
+        )}
 
         {/* Messages */}
         <div

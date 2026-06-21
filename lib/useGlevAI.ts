@@ -170,7 +170,7 @@ export type ContextSnapshot = {
   lastMealSummary?: string;
 };
 
-const HISTORY_KEY = "glev_ai_history_v1";
+const HISTORY_KEY = "glev_ai_history_v2";
 const MAX_HISTORY = 10;
 
 const NEUTRAL = "Keine Daten verfügbar";
@@ -178,7 +178,7 @@ const NEUTRAL = "Keine Daten verfügbar";
 function safeReadHistory(): GlevChatMessage[] {
   if (typeof window === "undefined") return [];
   try {
-    const raw = window.sessionStorage.getItem(HISTORY_KEY);
+    const raw = window.localStorage.getItem(HISTORY_KEY);
     if (!raw) return [];
     const arr = JSON.parse(raw);
     if (!Array.isArray(arr)) return [];
@@ -213,7 +213,7 @@ function safeWriteHistory(history: GlevChatMessage[]) {
         }));
       return actions.length ? { ...base, pendingActions: actions } : base;
     });
-    window.sessionStorage.setItem(HISTORY_KEY, JSON.stringify(trimmed));
+    window.localStorage.setItem(HISTORY_KEY, JSON.stringify(trimmed));
   } catch {
     /* ignore quota / privacy errors */
   }
@@ -391,7 +391,7 @@ export function useGlevAI(opts?: {
     setModalOpen(false);
     setConsentGranted(false);
     if (typeof window !== "undefined") {
-      try { window.sessionStorage.removeItem(HISTORY_KEY); } catch { /* ignore */ }
+      try { window.localStorage.removeItem(HISTORY_KEY); } catch { /* ignore */ }
     }
     try {
       await fetch("/api/ai/consent", { method: "DELETE" });
@@ -417,7 +417,7 @@ export function useGlevAI(opts?: {
       setSheetOpen(false);
       setModalOpen(false);
       setConsentGranted(false);
-      try { window.sessionStorage.removeItem(HISTORY_KEY); } catch { /* ignore */ }
+      try { window.localStorage.removeItem(HISTORY_KEY); } catch { /* ignore */ }
     };
     const onOpenModal = () => {
       // Triggered by Settings toggle — mark so grantConsent() skips setSheetOpen.
@@ -432,7 +432,7 @@ export function useGlevAI(opts?: {
     };
   }, []);
 
-  /** Clear the chat history — wipes sessionStorage + in-memory messages + pending meal queue. */
+  /** Clear the chat history — wipes localStorage + in-memory messages + pending meal queue. */
   const clearMessages = useCallback(() => {
     if (abortRef.current) {
       try { abortRef.current.abort(); } catch { /* noop */ }
@@ -443,7 +443,7 @@ export function useGlevAI(opts?: {
     setPendingMealNavQueue([]);
     pendingMealQueueRef.current = [];
     if (typeof window !== "undefined") {
-      try { window.sessionStorage.removeItem(HISTORY_KEY); } catch { /* ignore */ }
+      try { window.localStorage.removeItem(HISTORY_KEY); } catch { /* ignore */ }
     }
   }, []);
 

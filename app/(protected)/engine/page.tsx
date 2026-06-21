@@ -30,6 +30,7 @@ import { CycleForm, SymptomForm } from "@/components/CycleSymptomForms";
 import { InfluenceForm } from "@/components/InfluenceLogForm";
 import GlevLogo from "@/components/GlevLogo";
 import EngineChatPanel from "@/components/EngineChatPanel";
+import GlevAIChatSheet from "@/components/GlevAIChatSheet";
 import { useEngineHeader } from "@/lib/engineHeaderContext";
 import { useEngineSourceHeader } from "@/lib/engineSourceHeaderContext";
 import { useFeatureFlag } from "@/lib/featureFlags";
@@ -488,12 +489,14 @@ export default function EnginePage() {
   }, [searchParams]);
   const [isMobile, setIsMobile] = useState(false);
   const aiVoiceEnabled = useGlevAIAccess();
+  const voiceIntentEnabled = useFeatureFlag("voice_intent_routing") === true;
   // When Glev AI consent is active the legacy food-parser chat panel
-  // (EngineChatPanel / "AI FOOD PARSER") is hidden — users interact
-  // exclusively via the global Glev AI sheet instead.
+  // (EngineChatPanel / "AI FOOD PARSER") is hidden — users see the inline
+  // Glev AI chat instead (Engine Step 0, ESSEN tab).
   // consentLoaded gates the switch so the old panel never flashes for
   // consented users during the Supabase fetch window.
-  const { consentGranted: glevAiConsented, consentLoaded } = useGlevAIContext();
+  const glevAi = useGlevAIContext();
+  const { consentGranted: glevAiConsented, consentLoaded } = glevAi;
   const [meals, setMeals]     = useState<Meal[]>([]);
   const [adaptedICR, setAdaptedICR] = useState(15);
   const [selectedICR, setSelectedICR] = useState<'static' | 'adaptive'>('adaptive');
@@ -2537,6 +2540,33 @@ export default function EnginePage() {
                   Hidden when Glev AI consent is active — users use the
                   global Glev AI sheet instead. */}
               {isMobile && consentLoaded && !glevAiConsented && chatPanelNode}
+              {/* Consented users see the inline Glev AI chat instead of the
+                  legacy food-parser panel. Guard: skip when the fullscreen
+                  sheet is already open (sheetOpen is always false on /engine
+                  since Layout closes it on navigation, so in practice the
+                  fullscreen GlevAIChatSheet overlay covers the inline panel
+                  visually when the FAB is tapped). */}
+              {isMobile && consentLoaded && glevAiConsented && !glevAi.sheetOpen && (
+                <GlevAIChatSheet
+                  variant="inline"
+                  open={true}
+                  onClose={() => {}}
+                  messages={glevAi.messages}
+                  streaming={glevAi.streaming}
+                  onSend={glevAi.sendMessage}
+                  onConfirmAction={glevAi.confirmAction}
+                  onCancelAction={glevAi.cancelAction}
+                  onOpenEngineForMeal={async (messageId, token) => {
+                    await glevAi.openEngineForMeal(messageId, token);
+                  }}
+                  onQuickSaveAction={glevAi.quickSaveAction}
+                  onDetailOpen={glevAi.navigateToLogScreen}
+                  onClearChat={glevAi.clearMessages}
+                  pendingMealNavQueue={glevAi.pendingMealNavQueue}
+                  onMealNavTap={glevAi.fireMealNav}
+                  voiceIntentEnabled={voiceIntentEnabled}
+                />
+              )}
               {(() => {
                 const anyMacro =
                   (Number(carbs)   || 0) > 0 ||
