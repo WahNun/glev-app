@@ -394,6 +394,10 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
   // from a long page never leaves the header stuck in the hidden state.
   const mainRef = useRef<HTMLElement>(null);
   const [headerHidden, setHeaderHidden] = useState(false);
+  // true when AI chat is visually "in front" — either the bottom sheet or
+  // the /glev-ai fullscreen page. Drives header controls, z-index, and
+  // scroll-fade behaviour so there is exactly ONE AI header cluster.
+  const isAiSurface = glevAi.sheetOpen || pathname.startsWith("/glev-ai");
   const lastScrollYRef = useRef(0);
   useEffect(() => {
     setHeaderHidden(false);
@@ -752,12 +756,8 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
       `}</style>
 
       {/* MOBILE HEADER — solid surface bg always; logo opens About modal, account icon opens Settings */}
-      {/* aiChatActive: true when the AI chat is visually "in front" —
-          either as a sheet (sheetOpen) or as the /glev-ai fullscreen page.
-          Drives header chip, Reset/Speaker buttons, and z-index. */}
-      {/* eslint-disable-next-line react-hooks/exhaustive-deps */}
       <header className="glev-mobile-head" style={{
-        position: "fixed", top: 0, left: 0, right: 0, zIndex: glevAi.sheetOpen ? 1102 : 99, overflow: "visible",
+        position: "fixed", top: 0, left: 0, right: 0, zIndex: isAiSurface ? 1102 : 99, overflow: "visible",
         // iOS notch / Dynamic Island: push content below the status bar by
         // honouring safe-area-inset-top, with a sensible fallback for
         // browsers that don't expose it (e.g. desktop dev tools).
@@ -797,10 +797,10 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
         borderBottom: `1px solid ${BORDER}`,
         alignItems: "center", justifyContent: "space-between",
         // Scroll-fade: slide up + fade out on scroll-down, reverse on scroll-up.
-        transform: (headerHidden && !glevAi.sheetOpen) ? "translateY(-100%)" : "translateY(0)",
-        opacity: (headerHidden && !glevAi.sheetOpen) ? 0 : 1,
+        transform: (headerHidden && !isAiSurface) ? "translateY(-100%)" : "translateY(0)",
+        opacity: (headerHidden && !isAiSurface) ? 0 : 1,
         transition: "transform 220ms cubic-bezier(.4,0,.2,1), opacity 220ms ease",
-        pointerEvents: (headerHidden && !glevAi.sheetOpen) ? "none" : undefined,
+        pointerEvents: (headerHidden && !isAiSurface) ? "none" : undefined,
       }}>
         <div
           onClick={() => setAboutOpen(true)}
@@ -815,13 +815,13 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
               das Logo-Quadrat soll in Light Mode NICHT mit-aufhellen,
               sonst löst es sich vom Header optisch auf. */}
           <GlevLockup size={26} color="var(--text)" symbolBg="var(--surface-alt)" />
-          {glevAi.sheetOpen && (
+          {isAiSurface && (
             <span style={{ fontSize: 13, fontWeight: 700, color: ACCENT, marginLeft: 2, letterSpacing: "-0.01em" }}>
               AI
             </span>
           )}
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: glevAi.sheetOpen ? 4 : 8, flexShrink: 0 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: isAiSurface ? 4 : 8, flexShrink: 0 }}>
           {/* Engine-Pille im Header wurde entfernt (User-Wunsch
               2026-05-04): "ich will nurnoch das plus symbol nutzen
               im header allerdings müssen dort alle tabs die aktuell
@@ -988,7 +988,7 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
               </div>
             );
           })()}
-          {glevAi.sheetOpen ? (
+          {isAiSurface ? (
             <>
               <AIStateChip state={glevAi.aiState} />
               {/* ↻ Reset-Chat — clears in-memory history only, no consent revoke */}
@@ -1040,22 +1040,29 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
                   </svg>
                 )}
               </button>
-              {/* Close ✕ — on /glev-ai (fullscreen page) navigate back,
-                  on other tabs close the bottom sheet. */}
+              {/* Close/Back — ← on /glev-ai page, ✕ on sheet */}
               <button
                 type="button"
                 onClick={pathname.startsWith("/glev-ai") ? () => router.back() : glevAi.closeSheet}
-                aria-label={locale === "en" ? "Close Glev AI" : "Glev AI schließen"}
+                aria-label={pathname.startsWith("/glev-ai")
+                  ? (locale === "en" ? "Go back" : "Zurück")
+                  : (locale === "en" ? "Close Glev AI" : "Glev AI schließen")}
                 style={{
                   background: "none", border: "none", cursor: "pointer",
                   padding: 4, display: "flex", alignItems: "center",
                   color: "var(--text-muted)",
                 }}
               >
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-                  <line x1="18" y1="6" x2="6" y2="18" />
-                  <line x1="6" y1="6" x2="18" y2="18" />
-                </svg>
+                {pathname.startsWith("/glev-ai") ? (
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="15 18 9 12 15 6" />
+                  </svg>
+                ) : (
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                    <line x1="18" y1="6" x2="6" y2="18" />
+                    <line x1="6" y1="6" x2="18" y2="18" />
+                  </svg>
+                )}
               </button>
             </>
           ) : (
