@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { parseFoodText } from "@/lib/nutrition/parseFood";
 import { aggregateNutrition } from "@/lib/nutrition/aggregate";
+import { AggregatorTrace } from "@/lib/nutrition/aggregator-trace";
 import { classifyMeal } from "@/lib/meals";
 import { lookupUserFoodHistory } from "@/lib/nutrition/userFoodHistory";
 import { authedClient } from "@/app/api/insulin/_helpers";
@@ -108,7 +109,8 @@ export async function POST(req: NextRequest) {
   }
 
   // Stage 2: smart routing → user history → OFF / USDA / GPT-estimate fallback
-  const aggregated = await aggregateNutrition(parsed.items, { userHistory });
+  const trace = earlyAuth?.user?.id ? new AggregatorTrace() : undefined;
+  const aggregated = await aggregateNutrition(parsed.items, { userHistory, trace });
   const tAgg = Date.now();
   // eslint-disable-next-line no-console
   console.log("[PERF parse-food] stage 2 (aggregator):", tAgg - tParse, "ms · source:", aggregated.nutritionSource);
@@ -121,6 +123,20 @@ export async function POST(req: NextRequest) {
 
   // eslint-disable-next-line no-console
   console.log("[PERF parse-food] total:", Date.now() - t0, "ms");
+
+  if (trace && earlyAuth?.user?.id) {
+    let adminSb;
+    try { adminSb = getSupabaseAdmin(); } catch { /* no-op */ }
+    if (adminSb) {
+      void trace.persist({
+        user_id:            earlyAuth.user.id,
+        input_text:         text,
+        supabaseClient:     adminSb,
+        aggregator_version: "1.0",
+        env:                process.env.VERCEL_ENV ?? process.env.NODE_ENV ?? "unknown",
+      });
+    }
+  }
 
   return NextResponse.json({
     // Backward-compat aliases for existing client code:
