@@ -17,6 +17,7 @@ import SourceBadge from "@/components/SourceBadge";
 import { aggregateBadge, aggregateSourceLabel } from "@/lib/nutrition/badgeFor";
 import { supabase } from "@/lib/supabase";
 import ResetButton from "@/components/ResetButton";
+import MealConfidenceModal from "@/components/MealConfidenceModal";
 
 const ACCENT = "#8b5cf6";
 const SHEET_BG = "var(--surface)";
@@ -263,7 +264,7 @@ function MealChipExpanded({
   onCancel: () => void;
   onOpenEngine?: () => void;
 }) {
-  const [expanded, setExpanded] = useState(false);
+  const [confidenceOpen, setConfidenceOpen] = useState(false);
   const [itemsForExpand, setItemsForExpand] = useState<Array<ParsedFood>>(initialItems);
   const [badgesTransitioning, setBadgesTransitioning] = useState(false);
 
@@ -452,60 +453,6 @@ function MealChipExpanded({
         </div>
       )}
 
-      {/* Expand: per-item list (Phase 1 = all ✨ KI) */}
-      {expanded && (
-        <div
-          style={{
-            display: "flex",
-            flexDirection: "column",
-            gap: 4,
-            padding: "8px 10px",
-            background: "var(--surface-alt, rgba(255,255,255,0.03))",
-            borderRadius: 8,
-            border: "1px solid var(--border)",
-          }}
-        >
-          {itemsForExpand.length > 0 ? (
-            itemsForExpand.map((item, i) => (
-              <div
-                key={i}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 8,
-                  fontSize: 12,
-                  color: "var(--text-body)",
-                }}
-              >
-                <span style={{ flex: 1 }}>
-                  {item.name}
-                  <span style={{ color: "var(--text-muted)", marginLeft: 4 }}>
-                    {item.grams}g
-                  </span>
-                </span>
-                <span style={{ opacity: badgesTransitioning ? 0 : 1, transition: "opacity 0.25s ease" }}>
-                  <SourceBadge source={(item.source ?? "estimated") as NutritionSource} />
-                </span>
-              </div>
-            ))
-          ) : (
-            // No per-item data (Phase 1 / flag-off) — show meal-name placeholder.
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                fontSize: 12,
-                color: "var(--text-body)",
-              }}
-            >
-              <span>{mealName}</span>
-              <SourceBadge source="estimated" />
-            </div>
-          )}
-        </div>
-      )}
-
       {/* Queue badge */}
       {showQueueBadge && (
         <div
@@ -531,7 +478,7 @@ function MealChipExpanded({
       <div style={{ display: "flex", gap: 8 }}>
         <button
           type="button"
-          onClick={() => setExpanded((v) => !v)}
+          onClick={() => setConfidenceOpen(true)}
           disabled={inactive}
           style={{
             flex: 1,
@@ -545,7 +492,7 @@ function MealChipExpanded({
             cursor: inactive ? "default" : "pointer",
           }}
         >
-          {expanded ? t.details_collapse : t.details_expand}
+          {t.details_expand}
         </button>
         <button
           type="button"
@@ -570,6 +517,14 @@ function MealChipExpanded({
           {busy ? t.opening : t.open_engine}
         </button>
       </div>
+
+      {/* Confidence modal — opened by Details ⌄ */}
+      <MealConfidenceModal
+        items={itemsForExpand.length > 0 ? itemsForExpand : [{ name: mealName, grams: 0, carbs: 0, protein: 0, fat: 0, fiber: 0 }]}
+        isOpen={confidenceOpen}
+        onClose={() => setConfidenceOpen(false)}
+        onEditMacros={onOpenEngine}
+      />
     </div>
   );
 }
