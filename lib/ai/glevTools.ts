@@ -2862,7 +2862,7 @@ async function toolGetTodayMacrosSoFar(
     return new Date(atIso).toLocaleDateString("en-CA", { timeZone: tz }) === dateStr;
   });
 
-  const totals = rows.reduce(
+  const totals = rows.reduce<{ carbs: number; protein: number; fat: number; fiber: number }>(
     (acc, m) => ({
       carbs:   acc.carbs   + (Number(m.carbs_grams)   || 0),
       protein: acc.protein + (Number(m.protein_grams) || 0),
@@ -2926,7 +2926,8 @@ async function toolGetDashboardSummary(
     const atIso = (m.meal_time as string | null) ?? (m.created_at as string);
     return new Date(atIso).toLocaleDateString("en-CA", { timeZone: tz }) === dateStr;
   });
-  const todayTotals = todayMeals.reduce(
+  type DailyTotals = { carbs: number; protein: number; fat: number; fiber: number };
+  const todayTotals = todayMeals.reduce<DailyTotals>(
     (acc, m) => ({
       carbs:   acc.carbs   + (Number(m.carbs_grams)   || 0),
       protein: acc.protein + (Number(m.protein_grams) || 0),
