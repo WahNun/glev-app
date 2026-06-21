@@ -27,12 +27,13 @@
     "android:version": "node scripts/bump-android-version.mjs show",
     "android:bump:build": "node scripts/bump-android-version.mjs build",
     "asana:sync": "node scripts/sync-asana-sprints.mjs",
-"check:engine-doc": "node scripts/check-engine-doc-thresholds.mjs",
+    "check:engine-doc": "node scripts/check-engine-doc-thresholds.mjs",
     "backfill:evaluations": "npx tsx scripts/backfillMealEvaluations.ts",
     "backfill:outcome-states": "npx tsx scripts/backfillOutcomeStates.ts",
     "backfill:curve-jobs": "npx tsx scripts/backfillCurveJobs.ts",
     "check:outcome-coverage": "node scripts/check-outcome-coverage.mjs",
-    "gh:setup-branch-protection": "node scripts/setup-branch-protection.mjs"
+    "gh:setup-branch-protection": "node scripts/setup-branch-protection.mjs",
+    "prepare": "husky"
   },
   "dependencies": {
     "@capacitor/android": "^8.3.1",
@@ -50,7 +51,6 @@
     "@dnd-kit/sortable": "^10.0.0",
     "@dnd-kit/utilities": "^3.2.2",
     "@mistralai/mistralai": "^2.2.1",
-    "heic2any": "^0.0.4",
     "@octokit/rest": "^21.1.1",
     "@react-pdf/renderer": "^4.5.1",
     "@replit/connectors-sdk": "^0.4.1",
@@ -61,6 +61,7 @@
     "@vercel/analytics": "^2.0.1",
     "axios": "^1.15.2",
     "googleapis": "^171.4.0",
+    "heic2any": "^0.0.4",
     "jszip": "^3.10.1",
     "next": "^16.2.6",
     "next-intl": "^4.9.2",
@@ -82,6 +83,7 @@
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",
     "apple-signin-auth": "^2.0.0",
+    "husky": "^9.1.7",
     "typescript": "~5.9.2"
   }
 }
