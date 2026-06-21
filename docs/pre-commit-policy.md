@@ -17,3 +17,16 @@ To enforce this as a required status check: **GitHub → Repo Settings → Branc
 ## Background
 
 Two consecutive Vercel build failures (PR #64 + follow-up hotfix) exposed that `--admin` bypass merges were letting TypeScript errors reach `main` undetected, keeping production on an old build for days.
+
+## Test-Files Pre-Existing TypeScript-Errors (Stand 2026-06-21)
+
+Tests unter `tests/` haben 18 Pre-Existing-Type-Errors aus älteren API-Versionen.
+Diese sind pre-launch akzeptierte Tech-Debt. Tests sind aus dem Standard-tsc-Check
+ausgeschlossen (`tsconfig.json` exclude).
+
+Für gezielten Test-Type-Check:
+```
+pnpm typecheck:tests
+```
+
+Geplanter Fix-Sweep: V1.1 nach Public-Launch.

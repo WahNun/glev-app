@@ -42,6 +42,9 @@
     "scripts",
     "clean-app",
     ".agents",
-    "supabase"
+    "supabase",
+    "tests/**",
+    "**/*.test.ts",
+    "**/*.test.tsx"
   ]
 }

@@ -33,7 +33,8 @@
     "backfill:curve-jobs": "npx tsx scripts/backfillCurveJobs.ts",
     "check:outcome-coverage": "node scripts/check-outcome-coverage.mjs",
     "gh:setup-branch-protection": "node scripts/setup-branch-protection.mjs",
-    "prepare": "husky"
+    "prepare": "husky",
+    "typecheck:tests": "tsc --project tsconfig.test.json --noEmit"
   },
   "dependencies": {
     "@capacitor/android": "^8.3.1",
