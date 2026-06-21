@@ -858,7 +858,7 @@ export async function handleChatPost(
               detail: {
                 model:           "pixtral-12b-2409",
                 tool_calls_count: toolCalls.length,
-                tool_names:      toolCalls.map((c: { function?: { name?: string } }) => c.function?.name).filter(Boolean),
+                tool_names:      toolCalls.map((c) => 'function' in c ? c.function?.name : undefined).filter(Boolean),
               },
             });
           }
