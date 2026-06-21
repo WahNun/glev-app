@@ -5057,7 +5057,11 @@ function InsightsSwipePager({
                 alignItems: "flex-start",
                 justifyContent: "center",
                 overflow: "hidden",
-              }}
+                // Expose locked max height so inner FlipCards can sync
+                // to the tallest sibling via CSS max() — no per-card
+                // override needed, no prop threading required.
+                "--glev-pager-slot-h": `${maxMeasured != null ? maxMeasured : FIRST_PAINT_H}px`,
+              } as React.CSSProperties}
             >
               <div
                 ref={(el) => { itemRefs.current[idx] = el; }}
@@ -5901,10 +5905,17 @@ function FlipCard({
       aria-pressed={flipped}
     >
       {/* FLIP STAGE — CSS grid stacks front + back in the same cell so
-          each face is rendered exactly once. Card height = max(front, back). */}
+          each face is rendered exactly once. Card height = max(front, back).
+          min-height uses CSS max() so the stage picks the larger of:
+          • the explicit minHeight prop (CARD_MIN_H clamp — the per-card floor)
+          • --glev-pager-slot-h set by InsightsSwipePager on the slot div
+          This makes every card in a cluster match the tallest sibling
+          without any prop-threading or per-cluster overrides. */}
       <div style={{
         display:"grid",
-        minHeight: minHeight || undefined,
+        minHeight: minHeight
+          ? `max(${minHeight}, var(--glev-pager-slot-h, 0px))`
+          : "var(--glev-pager-slot-h, 0px)",
         transformStyle:"preserve-3d",
         transition:"transform 0.55s cubic-bezier(0.4,0,0.2,1)",
         transform: flipped ? "rotateY(180deg)" : "rotateY(0deg)",
