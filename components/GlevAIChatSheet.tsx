@@ -1784,8 +1784,10 @@ export default function GlevAIChatSheet({
           </div>
         )}
 
-        {/* Header strip: close/back (left) + reset button (right) — hidden in inline mode */}
-        {!isInline && (
+        {/* Header strip: back (left) + reset button (right) — fullscreen/page only.
+            Sheet variant omits this header: the global app-header already provides
+            AIStateChip + Reset + Speaker + Close when the bottom sheet is open. */}
+        {isFullscreen && (
         <div
           style={{
             flexShrink: 0,
