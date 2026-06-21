@@ -533,3 +533,5 @@ Neue Tabelle `public.glev_ops_users` (id, email, password_hash, role, name, must
 | 2026-06-21 | Glucose-Card-Back i18n | [BUGFIX] FlipCard-Back der Glucose-Card war hardcoded English. Neue dashboard.glucose_back_*-Keys in de.json + en.json (glucose_back_title, glucose_back_no_readings, glucose_back_daily_avg, glucose_back_time_in_range, glucose_back_time_above, glucose_back_time_below, glucose_back_highest, glucose_back_lowest). Bestehender flip_back-Key wiederverwendet. useTranslations-Hook in BackStats ergänzt. |
 
 | 2026-06-21 | Pre-Commit-Hook + GitHub-Action TypeScript-Check | [INFRA] Husky-Setup mit pre-commit Hook der `pnpm tsc --noEmit` ausführt. Plus GitHub-Action als Backup. Verhindert Type-Errors auf main wie bei PR #64 + Folge-Hotfix. |
+
+| 2026-06-21 | Tests temporär vom tsc Pre-Commit excluded | [CHORE] Pre-Launch Bandage: `tests/**` im tsconfig.json excluded. Separates tsconfig.test.json für gezielten Test-Check (`pnpm typecheck:tests`). Tech-Debt-Sweep der 18 pre-existing Test-Errors als V1.1-Backlog. |
