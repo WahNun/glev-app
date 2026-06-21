@@ -82,7 +82,7 @@ export default function PlanSimulator() {
       padding: "16px",
       background: SURFACE,
       border: `1px solid ${ORANGE}40`,
-      borderRadius: 14,
+      borderRadius: 16,
       display: "flex",
       flexDirection: "column",
       gap: 12,

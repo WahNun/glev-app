@@ -5893,14 +5893,14 @@ function FlipCard({
   const frontShell: React.CSSProperties = variant === "glass" ? glassFront : {
     background: SURFACE,
     border: `1px solid ${BORDER}`,
-    borderRadius: 14,
+    borderRadius: 16,
     padding,
     boxSizing: "border-box",
   };
   const backShell: React.CSSProperties = variant === "glass" ? glassBack : {
     background: `linear-gradient(145deg, ${accent}12, ${SURFACE} 65%)`,
     border: `1px solid ${accent}33`,
-    borderRadius: 14,
+    borderRadius: 16,
     padding,
     boxSizing: "border-box",
   };
