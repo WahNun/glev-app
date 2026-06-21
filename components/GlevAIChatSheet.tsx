@@ -594,7 +594,7 @@ function MealChipExpanded({
               return itemsForExpand.length > 0 ? itemsForExpand : [{ name: mealName, grams: 0, carbs: 0, protein: 0, fat: 0, fiber: 0 } as ParsedFood];
             })();
             return effectiveItems.map((item, i) => {
-            const conf = computeItemConfidence(item, expandLocale);
+            const conf = computeItemConfidence(item, expandLocale, { isMultiComponent: effectiveItems.length > 2 });
             const ciStr = (v: number, ci: number) =>
               v === 0 && ci < 0.15 ? "0 g" : `${v.toFixed(1)} ±${Math.max(0.1, ci).toFixed(1)} g`;
             const confColor = conf.overallPct >= 85 ? "#34d399" : conf.overallPct >= 70 ? "#fbbf24" : "#f87171";

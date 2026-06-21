@@ -32,6 +32,12 @@ interface ComputeOpts {
   historyEntries?: HistoryEntry[];
   /** Number of OFF/USDA database records that backed this item (affects CI width). */
   dbRecordCount?: number;
+  /**
+   * True when this item belongs to a meal with 3+ components.
+   * Single-item and two-item meals are always "simple" (±15%).
+   * Gram weight is NOT a complexity indicator.
+   */
+  isMultiComponent?: boolean;
 }
 
 function clamp(v: number, lo: number, hi: number): number {
@@ -111,10 +117,10 @@ export function computeMacroConfidence(
   }
 
   if (source === "estimated" || source === "unknown") {
-    // Heuristic: simple items ±15%, complex (wraps, salads) ±25%.
-    // We use a proxy: if grams > 200 or macroName is carbs and value > 40
-    // treat as "complex". Callers can override via opts.
-    const isComplex = grams > 200 || (macroName === "carbs" && value > 40);
+    // "complex" only for meals with 3+ components (passed via opts.isMultiComponent).
+    // Gram weight and carb value are NOT complexity indicators — a 300g banana
+    // is a simple single item and must not be penalised with ±25%.
+    const isComplex = opts.isMultiComponent === true;
     const frac = isComplex ? 0.25 : 0.15;
     const ci = Math.max(0.1, value * frac);
     const sourceLabel = isDE ? "KI-Schätzung" : "AI estimate";

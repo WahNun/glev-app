@@ -111,12 +111,51 @@ const effectiveItems: ParsedFood[] = (() => {
 
 ---
 
+## Bug C — Heuristik-Threshold falsch (Banane 300g → "komplex")
+
+### Root cause
+
+`lib/nutrition/confidence.ts`, `computeMacroConfidence()`, estimated/unknown branch:
+
+```typescript
+// before fix
+const isComplex = grams > 200 || (macroName === "carbs" && value > 40);
+```
+
+Both conditions are gram-/carb-weight proxies. A single banana at 300g triggers `grams > 200 = true` → "komplexes Item ±25%". A large-carb item (>40g KH) is also incorrectly labelled complex. Neither condition reflects structural meal complexity.
+
+### Fix
+
+`lib/nutrition/confidence.ts` — added `isMultiComponent?: boolean` to `ComputeOpts`:
+
+```typescript
+const isComplex = opts.isMultiComponent === true;
+```
+
+`components/GlevAIChatSheet.tsx` — pass from caller:
+
+```tsx
+const conf = computeItemConfidence(item, expandLocale, { isMultiComponent: effectiveItems.length > 2 });
+```
+
+Rule: a meal is "complex" only when it has **3+ components** (effectiveItems.length > 2). Single-item and two-item meals always get ±15% regardless of gram weight or carb value.
+
+---
+
 ## Acceptance criteria
 
 `"Banane 120g"` →  
 - Header: `27g KH, 1g P, 0g F, 3g Bal`  
 - Tap "Details ⌄" → KH `27 ±3g`, Eiweiß `1 ±0.3g`, Fett `0g`, Ballaststoffe `3 ±1g`  
 - Source line: reflects actual aggregator result (e.g. "Open Food Facts" when aggregator hit OFF, "KI-Schätzung" when it fell back)
+
+`"Banane 300g"` →  
+- Heuristic label: "einfaches Item ±15%" (not "komplexes Item ±25%")  
+- Same for any single-item or two-item meal, regardless of gram count
+
+`"Erdbeeren 50g + Bananen 300g"` →  
+- Both items show real macros  
+- Both classified as "einfaches Item ±15%" (2 items, not >2)
 
 ---
 
