@@ -172,34 +172,20 @@ export default function LandscapeGlucoseOverlay() {
     };
   }, []);
 
-  // Track landscape transitions to lock/unlock per cycle — enabling repeated
-  // rotate → portrait → rotate sequences without an app restart:
-  //
-  //  false → true  (overlay opens):  unlock() so iOS allows the rotation.
-  //                                   Needed on every open because a previous
-  //                                   true→false transition already locked us.
-  //  true  → false (overlay closes): lock("portrait") so all other screens
-  //                                   remain portrait-only.
-  //
-  // The mount useEffect above handles the very first unlock on app start.
-  // Using a ref to track the previous value avoids re-running on mount
-  // (landscape starts false, prevLandscape starts false → no initial action).
-  const prevLandscape = useRef(false);
+  // Re-unlock on every landscape=true transition so that any incidental
+  // lock() call (e.g. from a Capacitor plugin elsewhere) cannot silently
+  // block the next rotation. We intentionally do NOT lock back to portrait
+  // on landscape=false: doing so creates a deadlock — the WKWebView is
+  // locked at the OS level, so the next physical rotation fires no resize /
+  // orientationchange / mql.change events, landscape never becomes true,
+  // and unlock() is never called. The mount effect above guarantees the
+  // initial unlock; the unmount cleanup is the only portrait re-lock needed.
   useEffect(() => {
-    const prev = prevLandscape.current;
-    prevLandscape.current = landscape;
-    if (landscape === prev) return; // no transition — skip
+    if (!landscape) return;
     void (async () => {
       const so = await loadScreenOrientation();
       if (!so) return;
-      if (landscape) {
-        // false → true: re-unlock so iOS allows the WKWebView to rotate again
-        // (without this, after the first lock the overlay is one-shot per session).
-        try { await so.ScreenOrientation.unlock(); } catch { /* noop */ }
-      } else {
-        // true → false: re-lock portrait so Engine, Entries, Log forms etc. stay portrait
-        try { await so.ScreenOrientation.lock({ orientation: "portrait" }); } catch { /* noop */ }
-      }
+      try { await so.ScreenOrientation.unlock(); } catch { /* noop */ }
     })();
   }, [landscape]);
 
