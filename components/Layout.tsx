@@ -13,6 +13,7 @@ import PaywallSheet from "@/components/PaywallSheet";
 import GlevAIButton from "@/components/GlevAIButton";
 import GlevAIConsentModal from "@/components/GlevAIConsentModal";
 import GlevAIChatSheet from "@/components/GlevAIChatSheet";
+import ResetButton from "@/components/ResetButton";
 import { useGlevAI, type AIState } from "@/lib/useGlevAI";
 import { GlevAIProvider } from "@/lib/glevAIContext";
 import { resolveFabAction } from "@/lib/fabAction";
@@ -991,25 +992,10 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
           {(glevAi.sheetOpen || pathname.startsWith("/glev-ai")) ? (
             <>
               <AIStateChip state={glevAi.aiState} />
-              {/* Reset ↻ */}
-              <button
-                type="button"
-                onClick={glevAi.clearMessages}
-                disabled={glevAi.messages.length === 0 && !glevAi.streaming}
-                aria-label={locale === "en" ? "Reset chat" : "Chat zurücksetzen"}
-                style={{
-                  background: "none", border: "none", cursor: "pointer",
-                  padding: 4, display: "flex", alignItems: "center",
-                  color: glevAi.messages.length === 0 && !glevAi.streaming
-                    ? "var(--text-ghost)" : "var(--text-dim)",
-                  transition: "color 0.15s",
-                }}
-              >
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <polyline points="1 4 1 10 7 10"/>
-                  <path d="M3.51 15a9 9 0 1 0 .49-4.5"/>
-                </svg>
-              </button>
+              {/* Reset 🛡 — consent-revoke; only shown after user has consented */}
+              {glevAi.consentGranted && (
+                <ResetButton style={{ padding: 4 }} />
+              )}
               {/* Speaker 🔊 */}
               <button
                 type="button"
