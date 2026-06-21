@@ -237,6 +237,30 @@ interface Props {
  *     and non-interactive — the user must resolve earlier chips first.
  */
 
+// ── MealChipExpanded helpers ──────────────────────────────────────────────
+
+/**
+ * Parse "27g KH, 1g P, 0g F, 3g Bal" from the pending-action summary string.
+ * Returns null when carbs can't be extracted (fallback to zeros).
+ */
+function parseSummaryMacros(
+  macroStr: string | null,
+): { carbs: number; protein: number; fat: number; fiber: number } | null {
+  if (!macroStr) return null;
+  const carbsM   = macroStr.match(/(\d+(?:\.\d+)?)g KH/);
+  const proteinM = macroStr.match(/(\d+(?:\.\d+)?)g P\b/);
+  const fatM     = macroStr.match(/(\d+(?:\.\d+)?)g F\b/);
+  const fiberM   = macroStr.match(/(\d+(?:\.\d+)?)g Bal/);
+  const carbs = parseFloat(carbsM?.[1] ?? "");
+  if (!Number.isFinite(carbs)) return null;
+  return {
+    carbs,
+    protein: Number.isFinite(parseFloat(proteinM?.[1] ?? "")) ? parseFloat(proteinM![1]) : 0,
+    fat:     Number.isFinite(parseFloat(fatM?.[1]     ?? "")) ? parseFloat(fatM![1])     : 0,
+    fiber:   Number.isFinite(parseFloat(fiberM?.[1]   ?? "")) ? parseFloat(fiberM![1])   : 0,
+  };
+}
+
 // ── MealChipExpanded ──────────────────────────────────────────────────────
 // Extracted so it can own its own useState (expand toggle) without making
 // PendingActionWidget a client component or violating hooks rules.
@@ -547,7 +571,29 @@ function MealChipExpanded({
             border: "1px solid var(--border)",
           }}
         >
-          {(itemsForExpand.length > 0 ? itemsForExpand : [{ name: mealName, grams: 0, carbs: 0, protein: 0, fat: 0, fiber: 0 } as ParsedFood]).map((item, i) => {
+          {(() => {
+            // Bug A fix: when items are missing or all-zero, synthesise a single
+            // display item from the summary macros (macroStr always carries
+            // Mistral's estimates — identical to what the header shows).
+            // Bug B fix: map nutritionSource → per-item source so computeItemConfidence
+            // can show "Open Food Facts", "USDA", etc. instead of always "KI-Schätzung".
+            const hasMacros = itemsForExpand.some(
+              it => (it.carbs ?? 0) > 0 || (it.protein ?? 0) > 0 || (it.fat ?? 0) > 0 || (it.fiber ?? 0) > 0,
+            );
+            const effectiveItems: ParsedFood[] = (() => {
+              if (hasMacros) return itemsForExpand;
+              const parsed = parseSummaryMacros(macroStr);
+              if (parsed) {
+                const src: ParsedFood["source"] =
+                  nutritionSource === "open_food_facts" ? "open_food_facts" :
+                  nutritionSource === "usda"            ? "usda" :
+                  (nutritionSource === "user_history" || nutritionSource === "user_confirmed") ? "user_history" :
+                  "estimated";
+                return [{ name: mealName, grams: 0, ...parsed, source: src }];
+              }
+              return itemsForExpand.length > 0 ? itemsForExpand : [{ name: mealName, grams: 0, carbs: 0, protein: 0, fat: 0, fiber: 0 } as ParsedFood];
+            })();
+            return effectiveItems.map((item, i) => {
             const conf = computeItemConfidence(item, expandLocale);
             const ciStr = (v: number, ci: number) =>
               v === 0 && ci < 0.15 ? "0 g" : `${v.toFixed(1)} ±${Math.max(0.1, ci).toFixed(1)} g`;
@@ -559,8 +605,8 @@ function MealChipExpanded({
                   display: "flex",
                   flexDirection: "column",
                   gap: 6,
-                  paddingBottom: i < (itemsForExpand.length || 1) - 1 ? 10 : 0,
-                  borderBottom: i < (itemsForExpand.length || 1) - 1 ? "1px solid var(--border)" : "none",
+                  paddingBottom: i < effectiveItems.length - 1 ? 10 : 0,
+                  borderBottom: i < effectiveItems.length - 1 ? "1px solid var(--border)" : "none",
                 }}
               >
                 {/* Item header */}
@@ -635,7 +681,8 @@ function MealChipExpanded({
                 )}
               </div>
             );
-          })}
+            });
+          })()}
 
           {/* "Eigenen Wert eingeben" — delegates to Engine macro edit */}
           {onOpenEngine && (
