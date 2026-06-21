@@ -23,6 +23,7 @@ import { detectPattern } from "@/lib/engine/patterns";
 import { suggestAdjustment, type AdaptiveSettings } from "@/lib/engine/adjustment";
 import { applyAdjustmentToSettings, getInsulinSettings, persistEngineIcr, fetchInsulinType } from "@/lib/userSettings";
 import { useCarbUnit } from "@/hooks/useCarbUnit";
+import { formatWithBoth, formatICR, type CarbUnit } from "@/lib/carbUnits";
 import { useEngineWizardStep } from "@/lib/engineWizardStepContext";
 import EngineLogTab, { InsulinForm, ExerciseForm } from "@/components/EngineLogTab";
 import FingerstickLogCard from "@/components/FingerstickLogCard";
@@ -321,6 +322,7 @@ function renderReasoning(
   safetyNotes: string[],
   t: EngineTranslator,
   fmt: NumFormatter,
+  unit?: CarbUnit,
 ): string {
   const unitsShort = t("units_short");
   let main: string;
@@ -336,12 +338,22 @@ function renderReasoning(
       main = t("reason_blended", { count: reasoning.count });
       break;
     case "formula":
-      main = t("reason_formula", {
-        carbs: reasoning.carbs,
-        icr: reasoning.icr,
-        correction: fmt(reasoning.correction, 1),
-        units: unitsShort,
-      });
+      if (unit && unit !== "g") {
+        // Show both g and unit for transparency: "120g KH (10 BE) ÷ 1 BE/IE"
+        main = t("reason_formula_kebe" as Parameters<typeof t>[0], {
+          carbs: formatWithBoth(reasoning.carbs, unit),
+          icr: formatICR(reasoning.icr, unit),
+          correction: fmt(reasoning.correction, 1),
+          units: unitsShort,
+        });
+      } else {
+        main = t("reason_formula", {
+          carbs: reasoning.carbs,
+          icr: reasoning.icr,
+          correction: fmt(reasoning.correction, 1),
+          units: unitsShort,
+        });
+      }
       break;
   }
   return safetyNotes.length > 0 ? `${main} ${safetyNotes.join(" ")}` : main;
@@ -3449,7 +3461,7 @@ export default function EnginePage() {
                       </button>
                       {reasoningExpanded && (
                         <div style={{ padding: "0 16px 14px", fontSize: 13, lineHeight: 1.6, color: "var(--text-body)" }}>
-                          {renderReasoning(result.reasoning, result.safetyNotes, tEngineFn, formatNum)}
+                          {renderReasoning(result.reasoning, result.safetyNotes, tEngineFn, formatNum, carbUnit.unit)}
                         </div>
                       )}
                     </div>

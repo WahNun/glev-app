@@ -13,6 +13,7 @@ import type {
 import type { UserFoodHistoryHit } from "./userFoodHistory";
 import { normalizeFoodName } from "./userFoodHistory";
 import { AggregatorTrace } from "./aggregator-trace";
+import { memCacheGet, memCacheSet } from "./memory-cache";
 
 const ZERO: NutritionPer100 = { carbs_g: 0, protein_g: 0, fat_g: 0, fiber_g: 0 };
 
@@ -74,12 +75,20 @@ async function resolveItem(
     }
   }
 
-  // Phase 3: Promise.any race — both lookups fire simultaneously and the
-  // first non-null hit wins. The slower one's in-flight request continues
-  // until its own timeout (1.5s), but we don't wait for it. Wall time =
+  // Memory cache: skip the entire OFF/USDA race for previously resolved items.
+  // Populated on successful DB hits; LLM estimates are intentionally excluded.
+  const memHit = memCacheGet(item.name);
+  if (memHit) {
+    trace?.recordLookup({ source: "memory_cache", success: true, latency_ms: 0 });
+    return memHit;
+  }
+
+  // Promise.any race — both lookups fire simultaneously and the first
+  // non-null hit wins. The slower one's in-flight request continues until
+  // its own timeout (1.5s), but we don't wait for it. Wall time =
   // min(OFF, USDA) on a hit, max(OFF, USDA) on a full miss — capped at
-  // 1.5s per Phase 3 timeout tightening. Priority tiebreak: if both
-  // respond within the same tick, branded → prefer OFF; generic → prefer USDA.
+  // 1.5s per timeout. Priority tiebreak: if both respond within the same
+  // tick, branded → prefer OFF; generic → prefer USDA.
   const offTerm  = item.search_term_de || item.name;
   const usdaTerm = item.search_term_en || item.name;
 
@@ -110,7 +119,9 @@ async function resolveItem(
   // Order the race so the preferred source wins when both resolve simultaneously.
   const raceOrder = item.is_branded ? [offHit, usdaHit] : [usdaHit, offHit];
   try {
-    return await Promise.any(raceOrder);
+    const winner = await Promise.any(raceOrder);
+    memCacheSet(item.name, winner.per100, winner.source);
+    return winner;
   } catch {
     // Both DBs missed — fall through to GPT / category-default below.
   }
