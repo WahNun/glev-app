@@ -18,6 +18,7 @@ import { aggregateBadge, aggregateSourceLabel } from "@/lib/nutrition/badgeFor";
 import { supabase } from "@/lib/supabase";
 import ResetButton from "@/components/ResetButton";
 import { computeItemConfidence } from "@/lib/nutrition/confidence";
+import { useCarbUnit } from "@/hooks/useCarbUnit";
 
 const ACCENT = "#8b5cf6";
 const SHEET_BG = "var(--surface)";
@@ -307,6 +308,18 @@ function MealChipExpanded({
   const rawLocale = useLocale();
   const expandLocale: "de" | "en" = rawLocale === "en" ? "en" : "de";
   const [badgesTransitioning, setBadgesTransitioning] = useState(false);
+  const carbUnit = useCarbUnit();
+
+  // When carb unit is BE/KE, annotate "27g KH" in macroStr with "(≈2.3 BE)".
+  const macroStrAdapted = (() => {
+    if (!macroStr || carbUnit.unit === "g") return macroStr;
+    return macroStr.replace(/(\d+(?:\.\d+)?)g KH/, (_m, gStr) => {
+      const g = parseFloat(gStr);
+      if (!Number.isFinite(g) || g <= 0) return `${gStr}g KH`;
+      const unitVal = carbUnit.fromGrams(g);
+      return `${gStr}g KH (≈${unitVal} ${carbUnit.label})`;
+    });
+  })();
 
   // Phase 3 Realtime: subscribe to meal_prep_refinements for this mealPrepId.
   // When OPTIMISTIC_REFINEMENT=true the aggregator writes a 'completed' row
@@ -507,11 +520,11 @@ function MealChipExpanded({
         })()}
       </div>
 
-      {/* Macros + time line */}
-      {(macroStr || timeStr) && (
+      {/* Macros + time line — macroStrAdapted adds "(≈X BE)" when unit != g */}
+      {(macroStrAdapted || timeStr) && (
         <div style={{ color: "var(--text-body)", fontSize: 12, lineHeight: 1.4 }}>
-          {macroStr && <span>({macroStr})</span>}
-          {macroStr && timeStr && " "}
+          {macroStrAdapted && <span>({macroStrAdapted})</span>}
+          {macroStrAdapted && timeStr && " "}
           {timeStr && <span style={{ color: "var(--text-muted)" }}>um {timeStr}</span>}
         </div>
       )}
