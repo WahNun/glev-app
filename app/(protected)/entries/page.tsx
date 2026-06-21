@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import RefreshingBar from "@/components/RefreshingBar";
+import GlevLoadingPattern from "@/components/GlevLoadingPattern";
 import { useTranslations, useLocale } from "next-intl";
 import { fetchMeals, deleteMeal, updateMeal, type Meal } from "@/lib/meals";
 import { MEALS_INITIAL_DAYS, MEALS_PAGE_SIZE, FETCH_MEALS_DEFAULT_SINCE_DAYS, executeInitialMealFetch, executeLoadMoreFetch } from "./constants";
@@ -1079,23 +1080,7 @@ export default function EntriesPage() {
 
   const inp: React.CSSProperties = { background:"var(--input-bg)", border:`1px solid ${BORDER}`, borderRadius:10, padding:"9px 14px", color:"var(--text)", fontSize:14, outline:"none" };
 
-  if (loading) return (
-    <div style={{ display:"flex", alignItems:"center", justifyContent:"center", height:"60vh" }}>
-      <style>{`@keyframes glevPulse{0%,100%{opacity:.45}50%{opacity:.9}}`}</style>
-      <svg width={48} height={48} viewBox="0 0 32 32" fill="none" aria-label="Glev" style={{ animation:"glevPulse 1.4s ease-in-out infinite" }}>
-        <rect width="32" height="32" rx="9" fill="var(--surface)"/>
-        {([
-          [0,1],[1,2],[2,3],[3,4],[4,5],[5,0],[0,6],[1,6],[2,6],[3,6],
-        ] as [number,number][]).map(([a,b],i) => {
-          const ns=[{cx:16,cy:7},{cx:25,cy:12},{cx:25,cy:20},{cx:18,cy:26},{cx:9,cy:22},{cx:7,cy:14},{cx:16,cy:16}];
-          return <line key={i} x1={ns[a].cx} y1={ns[a].cy} x2={ns[b].cx} y2={ns[b].cy} stroke="#4F6EF7" strokeWidth="0.9" strokeOpacity="0.55"/>;
-        })}
-        {[{cx:16,cy:7},{cx:25,cy:12},{cx:25,cy:20},{cx:18,cy:26},{cx:9,cy:22},{cx:7,cy:14},{cx:16,cy:16}].map((n,i) => (
-          <circle key={i} cx={n.cx} cy={n.cy} r={i===6?3.5:2} fill={i===6?"#4F6EF7":"#4F6EF740"} stroke="#4F6EF7" strokeWidth={i===6?0:0.8}/>
-        ))}
-      </svg>
-    </div>
-  );
+  if (loading) return <GlevLoadingPattern variant="splash" />;
 
   return (
     <div style={{ maxWidth:960, margin:"0 auto" }}>

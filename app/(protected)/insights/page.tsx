@@ -20,7 +20,7 @@ import { fetchRejectedPairs, addRejectedPair, pairKey, type RejectedPairKey } fr
 import { detectPattern } from "@/lib/engine/patterns";
 import { suggestAdjustment, type AdaptiveSettings, type AdjustmentSuggestion } from "@/lib/engine/adjustment";
 import SortableCardGrid, { type SortableItem } from "@/components/SortableCardGrid";
-import SkeletonBlock from "@/components/SkeletonBlock";
+import GlevLoadingPattern from "@/components/GlevLoadingPattern";
 import { useCardOrder } from "@/lib/cardOrder";
 // Note: PagerIndicator was the previous shared dot/segment row. The
 // Insights page now uses its own InsightsCockpitIndicator (defined
@@ -594,19 +594,7 @@ export function InsightsClusterView({ clusterId }: { clusterId: InsightsCluster 
   // shape so the visible UI never jumps when data arrives. Replaces the
   // old centered spinner because a layout-shaped skeleton feels much
   // faster to the user than a blank screen with a tiny spinner.
-  if (loading) return (
-    <div style={{ padding:"16px 16px 0", display:"flex", flexDirection:"column", gap:16 }}>
-      <style>{`@keyframes glevPulse{0%,100%{opacity:.55}50%{opacity:.85}}`}</style>
-      <SkeletonBlock height={48} />
-      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
-        <SkeletonBlock height={96} />
-        <SkeletonBlock height={96} />
-      </div>
-      <SkeletonBlock height={260} />
-      <SkeletonBlock height={200} />
-      <SkeletonBlock height={200} />
-    </div>
-  );
+  if (loading) return <GlevLoadingPattern variant="splash" />;
 
   const total = meals.length;
   if (total === 0) return (

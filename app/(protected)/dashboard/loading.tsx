@@ -1,5 +1,5 @@
 import GlevLoadingPattern from "@/components/GlevLoadingPattern";
 
 export default function DashboardLoading() {
-  return <GlevLoadingPattern />;
+  return <GlevLoadingPattern variant="splash" />;
 }
