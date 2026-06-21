@@ -498,3 +498,5 @@ Neue Tabelle `public.glev_ops_users` (id, email, password_hash, role, name, must
 | 2026-06-21 | Card-Polish-Marathon | [REFACTOR] 21+ Cards Front+Backside auf einheitlichen Glev-Card-Standard. Inkonsistenzen in docs/card-polish-audit.md dokumentiert + behoben. Fixes: IOBCard 18→16px, FingerstickLogCard 14→16px + Padding, PlanSimulator 14→16px, Dashboard FlipCard×4 14→16px + Transition 0.5s→0.55s, Insights-FlipCard Standard 14→16px. InsightFlipTile (2-col) + Triplet-Zellen (96px) bleiben bei 14px (compact design). Kein Funktional-Regression. |
 
 | 2026-06-21 | Sprint Y: Engine-Inline-Chat + Persist | [BUGFIX] Engine Step-0 rendert für konsente User jetzt inline das Glev-AI-Chat-Panel (vorher leer seit PR #7 Legacy-Rip-Out). messages-Persist von sessionStorage auf localStorage gehoben + Key v1 → v2, Chat-Verlauf überlebt iOS App-Kill. |
+
+| 2026-06-21 | Bottom-Nav-Overlap Hotfix Insights-Detail | [BUGFIX] PR #37 globaler .glev-main Buffer 120px hat Insights-Cluster-Detail nicht erreicht — innerer Scroll-Container brauchte eigenes padding-bottom. Helper-Class .glev-cluster-scroll in globals.css für künftige Cluster-Surfaces. |

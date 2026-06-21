@@ -5010,6 +5010,7 @@ function InsightsSwipePager({
   // the *inside* of a card never scrolls, per user request.
   return (
     <div
+      className="glev-cluster-scroll"
       style={{
         minHeight: "calc(100dvh - 230px)",
         display: "flex",
