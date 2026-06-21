@@ -757,7 +757,7 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
           Drives header chip, Reset/Speaker buttons, and z-index. */}
       {/* eslint-disable-next-line react-hooks/exhaustive-deps */}
       <header className="glev-mobile-head" style={{
-        position: "fixed", top: 0, left: 0, right: 0, zIndex: (glevAi.sheetOpen || pathname.startsWith("/glev-ai")) ? 1102 : 99, overflow: "visible",
+        position: "fixed", top: 0, left: 0, right: 0, zIndex: glevAi.sheetOpen ? 1102 : 99, overflow: "visible",
         // iOS notch / Dynamic Island: push content below the status bar by
         // honouring safe-area-inset-top, with a sensible fallback for
         // browsers that don't expose it (e.g. desktop dev tools).
@@ -797,10 +797,10 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
         borderBottom: `1px solid ${BORDER}`,
         alignItems: "center", justifyContent: "space-between",
         // Scroll-fade: slide up + fade out on scroll-down, reverse on scroll-up.
-        transform: (headerHidden && !glevAi.sheetOpen && !pathname.startsWith("/glev-ai")) ? "translateY(-100%)" : "translateY(0)",
-        opacity: (headerHidden && !glevAi.sheetOpen && !pathname.startsWith("/glev-ai")) ? 0 : 1,
+        transform: (headerHidden && !glevAi.sheetOpen) ? "translateY(-100%)" : "translateY(0)",
+        opacity: (headerHidden && !glevAi.sheetOpen) ? 0 : 1,
         transition: "transform 220ms cubic-bezier(.4,0,.2,1), opacity 220ms ease",
-        pointerEvents: (headerHidden && !glevAi.sheetOpen && !pathname.startsWith("/glev-ai")) ? "none" : undefined,
+        pointerEvents: (headerHidden && !glevAi.sheetOpen) ? "none" : undefined,
       }}>
         <div
           onClick={() => setAboutOpen(true)}
@@ -815,13 +815,13 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
               das Logo-Quadrat soll in Light Mode NICHT mit-aufhellen,
               sonst löst es sich vom Header optisch auf. */}
           <GlevLockup size={26} color="var(--text)" symbolBg="var(--surface-alt)" />
-          {(glevAi.sheetOpen || pathname.startsWith("/glev-ai")) && (
+          {glevAi.sheetOpen && (
             <span style={{ fontSize: 13, fontWeight: 700, color: ACCENT, marginLeft: 2, letterSpacing: "-0.01em" }}>
               AI
             </span>
           )}
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: (glevAi.sheetOpen || pathname.startsWith("/glev-ai")) ? 4 : 8, flexShrink: 0 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: glevAi.sheetOpen ? 4 : 8, flexShrink: 0 }}>
           {/* Engine-Pille im Header wurde entfernt (User-Wunsch
               2026-05-04): "ich will nurnoch das plus symbol nutzen
               im header allerdings müssen dort alle tabs die aktuell
@@ -988,7 +988,7 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
               </div>
             );
           })()}
-          {(glevAi.sheetOpen || pathname.startsWith("/glev-ai")) ? (
+          {glevAi.sheetOpen ? (
             <>
               <AIStateChip state={glevAi.aiState} />
               {/* ↻ Reset-Chat — clears in-memory history only, no consent revoke */}
