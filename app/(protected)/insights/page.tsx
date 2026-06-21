@@ -4370,10 +4370,6 @@ export function InsightsClusterView({ clusterId }: { clusterId: InsightsCluster 
         alignItems: "center",
         gap: 12,
         padding: "12px 16px",
-        position: "sticky",
-        top: 0,
-        background: "var(--bg)",
-        zIndex: 10,
         borderBottom: "1px solid var(--border-soft)",
       }}>
         <button
