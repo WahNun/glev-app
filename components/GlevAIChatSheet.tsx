@@ -440,7 +440,7 @@ function MealChipExpanded({
         </div>
         {/* Aggregate badge from real sources; fades during Realtime refinement. */}
         {(() => {
-          // Vision estimate: show a dedicated 📷 Foto badge.
+          // Vision estimate: dedicated 📷 Foto badge.
           if (nutritionSource === "vision_estimate") {
             return (
               <span
@@ -454,31 +454,54 @@ function MealChipExpanded({
                   background: "rgba(59,130,246,0.12)", color: "#60a5fa",
                   whiteSpace: "nowrap", flexShrink: 0,
                 }}>
-                  📷 {aggregateSourceLabel(nutritionSource)}
+                  📷 {aggregateSourceLabel(nutritionSource, expandLocale)}
                 </span>
               </span>
             );
           }
-          const badge = aggregateBadge(
-            itemsForExpand.map((it) => ({ source: (it.source ?? "estimated") as NutritionSource })),
-          );
-          // Prefer the top-level nutritionSource from the aggregator when it
-          // signals "user_history" — aggregateBadge collapses all DB sources
-          // to "verified" so we'd lose the distinction without this check.
-          const src: NutritionSource = (() => {
+          // Trust the aggregator's top-level nutritionSource first; fall back to
+          // per-item derivation for the optimistic path where top-level is null.
+          const effectiveSrc: "user_history" | "usda" | "open_food_facts" | "mixed" | "estimated" = (() => {
             if (nutritionSource === "user_history" || nutritionSource === "user_confirmed") return "user_history";
-            if (itemsForExpand.length > 0) {
-              if (badge === "verified") return nutritionSource === "usda" ? "usda" : "open_food_facts";
-              return "estimated";
-            }
-            // No per-item data — use top-level nutritionSource directly.
-            if (nutritionSource === "open_food_facts" || nutritionSource === "database") return "open_food_facts";
             if (nutritionSource === "usda") return "usda";
+            if (nutritionSource === "open_food_facts" || nutritionSource === "database") return "open_food_facts";
+            if (nutritionSource === "mixed") return "mixed";
+            // Fallback: derive from per-item sources (optimistic path: nutritionSource is null
+            // because the aggregator result is only stored in meal_prep_refinements, not the
+            // initial SSE frame — so we reconstruct the aggregate from what Realtime gave us).
+            if (itemsForExpand.length > 0) {
+              if (itemsForExpand.some(it => it.source === "user_history" || it.source === "user_confirmed")) return "user_history";
+              const badge = aggregateBadge(
+                itemsForExpand.map((it) => ({ source: (it.source ?? "estimated") as NutritionSource })),
+              );
+              if (badge === "mixed") return "mixed";
+              if (badge === "verified") {
+                if (itemsForExpand.every(it => it.source === "usda")) return "usda";
+                return "open_food_facts";
+              }
+            }
             return "estimated";
           })();
+          // "mixed" needs its own inline render — NutritionSource doesn't include it
+          // so SourceBadge can't handle it.
+          if (effectiveSrc === "mixed") {
+            return (
+              <span style={{ opacity: badgesTransitioning ? 0 : 1, transition: "opacity 0.25s ease" }}>
+                <span style={{
+                  display: "inline-flex", alignItems: "center", gap: 3,
+                  fontSize: 10, fontWeight: 600, letterSpacing: "0.04em",
+                  padding: "1px 5px", borderRadius: 6,
+                  background: "rgba(139,92,246,0.12)", color: "#a78bfa",
+                  whiteSpace: "nowrap", flexShrink: 0,
+                }}>
+                  ✨ {aggregateSourceLabel("mixed", expandLocale)}
+                </span>
+              </span>
+            );
+          }
           return (
             <span style={{ opacity: badgesTransitioning ? 0 : 1, transition: "opacity 0.25s ease" }}>
-              <SourceBadge source={src} />
+              <SourceBadge source={effectiveSrc} locale={expandLocale} />
             </span>
           );
         })()}
