@@ -67,7 +67,7 @@ function LegalPageInner() {
         role="tabpanel"
         aria-labelledby="tab-dse"
       >
-        <div className="meta-strip">Stand: Juni 2026 &nbsp;·&nbsp; DSGVO-konform</div>
+        <div className="meta-strip">Stand: 21. Juni 2026 &nbsp;·&nbsp; DSGVO-konform</div>
         <div className="container">
           <div className="intro-box">
             Der Schutz deiner persönlichen Daten – insbesondere deiner Gesundheitsdaten – ist uns ein zentrales Anliegen. Diese Datenschutzerklärung informiert dich darüber, welche Daten wir erheben, wie wir sie verarbeiten und welche Rechte du hast.
@@ -142,27 +142,24 @@ function LegalPageInner() {
                     <tr><td><strong>Supabase, Inc.</strong></td><td>Database, authentication</td><td>EU (Ireland)</td><td><span className="badge">EU region</span></td></tr>
                     <tr><td><strong>Vercel, Inc.</strong></td><td>Hosting, deployment (Next.js)</td><td>Primarily EU, possibly USA</td><td><span className="badge warning">USA possible</span></td></tr>
                     <tr><td><strong>Stripe, Inc.</strong></td><td>Payment processing</td><td>USA / EU</td><td><span className="badge warning">USA possible</span></td></tr>
-                    <tr><td><strong>Mistral AI SAS</strong></td><td>AI language model (voice assistant, meal parsing, chat, text-to-speech)</td><td>EU (France)</td><td><span className="badge">EU region</span></td></tr>
-                    <tr><td><strong>OpenAI, Inc.</strong></td><td>Speech recognition (Whisper), meal parsing (gpt-4o-mini), nutrition estimation</td><td>USA</td><td><span className="badge warning">Third country (SCC)</span></td></tr>
+                    <tr><td><strong>Mistral AI SAS</strong></td><td>AI language model (chat, voice STT/TTS, photo analysis, meal parsing, intent classification, macros estimation)</td><td>EU (France)</td><td><span className="badge">EU region</span></td></tr>
                     <tr><td><strong>Meta Platforms Ireland Ltd.</strong></td><td>Transmission of lead data from Facebook/Instagram ad forms</td><td>EU (Ireland)</td><td><span className="badge">EU region</span></td></tr>
                   </tbody>
                 </table>
                 <p>We have deliberately chosen the <strong>EU region Ireland</strong> for Supabase so that all health and account data is stored and processed within the European Union. There is <strong>no mirroring to third countries</strong> — database replication stays entirely within the EU.</p>
                 <p><strong>Mistral AI SAS</strong> is a French company headquartered in Paris (within the scope of EU GDPR). Processing by Mistral takes place exclusively within the EU. Mistral processes meal descriptions in chat, general Glev AI conversation, input intent recognition, and meal summaries solely to deliver the requested function. No permanent storage or use for training purposes without separate consent takes place (API mode, opt-out active). The legal basis is a data processing agreement (DPA) under Art. 28 GDPR.</p>
-                <p><strong>OpenAI, Inc.</strong> is headquartered in San Francisco, USA. The transfer to the USA is based on <strong>EU Standard Contractual Clauses (SCC)</strong> pursuant to Art. 46(2)(c) GDPR. OpenAI processes voice recordings for speech-to-text (Whisper) as well as structured meal recognition and nutrition estimation (gpt-4o-mini). The transmitted data is not used for training purposes (API default since March 2023, opt-out active). The legal basis is a data processing agreement (DPA) under Art. 28 GDPR.</p>
                 <div className="highlight-box">
                   <strong>Note on third-country transfers (USA)</strong>
-                  Vercel, Stripe and OpenAI may transfer data to the USA. Vercel and Stripe are certified under the <strong>EU-U.S. Data Privacy Framework</strong>; all three use <strong>Standard Contractual Clauses (SCC)</strong> pursuant to Art. 46(2)(c) GDPR. Mistral AI is an EU provider — no third-country transfer.
+                  Vercel and Stripe may transfer data to the USA. Both are certified under the <strong>EU-U.S. Data Privacy Framework</strong> and additionally use <strong>Standard Contractual Clauses (SCC)</strong> pursuant to Art. 46(2)(c) GDPR. Mistral AI is an EU provider — no third-country transfer.
                 </div>
                 <p>No data is passed on to third parties outside the listed processors. No data sharing for advertising purposes.</p>
-                <p>Glev does <strong>not</strong> send any <strong>personal identifiers</strong> (email, name, date of birth) to OpenAI or Mistral. Both AI providers see only meal and chat content with no user context. Voice recordings are <strong>deleted immediately</strong> after transcription by OpenAI Whisper and are not stored permanently.</p>
+                <p>Glev does <strong>not</strong> send any <strong>personal identifiers</strong> (email, name, date of birth) to Mistral. Mistral sees only meal and chat content with no user context. Voice recordings are <strong>deleted immediately</strong> after transcription by Mistral Voxtral and are not stored permanently.</p>
                 <p>In Settings → <strong>Glev Engine → Glev AI</strong> you can individually enable or disable each AI feature. If all AI features are disabled, Glev remains fully usable as a pure documentation app without AI.</p>
                 <div className="highlight-box" style={{ marginTop: "1rem" }}>
                   <strong>AI feedback collection (optional)</strong><br />
                   If you report a bug or feature request via the Glev AI chat and have enabled <em>Save app feedback</em> in Settings → Glev AI, the following data is stored in your Glev account: a description of what you noticed, the location in the app, a description of what is broken (if applicable), your feature wish (if applicable), an AI-generated summary, and a category/severity classification. This data is processed by Mistral AI solely to generate the structured summary — Mistral does not store it permanently (API mode, no training use). The feedback is stored encrypted in the Supabase EU database and is only accessible to the Glev team. <strong>Legal basis: Art. 6(1)(a) GDPR (consent).</strong> You can revoke your consent at any time in Settings → Glev AI → <em>Save app feedback</em> (toggle off). Existing feedback entries are deleted on account deletion.
                 </div>
                 <ul>
-                  <li><a href="https://openai.com/policies/privacy-policy" target="_blank" rel="noopener noreferrer">OpenAI Privacy Policy</a></li>
                   <li><a href="https://mistral.ai/terms#privacy-policy" target="_blank" rel="noopener noreferrer">Mistral Privacy Policy</a></li>
                 </ul>
               </>
@@ -176,27 +173,24 @@ function LegalPageInner() {
                     <tr><td><strong>Supabase, Inc.</strong></td><td>Datenbank, Authentifizierung</td><td>EU (Irland)</td><td><span className="badge">EU-Region</span></td></tr>
                     <tr><td><strong>Vercel, Inc.</strong></td><td>Hosting, Deployment (Next.js)</td><td>Primär EU, ggf. USA</td><td><span className="badge warning">USA möglich</span></td></tr>
                     <tr><td><strong>Stripe, Inc.</strong></td><td>Zahlungsabwicklung</td><td>USA / EU</td><td><span className="badge warning">USA möglich</span></td></tr>
-                    <tr><td><strong>Mistral AI SAS</strong></td><td>KI-Sprachmodell (Sprachassistent, Mahlzeiten-Parsing, Chat, Text-to-Speech)</td><td>EU (Frankreich)</td><td><span className="badge">EU-Region</span></td></tr>
-                    <tr><td><strong>OpenAI, Inc.</strong></td><td>Sprach-Erkennung (Whisper), Mahlzeit-Parsing (gpt-4o-mini), Nährwert-Schätzung</td><td>USA</td><td><span className="badge warning">Drittland (SCC)</span></td></tr>
+                    <tr><td><strong>Mistral AI SAS</strong></td><td>KI-Sprachmodell (Chat, Sprach-Erkennung & Text-to-Speech, Foto-Analyse, Mahlzeiten-Parsing, Intent-Klassifikation, Nährwert-Schätzung)</td><td>EU (Frankreich)</td><td><span className="badge">EU-Region</span></td></tr>
                     <tr><td><strong>Meta Platforms Ireland Ltd.</strong></td><td>Übermittlung von Lead-Daten aus Facebook/Instagram-Werbeformularen</td><td>EU (Irland)</td><td><span className="badge">EU-Region</span></td></tr>
                   </tbody>
                 </table>
                 <p>Wir haben für Supabase bewusst die <strong>EU-Region Irland</strong> gewählt, damit alle Gesundheits- und Kontodaten innerhalb der Europäischen Union gespeichert und verarbeitet werden. Es findet <strong>keine Spiegelung in Drittländer</strong> statt – die Datenbank-Replikation bleibt vollständig innerhalb der EU.</p>
                 <p><strong>Mistral AI SAS</strong> ist ein französisches Unternehmen mit Sitz in Paris (EU-DSGVO-Geltungsbereich). Die Verarbeitung durch Mistral erfolgt ausschließlich innerhalb der EU. Mistral verarbeitet Mahlzeit-Beschreibungen im Chat, allgemeine Glev-AI-Konversation, Erkennung der Eingabe-Intention und Mahlzeit-Übersichten ausschließlich zur Erbringung der angefragten Funktion. Eine dauerhafte Speicherung oder Verwendung zu Trainingszwecken ohne gesonderte Einwilligung findet nicht statt (API-Modus, opt-out aktiv). Grundlage ist ein Auftragsverarbeitungsvertrag (AVV) nach Art. 28 DSGVO.</p>
-                <p><strong>OpenAI, Inc.</strong> hat seinen Sitz in San Francisco, USA. Die Übermittlung in die USA erfolgt auf Basis von <strong>EU-Standardvertragsklauseln (SCC)</strong> gemäß Art. 46 Abs. 2 lit. c DSGVO. OpenAI verarbeitet Sprach-Aufnahmen für Speech-to-Text (Whisper) sowie strukturierte Mahlzeit-Erkennung und Nährwert-Schätzung (gpt-4o-mini). Eine Verwendung der übermittelten Daten zu Trainingszwecken findet nicht statt (API-Default seit März 2023, opt-out aktiv). Grundlage ist ein Auftragsverarbeitungsvertrag (AVV) nach Art. 28 DSGVO.</p>
                 <div className="highlight-box">
                   <strong>Hinweis zu Drittlandtransfers (USA)</strong>
-                  Vercel, Stripe und OpenAI können Daten in die USA übermitteln. Vercel und Stripe sind im Rahmen des <strong>EU-U.S. Data Privacy Framework</strong> zertifiziert; alle drei setzen <strong>Standardvertragsklauseln (SCC)</strong> gemäß Art. 46 Abs. 2 lit. c DSGVO ein. Mistral AI ist ein EU-Anbieter – kein Drittlandtransfer.
+                  Vercel und Stripe können Daten in die USA übermitteln. Beide sind im Rahmen des <strong>EU-U.S. Data Privacy Framework</strong> zertifiziert und setzen zusätzlich <strong>Standardvertragsklauseln (SCC)</strong> gemäß Art. 46 Abs. 2 lit. c DSGVO ein. Mistral AI ist ein EU-Anbieter – kein Drittlandtransfer.
                 </div>
                 <p>Eine Weitergabe an Dritte außerhalb der genannten Auftragsverarbeiter findet <strong>nicht</strong> statt. Keine Datenweitergabe zu Werbezwecken.</p>
-                <p>Glev sendet <strong>keine personenbezogenen Identifikatoren</strong> (E-Mail, Name, Geburtsdatum) an OpenAI oder Mistral. Beide KI-Dienstleister sehen ausschließlich Mahlzeit- und Chat-Inhalte ohne User-Kontext. Sprach-Aufnahmen werden nach Erhalt der Transkription durch OpenAI Whisper <strong>unverzüglich gelöscht</strong> und nicht dauerhaft gespeichert.</p>
+                <p>Glev sendet <strong>keine personenbezogenen Identifikatoren</strong> (E-Mail, Name, Geburtsdatum) an Mistral. Mistral sieht ausschließlich Mahlzeit- und Chat-Inhalte ohne User-Kontext. Sprach-Aufnahmen werden nach Erhalt der Transkription durch Mistral Voxtral <strong>unverzüglich gelöscht</strong> und nicht dauerhaft gespeichert.</p>
                 <p>In den Einstellungen → <strong>Glev Engine → Glev AI</strong> kannst Du jede einzelne KI-Funktion granular aktivieren oder deaktivieren. Bei vollständiger Deaktivierung ist Glev weiterhin als reine Dokumentations-App ohne KI nutzbar.</p>
                 <div className="highlight-box" style={{ marginTop: "1rem" }}>
                   <strong>KI-gestützte Feedback-Erfassung (optional)</strong><br />
                   Wenn du über den Glev-AI-Chat einen Bug oder Feature-Wunsch meldest und die Option <em>„App-Feedback speichern"</em> in Einstellungen → Glev AI aktiviert hast, werden folgende Daten in deinem Glev-Konto gespeichert: eine Beschreibung des Beobachteten, der Ort in der App, eine Beschreibung des Fehlers (falls zutreffend), dein Feature-Wunsch (falls zutreffend), eine KI-generierte Zusammenfassung sowie eine Kategorie- und Schweregrad-Klassifikation. Diese Daten werden von Mistral AI ausschließlich zur Erstellung der strukturierten Zusammenfassung verarbeitet — Mistral speichert sie nicht dauerhaft (API-Modus, kein Training). Das Feedback wird verschlüsselt in der Supabase-EU-Datenbank gespeichert und ist ausschließlich für das Glev-Team zugänglich. <strong>Rechtsgrundlage: Art. 6 Abs. 1 lit. a DSGVO (Einwilligung).</strong> Du kannst deine Einwilligung jederzeit in Einstellungen → Glev AI → <em>„App-Feedback speichern"</em> (Toggle deaktivieren) widerrufen. Bestehende Feedback-Einträge werden bei Kontolöschung gelöscht.
                 </div>
                 <ul>
-                  <li><a href="https://openai.com/policies/privacy-policy" target="_blank" rel="noopener noreferrer">OpenAI Privacy Policy</a></li>
                   <li><a href="https://mistral.ai/terms#privacy-policy" target="_blank" rel="noopener noreferrer">Mistral Privacy Policy</a></li>
                 </ul>
               </>
@@ -265,7 +259,7 @@ function LegalPageInner() {
 
           <section id="dse-11">
             <h2><span className="num">11</span> Änderungen</h2>
-            <p>Wir behalten uns vor, diese Datenschutzerklärung bei Bedarf anzupassen. Bei wesentlichen Änderungen werden registrierte Nutzer per E-Mail informiert. <strong>Stand: Juni 2026.</strong></p>
+            <p>Wir behalten uns vor, diese Datenschutzerklärung bei Bedarf anzupassen. Bei wesentlichen Änderungen werden registrierte Nutzer per E-Mail informiert. <strong>Stand: 21. Juni 2026.</strong></p>
           </section>
 
           <section id="dse-12">
