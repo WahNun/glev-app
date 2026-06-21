@@ -1747,6 +1747,11 @@ async function toolLogMealEntry(
   > {
     if (!aggregatorEnabled) return undefined;
     const t0 = Date.now();
+    // Hoist admin client so both success and failure branches can write
+    // meal_prep_refinements. RLS only grants SELECT to authenticated users;
+    // INSERT/UPDATE requires service-role bypass (see migration comment).
+    let adminSbForTrace;
+    try { adminSbForTrace = getSupabaseAdmin(); } catch { /* no-op */ }
     try {
       // When rawItems is empty (Mistral didn't provide items[] or all were
       // filtered), synthesize a single item from inputText at 100g so the
@@ -1798,8 +1803,6 @@ async function toolLogMealEntry(
 
       const mealTrace = new AggregatorTrace();
       const agg = await aggregateNutrition(parsedItems, { userHistory, trace: mealTrace });
-      let adminSbForTrace;
-      try { adminSbForTrace = getSupabaseAdmin(); } catch { /* no-op */ }
       if (adminSbForTrace) {
         void mealTrace.persist({
           user_id:            userId,
@@ -1835,20 +1838,20 @@ async function toolLogMealEntry(
       const elapsed = Date.now() - t0;
       console.log(`[meal_prep] id=${targetId} aggregator: ${agg.items.length} items, ${dbHits} db-hits, ${estCnt} estimates, ${elapsed}ms fallback=${usingFallback}`);
 
-      if (optimisticEnabled) {
+      if (optimisticEnabled && adminSbForTrace) {
         // Fire-and-forget: write refinement row; Realtime notifies the client.
-        // Wrap in Promise.resolve() because Supabase returns PromiseLike (no .catch).
+        // Must use service-role client — RLS allows only SELECT for user role.
         void Promise.resolve(
-          sb.from("meal_prep_refinements")
+          adminSbForTrace.from("meal_prep_refinements")
             .upsert({ id: targetId, user_id: userId, items_refined: resolved, status: "completed", completed_at: new Date().toISOString() }, { onConflict: "id" })
         ).catch((e: unknown) => console.error("[meal_prep] refinement write failed:", e));
       }
       return { items: resolved, nutritionSource: agg.nutritionSource };
     } catch (aggErr) {
       console.error(`[meal_prep] id=${targetId} aggregator error (fallback to Mistral macros):`, aggErr);
-      if (optimisticEnabled) {
+      if (optimisticEnabled && adminSbForTrace) {
         void Promise.resolve(
-          sb.from("meal_prep_refinements")
+          adminSbForTrace.from("meal_prep_refinements")
             .upsert({ id: targetId, user_id: userId, status: "failed", completed_at: new Date().toISOString() }, { onConflict: "id" })
         ).catch(() => {});
       }
@@ -1885,10 +1888,15 @@ async function toolLogMealEntry(
     // the background task writes 'completed'. The aggregator itself is returned as
     // a `backgroundTask` closure — the route handler schedules it with Next.js
     // `after()` so Vercel keeps the process alive after the stream closes.
-    await Promise.resolve(
-      sb.from("meal_prep_refinements")
-        .insert({ id: mealPrepId, user_id: userId, status: "pending" })
-    ).catch(() => {});
+    // Pre-insert uses service-role — RLS allows only SELECT for authenticated users.
+    let adminSbOpt;
+    try { adminSbOpt = getSupabaseAdmin(); } catch { /* no-op */ }
+    if (adminSbOpt) {
+      await Promise.resolve(
+        adminSbOpt.from("meal_prep_refinements")
+          .insert({ id: mealPrepId, user_id: userId, status: "pending" })
+      ).catch(() => {});
+    }
     // Capture as a closure — do NOT call here. The chat route calls after(backgroundTask).
     backgroundTask = async () => { await runAggregator(mealPrepId); };
     // Use enriched Mistral estimates as placeholders; include alcohol_g so dual-emission

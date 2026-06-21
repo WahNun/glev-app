@@ -351,11 +351,11 @@ function MealChipExpanded({
       )
       .subscribe();
 
-    // Polling fallback: query every 500ms for up to 5s if Realtime doesn't fire.
+    // Polling fallback: query every 500ms for up to 10s if Realtime doesn't fire.
     let pollCount = 0;
     const poll = setInterval(async () => {
       pollCount++;
-      if (pollCount > 10) { clearInterval(poll); return; }
+      if (pollCount > 20) { clearInterval(poll); return; }
       if (!supabase) { clearInterval(poll); return; }
       const { data } = await supabase
         .from("meal_prep_refinements")
