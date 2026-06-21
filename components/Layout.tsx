@@ -13,7 +13,6 @@ import PaywallSheet from "@/components/PaywallSheet";
 import GlevAIButton from "@/components/GlevAIButton";
 import GlevAIConsentModal from "@/components/GlevAIConsentModal";
 import GlevAIChatSheet from "@/components/GlevAIChatSheet";
-import ResetButton from "@/components/ResetButton";
 import { useGlevAI, type AIState } from "@/lib/useGlevAI";
 import { GlevAIProvider } from "@/lib/glevAIContext";
 import { resolveFabAction } from "@/lib/fabAction";
@@ -992,10 +991,27 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
           {(glevAi.sheetOpen || pathname.startsWith("/glev-ai")) ? (
             <>
               <AIStateChip state={glevAi.aiState} />
-              {/* Reset 🛡 — consent-revoke; only shown after user has consented */}
-              {glevAi.consentGranted && (
-                <ResetButton style={{ padding: 4 }} />
-              )}
+              {/* ↻ Reset-Chat — clears in-memory history only, no consent revoke */}
+              <button
+                type="button"
+                onClick={() => {
+                  const msg = locale === "en"
+                    ? "Clear chat history?"
+                    : "Chat-Verlauf löschen?";
+                  if (window.confirm(msg)) glevAi.clearMessages();
+                }}
+                aria-label={locale === "en" ? "Clear chat history" : "Chat-Verlauf löschen"}
+                style={{
+                  background: "none", border: "none", cursor: "pointer",
+                  padding: 4, display: "flex", alignItems: "center",
+                  color: "var(--text-muted)",
+                }}
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
+                  <path d="M3 3v5h5"/>
+                </svg>
+              </button>
               {/* Speaker 🔊 */}
               <button
                 type="button"
