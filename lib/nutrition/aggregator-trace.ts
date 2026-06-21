@@ -1,7 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 export type LookupAttempt = {
-  source: "user_history" | "open_food_facts" | "usda" | "llm";
+  source: "user_history" | "memory_cache" | "open_food_facts" | "usda" | "llm";
   success: boolean;
   hit_count?: number;
   latency_ms: number;
