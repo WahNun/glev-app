@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getMistralChatClient } from "@/lib/ai/openaiClient";
 import { parseFoodText } from "@/lib/nutrition/parseFood";
 import { aggregateNutrition } from "@/lib/nutrition/aggregate";
+import { AggregatorTrace } from "@/lib/nutrition/aggregator-trace";
 import {
   lookupUserFoodHistory,
   recordItemsToHistory,
@@ -220,7 +221,21 @@ food databases, not guesses):
       );
       } catch { /* best effort */ }
     }
-    const aggregated = await aggregateNutrition(parsedDesc.items, { userHistory });
+    const cmTrace = userId ? new AggregatorTrace() : undefined;
+    const aggregated = await aggregateNutrition(parsedDesc.items, { userHistory, trace: cmTrace });
+    if (cmTrace && userId) {
+      let adminSb;
+      try { adminSb = getSupabaseAdmin(); } catch { /* no-op */ }
+      if (adminSb) {
+        void cmTrace.persist({
+          user_id:            userId,
+          input_text:         chatDescription,
+          supabaseClient:     adminSb,
+          aggregator_version: "1.0",
+          env:                process.env.VERCEL_ENV ?? process.env.NODE_ENV ?? "unknown",
+        });
+      }
+    }
 
     // Best-effort: record the corrected items as user_confirmed so the
     // refinement is honoured on the next parse. Skips items the

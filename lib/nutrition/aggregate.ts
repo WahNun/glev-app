@@ -12,6 +12,7 @@ import type {
 } from "./types";
 import type { UserFoodHistoryHit } from "./userFoodHistory";
 import { normalizeFoodName } from "./userFoodHistory";
+import { AggregatorTrace } from "./aggregator-trace";
 
 const ZERO: NutritionPer100 = { carbs_g: 0, protein_g: 0, fat_g: 0, fiber_g: 0 };
 
@@ -44,6 +45,7 @@ interface ResolvedItem {
 async function resolveItem(
   item: ParsedFoodItem,
   history?: Map<string, UserFoodHistoryHit>,
+  trace?: AggregatorTrace,
 ): Promise<ResolvedItem> {
   // Phase B: per-user food history wins over every other source.
   // The history table is per-user and RLS-protected, so a hit here
@@ -56,6 +58,7 @@ async function resolveItem(
     if (hit) {
       // user_confirmed = explicit chat-macros correction, always trusted.
       if (hit.source === "user_confirmed") {
+        trace?.recordLookup({ source: "user_history", success: true, latency_ms: 0, hit_count: hit.occurrences });
         return { per100: hit.per100, source: "user_confirmed" };
       }
       // Passive history: require ≥3 occurrences before trusting the cached
@@ -63,9 +66,11 @@ async function resolveItem(
       // a one-off unusual portion — fall through to OFF/USDA/GPT until
       // at least 3 entries have been blended into the average.
       if (hit.occurrences >= 3) {
+        trace?.recordLookup({ source: "user_history", success: true, latency_ms: 0, hit_count: hit.occurrences });
         return { per100: hit.per100, source: "user_history" };
       }
       // < 3 occurrences: fall through to OFF / USDA / GPT below.
+      trace?.recordLookup({ source: "user_history", success: false, latency_ms: 0, hit_count: hit.occurrences });
     }
   }
 
@@ -80,12 +85,25 @@ async function resolveItem(
 
   // Wrap each lookup as a Promise that rejects when the result is null
   // (Promise.any needs a rejection to fall through to the next).
-  const offHit  = lookupOpenFoodFacts(offTerm).then((r) => {
-    if (!r) throw new Error("off-miss");
+  const offT0 = Date.now();
+  const offHit = lookupOpenFoodFacts(offTerm).then((r) => {
+    const latency_ms = Date.now() - offT0;
+    if (!r) {
+      trace?.recordLookup({ source: "open_food_facts", success: false, latency_ms });
+      throw new Error("off-miss");
+    }
+    trace?.recordLookup({ source: "open_food_facts", success: true, latency_ms, response_excerpt: JSON.stringify(r).slice(0, 200) });
     return { per100: r, source: "open_food_facts" as const };
   });
+
+  const usdaT0 = Date.now();
   const usdaHit = lookupUSDA(usdaTerm).then((r) => {
-    if (!r) throw new Error("usda-miss");
+    const latency_ms = Date.now() - usdaT0;
+    if (!r) {
+      trace?.recordLookup({ source: "usda", success: false, latency_ms });
+      throw new Error("usda-miss");
+    }
+    trace?.recordLookup({ source: "usda", success: true, latency_ms, response_excerpt: JSON.stringify(r).slice(0, 200) });
     return { per100: r, source: "usda" as const };
   });
 
@@ -100,10 +118,13 @@ async function resolveItem(
   // Both DBs missed → GPT estimate. estimateItemNutrition THROWS on
   // any failure (config, API, all-zero response, IMPOSSIBLE) per the
   // T1D safety contract — see lib/nutrition/estimate.ts.
+  const llmT0 = Date.now();
   try {
     const est = await estimateItemNutrition(item);
+    trace?.recordLookup({ source: "llm", success: true, latency_ms: Date.now() - llmT0 });
     return { per100: est, source: "estimated" };
   } catch {
+    trace?.recordLookup({ source: "llm", success: false, latency_ms: Date.now() - llmT0 });
     // Option C (2026-05-12 — Lucas): before tagging this item as
     // 'unknown' (which escalates the WHOLE meal to nutritionSource
     // 'unknown' and blocks auto-fill — see topLevelSource), try a
@@ -170,12 +191,16 @@ export interface AggregateOptions {
    * that don't pass this option keep working unchanged.
    */
   userHistory?: Map<string, UserFoodHistoryHit>;
+  /** When provided, each lookup stage records timing + success into this trace. Persist is the caller's responsibility. */
+  trace?: AggregatorTrace;
 }
 
 export async function aggregateNutrition(
   items: ParsedFoodItem[],
   opts: AggregateOptions = {},
 ): Promise<AggregatedNutrition> {
+  const { trace } = opts;
+
   if (items.length === 0) {
     return {
       items: [],
@@ -184,12 +209,14 @@ export async function aggregateNutrition(
     };
   }
 
+  trace?.setParsedFood(items);
+
   // Parallel resolve — each item makes at most 2 HTTP calls + 1 GPT call,
   // each with its own 3-4s timeout. With N items the total wall time is
   // bounded by the slowest item, not N × budget. History hits short-
   // circuit before any HTTP call and resolve synchronously.
   const resolved = await Promise.all(
-    items.map((it) => resolveItem(it, opts.userHistory)),
+    items.map((it) => resolveItem(it, opts.userHistory, trace)),
   );
 
   const finalItems: NutritionItem[] = items.map((it, i) => {
@@ -249,6 +276,9 @@ export async function aggregateNutrition(
     return acc;
   }, {});
   console.log(`[nutritionMetrics] items=${finalItems.length} sources=${JSON.stringify(srcCounts)} topLevel=${nutritionSource}`);
+
+  trace?.setFinalSource(nutritionSource);
+  trace?.setFinalMacros({ ...totals, calories });
 
   return {
     items: finalItems,

@@ -45,6 +45,7 @@ import {
   type MealLike,
 } from "@/lib/iob";
 import { aggregateNutrition } from "@/lib/nutrition/aggregate";
+import { AggregatorTrace } from "@/lib/nutrition/aggregator-trace";
 import { getCachedUserHistory } from "@/lib/nutrition/userHistoryCache";
 import { parseFoodText } from "@/lib/nutrition/parseFood";
 import type { ParsedFoodItem, AggregateSource } from "@/lib/nutrition/types";
@@ -1686,7 +1687,19 @@ async function toolLogMealEntry(
         sb, userId, parsedItems.map((p) => p.name),
       ).catch(() => new Map());
 
-      const agg = await aggregateNutrition(parsedItems, { userHistory });
+      const mealTrace = new AggregatorTrace();
+      const agg = await aggregateNutrition(parsedItems, { userHistory, trace: mealTrace });
+      let adminSbForTrace;
+      try { adminSbForTrace = getSupabaseAdmin(); } catch { /* no-op */ }
+      if (adminSbForTrace) {
+        void mealTrace.persist({
+          user_id:            userId,
+          input_text:         inputText,
+          supabaseClient:     adminSbForTrace,
+          aggregator_version: "1.0",
+          env:                process.env.VERCEL_ENV ?? process.env.NODE_ENV ?? "unknown",
+        });
+      }
 
       let resolved: import("@/lib/meals").ParsedFood[] = agg.items.map((it) => ({
         name: it.name, grams: it.grams, carbs: it.carbs,
