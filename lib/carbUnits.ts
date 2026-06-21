@@ -87,3 +87,12 @@ export function formatCarbs(grams: number, unit: CarbUnit): string {
 export function formatICR(icrGperIE: number, unit: CarbUnit): string {
   return `${icrToUnit(icrGperIE, unit)} ${CARB_UNITS[unit].label}/IE`;
 }
+
+// Dual-display: "27g KH (2.3 BE)" when unit != g, "27g KH" otherwise.
+// Used in the bolus-breakdown sheet so the transparency line shows both
+// units when the user has switched to BE/KE mode.
+export function formatWithBoth(grams: number, unit: CarbUnit): string {
+  if (unit === "g") return `${Math.round(grams)}g KH`;
+  const unitVal = gToUnit(grams, unit);
+  return `${Math.round(grams)}g KH (${unitVal} ${CARB_UNITS[unit].label})`;
+}

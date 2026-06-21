@@ -206,7 +206,7 @@ export default function ReviewMacrosCards({
         textTransform: "uppercase",
         paddingBottom: 4,
       }}>
-        Angaben in g
+        {carbUnit.unit === "g" ? "Angaben in g" : `KH in ${carbUnit.label} · P/F/Bal in g`}
       </div>
 
       {open && (() => {

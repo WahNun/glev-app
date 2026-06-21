@@ -355,6 +355,7 @@
     "reason_historical": "Basierend auf {count, plural, one {einer ähnlichen früheren Mahlzeit} other {# ähnlichen früheren Mahlzeiten}} mit GUTEM Ergebnis (±12g KH, ±35 mg/dL Glukose). Historischer Insulindurchschnitt: {avg} {units}.",
     "reason_blended": "Gemischt aus {count, plural, one {einer ähnlichen Mahlzeit} other {# ähnlichen Mahlzeiten}} + KH-Faktor-Formel. Begrenzte historische Daten — mehr Mahlzeiten loggen für höhere Konfidenz.",
     "reason_formula": "Keine ähnlichen früheren Mahlzeiten gefunden. Standard-KH-Faktor-Formel verwendet: {carbs}g ÷ {icr} + {correction} {units} Korrektur.",
+    "reason_formula_kebe": "Keine ähnlichen früheren Mahlzeiten gefunden. Formel: {carbs} ÷ {icr} + {correction} {units} Korrektur.",
     "safety_stacking": "⚠ Stacking-Risiko: {count} Bolus-Gaben in den letzten 6h (Σ {total} {units}). Aktives Insulin könnte sich überlagern — vorsichtig dosieren.",
     "safety_basal": "Basal-Kontext: zuletzt {amount} {units} {name} vor {hours}h.",
     "safety_basal_default_name": "Basal",
