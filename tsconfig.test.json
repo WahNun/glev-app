@@ -1,0 +1,9 @@
+{
+  "extends": "./tsconfig.json",
+  "include": ["tests/**/*.ts", "tests/**/*.tsx", "vitest.setup.ts"],
+  "exclude": ["node_modules", ".next"],
+  "compilerOptions": {
+    "noEmit": true,
+    "skipLibCheck": true
+  }
+}

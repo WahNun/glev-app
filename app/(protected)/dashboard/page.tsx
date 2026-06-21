@@ -24,7 +24,7 @@ import MealEntryLightExpand from "@/components/MealEntryLightExpand";
 import PendingGlucoseStrip from "@/components/PendingGlucoseStrip";
 import CurrentDayGlucoseCard from "@/components/CurrentDayGlucoseCard";
 import MacroRing from "@/components/MacroRing";
-import SkeletonBlock from "@/components/SkeletonBlock";
+import GlevLoadingPattern from "@/components/GlevLoadingPattern";
 import GlevLogo from "@/components/GlevLogo";
 import { hapticSelection } from "@/lib/haptics";
 import { parseDbDate, parseDbTs, localeToBcp47 } from "@/lib/time";
@@ -267,9 +267,9 @@ function FlipCard({ card }: { card: CardData }) {
   const t = useTranslations("dashboard");
   return (
     <div onClick={() => setFlipped(f => !f)} className="glev-stat-card" style={{ position:"relative", cursor:"pointer", height:140, perspective:1000 }}>
-      <div style={{ position:"absolute", inset:0, transformStyle:"preserve-3d", transition:"transform 0.5s cubic-bezier(0.4,0,0.2,1)", transform:flipped ? "rotateY(180deg)" : "rotateY(0deg)" }}>
+      <div style={{ position:"absolute", inset:0, transformStyle:"preserve-3d", transition:"transform 0.55s cubic-bezier(0.4,0,0.2,1)", transform:flipped ? "rotateY(180deg)" : "rotateY(0deg)" }}>
         {/* Front */}
-        <div style={{ position:"absolute", inset:0, backfaceVisibility:"hidden", background:SURFACE, border:`1px solid ${BORDER}`, borderRadius:14, padding:"14px 18px", boxSizing:"border-box", display:"flex", flexDirection:"column", justifyContent:"space-between" }}>
+        <div style={{ position:"absolute", inset:0, backfaceVisibility:"hidden", background:SURFACE, border:`1px solid ${BORDER}`, borderRadius:16, padding:"14px 18px", boxSizing:"border-box", display:"flex", flexDirection:"column", justifyContent:"space-between" }}>
           <div style={{ display:"flex", alignItems:"flex-start", justifyContent:"space-between" }}>
             <div style={{ fontSize:12, color:"var(--text-dim)", letterSpacing:"0.08em", fontWeight:600, textTransform:"uppercase" }}>{card.label}</div>
             <span style={{ fontSize:11, color:"var(--text-ghost)" }}>↺</span>
@@ -286,7 +286,7 @@ function FlipCard({ card }: { card: CardData }) {
           </div>
         </div>
         {/* Back */}
-        <div style={{ position:"absolute", inset:0, backfaceVisibility:"hidden", transform:"rotateY(180deg)", background:`linear-gradient(145deg,${card.color}12,${SURFACE} 65%)`, border:`1px solid ${card.color}33`, borderRadius:14, padding:"12px 16px", boxSizing:"border-box", overflow:"hidden", display:"flex", flexDirection:"column", gap:6, justifyContent:"space-between" }}>
+        <div style={{ position:"absolute", inset:0, backfaceVisibility:"hidden", transform:"rotateY(180deg)", background:`linear-gradient(145deg,${card.color}12,${SURFACE} 65%)`, border:`1px solid ${card.color}33`, borderRadius:16, padding:"14px 16px", boxSizing:"border-box", overflow:"hidden", display:"flex", flexDirection:"column", gap:6, justifyContent:"space-between" }}>
           <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between" }}>
             <div style={{ fontSize:12, color:card.color, fontWeight:700, letterSpacing:"0.06em", textTransform:"uppercase" }}>{card.label}</div>
             <span style={{ fontSize:11, color:"var(--text-ghost)" }}>{t("flip_back")}</span>
@@ -627,16 +627,7 @@ export default function DashboardPage() {
   // so the visible UI never jumps when data arrives. Feels much faster
   // than the old centered spinner because the user sees the page shape
   // immediately instead of staring at a tiny spinner on a blank screen.
-  if (loading) return (
-    <div style={{ padding:"16px 16px 0", display:"flex", flexDirection:"column", gap:16 }}>
-      <style>{`@keyframes glevPulse{0%,100%{opacity:.55}50%{opacity:.85}}`}</style>
-      <SkeletonBlock height={56} />
-      <SkeletonBlock height={180} />
-      <SkeletonBlock height={140} />
-      <SkeletonBlock height={140} />
-      <SkeletonBlock height={220} />
-    </div>
-  );
+  if (loading) return <GlevLoadingPattern variant="splash" />;
 
   const cards = buildCards(meals, t);
   const rateCards = cards.filter(c => c.key !== "control");
@@ -736,10 +727,7 @@ export default function DashboardPage() {
         .glev-dash-head { display: flex; }
         .glev-cluster-bar  { display: none !important; }
         .glev-quickadd-cta { display: none !important; }
-        /* Extra scroll runway at the bottom so users can pull the last
-           card fully clear of the nav bar and read it comfortably. */
-        .glev-main { padding-bottom: calc(var(--nav-bottom-total) + 40px) !important; }
-        @media (max-width: 768px) {
+@media (max-width: 768px) {
           .glev-dash-head { display: none !important; }
         }
         /* Mobile compression — iPhone 13 mini (375×812) and similar.
@@ -1229,9 +1217,13 @@ function DashboardCluster({
     });
   }, [cards.length]);
 
+  // Single-card clusters (e.g. glucose) use `height: auto` so CSS media
+  // queries can resize the card on orientation change without the overflow:hidden
+  // clipping it at the stale JS-measured height for 220ms. Multi-card clusters
+  // still use the measured height so the pager animation stays smooth.
   const activeMeasured = heights[active];
   const scrollerHeight: React.CSSProperties["height"] =
-    activeMeasured != null ? activeMeasured : "auto";
+    cards.length === 1 ? "auto" : (activeMeasured != null ? activeMeasured : "auto");
 
   // ── Render ──────────────────────────────────────────────────────────
   return (
@@ -1262,7 +1254,9 @@ function DashboardCluster({
         style={{
           overflow: "hidden",
           height: scrollerHeight,
-          transition: "height 220ms ease",
+          // Transition only for multi-card pager — single-card clusters
+          // let CSS drive height so orientation changes are flicker-free.
+          transition: cards.length > 1 ? "height 220ms ease" : undefined,
           // Allow vertical page scroll; horizontal is handled manually.
           touchAction: cards.length > 1 ? "pan-y" : "auto",
           userSelect: "none",

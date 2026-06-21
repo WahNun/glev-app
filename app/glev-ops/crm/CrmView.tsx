@@ -497,6 +497,8 @@ function LeadStatusCell({ email, initial }: { email: string; initial: string | n
       ? { background: "#dcfce7", color: "#166534", border: "1px solid #bbf7d0", borderRadius: 4, padding: "2px 7px", fontSize: 11, fontWeight: 600, whiteSpace: "nowrap" }
       : value === "lukas_action"
       ? { background: "#eff6ff", color: "#1d4ed8", border: "1px solid #bfdbfe", borderRadius: 4, padding: "2px 7px", fontSize: 11, fontWeight: 600, whiteSpace: "nowrap" }
+      : value === "alen_action"
+      ? { background: "#f5f3ff", color: "#6b21a8", border: "1px solid #ddd6fe", borderRadius: 4, padding: "2px 7px", fontSize: 11, fontWeight: 600, whiteSpace: "nowrap" }
       : { background: "#f3f4f6", color: "#9ca3af", borderRadius: 4, padding: "2px 7px", fontSize: 11, whiteSpace: "nowrap" };
 
   function label(v: string | null) {
@@ -504,6 +506,7 @@ function LeadStatusCell({ email, initial }: { email: string; initial: string | n
     if (v === "in_review") return "🟡 In Prüfung";
     if (v === "qualified") return "🟢 Qualifiziert";
     if (v === "lukas_action") return "🔵 Lucas Action";
+    if (v === "alen_action") return "🟣 Alen Action";
     return "";
   }
 
@@ -522,6 +525,7 @@ function LeadStatusCell({ email, initial }: { email: string; initial: string | n
         <option value="qualified">🟢 Qualifiziert</option>
         <option value="dq">🔴 DQ</option>
         <option value="lukas_action">🔵 Lucas Action</option>
+        <option value="alen_action">🟣 Alen Action</option>
       </select>
     </div>
   );

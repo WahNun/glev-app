@@ -8,14 +8,14 @@
  *   "consent-modal"      – AI enabled but consent not yet granted: show modal
  *   "voice-start"        – on /glev-ai: start a new voice take in the fullscreen page
  *   "navigate-glev-ai"   – consent granted on any other tab: navigate to /glev-ai
- *   "legacy-navigate"    – no AI flag: navigate to /engine?voice=1
+ *   "open-paywall"       – no AI flag (free user): show Smart-tier PaywallSheet
  */
 export type FabAction =
   | { type: "toggle-fullscreen"; willOpen: boolean }
   | { type: "consent-modal" }
   | { type: "voice-start" }
   | { type: "navigate-glev-ai" }
-  | { type: "legacy-navigate" };
+  | { type: "open-paywall" };
 
 export function resolveFabAction(opts: {
   pathname: string;
@@ -30,8 +30,8 @@ export function resolveFabAction(opts: {
     consentGranted,
     fullscreenOpen,
   } = opts;
-  // Treat null (flag still loading) as false so the FAB gracefully falls
-  // back to legacy voice rather than triggering a premature consent modal.
+  // Treat null (flag still loading) as false so the FAB shows the paywall
+  // rather than triggering a premature consent modal.
   const aiVoiceEnabled = opts.aiVoiceEnabled === true;
 
   // ── Engine page ──────────────────────────────────────────────────────────
@@ -42,7 +42,7 @@ export function resolveFabAction(opts: {
     if (aiVoiceEnabled && !consentGranted) {
       return { type: "consent-modal" };
     }
-    return { type: "legacy-navigate" };
+    return { type: "open-paywall" };
   }
 
   // ── Glev AI fullscreen page ───────────────────────────────────────────────
@@ -51,7 +51,7 @@ export function resolveFabAction(opts: {
     if (aiVoiceEnabled && consentGranted) {
       return { type: "voice-start" };
     }
-    return { type: "legacy-navigate" };
+    return { type: "open-paywall" };
   }
 
   // ── Non-engine, non-glev-ai pages ────────────────────────────────────────
@@ -63,5 +63,5 @@ export function resolveFabAction(opts: {
     return { type: "consent-modal" };
   }
 
-  return { type: "legacy-navigate" };
+  return { type: "open-paywall" };
 }

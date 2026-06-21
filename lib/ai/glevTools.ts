@@ -45,9 +45,15 @@ import {
   type MealLike,
 } from "@/lib/iob";
 import { aggregateNutrition } from "@/lib/nutrition/aggregate";
+import { AggregatorTrace } from "@/lib/nutrition/aggregator-trace";
 import { getCachedUserHistory } from "@/lib/nutrition/userHistoryCache";
-import type { ParsedFoodItem } from "@/lib/nutrition/types";
+import { parseFoodText } from "@/lib/nutrition/parseFood";
+import type { ParsedFoodItem, AggregateSource } from "@/lib/nutrition/types";
 import { applyAlcoholFallback, sumAlcoholG, hasAlcoholKeyword } from "@/lib/ai/alcoholFallback";
+import { computeControlScore } from "@/lib/controlScore";
+import { detectPattern } from "@/lib/engine/patterns";
+import { EngineTrace } from "@/lib/engine/trace";
+import { getMistralChatClient } from "@/lib/ai/openaiClient";
 
 // ── Tool definitions (Mistral function-calling schema) ───────────────
 export const GLEV_TOOLS = [
@@ -181,15 +187,15 @@ export const GLEV_TOOLS = [
           },
           protein_grams: {
             type: "number",
-            description: "Optional: Eiweiß in Gramm.",
+            description: "Eiweiß in Gramm. IMMER setzen — eigene Schätzung wenn kein DB-Wert vorliegt (z. B. Hähnchen ≈ 30g/100g, Pizza ≈ 11g/100g, Haferflocken ≈ 13g/100g).",
           },
           fat_grams: {
             type: "number",
-            description: "Optional: Fett in Gramm.",
+            description: "Fett in Gramm. IMMER setzen — eigene Schätzung wenn kein DB-Wert vorliegt (z. B. Pizza ≈ 10g/100g, Haferflocken ≈ 7g/100g, Hähnchenbrust ≈ 3g/100g).",
           },
           fiber_grams: {
             type: "number",
-            description: "Optional: Ballaststoffe in Gramm. Nur setzen wenn bekannt (z. B. Linsen, Vollkornbrot, Hülsenfrüchte, Haferflocken). Weglassen wenn unsicher.",
+            description: "Ballaststoffe in Gramm. IMMER setzen — eigene Schätzung wenn kein DB-Wert vorliegt (z. B. Apfel ≈ 2g, Pizza ≈ 2.5g, Linsen ≈ 8g, Süßigkeiten ≈ 0g).",
           },
           meal_type: {
             type: "string",
@@ -215,8 +221,12 @@ export const GLEV_TOOLS = [
               required: ["name", "grams"],
             },
           },
+          from_photo: {
+            type: "boolean",
+            description: "Auf true setzen, wenn die Mahlzeit direkt aus einem Foto analysiert wurde (Vision-Analyse).",
+          },
         },
-        required: ["input_text", "carbs_grams", "items"],
+        required: ["input_text", "carbs_grams", "protein_grams", "fat_grams", "fiber_grams", "items"],
       },
     },
   },
@@ -731,6 +741,93 @@ Wenn der Nutzer einen Markennamen nennt, leite insulin_type automatisch aus der 
       },
     },
   },
+  {
+    type: "function" as const,
+    function: {
+      name: "get_macro_targets",
+      description:
+        "Tages-Makronährstoff-Ziele des Nutzers (KH, Protein, Fett, Ballaststoffe g/Tag) aus den Settings sowie BZ-Zielwert und Zielbereich. null-Felder = Nutzer hat dieses Ziel noch nicht gesetzt. Vor Soll-Ist-Vergleichen immer mit get_today_macros_so_far kombinieren.",
+      parameters: { type: "object", properties: {}, required: [] },
+    },
+  },
+  {
+    type: "function" as const,
+    function: {
+      name: "get_today_macros_so_far",
+      description:
+        "Summe der heute bereits geloggten Makronährstoffe (KH, Protein, Fett, Ballaststoffe) — alle Mahlzeiten seit Mitternacht (Lokalzeit). Kombiniere mit get_macro_targets für Soll-Ist-Vergleich.",
+      parameters: { type: "object", properties: {}, required: [] },
+    },
+  },
+  {
+    type: "function" as const,
+    function: {
+      name: "get_dashboard_summary",
+      description:
+        "Kompakter Status-Überblick aller Dashboard-Karten: aktueller Glukosewert + Trend, Aktiv-IOB, TIR der letzten 7 Tage, Adapt-Score (7T), Makros bisher heute, letzte Mahlzeit. Nutze bei allgemeinen Statusfragen wie 'wie sieht mein Tag aus' oder 'aktueller Status'.",
+      parameters: { type: "object", properties: {}, required: [] },
+    },
+  },
+  {
+    type: "function" as const,
+    function: {
+      name: "get_insights_summary",
+      description:
+        "Aggregierte Insights-Metriken für einen gewählten Zeitraum. cluster: 'glucose_basics' (TIR/TBR/TAR, Durchschnitt-BZ, GMI), 'meals_bolus' (Adapt-Score, Mahlzeittypen, Bolus-Erfolge), 'adaptive_engine' (Gesamtdosis, Bolus/Basal-Verhältnis, ICR). 'all' = alle Cluster (Standard). scope: 'day', 'week' (Standard), 'month'.",
+      parameters: {
+        type: "object",
+        properties: {
+          cluster: {
+            type: "string",
+            description:
+              "Welcher Insights-Cluster: 'glucose_basics', 'meals_bolus', 'adaptive_engine', oder 'all' (Standard — alle drei).",
+          },
+          scope: {
+            type: "string",
+            description: "Zeitraum: 'day' (heute), 'week' (7 Tage, Standard), 'month' (30 Tage).",
+          },
+        },
+        required: [],
+      },
+    },
+  },
+  {
+    type: "function" as const,
+    function: {
+      name: "get_pattern_alerts",
+      description:
+        "Erkannte Bolus-Muster der letzten 30 Tage (Überdosierung, Unterdosierung, Spike-Muster, ausgeglichen). Liefert Muster-Typ, Konfidenz, Erklärung und optional Kurven-Insights. Nutze bei Fragen wie 'was mache ich häufig falsch', 'erkennst du Muster in meinem Bolus-Verhalten'.",
+      parameters: { type: "object", properties: {}, required: [] },
+    },
+  },
+  {
+    type: "function" as const,
+    function: {
+      name: "suggest_meal_for_remaining_macros",
+      description:
+        "Schlägt 2-4 Mahlzeit-Ideen oder Rezepte vor, deren Makro-Profile zu den verbleibenden Tageszielen des Users passen. Kombiniert User-History (Favoriten aus user_food_history mit occurrences ≥ 3) mit KI-generierten Rezept-Vorschlägen. Aufrufen bei Fragen wie 'was soll ich kochen', 'was passt zu meinen Zielen', 'Rezept-Vorschlag', 'was kann ich heute Abend essen'.",
+      parameters: {
+        type: "object",
+        properties: {
+          meal_type: {
+            type: "string",
+            enum: ["breakfast", "lunch", "dinner", "snack"],
+            description: "Optional: Mahlzeit-Typ. Falls nicht gesetzt: heuristisch anhand Uhrzeit.",
+          },
+          dietary_constraints: {
+            type: "array",
+            items: { type: "string" },
+            description: "Optional: Ernährungseinschränkungen, z. B. ['vegetarisch', 'glutenfrei'].",
+          },
+          max_prep_min: {
+            type: "number",
+            description: "Optional: maximale Zubereitungszeit in Minuten.",
+          },
+        },
+        required: [],
+      },
+    },
+  },
 ];
 
 export type GlevToolName =
@@ -757,7 +854,13 @@ export type GlevToolName =
   | "set_macro"
   | "update_setting"
   | "navigate_to"
-  | "submit_structured_feedback";
+  | "submit_structured_feedback"
+  | "get_macro_targets"
+  | "get_today_macros_so_far"
+  | "get_dashboard_summary"
+  | "get_insights_summary"
+  | "get_pattern_alerts"
+  | "suggest_meal_for_remaining_macros";
 
 /**
  * Marker shape returned by every WRITE-tool. The chat-route handler
@@ -943,6 +1046,18 @@ export async function executeGlevTool(
         return await toolGetCheckHistory(sb, userId, args, userTimezone);
       case "save_user_observation":
         return await toolSaveUserObservation(sb, userId, args);
+      case "get_macro_targets":
+        return await toolGetMacroTargets(sb, userId);
+      case "get_today_macros_so_far":
+        return await toolGetTodayMacrosSoFar(sb, userId, userTimezone);
+      case "get_dashboard_summary":
+        return await toolGetDashboardSummary(sb, userId, userTimezone);
+      case "get_insights_summary":
+        return await toolGetInsightsSummary(sb, userId, args, userTimezone);
+      case "get_pattern_alerts":
+        return await toolGetPatternAlerts(sb, userId);
+      case "suggest_meal_for_remaining_macros":
+        return await toolSuggestMealForRemainingMacros(sb, userId, args, userTimezone);
       case "log_meal_entry":
         return await toolLogMealEntry(sb, userId, args, userTimezone);
       case "log_bolus_entry":
@@ -1488,7 +1603,22 @@ async function createPendingAction(
   summary: string,
   clientPayload?: Record<string, unknown>,
 ): Promise<PendingActionEnvelope | { error: string }> {
-  const expiresAt = new Date(Date.now() + PENDING_TTL_MS).toISOString();
+  const now = Date.now();
+  const expiresAt = new Date(now + PENDING_TTL_MS).toISOString();
+
+  // Supersede any unconfirmed same-kind chips from previous turns.
+  // Same-turn chips (e.g. two log_meal_entry calls in one AI response)
+  // are created within milliseconds — using a 30-second cutoff preserves
+  // them while cleaning up orphaned chips from earlier conversations.
+  const supersedeBefore = new Date(now - 30_000).toISOString();
+  await sb
+    .from("ai_pending_actions")
+    .update({ used_at: new Date(now).toISOString() })
+    .eq("user_id", userId)
+    .eq("kind", kind)
+    .is("used_at", null)
+    .lt("created_at", supersedeBefore);
+
   const { data, error } = await sb
     .from("ai_pending_actions")
     .insert({
@@ -1611,47 +1741,117 @@ async function toolLogMealEntry(
   const mealPrepId = crypto.randomUUID();
 
   // Helper: run aggregator, log metrics, write refinement row.
-  async function runAggregator(targetId: string): Promise<import("@/lib/meals").ParsedFood[] | undefined> {
-    if (!aggregatorEnabled || rawItems.length === 0) return undefined;
+  // Returns items + nutritionSource, or undefined on hard failure.
+  async function runAggregator(targetId: string): Promise<
+    { items: import("@/lib/meals").ParsedFood[]; nutritionSource: AggregateSource } | undefined
+  > {
+    if (!aggregatorEnabled) return undefined;
     const t0 = Date.now();
+    // Hoist admin client so both success and failure branches can write
+    // meal_prep_refinements. RLS only grants SELECT to authenticated users;
+    // INSERT/UPDATE requires service-role bypass (see migration comment).
+    let adminSbForTrace;
+    try { adminSbForTrace = getSupabaseAdmin(); } catch { /* no-op */ }
     try {
-      const parsedItems: ParsedFoodItem[] = rawItems.map((i) => ({
-        name:               String(i.name),
-        grams:              Number(i.grams),
-        is_branded:         false,
-        search_term_en:     String(i.name),
-        search_term_de:     String(i.name),
-        quantity_specified: true,
-      }));
+      // When rawItems is empty (Mistral didn't provide items[] or all were
+      // filtered), synthesize a single item from inputText at 100g so the
+      // aggregator can resolve user-history / OFF / USDA per-100g values.
+      // Results are then scaled to match the AI-provided carbs estimate.
+      const usingFallback = rawItems.length === 0;
+      let parsedItems: ParsedFoodItem[];
+      if (usingFallback) {
+        parsedItems = inputText ? [{
+          name:               inputText.slice(0, 100),
+          grams:              100,
+          is_branded:         false,
+          search_term_en:     inputText.slice(0, 100),
+          search_term_de:     inputText.slice(0, 100),
+          quantity_specified: false,
+        }] : [];
+      } else {
+        // rawItems.name is the food name in the user's language (e.g. "banane").
+        // Passing it directly as search_term_en causes a USDA miss for every
+        // non-English name — USDA only has English entries ("banana", not "banane").
+        // parseFoodText generates the correct bilingual terms: search_term_en
+        // ("banana") for USDA and search_term_de ("banane") for OFF.
+        let parseResult: { items: ParsedFoodItem[] } | null = null;
+        try {
+          const itemsText = rawItems.map((i) => `${i.grams}g ${i.name}`).join(", ");
+          parseResult = await parseFoodText(itemsText, "de");
+        } catch {
+          // Non-fatal: fall back to item.name for both terms.
+          // USDA will miss for non-English names; OFF may still succeed.
+        }
+        parsedItems = rawItems.map((raw, idx) => {
+          const parsed = parseResult?.items[idx];
+          return {
+            name:               String(raw.name),
+            grams:              Number(raw.grams),
+            is_branded:         parsed?.is_branded ?? false,
+            search_term_en:     parsed?.search_term_en ?? String(raw.name),
+            search_term_de:     parsed?.search_term_de ?? String(raw.name),
+            quantity_specified: true,
+          };
+        });
+      }
+
+      if (parsedItems.length === 0) return undefined;
+
       const userHistory = await getCachedUserHistory(
         sb, userId, parsedItems.map((p) => p.name),
       ).catch(() => new Map());
 
-      const agg = await aggregateNutrition(parsedItems, { userHistory });
-      const resolved: import("@/lib/meals").ParsedFood[] = agg.items.map((it) => ({
+      const mealTrace = new AggregatorTrace();
+      const agg = await aggregateNutrition(parsedItems, { userHistory, trace: mealTrace });
+      if (adminSbForTrace) {
+        void mealTrace.persist({
+          user_id:            userId,
+          input_text:         inputText,
+          supabaseClient:     adminSbForTrace,
+          aggregator_version: "1.0",
+          env:                process.env.VERCEL_ENV ?? process.env.NODE_ENV ?? "unknown",
+        });
+      }
+
+      let resolved: import("@/lib/meals").ParsedFood[] = agg.items.map((it) => ({
         name: it.name, grams: it.grams, carbs: it.carbs,
         protein: it.protein, fat: it.fat, fiber: it.fiber, source: it.source,
       }));
 
+      // Scale fallback results: the synthetic item was at 100g, so per-item
+      // values are per-100g. Scale to match the AI-provided carbs estimate
+      // so the output reflects the actual portion size.
+      if (usingFallback && agg.totals.carbs > 0 && carbs > 0) {
+        const scale = carbs / agg.totals.carbs;
+        resolved = resolved.map((it) => ({
+          ...it,
+          carbs:   Math.round(it.carbs   * scale),
+          protein: Math.round(it.protein * scale),
+          fat:     Math.round(it.fat     * scale),
+          fiber:   Math.round(it.fiber   * scale),
+          grams:   Math.round(it.grams   * scale),
+        }));
+      }
+
       const dbHits  = agg.items.filter((i) => i.source !== "estimated" && i.source !== "unknown").length;
       const estCnt  = agg.items.length - dbHits;
       const elapsed = Date.now() - t0;
-      console.log(`[meal_prep] id=${targetId} aggregator: ${agg.items.length} items, ${dbHits} db-hits, ${estCnt} estimates, ${elapsed}ms`);
+      console.log(`[meal_prep] id=${targetId} aggregator: ${agg.items.length} items, ${dbHits} db-hits, ${estCnt} estimates, ${elapsed}ms fallback=${usingFallback}`);
 
-      if (optimisticEnabled) {
+      if (optimisticEnabled && adminSbForTrace) {
         // Fire-and-forget: write refinement row; Realtime notifies the client.
-        // Wrap in Promise.resolve() because Supabase returns PromiseLike (no .catch).
+        // Must use service-role client — RLS allows only SELECT for user role.
         void Promise.resolve(
-          sb.from("meal_prep_refinements")
+          adminSbForTrace.from("meal_prep_refinements")
             .upsert({ id: targetId, user_id: userId, items_refined: resolved, status: "completed", completed_at: new Date().toISOString() }, { onConflict: "id" })
         ).catch((e: unknown) => console.error("[meal_prep] refinement write failed:", e));
       }
-      return resolved;
+      return { items: resolved, nutritionSource: agg.nutritionSource };
     } catch (aggErr) {
       console.error(`[meal_prep] id=${targetId} aggregator error (fallback to Mistral macros):`, aggErr);
-      if (optimisticEnabled) {
+      if (optimisticEnabled && adminSbForTrace) {
         void Promise.resolve(
-          sb.from("meal_prep_refinements")
+          adminSbForTrace.from("meal_prep_refinements")
             .upsert({ id: targetId, user_id: userId, status: "failed", completed_at: new Date().toISOString() }, { onConflict: "id" })
         ).catch(() => {});
       }
@@ -1660,6 +1860,7 @@ async function toolLogMealEntry(
   }
 
   let resolvedItems: import("@/lib/meals").ParsedFood[] | undefined;
+  let resolvedNutritionSource: AggregateSource | undefined;
   let resolvedCarbs   = carbs;
   let resolvedProtein = protein;
   let resolvedFat     = fat;
@@ -1668,8 +1869,10 @@ async function toolLogMealEntry(
 
   if (aggregatorEnabled && !optimisticEnabled) {
     // Synchronous path (Phase 2): await aggregator before returning.
-    resolvedItems = await runAggregator(mealPrepId);
-    if (resolvedItems) {
+    const aggResult = await runAggregator(mealPrepId);
+    if (aggResult) {
+      resolvedItems = aggResult.items;
+      resolvedNutritionSource = aggResult.nutritionSource;
       const totals = resolvedItems.reduce(
         (acc, it) => ({ carbs: acc.carbs + it.carbs, protein: acc.protein + it.protein, fat: acc.fat + it.fat, fiber: acc.fiber + it.fiber }),
         { carbs: 0, protein: 0, fat: 0, fiber: 0 },
@@ -1685,10 +1888,15 @@ async function toolLogMealEntry(
     // the background task writes 'completed'. The aggregator itself is returned as
     // a `backgroundTask` closure — the route handler schedules it with Next.js
     // `after()` so Vercel keeps the process alive after the stream closes.
-    await Promise.resolve(
-      sb.from("meal_prep_refinements")
-        .insert({ id: mealPrepId, user_id: userId, status: "pending" })
-    ).catch(() => {});
+    // Pre-insert uses service-role — RLS allows only SELECT for authenticated users.
+    let adminSbOpt;
+    try { adminSbOpt = getSupabaseAdmin(); } catch { /* no-op */ }
+    if (adminSbOpt) {
+      await Promise.resolve(
+        adminSbOpt.from("meal_prep_refinements")
+          .insert({ id: mealPrepId, user_id: userId, status: "pending" })
+      ).catch(() => {});
+    }
     // Capture as a closure — do NOT call here. The chat route calls after(backgroundTask).
     backgroundTask = async () => { await runAggregator(mealPrepId); };
     // Use enriched Mistral estimates as placeholders; include alcohol_g so dual-emission
@@ -1700,6 +1908,12 @@ async function toolLogMealEntry(
           ...(typeof i.alcohol_g === "number" && i.alcohol_g > 0 ? { alcohol_g: i.alcohol_g } : {}),
         }))
       : undefined;
+  }
+
+  // When the AI analysed a food photo, override the aggregator's top-level
+  // source so the UI badge shows "📷 Foto" instead of "✨ KI".
+  if (args.from_photo === true) {
+    resolvedNutritionSource = "vision_estimate";
   }
 
   // ── Dual-Emission: Alkohol-Erkennung ──────────────────────────────
@@ -1724,10 +1938,10 @@ async function toolLogMealEntry(
     meal_time_explicit:  loggedAtExplicit,
     glucose_before:      glucoseBefore,
     meal_prep_id:        mealPrepId,
+    ...(resolvedNutritionSource ? { nutritionSource: resolvedNutritionSource } : {}),
     ...(resolvedItems ? { items: resolvedItems } : {}),
     ...(totalAlcoholG > 0 ? { total_alcohol_g: Math.round(totalAlcoholG * 10) / 10 } : {}),
   };
-
   const tzField = userTimezone ? { _user_timezone: userTimezone } : {};
 
   if (totalAlcoholG > 0) {
@@ -2618,6 +2832,591 @@ async function toolSubmitStructuredFeedback(
     ok: true,
     message: "Danke! Dein Feedback ist bei mir angekommen. Lucas und das Team kümmern sich drum.",
   };
+}
+
+// ── READ-only tools: Macro Targets / Dashboard / Insights ────────────
+
+async function toolGetMacroTargets(
+  sb: SupabaseClient,
+  userId: string,
+): Promise<unknown> {
+  const { data, error } = await sb
+    .from("user_settings")
+    .select("target_carbs_g, target_protein_g, target_fat_g, target_fiber_g, target_bg_mgdl, target_min_mgdl, target_max_mgdl")
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  if (error) return { error: error.message };
+
+  const row = data as {
+    target_carbs_g:   number | null;
+    target_protein_g: number | null;
+    target_fat_g:     number | null;
+    target_fiber_g:   number | null;
+    target_bg_mgdl:   number | null;
+    target_min_mgdl:  number | null;
+    target_max_mgdl:  number | null;
+  } | null;
+
+  return {
+    carbs_g:        row?.target_carbs_g   ?? null,
+    protein_g:      row?.target_protein_g ?? null,
+    fat_g:          row?.target_fat_g     ?? null,
+    fiber_g:        row?.target_fiber_g   ?? null,
+    bg_target_mgdl: row?.target_bg_mgdl   ?? null,
+    bg_range_mgdl:  (row?.target_min_mgdl != null && row?.target_max_mgdl != null)
+      ? { min: row.target_min_mgdl, max: row.target_max_mgdl }
+      : null,
+    hint: !row
+      ? "Keine Einstellungen gefunden. Tagesziele können in Settings → Makroziele gesetzt werden."
+      : null,
+  };
+}
+
+async function toolGetTodayMacrosSoFar(
+  sb: SupabaseClient,
+  _userId: string,
+  userTimezone: string | null,
+): Promise<unknown> {
+  const tz = userTimezone && isValidTimezone(userTimezone) ? userTimezone : "Europe/Berlin";
+  const now = Date.now();
+  // "YYYY-MM-DD" in the user's local timezone
+  const dateStr = new Date(now).toLocaleDateString("en-CA", { timeZone: tz });
+
+  // Fetch the last 24 h and filter to today in local time — safe across midnight in any timezone.
+  const since24hIso = new Date(now - 24 * 60 * 60_000).toISOString();
+  const { data, error } = await sb
+    .from("meals")
+    .select("carbs_grams, protein_grams, fat_grams, fiber_grams, meal_time, created_at")
+    .gte("created_at", since24hIso)
+    .order("created_at", { ascending: false });
+
+  if (error) return { error: error.message };
+
+  type MealRow = {
+    carbs_grams: number | null; protein_grams: number | null;
+    fat_grams: number | null;   fiber_grams: number | null;
+    meal_time: string | null;   created_at: string;
+  };
+  const rows = ((data ?? []) as MealRow[]).filter((m) => {
+    const atIso = m.meal_time ?? m.created_at;
+    return new Date(atIso).toLocaleDateString("en-CA", { timeZone: tz }) === dateStr;
+  });
+
+  const totals = rows.reduce<{ carbs: number; protein: number; fat: number; fiber: number }>(
+    (acc, m) => ({
+      carbs:   acc.carbs   + (Number(m.carbs_grams)   || 0),
+      protein: acc.protein + (Number(m.protein_grams) || 0),
+      fat:     acc.fat     + (Number(m.fat_grams)     || 0),
+      fiber:   acc.fiber   + (Number(m.fiber_grams)   || 0),
+    }),
+    { carbs: 0, protein: 0, fat: 0, fiber: 0 },
+  );
+
+  return {
+    date:      dateStr,
+    meal_count: rows.length,
+    carbs_g:   Math.round(totals.carbs   * 10) / 10,
+    protein_g: Math.round(totals.protein * 10) / 10,
+    fat_g:     Math.round(totals.fat     * 10) / 10,
+    fiber_g:   Math.round(totals.fiber   * 10) / 10,
+  };
+}
+
+async function toolGetDashboardSummary(
+  sb: SupabaseClient,
+  userId: string,
+  userTimezone: string | null,
+): Promise<unknown> {
+  const tz = userTimezone && isValidTimezone(userTimezone) ? userTimezone : "Europe/Berlin";
+  const now = Date.now();
+  const dateStr    = new Date(now).toLocaleDateString("en-CA", { timeZone: tz });
+  const since7dIso = new Date(now - 7 * 86_400_000).toISOString();
+  const since6hIso = new Date(now - 6 * 60 * 60_000).toISOString();
+  const since7dMs  = now - 7 * 86_400_000;
+
+  const [cgmResult, insulinRes, meals7dRes, settingsRes] = await Promise.all([
+    getHistory(userId).catch(() => null),
+    sb.from("insulin_logs")
+      .select("id, insulin_type, units, created_at")
+      .eq("user_id", userId)
+      .gte("created_at", since6hIso)
+      .order("created_at", { ascending: false }),
+    sb.from("meals")
+      .select("id, input_text, parsed_json, carbs_grams, protein_grams, fat_grams, fiber_grams, meal_type, meal_time, created_at, insulin_units, evaluation, glucose_before, glucose_after")
+      .gte("created_at", since7dIso)
+      .order("created_at", { ascending: false }),
+    sb.from("user_settings")
+      .select("dia_minutes, insulin_type, target_min_mgdl, target_max_mgdl")
+      .eq("user_id", userId)
+      .maybeSingle(),
+  ]);
+
+  const meals7d    = (meals7dRes.data ?? []) as Array<Record<string, unknown>>;
+  const insulinLog = (insulinRes.data ?? []) as InsulinLike[];
+
+  // IOB
+  const diaMinutes = (settingsRes.data?.dia_minutes as number | null) ?? undefined;
+  const rawType    = settingsRes.data?.insulin_type as string | undefined;
+  const insulinType: InsulinType = rawType === "rapid" || rawType === "regular" ? rawType : "rapid";
+  const doses    = buildDoses(insulinLog, meals7d as unknown as MealLike[]);
+  const iobUnits = calcTotalIOB(doses, insulinType, now, diaMinutes);
+
+  // Today's macros from today's meals
+  const todayMeals = meals7d.filter((m) => {
+    const atIso = (m.meal_time as string | null) ?? (m.created_at as string);
+    return new Date(atIso).toLocaleDateString("en-CA", { timeZone: tz }) === dateStr;
+  });
+  type DailyTotals = { carbs: number; protein: number; fat: number; fiber: number };
+  const todayTotals = todayMeals.reduce<DailyTotals>(
+    (acc, m) => ({
+      carbs:   acc.carbs   + (Number(m.carbs_grams)   || 0),
+      protein: acc.protein + (Number(m.protein_grams) || 0),
+      fat:     acc.fat     + (Number(m.fat_grams)     || 0),
+      fiber:   acc.fiber   + (Number(m.fiber_grams)   || 0),
+    }),
+    { carbs: 0, protein: 0, fat: 0, fiber: 0 },
+  );
+
+  // Adapt Score (7-day)
+  const scoreResult = computeControlScore(
+    meals7d as unknown as import("@/lib/meals").Meal[],
+    since7dMs,
+  );
+
+  // TIR (7-day) from CGM history; fallback to pre-meal BZ from meals
+  const tirLow  = (settingsRes.data?.target_min_mgdl as number | null) ?? 70;
+  const tirHigh = (settingsRes.data?.target_max_mgdl as number | null) ?? 180;
+  let tirPct: number | null = null;
+  const cgmSamples = (cgmResult?.history ?? []).filter((r) => {
+    if (!r.timestamp || r.value == null) return false;
+    return new Date(r.timestamp).getTime() >= since7dMs;
+  });
+  if (cgmSamples.length > 0) {
+    const inRange = cgmSamples.filter((r) => r.value! >= tirLow && r.value! <= tirHigh).length;
+    tirPct = Math.round((inRange / cgmSamples.length) * 100);
+  } else {
+    const gluValues = meals7d
+      .map((m) => Number(m.glucose_before))
+      .filter((v) => Number.isFinite(v) && v > 0);
+    if (gluValues.length > 0) {
+      const inRange = gluValues.filter((v) => v >= tirLow && v <= tirHigh).length;
+      tirPct = Math.round((inRange / gluValues.length) * 100);
+    }
+  }
+
+  // Last meal
+  const lastMeal = meals7d[0] ?? null;
+  const lastMealDesc = lastMeal
+    ? resolveMealDescription(
+        lastMeal.input_text as string | null,
+        lastMeal.parsed_json as Array<{ name?: string }> | null,
+      )
+    : null;
+  const lastMealAt = lastMeal
+    ? formatInUserTimezone(
+        new Date(((lastMeal.meal_time ?? lastMeal.created_at) as string)).getTime(),
+        userTimezone,
+      ).dateTime
+    : null;
+
+  return {
+    glucose: cgmResult?.current
+      ? { value: cgmResult.current.value, unit: cgmResult.current.unit, trend: cgmResult.current.trend ?? null }
+      : null,
+    iob_units:         Math.round(iobUnits * 100) / 100,
+    tir_pct_7d:        tirPct,
+    tir_target_range:  { low: tirLow, high: tirHigh },
+    adapt_score_7d:    scoreResult.score,
+    adapt_score_count: scoreResult.count,
+    today_macros: {
+      meal_count: todayMeals.length,
+      carbs_g:   Math.round(todayTotals.carbs   * 10) / 10,
+      protein_g: Math.round(todayTotals.protein * 10) / 10,
+      fat_g:     Math.round(todayTotals.fat     * 10) / 10,
+      fiber_g:   Math.round(todayTotals.fiber   * 10) / 10,
+    },
+    last_meal: lastMealDesc
+      ? { description: lastMealDesc, at: lastMealAt, carbs_g: (Number(lastMeal.carbs_grams) || null) }
+      : null,
+  };
+}
+
+async function toolGetInsightsSummary(
+  sb: SupabaseClient,
+  userId: string,
+  args: Record<string, unknown>,
+  userTimezone: string | null,
+): Promise<unknown> {
+  const cluster  = typeof args.cluster === "string" ? args.cluster : "all";
+  const scope    = typeof args.scope   === "string" ? args.scope   : "week";
+  const now      = Date.now();
+  const scopeMs  = scope === "day" ? 86_400_000 : scope === "month" ? 30 * 86_400_000 : 7 * 86_400_000;
+  const sinceMs  = now - scopeMs;
+  const sinceIso = new Date(sinceMs).toISOString();
+  const result: Record<string, unknown> = { scope, cluster };
+
+  // ── Glucose Basics ────────────────────────────────────────────────
+  if (cluster === "all" || cluster === "glucose_basics") {
+    const [cgmResult, rangeRes] = await Promise.all([
+      getHistory(userId).catch(() => null),
+      sb.from("user_settings")
+        .select("target_min_mgdl, target_max_mgdl")
+        .eq("user_id", userId)
+        .maybeSingle(),
+    ]);
+    const tirLow  = (rangeRes.data?.target_min_mgdl as number | null) ?? 70;
+    const tirHigh = (rangeRes.data?.target_max_mgdl as number | null) ?? 180;
+    const samples = (cgmResult?.history ?? []).filter((r) => {
+      if (!r.timestamp || r.value == null) return false;
+      return new Date(r.timestamp).getTime() >= sinceMs;
+    });
+    if (samples.length > 0) {
+      const values  = samples.map((r) => r.value as number);
+      const avg     = Math.round(values.reduce((a, b) => a + b, 0) / values.length);
+      const inRange = values.filter((v) => v >= tirLow && v <= tirHigh).length;
+      const tooLow  = values.filter((v) => v < tirLow).length;
+      const tooHigh = values.filter((v) => v > tirHigh).length;
+      result.glucose_basics = {
+        sample_count:      samples.length,
+        avg_bg_mgdl:       avg,
+        gmi_pct:           +(3.31 + 0.02392 * avg).toFixed(1),
+        tir_pct:           Math.round((inRange / values.length) * 100),
+        tbr_pct:           Math.round((tooLow  / values.length) * 100),
+        tar_pct:           Math.round((tooHigh / values.length) * 100),
+        target_range_mgdl: { low: tirLow, high: tirHigh },
+      };
+    } else {
+      result.glucose_basics = {
+        available: false,
+        hint: !cgmResult?.history?.length
+          ? "Kein CGM verbunden oder Cache leer."
+          : "Keine CGM-Daten im gewählten Zeitraum.",
+      };
+    }
+  }
+
+  // ── Meals & Bolus ─────────────────────────────────────────────────
+  if (cluster === "all" || cluster === "meals_bolus") {
+    const { data: mealRows, error: mealsErr } = await sb
+      .from("meals")
+      .select("created_at, meal_time, evaluation, insulin_units, glucose_before, glucose_after, carbs_grams, meal_type")
+      .gte("created_at", sinceIso);
+
+    if (mealsErr) {
+      result.meals_bolus = { error: mealsErr.message };
+    } else {
+      type Row = {
+        created_at: string; meal_time: string | null; evaluation: string | null;
+        insulin_units: number | null; glucose_before: number | null; glucose_after: number | null;
+        carbs_grams: number | null; meal_type: string | null;
+      };
+      const rows = (mealRows ?? []) as Row[];
+      const scoreResult = computeControlScore(rows as unknown as import("@/lib/meals").Meal[], sinceMs);
+      const evaluated   = scoreResult.good + scoreResult.spike + scoreResult.hypo;
+      const typeCount: Record<string, number> = {};
+      let totalCarbs = 0;
+      for (const m of rows) {
+        const t = m.meal_type ?? "UNKNOWN";
+        typeCount[t] = (typeCount[t] ?? 0) + 1;
+        totalCarbs  += Number(m.carbs_grams) || 0;
+      }
+      result.meals_bolus = {
+        meal_count:         rows.length,
+        adapt_score:        scoreResult.score,
+        good_count:         scoreResult.good,
+        spike_count:        scoreResult.spike,
+        hypo_count:         scoreResult.hypo,
+        good_pct:           evaluated > 0 ? Math.round((scoreResult.good  / evaluated) * 100) : null,
+        spike_pct:          evaluated > 0 ? Math.round((scoreResult.spike / evaluated) * 100) : null,
+        meal_type_dist:     typeCount,
+        avg_carbs_per_meal: rows.length > 0 ? Math.round(totalCarbs / rows.length) : null,
+      };
+    }
+  }
+
+  // ── Adaptive Engine ───────────────────────────────────────────────
+  if (cluster === "all" || cluster === "adaptive_engine") {
+    const [insulinRes, settingsRes] = await Promise.all([
+      sb.from("insulin_logs")
+        .select("insulin_type, units")
+        .gte("created_at", sinceIso),
+      sb.from("user_settings")
+        .select("icr_g_per_unit, icr_g_per_unit_engine, engine_icr_sample_size")
+        .eq("user_id", userId)
+        .maybeSingle(),
+    ]);
+    const insulinRows = (insulinRes.data ?? []) as Array<{ insulin_type: string; units: number }>;
+    const totalBolus  = insulinRows.filter((r) => r.insulin_type === "bolus").reduce((s, r) => s + Number(r.units), 0);
+    const totalBasal  = insulinRows.filter((r) => r.insulin_type === "basal").reduce((s, r) => s + Number(r.units), 0);
+    const days        = Math.max(1, scopeMs / 86_400_000);
+    result.adaptive_engine = {
+      total_bolus_units:     Math.round(totalBolus * 10) / 10,
+      total_basal_units:     Math.round(totalBasal * 10) / 10,
+      avg_daily_bolus_units: Math.round((totalBolus / days) * 10) / 10,
+      bolus_basal_ratio:     totalBasal > 0 ? Math.round((totalBolus / totalBasal) * 10) / 10 : null,
+      user_icr:              (settingsRes.data?.icr_g_per_unit          as number | null) ?? null,
+      engine_icr:            (settingsRes.data?.icr_g_per_unit_engine   as number | null) ?? null,
+      engine_icr_samples:    (settingsRes.data?.engine_icr_sample_size  as number | null) ?? null,
+    };
+  }
+
+  return result;
+}
+
+async function toolGetPatternAlerts(
+  sb: SupabaseClient,
+  _userId: string,
+): Promise<unknown> {
+  const since30dIso = new Date(Date.now() - 30 * 86_400_000).toISOString();
+
+  const { data, error } = await sb
+    .from("meals")
+    .select("id, meal_time, created_at, evaluation, insulin_units, glucose_before, glucose_after, carbs_grams, protein_grams, fat_grams, meal_type, max_bg_180, min_bg_0_180, time_to_peak_min, auc_0_180")
+    .gte("created_at", since30dIso)
+    .order("created_at", { ascending: false })
+    .limit(50);
+
+  if (error) return { error: error.message };
+
+  const meals = (data ?? []) as Array<Record<string, unknown>>;
+  if (!meals.length) {
+    return { available: false, hint: "Keine Mahlzeiten in den letzten 30 Tagen." };
+  }
+
+  const pattern = detectPattern(meals as unknown as import("@/lib/meals").Meal[]);
+  return {
+    type:        pattern.type,
+    label:       pattern.label,
+    explanation: pattern.explanation,
+    confidence:  pattern.confidence,
+    sample_size: pattern.sampleSize,
+    counts:      pattern.counts,
+    ...(pattern.curveInsights ? { curve_insights: pattern.curveInsights } : {}),
+  };
+}
+
+async function toolSuggestMealForRemainingMacros(
+  sb: SupabaseClient,
+  userId: string,
+  args: Record<string, unknown>,
+  userTimezone: string | null,
+): Promise<unknown> {
+  const mealType = typeof args.meal_type === "string" ? args.meal_type : undefined;
+  const dietaryConstraints = Array.isArray(args.dietary_constraints)
+    ? (args.dietary_constraints as unknown[]).filter((s): s is string => typeof s === "string")
+    : undefined;
+  const maxPrepMin = typeof args.max_prep_min === "number" ? args.max_prep_min : undefined;
+
+  const trace = new EngineTrace("recipe_suggestion", {
+    meal_type: mealType,
+    dietary_constraints: dietaryConstraints,
+    max_prep_min: maxPrepMin,
+  });
+
+  // 1. Fetch targets + today's macros in parallel
+  const [targetsRaw, soFarRaw] = await Promise.all([
+    toolGetMacroTargets(sb, userId),
+    toolGetTodayMacrosSoFar(sb, userId, userTimezone),
+  ]);
+
+  const targets = targetsRaw as {
+    carbs_g: number | null; protein_g: number | null;
+    fat_g: number | null;   fiber_g: number | null;
+  };
+  const soFar = soFarRaw as {
+    carbs_g: number; protein_g: number; fat_g: number; fiber_g: number;
+  };
+
+  const remaining = {
+    carbs:   Math.max(0, (targets.carbs_g   ?? 0) - (soFar.carbs_g   ?? 0)),
+    protein: Math.max(0, (targets.protein_g ?? 0) - (soFar.protein_g ?? 0)),
+    fat:     Math.max(0, (targets.fat_g     ?? 0) - (soFar.fat_g     ?? 0)),
+    fiber:   Math.max(0, (targets.fiber_g   ?? 0) - (soFar.fiber_g   ?? 0)),
+  };
+
+  trace.recordStep("macro_gap_computed", { success: true, detail: remaining });
+
+  // 2. Fetch user favorites (occurrences >= 3, sorted by frequency)
+  const { data: historyRows, error: historyErr } = await sb
+    .from("user_food_history")
+    .select("display_name, typical_grams, carbs_per_100g, protein_per_100g, fat_per_100g, fiber_per_100g, occurrences")
+    .gte("occurrences", 3)
+    .order("occurrences", { ascending: false })
+    .limit(20);
+
+  type HistoryRow = {
+    display_name: string; typical_grams: number;
+    carbs_per_100g: number; protein_per_100g: number;
+    fat_per_100g: number; fiber_per_100g: number;
+    occurrences: number;
+  };
+  const historyItems: HistoryRow[] = historyErr ? [] : ((historyRows ?? []) as HistoryRow[]);
+
+  trace.recordStep("user_history_fetched", {
+    success: !historyErr,
+    detail: { count: historyItems.length },
+  });
+
+  // 3. Score favorites by Euclidean distance to remaining macros
+  const remainingNorm = Math.sqrt(
+    remaining.carbs ** 2 + remaining.protein ** 2 + remaining.fat ** 2 + remaining.fiber ** 2,
+  ) || 1;
+
+  const scoredHistory = historyItems.map((item) => {
+    const portionCarbs   = (item.carbs_per_100g   * item.typical_grams) / 100;
+    const portionProtein = (item.protein_per_100g * item.typical_grams) / 100;
+    const portionFat     = (item.fat_per_100g     * item.typical_grams) / 100;
+    const portionFiber   = (item.fiber_per_100g   * item.typical_grams) / 100;
+
+    const dist = Math.sqrt(
+      (remaining.carbs   - portionCarbs)   ** 2 +
+      (remaining.protein - portionProtein) ** 2 +
+      (remaining.fat     - portionFat)     ** 2 +
+      (remaining.fiber   - portionFiber)   ** 2,
+    );
+    const fitScore = Math.round(Math.max(0, 1 - dist / (remainingNorm * 2)) * 100) / 100;
+
+    const dominant = remaining.protein >= remaining.carbs
+      ? `Protein-Lücke von ${Math.round(remaining.protein)}g`
+      : `KH-Lücke von ${Math.round(remaining.carbs)}g`;
+
+    return {
+      name:         item.display_name,
+      macros: {
+        kh:      Math.round(portionCarbs   * 10) / 10,
+        protein: Math.round(portionProtein * 10) / 10,
+        fat:     Math.round(portionFat     * 10) / 10,
+        fiber:   Math.round(portionFiber   * 10) / 10,
+      },
+      prep_minutes: null as number | null,
+      source:       "user_history" as const,
+      fit_score:    fitScore,
+      occurrences:  item.occurrences,
+      reasoning:    `passt zu deiner ${dominant} und du hattest es schon ${item.occurrences}×`,
+    };
+  });
+
+  scoredHistory.sort((a, b) => b.fit_score - a.fit_score);
+  const topHistory = scoredHistory.slice(0, 2);
+
+  // 4. Mistral-generated recipe ideas
+  type GeneratedSuggestion = {
+    name: string;
+    macros: { kh: number; protein: number; fat: number; fiber: number };
+    prep_minutes: number | null;
+    source: "generated";
+    fit_score: number;
+    reasoning: string;
+  };
+  let generatedSuggestions: GeneratedSuggestion[] = [];
+
+  try {
+    const client = getMistralChatClient();
+    const tz = userTimezone && isValidTimezone(userTimezone) ? userTimezone : "Europe/Berlin";
+    const localHour = new Date().toLocaleString("en-US", { timeZone: tz, hour: "numeric", hour12: false });
+    const hour = parseInt(localHour, 10);
+    const inferredType = mealType ?? (
+      hour >= 5 && hour < 11 ? "breakfast"
+      : hour >= 11 && hour < 15 ? "lunch"
+      : hour >= 17 && hour < 22 ? "dinner"
+      : "snack"
+    );
+
+    const dietStr  = dietaryConstraints?.length ? ` Ernährungsweise: ${dietaryConstraints.join(", ")}.` : "";
+    const prepStr  = maxPrepMin ? ` Max. Zubereitungszeit: ${maxPrepMin} Minuten.` : "";
+
+    const prompt =
+      `Du bist ein Koch-Assistent. Schlage genau 2 Mahlzeit-Ideen vor, die zur folgenden verbleibenden Makro-Lücke des Nutzers passen:\n` +
+      `KH: ~${Math.round(remaining.carbs)}g, Protein: ~${Math.round(remaining.protein)}g, Fett: ~${Math.round(remaining.fat)}g, Ballaststoffe: ~${Math.round(remaining.fiber)}g.\n` +
+      `Mahlzeit-Typ: ${inferredType}.${dietStr}${prepStr}\n\n` +
+      `Antworte NUR mit einem gültigen JSON-Array (kein Markdown, kein Text davor oder danach):\n` +
+      `[{"name":"Gerichtname","macros":{"kh":N,"protein":N,"fat":N,"fiber":N},"prep_minutes":N,"reasoning":"1 Satz warum dieses Gericht gut zur Makro-Lücke passt"}]\n\n` +
+      `WICHTIG: Keine BZ-Bezüge, keine Insulin-Angaben, keine medizinischen Aussagen. Nur kulinarische Beschreibung.`;
+
+    const resp = await client.chat.completions.create({
+      model: "mistral-small-latest",
+      messages: [{ role: "user", content: prompt }],
+      temperature: 0.7,
+      max_tokens: 500,
+    });
+
+    const raw = (resp.choices[0]?.message?.content ?? "[]").trim()
+      .replace(/^```(?:json)?\s*/i, "")
+      .replace(/\s*```$/i, "");
+
+    type RawRecipe = { name: string; macros: { kh: number; protein: number; fat: number; fiber: number }; prep_minutes: number; reasoning: string };
+    const parsed = JSON.parse(raw) as RawRecipe[];
+
+    generatedSuggestions = (Array.isArray(parsed) ? parsed : []).slice(0, 2).map((r) => {
+      const kh      = Number(r.macros?.kh)      || 0;
+      const protein = Number(r.macros?.protein)  || 0;
+      const fat     = Number(r.macros?.fat)      || 0;
+      const fiber   = Number(r.macros?.fiber)    || 0;
+      const dist = Math.sqrt(
+        (remaining.carbs   - kh)      ** 2 +
+        (remaining.protein - protein) ** 2 +
+        (remaining.fat     - fat)     ** 2 +
+        (remaining.fiber   - fiber)   ** 2,
+      );
+      return {
+        name:         typeof r.name === "string" ? r.name : "Rezeptvorschlag",
+        macros:       { kh, protein, fat, fiber },
+        prep_minutes: typeof r.prep_minutes === "number" ? r.prep_minutes : null,
+        source:       "generated" as const,
+        fit_score:    Math.round(Math.max(0, 1 - dist / (remainingNorm * 2)) * 100) / 100,
+        reasoning:    typeof r.reasoning === "string" ? r.reasoning : "Guter Makro-Mix für deine verbleibende Tageslücke.",
+      };
+    });
+
+    trace.recordStep("mistral_recipes_generated", {
+      success: true,
+      detail: { count: generatedSuggestions.length },
+    });
+  } catch (e) {
+    trace.recordStep("mistral_recipes_generated", {
+      success: false,
+      detail: { error: e instanceof Error ? e.message : "unknown" },
+    });
+  }
+
+  // 5. Merge, sort by fit_score, cap at 4
+  const suggestions = [
+    ...topHistory.map(({ occurrences: _oc, ...s }) => s),
+    ...generatedSuggestions,
+  ].sort((a, b) => b.fit_score - a.fit_score).slice(0, 4);
+
+  const result = {
+    suggestions,
+    remaining: {
+      kh:      Math.round(remaining.carbs   * 10) / 10,
+      protein: Math.round(remaining.protein * 10) / 10,
+      fat:     Math.round(remaining.fat     * 10) / 10,
+      fiber:   Math.round(remaining.fiber   * 10) / 10,
+    },
+    disclaimer: "Vorschlag, kein verbindlicher Mahlzeit-Plan. Bespreche Mengen mit deinem Diabetes-Team.",
+  };
+
+  trace.setOutput({
+    suggestion_count:  suggestions.length,
+    history_count:     topHistory.length,
+    generated_count:   generatedSuggestions.length,
+    history_dominant:  topHistory.length >= generatedSuggestions.length,
+  });
+
+  // 6. Fire-and-forget engine trace (admin client bypasses RLS)
+  let adminSbForTrace;
+  try { adminSbForTrace = getSupabaseAdmin(); } catch { /* no-op */ }
+  if (adminSbForTrace) {
+    void trace.persist({
+      user_id:     userId,
+      supabase:    adminSbForTrace,
+      app_version: "1.0",
+      env:         process.env.VERCEL_ENV ?? process.env.NODE_ENV ?? "unknown",
+    });
+  }
+
+  return result;
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────

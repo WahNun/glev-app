@@ -41,7 +41,7 @@ function parseLocalDt(v: string): Date | null {
 }
 
 function num(v: string): number | null {
-  const t = v.trim();
+  const t = v.trim().replace(",", ".");
   if (!t) return null;
   const n = parseFloat(t);
   return Number.isFinite(n) ? n : null;
@@ -528,26 +528,26 @@ export default function ManualEntryModal({
               <label style={labelStyle}>{carbsLabel}</label>
               <input
                 value={carbs}
-                onChange={(e) => setCarbs(e.target.value)}
-                type="number"
+                onChange={(e) => setCarbs(e.target.value.replace(/[^0-9.,]/g, ""))}
+                type="text"
                 inputMode="decimal"
-                min={0}
-                step={carbUnit.step}
+                pattern="[0-9]*[.,]?[0-9]*"
+                autoComplete="off"
                 placeholder={carbUnit.placeholder}
                 style={inp}
               />
             </div>
             <div>
               <label style={labelStyle}>{t("fiber_label")}</label>
-              <input value={fiber} onChange={(e) => setFiber(e.target.value)} type="number" min={0} placeholder={t("fiber_placeholder")} style={inp}/>
+              <input value={fiber} onChange={(e) => setFiber(e.target.value.replace(/[^0-9.,]/g, ""))} type="text" inputMode="decimal" pattern="[0-9]*[.,]?[0-9]*" autoComplete="off" placeholder={t("fiber_placeholder")} style={inp}/>
             </div>
             <div>
               <label style={labelStyle}>{t("protein_label")}</label>
-              <input value={protein} onChange={(e) => setProtein(e.target.value)} type="number" min={0} placeholder={t("protein_placeholder")} style={inp}/>
+              <input value={protein} onChange={(e) => setProtein(e.target.value.replace(/[^0-9.,]/g, ""))} type="text" inputMode="decimal" pattern="[0-9]*[.,]?[0-9]*" autoComplete="off" placeholder={t("protein_placeholder")} style={inp}/>
             </div>
             <div>
               <label style={labelStyle}>{t("fat_label")}</label>
-              <input value={fat} onChange={(e) => setFat(e.target.value)} type="number" min={0} placeholder={t("fat_placeholder")} style={inp}/>
+              <input value={fat} onChange={(e) => setFat(e.target.value.replace(/[^0-9.,]/g, ""))} type="text" inputMode="decimal" pattern="[0-9]*[.,]?[0-9]*" autoComplete="off" placeholder={t("fat_placeholder")} style={inp}/>
             </div>
           </div>
 
@@ -570,14 +570,14 @@ export default function ManualEntryModal({
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
             <div>
               <label style={labelStyle}>{t("insulin_label")}</label>
-              <input value={insulin} onChange={(e) => setInsulin(e.target.value)} type="number" min={0} step={0.5} placeholder={t("insulin_placeholder")} style={inp}/>
+              <input value={insulin} onChange={(e) => setInsulin(e.target.value.replace(/[^0-9.,]/g, ""))} type="text" inputMode="decimal" pattern="[0-9]*[.,]?[0-9]*" autoComplete="off" placeholder={t("insulin_placeholder")} style={inp}/>
             </div>
             <div>
               <label style={labelStyle}>{t("glucose_before_label")}</label>
               <input
                 value={glucose}
                 onChange={(e) => { setGlucose(e.target.value); setAutoFilled(s => ({ ...s, glucose: false })); }}
-                type="number" min={30} max={600}
+                type="number" inputMode="numeric" min={30} max={600}
                 placeholder={autoFilled.glucose ? t("glucose_auto_placeholder") : t("glucose_placeholder")}
                 style={{ ...inp, color: autoFilled.glucose ? ACCENT : "var(--text)" }}
               />

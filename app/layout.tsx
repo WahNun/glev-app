@@ -8,14 +8,15 @@ import "./globals.css";
 import { PreventZoom } from "@/components/PreventZoom";
 import { Analytics } from "@vercel/analytics/next";
 import PushNotificationsProvider from "@/components/PushNotificationsProvider";
+import RevenueCatProvider from "@/components/RevenueCatProvider";
 import MealCheckReminderProvider from "@/components/MealCheckReminderProvider";
 import LandscapeGlucoseOverlay from "@/components/LandscapeGlucoseOverlay";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import CookieBanner from "@/components/CookieBanner";
-import GoogleAnalytics from "@/components/GoogleAnalytics";
+import WebOnlyTracking from "@/components/WebOnlyTracking";
 import ServiceWorkerRegistration from "@/components/ServiceWorkerRegistration";
+import SplashScreenHider from "@/components/SplashScreenHider";
 
-const META_PIXEL_ID = "960780236789931";
 
 // Single inline bootstrap script that runs BEFORE React hydrates.
 // Merged into ONE tag deliberately: Replit's devtools proxy intercepts
@@ -283,81 +284,19 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         />
       </head>
       <body>
-        {/* Meta Pixel — fires PageView on every route. Loaded with
-            `afterInteractive` so it never blocks paint/hydration; the
-            queue (`fbq.queue`) catches any track() calls made before
-            the script finishes loading, so the per-page Lead /
-            ViewProPage events on /beta and /pro are safe even on the
-            first navigation after a cold load.
-
-            Uses `dangerouslySetInnerHTML` rather than JSX children
-            because the App Router build pipeline can mangle inline
-            <Script> children during minification (children become a
-            string-concat `props.children` chain, the IIFE then breaks
-            on the closing brace and `window.fbq` ends up undefined in
-            production). `dangerouslySetInnerHTML` ships the script
-            body verbatim. */}
-        {/* Google Analytics — loads after hydration, never blocks paint.
-            ID comes from NEXT_PUBLIC_GA_MEASUREMENT_ID (set in Vercel env vars).
-            Route-change page_view events are fired by <GoogleAnalytics> below. */}
-        {process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID && (
-          <>
-            <Script
-              src={`https://www.googletagmanager.com/gtag/js?id=${process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID}`}
-              strategy="afterInteractive"
-            />
-            <Script
-              id="google-analytics"
-              strategy="afterInteractive"
-              dangerouslySetInnerHTML={{
-                __html: `
-                  window.dataLayer = window.dataLayer || [];
-                  function gtag(){dataLayer.push(arguments);}
-                  gtag('js', new Date());
-                  gtag('config', '${process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID}', { send_page_view: false });
-                `,
-              }}
-            />
-          </>
-        )}
-        <Script
-          id="meta-pixel"
-          strategy="afterInteractive"
-          dangerouslySetInnerHTML={{
-            __html: `
-              !function(f,b,e,v,n,t,s)
-              {if(f.fbq)return;n=f.fbq=function(){n.callMethod?
-              n.callMethod.apply(n,arguments):n.queue.push(arguments)};
-              if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';
-              n.queue=[];t=b.createElement(e);t.async=!0;
-              t.src=v;s=b.getElementsByTagName(e)[0];
-              s.parentNode.insertBefore(t,s)}(window, document,'script',
-              'https://connect.facebook.net/en_US/fbevents.js');
-              fbq('init', '${META_PIXEL_ID}');
-              fbq('track', 'PageView');
-            `,
-          }}
-        />
-        <noscript>
-          <img
-            height="1"
-            width="1"
-            style={{ display: "none" }}
-            alt=""
-            src={`https://www.facebook.com/tr?id=${META_PIXEL_ID}&ev=PageView&noscript=1`}
-          />
-        </noscript>
-        <GoogleAnalytics />
+        <WebOnlyTracking gaId={process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID} />
         <NextIntlClientProvider locale={locale} messages={messages}>
           <ThemeProvider>
             <PreventZoom />
             <PushNotificationsProvider />
+            <RevenueCatProvider />
             <MealCheckReminderProvider />
             <LandscapeGlucoseOverlay />
             {children}
             <Analytics />
             <CookieBanner />
             <ServiceWorkerRegistration />
+            <SplashScreenHider />
           </ThemeProvider>
         </NextIntlClientProvider>
       </body>

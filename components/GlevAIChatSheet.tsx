@@ -14,8 +14,10 @@ import IntentConfirmChip, { intentLabel } from "@/components/IntentConfirmChip";
 import GlevLogo from "@/components/GlevLogo";
 import { getActionMeta } from "@/lib/ai/pendingActions";
 import SourceBadge from "@/components/SourceBadge";
-import { aggregateBadge } from "@/lib/nutrition/badgeFor";
+import { aggregateBadge, aggregateSourceLabel } from "@/lib/nutrition/badgeFor";
 import { supabase } from "@/lib/supabase";
+import { computeItemConfidence } from "@/lib/nutrition/confidence";
+import { useCarbUnit } from "@/hooks/useCarbUnit";
 
 const ACCENT = "#8b5cf6";
 const SHEET_BG = "var(--surface)";
@@ -61,10 +63,19 @@ const COPY = {
     read_aloud:            "Vorlesen",
     meal_fallback:         "Mahlzeit",
     open_engine_chip:      "Engine öffnen",
+    engine_opened_label:   "Im Engine geöffnet · noch nicht gespeichert",
+    macros_review:         "Macros prüfen →",
     n_of_total:            (n: number, total: number) => `${n} von ${total}`,
     details_expand:        "Details ⌄",
     details_collapse:      "Details ⌃",
     ai_source_label:       "KI",
+    conf_carbs:            "KH",
+    conf_protein:          "Eiweiß",
+    conf_fat:              "Fett",
+    conf_fiber:            "Ballaststoffe",
+    conf_breakdown:        "Aufschlüsselung KH",
+    conf_label:            "Konfidenz",
+    conf_enter_own:        "Eigenen Wert eingeben",
     mic_stop:              "Aufnahme stoppen",
     mic_start:             "Spracheingabe starten",
     mic_rate_limit:        (sec: number) => `Bitte ${sec} Sek. warten`,
@@ -75,6 +86,8 @@ const COPY = {
     send:                  "Senden",
     attach_too_large:      "Datei zu groß (max. 5 MB)",
     attach_limit:          "Maximal 3 Anhänge erlaubt",
+    attach_heic:           "HEIC-Konvertierung fehlgeschlagen – bitte als JPEG exportieren.",
+    attach_converting:     "Konvertiere HEIC …",
     attach_uploading:      "Lädt hoch …",
     attach_remove:         "Anhang entfernen",
   },
@@ -116,10 +129,19 @@ const COPY = {
     read_aloud:            "Read aloud",
     meal_fallback:         "Meal",
     open_engine_chip:      "Open Engine",
+    engine_opened_label:   "Opened in Engine · not saved yet",
+    macros_review:         "Review macros →",
     n_of_total:            (n: number, total: number) => `${n} of ${total}`,
     details_expand:        "Details ⌄",
     details_collapse:      "Details ⌃",
     ai_source_label:       "AI",
+    conf_carbs:            "Carbs",
+    conf_protein:          "Protein",
+    conf_fat:              "Fat",
+    conf_fiber:            "Fiber",
+    conf_breakdown:        "Carbs breakdown",
+    conf_label:            "Confidence",
+    conf_enter_own:        "Enter own value",
     mic_stop:              "Stop recording",
     mic_start:             "Start voice input",
     mic_rate_limit:        (sec: number) => `Wait ${sec} sec`,
@@ -130,6 +152,8 @@ const COPY = {
     send:                  "Send",
     attach_too_large:      "File too large (max 5 MB)",
     attach_limit:          "Max 3 attachments",
+    attach_heic:           "HEIC conversion failed – please export as JPEG.",
+    attach_converting:     "Converting HEIC …",
     attach_uploading:      "Uploading …",
     attach_remove:         "Remove attachment",
   },
@@ -185,8 +209,11 @@ interface Props {
    * "fullscreen" — fixed overlay that fills the content area between header
    *                and nav. No backdrop, no drag handle, fade-in animation,
    *                back-button instead of X. Used on /engine.
+   * "inline"     — no fixed positioning, no backdrop, no drag handle, no header.
+   *                Flows in the document as a flex column. Used in Engine Step 0
+   *                for consented users.
    */
-  variant?: "sheet" | "fullscreen";
+  variant?: "sheet" | "fullscreen" | "inline";
 }
 
 
@@ -210,6 +237,30 @@ interface Props {
  *     and non-interactive — the user must resolve earlier chips first.
  */
 
+// ── MealChipExpanded helpers ──────────────────────────────────────────────
+
+/**
+ * Parse "27g KH, 1g P, 0g F, 3g Bal" from the pending-action summary string.
+ * Returns null when carbs can't be extracted (fallback to zeros).
+ */
+function parseSummaryMacros(
+  macroStr: string | null,
+): { carbs: number; protein: number; fat: number; fiber: number } | null {
+  if (!macroStr) return null;
+  const carbsM   = macroStr.match(/(\d+(?:\.\d+)?)g KH/);
+  const proteinM = macroStr.match(/(\d+(?:\.\d+)?)g P\b/);
+  const fatM     = macroStr.match(/(\d+(?:\.\d+)?)g F\b/);
+  const fiberM   = macroStr.match(/(\d+(?:\.\d+)?)g Bal/);
+  const carbs = parseFloat(carbsM?.[1] ?? "");
+  if (!Number.isFinite(carbs)) return null;
+  return {
+    carbs,
+    protein: Number.isFinite(parseFloat(proteinM?.[1] ?? "")) ? parseFloat(proteinM![1]) : 0,
+    fat:     Number.isFinite(parseFloat(fatM?.[1]     ?? "")) ? parseFloat(fatM![1])     : 0,
+    fiber:   Number.isFinite(parseFloat(fiberM?.[1]   ?? "")) ? parseFloat(fiberM![1])   : 0,
+  };
+}
+
 // ── MealChipExpanded ──────────────────────────────────────────────────────
 // Extracted so it can own its own useState (expand toggle) without making
 // PendingActionWidget a client component or violating hooks rules.
@@ -222,6 +273,7 @@ function MealChipExpanded({
   timeStr,
   itemsForExpand: initialItems,
   mealPrepId,
+  nutritionSource,
   totalAlcoholG = 0,
   showQueueBadge,
   mealChipIndex,
@@ -239,6 +291,8 @@ function MealChipExpanded({
   itemsForExpand: Array<ParsedFood>;
   /** Phase 3: id for Realtime refinement subscription. */
   mealPrepId?: string;
+  /** Top-level nutrition provenance from the aggregator (AggregateSource). */
+  nutritionSource?: string | null;
   /** Dual-Emission: total alcohol grams across items — shows ⇄ indicator. */
   totalAlcoholG?: number;
   showQueueBadge: boolean;
@@ -250,7 +304,21 @@ function MealChipExpanded({
 }) {
   const [expanded, setExpanded] = useState(false);
   const [itemsForExpand, setItemsForExpand] = useState<Array<ParsedFood>>(initialItems);
+  const rawLocale = useLocale();
+  const expandLocale: "de" | "en" = rawLocale === "en" ? "en" : "de";
   const [badgesTransitioning, setBadgesTransitioning] = useState(false);
+  const carbUnit = useCarbUnit();
+
+  // When carb unit is BE/KE, annotate "27g KH" in macroStr with "(≈2.3 BE)".
+  const macroStrAdapted = (() => {
+    if (!macroStr || carbUnit.unit === "g") return macroStr;
+    return macroStr.replace(/(\d+(?:\.\d+)?)g KH/, (_m, gStr) => {
+      const g = parseFloat(gStr);
+      if (!Number.isFinite(g) || g <= 0) return `${gStr}g KH`;
+      const unitVal = carbUnit.fromGrams(g);
+      return `${gStr}g KH (≈${unitVal} ${carbUnit.label})`;
+    });
+  })();
 
   // Phase 3 Realtime: subscribe to meal_prep_refinements for this mealPrepId.
   // When OPTIMISTIC_REFINEMENT=true the aggregator writes a 'completed' row
@@ -283,11 +351,11 @@ function MealChipExpanded({
       )
       .subscribe();
 
-    // Polling fallback: query every 500ms for up to 5s if Realtime doesn't fire.
+    // Polling fallback: query every 500ms for up to 10s if Realtime doesn't fire.
     let pollCount = 0;
     const poll = setInterval(async () => {
       pollCount++;
-      if (pollCount > 10) { clearInterval(poll); return; }
+      if (pollCount > 20) { clearInterval(poll); return; }
       if (!supabase) { clearInterval(poll); return; }
       const { data } = await supabase
         .from("meal_prep_refinements")
@@ -384,80 +452,79 @@ function MealChipExpanded({
         </div>
         {/* Aggregate badge from real sources; fades during Realtime refinement. */}
         {(() => {
-          const badge = aggregateBadge(
-            itemsForExpand.map((it) => ({ source: (it.source ?? "estimated") as NutritionSource })),
-          );
-          const src: NutritionSource =
-            badge === "verified" ? "open_food_facts" :
-            badge === "mixed"    ? "user_history"    : "estimated";
+          // Vision estimate: dedicated 📷 Foto badge.
+          if (nutritionSource === "vision_estimate") {
+            return (
+              <span
+                style={{ opacity: badgesTransitioning ? 0 : 1, transition: "opacity 0.25s ease" }}
+                title="Vision-Schätzung"
+              >
+                <span style={{
+                  display: "inline-flex", alignItems: "center", gap: 3,
+                  fontSize: 10, fontWeight: 600, letterSpacing: "0.04em",
+                  padding: "1px 5px", borderRadius: 6,
+                  background: "rgba(59,130,246,0.12)", color: "#60a5fa",
+                  whiteSpace: "nowrap", flexShrink: 0,
+                }}>
+                  📷 {aggregateSourceLabel(nutritionSource, expandLocale)}
+                </span>
+              </span>
+            );
+          }
+          // Trust the aggregator's top-level nutritionSource first; fall back to
+          // per-item derivation for the optimistic path where top-level is null.
+          const effectiveSrc: "user_history" | "usda" | "open_food_facts" | "mixed" | "estimated" = (() => {
+            if (nutritionSource === "user_history" || nutritionSource === "user_confirmed") return "user_history";
+            if (nutritionSource === "usda") return "usda";
+            if (nutritionSource === "open_food_facts" || nutritionSource === "database") return "open_food_facts";
+            if (nutritionSource === "mixed") return "mixed";
+            // Fallback: derive from per-item sources (optimistic path: nutritionSource is null
+            // because the aggregator result is only stored in meal_prep_refinements, not the
+            // initial SSE frame — so we reconstruct the aggregate from what Realtime gave us).
+            if (itemsForExpand.length > 0) {
+              if (itemsForExpand.some(it => it.source === "user_history" || it.source === "user_confirmed")) return "user_history";
+              const badge = aggregateBadge(
+                itemsForExpand.map((it) => ({ source: (it.source ?? "estimated") as NutritionSource })),
+              );
+              if (badge === "mixed") return "mixed";
+              if (badge === "verified") {
+                if (itemsForExpand.every(it => it.source === "usda")) return "usda";
+                return "open_food_facts";
+              }
+            }
+            return "estimated";
+          })();
+          // "mixed" needs its own inline render — NutritionSource doesn't include it
+          // so SourceBadge can't handle it.
+          if (effectiveSrc === "mixed") {
+            return (
+              <span style={{ opacity: badgesTransitioning ? 0 : 1, transition: "opacity 0.25s ease" }}>
+                <span style={{
+                  display: "inline-flex", alignItems: "center", gap: 3,
+                  fontSize: 10, fontWeight: 600, letterSpacing: "0.04em",
+                  padding: "1px 5px", borderRadius: 6,
+                  background: "rgba(139,92,246,0.12)", color: "#a78bfa",
+                  whiteSpace: "nowrap", flexShrink: 0,
+                }}>
+                  ✨ {aggregateSourceLabel("mixed", expandLocale)}
+                </span>
+              </span>
+            );
+          }
           return (
             <span style={{ opacity: badgesTransitioning ? 0 : 1, transition: "opacity 0.25s ease" }}>
-              <SourceBadge source={src} />
+              <SourceBadge source={effectiveSrc} locale={expandLocale} />
             </span>
           );
         })()}
       </div>
 
-      {/* Macros + time line */}
-      {(macroStr || timeStr) && (
+      {/* Macros + time line — macroStrAdapted adds "(≈X BE)" when unit != g */}
+      {(macroStrAdapted || timeStr) && (
         <div style={{ color: "var(--text-body)", fontSize: 12, lineHeight: 1.4 }}>
-          {macroStr && <span>({macroStr})</span>}
-          {macroStr && timeStr && " "}
+          {macroStrAdapted && <span>({macroStrAdapted})</span>}
+          {macroStrAdapted && timeStr && " "}
           {timeStr && <span style={{ color: "var(--text-muted)" }}>um {timeStr}</span>}
-        </div>
-      )}
-
-      {/* Expand: per-item list (Phase 1 = all ✨ KI) */}
-      {expanded && (
-        <div
-          style={{
-            display: "flex",
-            flexDirection: "column",
-            gap: 4,
-            padding: "8px 10px",
-            background: "var(--surface-alt, rgba(255,255,255,0.03))",
-            borderRadius: 8,
-            border: "1px solid var(--border)",
-          }}
-        >
-          {itemsForExpand.length > 0 ? (
-            itemsForExpand.map((item, i) => (
-              <div
-                key={i}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 8,
-                  fontSize: 12,
-                  color: "var(--text-body)",
-                }}
-              >
-                <span style={{ flex: 1 }}>
-                  {item.name}
-                  <span style={{ color: "var(--text-muted)", marginLeft: 4 }}>
-                    {item.grams}g
-                  </span>
-                </span>
-                <span style={{ opacity: badgesTransitioning ? 0 : 1, transition: "opacity 0.25s ease" }}>
-                  <SourceBadge source={(item.source ?? "estimated") as NutritionSource} />
-                </span>
-              </div>
-            ))
-          ) : (
-            // No per-item data (Phase 1 / flag-off) — show meal-name placeholder.
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                fontSize: 12,
-                color: "var(--text-body)",
-              }}
-            >
-              <span>{mealName}</span>
-              <SourceBadge source="estimated" />
-            </div>
-          )}
         </div>
       )}
 
@@ -482,7 +549,7 @@ function MealChipExpanded({
         </div>
       )}
 
-      {/* Action row: [Details ⌄] [Engine öffnen →] */}
+      {/* Action row: [Details ⌄/⌃] [Engine öffnen →] */}
       <div style={{ display: "flex", gap: 8 }}>
         <button
           type="button"
@@ -525,6 +592,156 @@ function MealChipExpanded({
           {busy ? t.opening : t.open_engine}
         </button>
       </div>
+
+      {/* Inline confidence expand — toggles with Details ⌄/⌃ */}
+      {expanded && (
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            gap: 10,
+            padding: "10px 12px",
+            background: "var(--surface-alt, rgba(255,255,255,0.03))",
+            borderRadius: 10,
+            border: "1px solid var(--border)",
+          }}
+        >
+          {(() => {
+            // Bug A fix: when items are missing or all-zero, synthesise a single
+            // display item from the summary macros (macroStr always carries
+            // Mistral's estimates — identical to what the header shows).
+            // Bug B fix: map nutritionSource → per-item source so computeItemConfidence
+            // can show "Open Food Facts", "USDA", etc. instead of always "KI-Schätzung".
+            const hasMacros = itemsForExpand.some(
+              it => (it.carbs ?? 0) > 0 || (it.protein ?? 0) > 0 || (it.fat ?? 0) > 0 || (it.fiber ?? 0) > 0,
+            );
+            const effectiveItems: ParsedFood[] = (() => {
+              if (hasMacros) return itemsForExpand;
+              const parsed = parseSummaryMacros(macroStr);
+              if (parsed) {
+                const src: ParsedFood["source"] =
+                  nutritionSource === "open_food_facts" ? "open_food_facts" :
+                  nutritionSource === "usda"            ? "usda" :
+                  (nutritionSource === "user_history" || nutritionSource === "user_confirmed") ? "user_history" :
+                  "estimated";
+                return [{ name: mealName, grams: 0, ...parsed, source: src }];
+              }
+              return itemsForExpand.length > 0 ? itemsForExpand : [{ name: mealName, grams: 0, carbs: 0, protein: 0, fat: 0, fiber: 0 } as ParsedFood];
+            })();
+            return effectiveItems.map((item, i) => {
+            const conf = computeItemConfidence(item, expandLocale, { isMultiComponent: effectiveItems.length > 2 });
+            const ciStr = (v: number, ci: number) =>
+              v === 0 && ci < 0.15 ? "0 g" : `${v.toFixed(1)} ±${Math.max(0.1, ci).toFixed(1)} g`;
+            const confColor = conf.overallPct >= 85 ? "#34d399" : conf.overallPct >= 70 ? "#fbbf24" : "#f87171";
+            return (
+              <div
+                key={i}
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 6,
+                  paddingBottom: i < effectiveItems.length - 1 ? 10 : 0,
+                  borderBottom: i < effectiveItems.length - 1 ? "1px solid var(--border)" : "none",
+                }}
+              >
+                {/* Item header */}
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+                  <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text-strong)" }}>
+                    {item.name}
+                    {item.grams > 0 && (
+                      <span style={{ color: "var(--text-muted)", fontWeight: 400, marginLeft: 4 }}>
+                        {item.grams}g
+                      </span>
+                    )}
+                  </div>
+                  <span
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      padding: "1px 6px",
+                      borderRadius: 8,
+                      fontSize: 10,
+                      fontWeight: 700,
+                      background: `${confColor}22`,
+                      color: confColor,
+                      border: `1px solid ${confColor}44`,
+                      whiteSpace: "nowrap",
+                      flexShrink: 0,
+                    }}
+                  >
+                    {conf.overallPct}%
+                  </span>
+                </div>
+
+                {/* Macro rows with ±CI */}
+                <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                  {([
+                    { label: t.conf_carbs,   c: conf.carbs,   val: item.carbs },
+                    { label: t.conf_protein, c: conf.protein, val: item.protein },
+                    { label: t.conf_fat,     c: conf.fat,     val: item.fat },
+                    { label: t.conf_fiber,   c: conf.fiber,   val: item.fiber },
+                  ]).map(({ label, c, val }) => (
+                    <div
+                      key={label}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        fontSize: 11,
+                      }}
+                    >
+                      <span style={{ color: "var(--text-muted)", minWidth: 80 }}>{label}:</span>
+                      <span style={{ color: "var(--text-body)", fontVariantNumeric: "tabular-nums" }}>
+                        {ciStr(val, c.ci)}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+
+                {/* KH breakdown detail lines */}
+                {conf.carbs.details.length > 0 && (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 2, paddingTop: 4, borderTop: "1px solid var(--border)" }}>
+                    <div style={{ fontSize: 10, color: "var(--text-muted)", fontWeight: 600 }}>
+                      {t.conf_breakdown}:
+                    </div>
+                    {conf.carbs.details.map((line, j) => (
+                      <div key={j} style={{ fontSize: 10, color: "var(--text-body)", paddingLeft: 6 }}>
+                        • {line}
+                      </div>
+                    ))}
+                    <div style={{ fontSize: 10, color: "var(--text-muted)", paddingTop: 2 }}>
+                      {t.conf_label}: {conf.overallPct}%
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+            });
+          })()}
+
+          {/* "Eigenen Wert eingeben" — delegates to Engine macro edit */}
+          {onOpenEngine && (
+            <button
+              type="button"
+              onClick={onOpenEngine}
+              style={{
+                width: "100%",
+                padding: "8px 10px",
+                borderRadius: 8,
+                border: "1px solid var(--border)",
+                background: "transparent",
+                color: "var(--text-body)",
+                fontSize: 12,
+                fontWeight: 500,
+                cursor: "pointer",
+                marginTop: 2,
+              }}
+            >
+              {t.conf_enter_own}
+            </button>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -587,6 +804,33 @@ function PendingActionWidget({
         <div style={{ color: "#7ee0a0", fontWeight: 600, fontSize: 13 }}>
           {isMeal ? t.confirmed_engine : t.confirmed_saved}
         </div>
+      </div>
+    );
+  }
+  if (pa.state === "engine_opened" && isMeal) {
+    return (
+      <div style={{ ...baseCard, borderColor: "rgba(139,92,246,0.3)" }}>
+        {summary}
+        <div style={{ color: "var(--text-muted)", fontSize: 12 }}>
+          {t.engine_opened_label}
+        </div>
+        <button
+          type="button"
+          onClick={onOpenEngine}
+          style={{
+            width: "100%",
+            padding: "9px 12px",
+            borderRadius: 8,
+            border: "none",
+            background: "rgba(139,92,246,0.2)",
+            color: "var(--accent, #8b5cf6)",
+            fontWeight: 600,
+            fontSize: 13,
+            cursor: "pointer",
+          }}
+        >
+          {t.macros_review}
+        </button>
       </div>
     );
   }
@@ -657,6 +901,7 @@ function PendingActionWidget({
     const itemsForExpand: Array<ParsedFood> = p?.items ?? [];
     const mealPrepId = p?.meal_prep_id;
     const totalAlcoholG = p?.total_alcohol_g ?? 0;
+    const nutritionSource = p?.nutritionSource ?? null;
 
     return (
       <MealChipExpanded
@@ -668,6 +913,7 @@ function PendingActionWidget({
         timeStr={timeStr}
         itemsForExpand={itemsForExpand}
         mealPrepId={mealPrepId}
+        nutritionSource={nutritionSource}
         totalAlcoholG={totalAlcoholG}
         showQueueBadge={showQueueBadge}
         mealChipIndex={mealChipIndex}
@@ -1206,6 +1452,7 @@ export default function GlevAIChatSheet({
   const locale = useLocale();
   const t = locale === "en" ? COPY.en : COPY.de;
   const isFullscreen = variant === "fullscreen";
+  const isInline = variant === "inline";
   const [input, setInput] = useState("");
   const [sttError, setSttError] = useState<string | null>(null);
   const [sttPartial, setSttPartial] = useState<string | null>(null);
@@ -1217,7 +1464,7 @@ export default function GlevAIChatSheet({
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const addFiles = useCallback((files: FileList | File[]) => {
+  const addFiles = useCallback(async (files: FileList | File[]) => {
     const arr = Array.from(files);
     if (pendingAttachments.length + arr.length > 3) {
       setAttachToast(t.attach_limit);
@@ -1230,6 +1477,30 @@ export default function GlevAIChatSheet({
         setTimeout(() => setAttachToast(null), 3000);
         return;
       }
+      const nameLower = file.name.toLowerCase();
+      const isHeic =
+        file.type === "image/heic" || file.type === "image/heif" ||
+        nameLower.endsWith(".heic") || nameLower.endsWith(".heif");
+      if (isHeic) {
+        setAttachToast(t.attach_converting);
+        try {
+          const heic2any = (await import("heic2any")).default;
+          const result = await heic2any({ blob: file, toType: "image/jpeg", quality: 0.85 });
+          const jpegBlob = Array.isArray(result) ? result[0] : result;
+          const jpegName = file.name.replace(/\.hei[cf]$/i, ".jpg");
+          const jpegFile = new File([jpegBlob], jpegName, { type: "image/jpeg" });
+          setAttachToast(null);
+          const preview = URL.createObjectURL(jpegFile);
+          setPendingAttachments((prev) => [
+            ...prev,
+            { id: `${Date.now()}-${Math.random()}`, file: jpegFile, preview, mimeType: "image/jpeg", fileName: jpegFile.name },
+          ]);
+        } catch {
+          setAttachToast(t.attach_heic);
+          setTimeout(() => setAttachToast(null), 5000);
+        }
+        continue;
+      }
       const preview = file.type.startsWith("image/") ? URL.createObjectURL(file) : null;
       setPendingAttachments((prev) => [
         ...prev,
@@ -1237,7 +1508,7 @@ export default function GlevAIChatSheet({
       ]);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pendingAttachments.length, t.attach_limit, t.attach_too_large]);
+  }, [pendingAttachments.length, t.attach_limit, t.attach_too_large, t.attach_converting, t.attach_heic]);
 
   const removeAttachment = useCallback((id: string) => {
     setPendingAttachments((prev) => {
@@ -1492,7 +1763,7 @@ export default function GlevAIChatSheet({
       `}</style>
 
       {/* Backdrop — sheet mode only */}
-      {!isFullscreen && (
+      {!isFullscreen && !isInline && (
         <div
           onClick={onClose}
           role="presentation"
@@ -1511,12 +1782,23 @@ export default function GlevAIChatSheet({
         />
       )}
 
-      {/* Sheet / Fullscreen container */}
+      {/* Sheet / Fullscreen / Inline container */}
       <div
-        role="dialog"
-        aria-modal="true"
+        role={isInline ? undefined : "dialog"}
+        aria-modal={isInline ? undefined : "true"}
         aria-label="Glev AI Chat"
-        style={isFullscreen ? {
+        style={isInline ? {
+          display: "flex",
+          flexDirection: "column",
+          width: "100%",
+          flex: "1 1 0",
+          minHeight: 0,
+          background: SHEET_BG,
+          color: "var(--text)",
+          overflow: "hidden",
+          borderRadius: 14,
+          border: "1px solid var(--border-soft)",
+        } : isFullscreen ? {
           position: "fixed",
           top: "var(--nav-top-total)",
           bottom: "var(--nav-bottom-total)",
@@ -1534,10 +1816,10 @@ export default function GlevAIChatSheet({
           overflow: "hidden",
         } : {
           position: "fixed",
+          top: "var(--nav-top-total)",
           bottom: "var(--nav-bottom-total)",
           left: 0,
           right: 0,
-          height: "calc(85dvh - var(--nav-bottom-total))",
           background: SHEET_BG,
           color: "var(--text)",
           borderRadius: "20px 20px 0 0",
@@ -1553,7 +1835,7 @@ export default function GlevAIChatSheet({
         }}
       >
         {/* Drag handle — sheet mode only, swipe down ≥ 80 px to close */}
-        {!isFullscreen && (
+        {!isFullscreen && !isInline && (
           <div
             aria-hidden="true"
             onTouchStart={handleDragStart}
@@ -1583,6 +1865,11 @@ export default function GlevAIChatSheet({
             />
           </div>
         )}
+
+        {/* No internal header on any variant — the global app-header provides
+            the full AI control cluster (AIStateChip + ↻ + 🔊 + ← / ✕) for
+            both the bottom-sheet (sheetOpen) and the /glev-ai fullscreen page
+            (isAiSurface). Removing this strip eliminates the double-header. */}
 
         {/* Messages */}
         <div

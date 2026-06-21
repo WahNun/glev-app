@@ -7,6 +7,7 @@ import {
 } from "@/lib/stripeServer";
 import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { trackEvent } from "@/lib/capi-events";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -212,6 +213,17 @@ export async function POST(req: NextRequest) {
       await rollbackPendingReservation(sb, rowId);
       return NextResponse.json({ error: GENERIC_ERROR }, { status: 500 });
     }
+
+    trackEvent("InitiateCheckout", {
+      user: { email },
+      customData: {
+        content_name: "Glev Smart",
+        content_ids:  ["glev-smart-monthly"],
+        content_type: "product",
+      },
+      eventId:   `checkout_${session.id}`,
+      sourceUrl: `${getOrigin(req)}/beta`,
+    }).catch(() => {});
 
     // Persist session id, but never on a row that has somehow already been
     // marked paid (defense-in-depth against races with the webhook).

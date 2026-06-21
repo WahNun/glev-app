@@ -18,6 +18,7 @@
 import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
+import { useCarbUnit, type UseCarbUnitResult } from "@/hooks/useCarbUnit";
 import {
   fetchIcrSchedule,
   saveIcrSchedule,
@@ -36,6 +37,7 @@ const PINK   = "#FF2D78";
 
 export default function IcrSchedulePage() {
   const t = useTranslations("icrSchedule");
+  const carbUnit = useCarbUnit();
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving]   = useState(false);
@@ -187,6 +189,7 @@ export default function IcrSchedulePage() {
             placeholder={placeholders[idx]}
             onChange={(patch) => updateSlot(idx, patch)}
             t={t}
+            carbUnit={carbUnit}
           />
         ))}
       </div>
@@ -234,12 +237,13 @@ export default function IcrSchedulePage() {
 }
 
 function SlotCard({
-  slot, placeholder, onChange, t,
+  slot, placeholder, onChange, t, carbUnit,
 }: {
   slot: IcrSlot;
   placeholder: string;
   onChange: (patch: Partial<IcrSlot>) => void;
   t: ReturnType<typeof useTranslations>;
+  carbUnit: UseCarbUnitResult;
 }) {
   const [startStr, setStartStr] = useState(minutesToHHMM(slot.startMinute));
   const [endStr,   setEndStr]   = useState(minutesToHHMM(slot.endMinute));
@@ -257,6 +261,14 @@ function SlotCard({
     const m = hhmmToMinutes(s);
     if (m != null) onChange({ endMinute: m });
   }
+
+  const icrLabel = { g: t("slot_icr_label_g"), BE: t("slot_icr_label_BE"), KE: t("slot_icr_label_KE") }[carbUnit.unit];
+  const unitCfg = {
+    g:  { min: 2,   max: 40, step: 1,   ticks: [5, 10, 15, 20, 25, 30] as number[] },
+    BE: { min: 0.5, max: 5,  step: 0.5, ticks: [0.5, 1, 1.5, 2, 2.5, 3] as number[] },
+    KE: { min: 0.5, max: 5,  step: 0.5, ticks: [0.5, 1, 1.5, 2, 2.5, 3] as number[] },
+  }[carbUnit.unit];
+  const displayICRValue = carbUnit.fromGrams(slot.icrGPerUnit);
 
   return (
     <div
@@ -358,17 +370,17 @@ function SlotCard({
       {/* ICR value */}
       <div>
         <label style={{ display: "block", fontSize: 11, color: "var(--text-faint)", marginBottom: 4 }}>
-          {t("slot_icr_label")}
+          {icrLabel}
         </label>
         <SnapSlider
-          value={slot.icrGPerUnit}
-          onChange={(v) => onChange({ icrGPerUnit: v })}
-          min={2}
-          max={40}
-          step={1}
-          unit="g/IE"
+          value={displayICRValue}
+          onChange={(v) => onChange({ icrGPerUnit: carbUnit.toGrams(v) })}
+          min={unitCfg.min}
+          max={unitCfg.max}
+          step={unitCfg.step}
+          unit={carbUnit.icrUnitSuffix}
           accent={ACCENT}
-          ariaLabel={t("slot_icr_label")}
+          ariaLabel={icrLabel}
         />
         <div style={{
           display: "flex",
@@ -377,17 +389,22 @@ function SlotCard({
           paddingLeft: 2,
           paddingRight: 2,
         }}>
-          {[5, 10, 15, 20, 25, 30].map((tick) => (
+          {unitCfg.ticks.map((tick) => (
             <span key={tick} style={{
               fontSize: 10,
-              color: slot.icrGPerUnit === tick ? ACCENT : "var(--text-ghost)",
-              fontWeight: slot.icrGPerUnit === tick ? 700 : 400,
+              color: displayICRValue === tick ? ACCENT : "var(--text-ghost)",
+              fontWeight: displayICRValue === tick ? 700 : 400,
               transition: "color 150ms ease",
             }}>
               {tick}
             </span>
           ))}
         </div>
+        {carbUnit.unit !== "g" && (
+          <div style={{ fontSize: 11, color: "var(--text-faint)", marginTop: 4, textAlign: "right" }}>
+            ({slot.icrGPerUnit} g KH / IE)
+          </div>
+        )}
       </div>
     </div>
   );

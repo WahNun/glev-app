@@ -4,7 +4,7 @@
  * Internal CRM notification — fires when someone completes the free-trial
  * signup (Step 2, after profile data is saved).
  *
- * Sends a structured email to glev@beauty-flow.de (CC: crm@glev.app) from crm@glev.app via Resend.
+ * Sends a structured email to glev@beauty-flow.de + crm@glev.app from crm@glev.app via Resend.
  * Fire-and-forget from the client — failures are logged but never surface
  * to the user.
  *
@@ -39,8 +39,7 @@ export async function POST(req: NextRequest) {
 
     const { error } = await resend.emails.send({
       from: "Glev CRM <crm@glev.app>",
-      to: "glev@beauty-flow.de",
-      cc: ["crm@glev.app"],
+      to: ["glev@beauty-flow.de", "crm@glev.app"],
       subject,
       html,
     });
@@ -58,4 +57,4 @@ export async function POST(req: NextRequest) {
   }
 }
 
-export const runtime = "edge";
+export const runtime = "nodejs";

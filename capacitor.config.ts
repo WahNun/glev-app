@@ -55,8 +55,10 @@ const config: CapacitorConfig & { packageClassList: string[] } = {
     "PushNotificationsPlugin",
     "ScreenOrientationPlugin",
     "SharePlugin",
+    "AppleSignInPlugin",
     "HealthPlugin",
     "GlevCriticalAlertsPlugin",
+    "PurchasesPlugin",
   ],
   server: {
     url: "https://glev.app/dashboard",
@@ -65,6 +67,15 @@ const config: CapacitorConfig & { packageClassList: string[] } = {
     allowNavigation: ["glev.app"],
   },
   plugins: {
+    SplashScreen: {
+      launchShowDuration: 2000,
+      launchAutoHide: false,
+      backgroundColor: "#09090B",
+      androidScaleType: "CENTER_CROP",
+      showSpinner: false,
+      splashFullScreen: true,
+      splashImmersive: true,
+    },
     // ScreenOrientation: default portrait-lock intentionally removed.
     //
     // Previously `ScreenOrientation: { default: "portrait" }` locked the

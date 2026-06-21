@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { getMistralClient } from "@/lib/ai/mistralClient";
 import { authedClient } from "@/app/api/insulin/_helpers";
 import { isSTTRateLimited, addSTTRateLimitHit, STT_MIN_BLOB_BYTES } from "@/lib/ai/sttRateLimiter";
+import { EngineTrace } from "@/lib/engine/trace";
+import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -12,7 +14,7 @@ function voxtralFileName(mimeType: string): string {
   if (mimeType.startsWith("audio/mpeg") || mimeType.startsWith("audio/mp3")) return "audio.mp3";
   if (mimeType.startsWith("audio/ogg")) return "audio.ogg";
   if (mimeType.startsWith("audio/wav")) return "audio.wav";
-  return "audio.webm"; // default — covers audio/webm;codecs=opus (Chrome/Safari/Firefox)
+  return "audio.webm";
 }
 
 function isMistral429(e: unknown): boolean {
@@ -68,6 +70,18 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  let adminSb;
+  try { adminSb = getSupabaseAdmin(); } catch { /* no-op */ }
+
+  const traceEnv = adminSb
+    ? {
+        user_id:     auth.user.id,
+        supabase:    adminSb,
+        app_version: process.env.npm_package_version ?? "unknown",
+        env:         process.env.VERCEL_ENV ?? process.env.NODE_ENV ?? "unknown",
+      }
+    : null;
+
   try {
     const form = await req.formData();
     const file = form.get("audio");
@@ -88,6 +102,18 @@ export async function POST(req: NextRequest) {
     // Record hit after validating audio (don't count rejected blobs).
     void addSTTRateLimitHit(auth.user.id);
 
+    // Strip codec parameter — Voxtral supports WebM natively but rejects
+    // "audio/webm;codecs=opus" with error 3310. Bare "audio/webm" is accepted.
+    const cleanMime = file.type.split(";")[0];
+
+    const trace = traceEnv
+      ? new EngineTrace("voice_intent", {
+          audio_bytes_size: file.size,
+          mime_type:        file.type,
+          clean_mime:       cleanMime,
+        })
+      : null;
+
     let mistral;
     try { mistral = getMistralClient(); }
     catch (e) {
@@ -99,19 +125,42 @@ export async function POST(req: NextRequest) {
 
     const t1 = Date.now();
 
-    // Voxtral identifies the audio format from the file extension.
-    // Without a filename the API returns 400 "Audio input could not be decoded."
-    const audioFile = new File([file], voxtralFileName(file.type), { type: file.type });
+    const audioFile = new File([file], voxtralFileName(cleanMime), { type: cleanMime });
 
-    const result = await mistral.audio.transcriptions.complete({
-      model: "voxtral-mini-latest",
-      file: audioFile,
-    });
+    let text: string;
+    try {
+      const result = await mistral.audio.transcriptions.complete({
+        model: "voxtral-mini-latest",
+        file: audioFile,
+      });
+      text = (result as unknown as { text?: string }).text ?? "";
+    } catch (sttErr) {
+      const sttLatency = Date.now() - t1;
+      if (trace && traceEnv) {
+        trace.recordStep("voxtral_stt", {
+          success:    false,
+          latency_ms: sttLatency,
+          detail:     { error: sttErr instanceof Error ? sttErr.message : String(sttErr) },
+        });
+        trace.setError(sttErr instanceof Error ? sttErr.message : String(sttErr));
+        void trace.persist(traceEnv);
+      }
+      throw sttErr;
+    }
 
-    const text = (result as unknown as { text?: string }).text ?? "";
-
+    const sttLatency = Date.now() - t1;
     // eslint-disable-next-line no-console
-    console.log("[STT mistral] done in", Date.now() - t1, "ms · chars:", text.length, "· total:", Date.now() - t0, "ms");
+    console.log("[STT mistral] done in", sttLatency, "ms · chars:", text.length, "· total:", Date.now() - t0, "ms");
+
+    if (trace && traceEnv) {
+      trace.recordStep("voxtral_stt", {
+        success:    true,
+        latency_ms: sttLatency,
+        detail:     { chars: text.length, model: "voxtral-mini-latest" },
+      });
+      trace.setOutput({ transcript: text });
+      void trace.persist(traceEnv);
+    }
 
     return NextResponse.json({ text });
   } catch (err: unknown) {

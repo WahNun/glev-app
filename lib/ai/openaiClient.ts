@@ -1,6 +1,7 @@
 import OpenAI from "openai";
 
 let cached: OpenAI | null = null;
+let cachedMistralChat: OpenAI | null = null;
 
 /**
  * Returns a configured OpenAI client.
@@ -43,6 +44,30 @@ export function getOpenAIClient(): OpenAI {
 
   if (!cached) cached = new OpenAI({ baseURL, apiKey });
   return cached;
+}
+
+/**
+ * Returns an OpenAI-SDK client pointed at Mistral's OpenAI-compatible API.
+ * Used by all user-facing AI routes (chat, nutrition parsing, intent
+ * classification, macro refinement) after the 2026-06-20 EU consolidation.
+ * Throws a clear error when MISTRAL_API_KEY is missing so route handlers
+ * can return 503 instead of crashing with an opaque 500.
+ */
+export function getMistralChatClient(): OpenAI {
+  const apiKey = process.env.MISTRAL_API_KEY;
+  if (!apiKey) {
+    throw new Error(
+      "Missing MISTRAL_API_KEY. Set it as a Replit Secret in dev and " +
+      "as a Vercel Environment Variable (Production + Preview).",
+    );
+  }
+  if (!cachedMistralChat) {
+    cachedMistralChat = new OpenAI({
+      baseURL: "https://api.mistral.ai/v1",
+      apiKey,
+    });
+  }
+  return cachedMistralChat;
 }
 
 export class AIConfigError extends Error {

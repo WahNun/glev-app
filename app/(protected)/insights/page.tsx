@@ -1,8 +1,11 @@
 "use client";
 
 import React, { useState, useEffect, useId, useCallback } from "react";
+import { useRouter } from "next/navigation";
 import { usePlan } from "@/hooks/usePlan";
 import UpgradeGate from "@/components/UpgradeGate";
+import PaywallSheet from "@/components/PaywallSheet";
+import { CLUSTER_CONFIGS, isClusterLocked, type ClusterConfig, type InsightsCluster } from "@/types/InsightsCluster";
 import useSWR, { mutate as swrMutate } from "swr";
 import RefreshingBar from "@/components/RefreshingBar";
 import { useLocale, useTranslations } from "next-intl";
@@ -17,7 +20,7 @@ import { fetchRejectedPairs, addRejectedPair, pairKey, type RejectedPairKey } fr
 import { detectPattern } from "@/lib/engine/patterns";
 import { suggestAdjustment, type AdaptiveSettings, type AdjustmentSuggestion } from "@/lib/engine/adjustment";
 import SortableCardGrid, { type SortableItem } from "@/components/SortableCardGrid";
-import SkeletonBlock from "@/components/SkeletonBlock";
+import GlevLoadingPattern from "@/components/GlevLoadingPattern";
 import { useCardOrder } from "@/lib/cardOrder";
 // Note: PagerIndicator was the previous shared dot/segment row. The
 // Insights page now uses its own InsightsCockpitIndicator (defined
@@ -62,6 +65,8 @@ import { useCarbUnit } from "@/hooks/useCarbUnit";
 import { fetchCgmSamples, type ContinuousReading } from "@/lib/cgmSamplesClient";
 import { fetchPostBolusChecksRaw, type PostBolusCheckRaw } from "@/lib/mealTimelineChecks";
 import { supabase } from "@/lib/supabase";
+import { fetchCycleLoggingEnabled } from "@/lib/cyclePrefs";
+import { InsightsGateBypassCtx } from "@/lib/insightsGateBypass";
 
 // Extra buffer added to the bolus-fetch window so pre- and post-boluses
 // at the edge of the 90-day meal window (up to ±30 min away from the
@@ -243,14 +248,28 @@ function mergeContinuousReadings(
   return keptEvents.concat(filtered.map(r => ({ v: r.v, t: r.t })));
 }
 
-export default function InsightsPage() {
+// Maps a cluster ID to its planFeatures flag — clusters without a flag (glucose-basics)
+// keep per-card gates active since they have no cluster-level gate.
+const CLUSTER_FEATURE_FLAG: Partial<Record<InsightsCluster, string>> = {
+  "meals-bolus":      "insights_meals_bolus_cluster",
+  "adaptive-engine":  "insights_adaptive_engine_cluster",
+  "workout-activity": "insights_workout_activity_cluster",
+  "cycle-symptoms":   "insights_cycle_symptoms_cluster",
+};
+
+export function InsightsClusterView({ clusterId }: { clusterId: InsightsCluster }) {
   // Chip-namespace translator (Task #279) — used to localize meal-type
   // headings on the per-type breakdown cards. Falls back to English
   // labels via chipLabelsFrom() when keys are missing.
   // Carb-unit selector — feeds the per-type "avg carbs" line and the
   // "Avg insulin" tile sublabel. All aggregates are computed in grams
   // upstream; only the rendered string switches to BE/KE/g.
-  const { canAccess } = usePlan();
+  const router = useRouter();
+  const { canAccess, plan, trialActive } = usePlan();
+  // Cluster-Level-Gate is final: when the user has access to this cluster's
+  // feature flag, all per-card UpgradeGate wrappers are bypassed.
+  const clusterFlag = CLUSTER_FEATURE_FLAG[clusterId];
+  const bypassCardGates = clusterFlag ? canAccess(clusterFlag) : false;
   const carbUnit = useCarbUnit();
   const tInsights = useTranslations("insights");
   const tChips = useTranslations("chips");
@@ -289,6 +308,7 @@ export default function InsightsPage() {
   // grid cell correctly resizes when the user expands the panel.
   const [relinkOpen, setRelinkOpen]         = useState(false);
   const [pairingTooltipOpen, setPairingTooltipOpen] = useState(false);
+  const [clusterPaywallOpen, setClusterPaywallOpen] = useState(false);
   // Biological sex — gates the cycle half of the "Zyklus & Symptome"
   // card. Male users see a symptoms-only variant (cycle stats hidden,
   // card retitled). Null/unset is treated as "show everything" so
@@ -574,19 +594,7 @@ export default function InsightsPage() {
   // shape so the visible UI never jumps when data arrives. Replaces the
   // old centered spinner because a layout-shaped skeleton feels much
   // faster to the user than a blank screen with a tiny spinner.
-  if (loading) return (
-    <div style={{ padding:"16px 16px 0", display:"flex", flexDirection:"column", gap:16 }}>
-      <style>{`@keyframes glevPulse{0%,100%{opacity:.55}50%{opacity:.85}}`}</style>
-      <SkeletonBlock height={48} />
-      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
-        <SkeletonBlock height={96} />
-        <SkeletonBlock height={96} />
-      </div>
-      <SkeletonBlock height={260} />
-      <SkeletonBlock height={200} />
-      <SkeletonBlock height={200} />
-    </div>
-  );
+  if (loading) return <GlevLoadingPattern variant="splash" />;
 
   const total = meals.length;
   if (total === 0) return (
@@ -4242,15 +4250,143 @@ export default function InsightsPage() {
     })(),
   ];
 
+  // ─── Cluster rendering prep ───────────────────────────────────────────────
+  // Build a lookup from card id → SortableItem so each cluster section can
+  // quickly assemble its filtered card list without re-scanning `items`.
+  const visibleItems = items.filter(it => it.node !== null);
+  const itemById = new Map(visibleItems.map(it => [it.id, it as SortableItem]));
+
+  // Per-card dynamic context lines — same data the previous single-pager used.
+  const insightsDynamicById: Record<string, string | null> = (() => {
+    const dyn: Record<string, string | null> = {};
+    if (b7.n >= MIN_DATAPOINTS) {
+      const sign = tirDelta > 0 ? "+" : tirDelta < 0 ? "" : "±";
+      dyn["time-in-range"] = tInsights("swipe_dyn_tir", { pct: b7.inR, delta: `${sign}${tirDelta}` });
+    }
+    if (last7Avg != null) {
+      dyn["gmi-a1c"] = tInsights("swipe_dyn_gmi", {
+        avg: Math.round(last7Avg),
+        gmi: gmi != null ? gmi.toFixed(1) : "—",
+      });
+      dyn["glucose-trend"] = tInsights("swipe_dyn_trend", {
+        avg: Math.round(last7Avg),
+        delta: bgDelta != null ? (bgDelta > 0 ? `+${bgDelta}` : `${bgDelta}`) : "—",
+      });
+    }
+    dyn["hypo-events"] = tInsights("swipe_dyn_hypo", {
+      count: readings7.filter(r => r.v < HYPO_THRESHOLD_MGDL).length,
+    });
+    dyn["hyper-events"] = tInsights("swipe_dyn_hyper", { count: hyperCount7d });
+    if (cvPct != null) {
+      dyn["glucose-variability"] = tInsights("swipe_dyn_cv", { cv: cvPct.toFixed(1) });
+    }
+    if (total > 0) {
+      dyn["meal-evaluation"] = tInsights("swipe_dyn_meal_eval", {
+        good: goodAll, total, rate: goodRate.toFixed(0),
+      });
+      dyn["performance-tiles"] = tInsights("swipe_dyn_perf", {
+        icr: estICR, rate: goodRate.toFixed(0),
+      });
+      dyn["meal-type"] = tInsights("swipe_dyn_meal_count", { n: total });
+      dyn["time-of-day"] = tInsights("swipe_dyn_meal_count", { n: total });
+    }
+    if (adaptiveICR.global != null) {
+      dyn["adaptive-engine"] = tInsights("swipe_dyn_engine", {
+        engine: adaptiveICR.global.toFixed(1),
+        user: userIcr,
+        n: adaptiveICR.sampleSize,
+      });
+    }
+    if (tddAvg7 != null) {
+      dyn["tdd"] = tInsights("swipe_dyn_tdd", {
+        tdd: tddAvg7.toFixed(1),
+        bolus: tddAvg7Bolus != null ? tddAvg7Bolus.toFixed(1) : "—",
+        basal: tddAvg7Basal != null ? tddAvg7Basal.toFixed(1) : "—",
+      });
+    }
+    if (enginePattern.sampleSize > 0) {
+      dyn["patterns"] = tInsights("swipe_dyn_pattern", {
+        type: enginePattern.label,
+        n: enginePattern.sampleSize,
+      });
+    }
+    if (exerciseLogs.length > 0) {
+      dyn["workout-outcomes"] = tInsights("swipe_dyn_workouts", { n: exerciseLogs.length });
+      dyn["workout-bg-response"] = tInsights("swipe_dyn_workouts", { n: exerciseLogs.length });
+      dyn["workout-patterns"] = tInsights("swipe_dyn_workouts", { n: exerciseLogs.length });
+      dyn["workout-type-patterns"] = tInsights("swipe_dyn_workouts", { n: exerciseLogs.length });
+    }
+    if (activity.context.todaySteps != null) {
+      dyn["daily-steps"] = tInsights("swipe_dyn_daily_steps", {
+        steps: activity.context.todaySteps.toLocaleString(locale),
+      });
+    }
+    if (items.find(it => it.id === "active-day-outcomes")?.node) {
+      dyn["active-day-outcomes"] = tInsights("swipe_dyn_active_day_outcomes", {
+        days: activity.rows.length,
+      });
+    }
+    if (symptomLogs.length > 0 || menstrualLogs.length > 0) {
+      dyn["cycle-symptoms"] = tInsights("swipe_dyn_cycle", {
+        symptoms: symptomLogs.length, cycle: menstrualLogs.length,
+      });
+    }
+    if (postBolusChecks.length > 0) {
+      dyn["post-bolus-trend"] = tInsights("swipe_dyn_post_bolus_trend", {
+        n: postBolusChecks.length,
+      });
+    }
+    return dyn;
+  })();
+
+  const insightsLastDataAtMs: number | null = (() => {
+    const timestamps: number[] = [];
+    for (const m of meals) timestamps.push(parseDbTs(m.created_at));
+    for (const l of insulinLogs) timestamps.push(parseDbTs(l.created_at));
+    for (const l of exerciseLogs) timestamps.push(parseDbTs(l.created_at));
+    for (const f of fingersticks) timestamps.push(parseDbTs(f.measured_at));
+    return timestamps.length > 0 ? Math.max(...timestamps) : null;
+  })();
+
   return (
-    // 480px max-width keeps the cards in their natural mockup
-    // proportions on tablet/desktop instead of stretching them out.
+    <InsightsGateBypassCtx.Provider value={bypassCardGates}>
+    {/* 480px max-width keeps the cards in their natural mockup
+        proportions on tablet/desktop instead of stretching them out. */}
     <div style={{ maxWidth:480, margin:"0 auto" }}>
-      {/* Persistent semantic heading for screen readers — keeps a
-          stable `h1` landmark on the page even after the transient
-          banner below unmounts. Visually hidden via the
-          screen-reader-only style snippet, matches the title that the
-          banner displays. */}
+      <header style={{
+        display: "flex",
+        alignItems: "center",
+        gap: 12,
+        padding: "12px 16px",
+        borderBottom: "1px solid var(--border-soft)",
+      }}>
+        <button
+          onClick={() => router.push("/insights")}
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 4,
+            padding: "8px 12px",
+            background: "transparent",
+            border: "none",
+            color: "var(--text)",
+            fontSize: 15,
+            fontWeight: 500,
+            cursor: "pointer",
+            borderRadius: 8,
+          }}
+          aria-label="Zurück zur Übersicht"
+        >
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="15 18 9 12 15 6" />
+          </svg>
+          <span>{tInsights("detail.back")}</span>
+        </button>
+        <h1 style={{ fontSize: 17, fontWeight: 500, margin: 0, color: "var(--text)" }}>
+          {CLUSTER_CONFIGS.find(c => c.id === clusterId)?.label ?? "Insights"}
+        </h1>
+      </header>
+      {/* Persistent semantic heading for screen readers */}
       <h1
         style={{
           position: "absolute",
@@ -4258,141 +4394,121 @@ export default function InsightsPage() {
           overflow: "hidden", clip: "rect(0,0,0,0)", whiteSpace: "nowrap", border: 0,
         }}
       >
-        Insights
+        {CLUSTER_CONFIGS.find(c => c.id === clusterId)?.label ?? "Insights"}
       </h1>
       <RefreshingBar visible={primaryValidating} />
-      {/* Transient header hint: shows the page title + interaction
-          subtitle briefly on entry, then auto-dismisses on the user's
-          first interaction (or after a backstop timeout) so the swipe
-          pager can claim the vertical space below. Wrapped in its own
-          component so the listener wiring stays scoped. */}
-      <InsightsHeaderHint
-        subtitle={tInsights("header_subtitle", { n: total })}
-      />
-
-      {/* Inline anchor stepper — pairs with the 4 mode chips in the
-          mobile header (Day/Week/Month/Year). The chip group only
-          switches mode; this row walks the user back/forward through
-          periods (◀ Today ▶ / ◀ This Week ▶ / …) without any tap-to-
-          open dropdown. 2026-05-18 user request. */}
       <ScopeAnchorStepper
         mode={scopeMode}
         anchor={scopeAnchor}
         onStep={stepScopeAnchor}
       />
 
-      {/* Swipe-focused layout (Task #316). Replaces the legacy vertical
-          SortableCardGrid feed: a single dominant card sits in the top
-          ~58% of the visible area and the user pages horizontally; the
-          bottom ~42% renders a context block tied to the active card. */}
-      <InsightsSwipePager
-        items={items.filter(it => it.node !== null)}
-        dynamicById={(() => {
-          // Per-card live data lines. These are computed from the same
-          // in-scope aggregates the cards themselves use, so the context
-          // panel always mirrors what the user is looking at on the
-          // focused card — not just static copy. When a value isn't
-          // meaningful for the active scope (e.g. CV% with too few
-          // readings) we omit the line entirely.
-          const dyn: Record<string, string | null> = {};
-          if (b7.n >= MIN_DATAPOINTS) {
-            const sign = tirDelta > 0 ? "+" : tirDelta < 0 ? "" : "±";
-            dyn["time-in-range"] = tInsights("swipe_dyn_tir", { pct: b7.inR, delta: `${sign}${tirDelta}` });
-          }
-          if (last7Avg != null) {
-            dyn["gmi-a1c"] = tInsights("swipe_dyn_gmi", {
-              avg: Math.round(last7Avg),
-              gmi: gmi != null ? gmi.toFixed(1) : "—",
-            });
-            dyn["glucose-trend"] = tInsights("swipe_dyn_trend", {
-              avg: Math.round(last7Avg),
-              delta: bgDelta != null ? (bgDelta > 0 ? `+${bgDelta}` : `${bgDelta}`) : "—",
-            });
-          }
-          dyn["hypo-events"] = tInsights("swipe_dyn_hypo", {
-            count: readings7.filter(r => r.v < HYPO_THRESHOLD_MGDL).length,
-          });
-          dyn["hyper-events"] = tInsights("swipe_dyn_hyper", { count: hyperCount7d });
-          if (cvPct != null) {
-            dyn["glucose-variability"] = tInsights("swipe_dyn_cv", { cv: cvPct.toFixed(1) });
-          }
-          if (total > 0) {
-            dyn["meal-evaluation"] = tInsights("swipe_dyn_meal_eval", {
-              good: goodAll, total, rate: goodRate.toFixed(0),
-            });
-            dyn["performance-tiles"] = tInsights("swipe_dyn_perf", {
-              icr: estICR, rate: goodRate.toFixed(0),
-            });
-            dyn["meal-type"] = tInsights("swipe_dyn_meal_count", { n: total });
-            dyn["time-of-day"] = tInsights("swipe_dyn_meal_count", { n: total });
-          }
-          if (adaptiveICR.global != null) {
-            dyn["adaptive-engine"] = tInsights("swipe_dyn_engine", {
-              engine: adaptiveICR.global.toFixed(1),
-              user: userIcr,
-              n: adaptiveICR.sampleSize,
-            });
-          }
-          if (tddAvg7 != null) {
-            dyn["tdd"] = tInsights("swipe_dyn_tdd", {
-              tdd: tddAvg7.toFixed(1),
-              bolus: tddAvg7Bolus != null ? tddAvg7Bolus.toFixed(1) : "—",
-              basal: tddAvg7Basal != null ? tddAvg7Basal.toFixed(1) : "—",
-            });
-          }
-          if (enginePattern.sampleSize > 0) {
-            dyn["patterns"] = tInsights("swipe_dyn_pattern", {
-              type: enginePattern.label,
-              n: enginePattern.sampleSize,
-            });
-          }
-          if (exerciseLogs.length > 0) {
-            dyn["workout-outcomes"] = tInsights("swipe_dyn_workouts", { n: exerciseLogs.length });
-            dyn["workout-bg-response"] = tInsights("swipe_dyn_workouts", { n: exerciseLogs.length });
-            dyn["workout-patterns"] = tInsights("swipe_dyn_workouts", { n: exerciseLogs.length });
-            dyn["workout-type-patterns"] = tInsights("swipe_dyn_workouts", { n: exerciseLogs.length });
-          }
-          if (activity.context.todaySteps != null) {
-            dyn["daily-steps"] = tInsights("swipe_dyn_daily_steps", {
-              steps: activity.context.todaySteps.toLocaleString(locale),
-            });
-          }
-          // Only surface the swipe-pager context line when the card
-          // itself is actually rendering — `items` already encodes
-          // the full gating (14+ step days AND ≥3 classified meals
-          // on EACH side), so checking node !== null keeps the
-          // dynamic line and the card in lock-step.
-          if (items.find(it => it.id === "active-day-outcomes")?.node) {
-            dyn["active-day-outcomes"] = tInsights("swipe_dyn_active_day_outcomes", {
-              days: activity.rows.length,
-            });
-          }
-          if (symptomLogs.length > 0 || menstrualLogs.length > 0) {
-            dyn["cycle-symptoms"] = tInsights("swipe_dyn_cycle", {
-              symptoms: symptomLogs.length, cycle: menstrualLogs.length,
-            });
-          }
-          if (postBolusChecks.length > 0) {
-            dyn["post-bolus-trend"] = tInsights("swipe_dyn_post_bolus_trend", {
-              n: postBolusChecks.length,
-            });
-          }
-          return dyn;
-        })()}
-        lastDataAtMs={(() => {
-          // Newest timestamp across every data source feeding this page.
-          // Renders as the "Stand: ..." footnote in the context block so
-          // the user knows how fresh the numbers are.
-          const timestamps: number[] = [];
-          for (const m of meals) timestamps.push(parseDbTs(m.created_at));
-          for (const l of insulinLogs) timestamps.push(parseDbTs(l.created_at));
-          for (const l of exerciseLogs) timestamps.push(parseDbTs(l.created_at));
-          for (const f of fingersticks) timestamps.push(parseDbTs(f.measured_at));
-          return timestamps.length > 0 ? Math.max(...timestamps) : null;
-        })()}
-        locale={locale}
+      {/* Cluster sections — each cluster renders its own swipe pager.
+          Workout cluster (Plus-only) renders a lock UI instead. */}
+      {CLUSTER_CONFIGS.filter((c) => c.id === clusterId).map((cluster: ClusterConfig) => {
+        const clusterItems = cluster.cardIds
+          .map(id => itemById.get(id))
+          .filter((it): it is SortableItem => it !== undefined);
+        const locked = isClusterLocked(cluster, plan, trialActive);
+
+        // Skip empty clusters that aren't locked (e.g. sleep with no data)
+        if (clusterItems.length === 0 && !locked) return null;
+
+        return (
+          <div key={cluster.id} style={{ marginBottom: 32 }}>
+            {/* ── Cluster header ── */}
+            <div style={{
+              display: "flex", alignItems: "center", gap: 8,
+              padding: "0 4px 10px",
+            }}>
+              <span style={{
+                fontSize: 11, fontWeight: 700, letterSpacing: "0.08em",
+                textTransform: "uppercase", color: "var(--text-dim)", flex: 1,
+              }}>
+                {cluster.label}
+              </span>
+              {locked && (
+                <span style={{
+                  fontSize: 10, fontWeight: 700, letterSpacing: "0.06em",
+                  textTransform: "uppercase",
+                  padding: "2px 8px", borderRadius: 20,
+                  background: "#a78bfa22", color: "#7c3aed",
+                }}>
+                  Glev+
+                </span>
+              )}
+            </div>
+
+            {locked ? (
+              /* ── Plus cluster lock UI ── */
+              <div style={{
+                position: "relative", borderRadius: 16, overflow: "hidden",
+                background: "var(--surface)", border: "1px solid var(--border)",
+                minHeight: 180,
+              }}>
+                {/* Blurred skeleton placeholder */}
+                <div style={{
+                  filter: "blur(5px)", opacity: 0.35,
+                  padding: "24px", pointerEvents: "none",
+                  display: "flex", flexDirection: "column", gap: 12,
+                }}>
+                  <div style={{ height: 12, width: "55%", background: "var(--border-soft)", borderRadius: 4 }}/>
+                  <div style={{ height: 44, background: "var(--border-soft)", borderRadius: 8 }}/>
+                  <div style={{ height: 10, width: "80%", background: "var(--border-soft)", borderRadius: 4 }}/>
+                  <div style={{ height: 10, width: "65%", background: "var(--border-soft)", borderRadius: 4 }}/>
+                </div>
+                {/* Lock overlay */}
+                <div style={{
+                  position: "absolute", inset: 0,
+                  display: "flex", flexDirection: "column",
+                  alignItems: "center", justifyContent: "center",
+                  gap: 10, padding: "24px",
+                }}>
+                  <div style={{ fontSize: 28, lineHeight: 1 }}>🔒</div>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: "var(--text)", textAlign: "center" }}>
+                    {cluster.label} — Glev+
+                  </div>
+                  <p style={{
+                    margin: 0, fontSize: 13, color: "var(--text-muted)",
+                    textAlign: "center", lineHeight: 1.4,
+                  }}>
+                    Workout-Auswertungen sind in Glev+ verfügbar
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setClusterPaywallOpen(true)}
+                    style={{
+                      marginTop: 4, padding: "11px 22px",
+                      background: "#7c3aed", color: "#fff",
+                      border: "none", borderRadius: 10,
+                      fontSize: 13, fontWeight: 700,
+                      cursor: "pointer", fontFamily: "inherit",
+                    }}
+                  >
+                    Glev+ entdecken →
+                  </button>
+                </div>
+              </div>
+            ) : clusterItems.length > 0 ? (
+              <InsightsSwipePager
+                items={clusterItems}
+                dynamicById={insightsDynamicById}
+                lastDataAtMs={insightsLastDataAtMs}
+                locale={locale}
+              />
+            ) : null}
+          </div>
+        );
+      })}
+
+      <PaywallSheet
+        open={clusterPaywallOpen}
+        onClose={() => setClusterPaywallOpen(false)}
+        onPurchaseSuccess={() => {}}
+        initialTier="plus"
       />
     </div>
+    </InsightsGateBypassCtx.Provider>
   );
 }
 
@@ -4841,15 +4957,15 @@ function InsightsSwipePager({
     });
   }, [items.length]);
 
-  // Pager height for the active card. Tracks the measured natural
-  // height exactly (plus the slot's vertical padding) so the bottom
-  // edge of the card sits flush against the context box below — no
-  // 320px floor, no blank space when a short KPI card is in focus.
-  // The first-paint fallback only applies until the first
-  // measurement arrives.
-  const activeMeasured = heights[active];
-  const pagerHeight = activeMeasured != null
-    ? activeMeasured + SLOT_PAD_V
+  // Pager height: max across ALL measured cards in this cluster so
+  // every card renders at identical height (Task 2026-06-20 sizing fix).
+  // Short KPI cards grow to match the tallest sibling; the slot's
+  // flex-start alignment then top-anchors each card so extra whitespace
+  // falls at the bottom rather than splitting above/below.
+  const allMeasuredHeights = Object.values(heights);
+  const maxMeasured = allMeasuredHeights.length > 0 ? Math.max(...allMeasuredHeights) : null;
+  const pagerHeight = maxMeasured != null
+    ? maxMeasured + SLOT_PAD_V
     : FIRST_PAINT_H;
 
   // Translation helper — returns localized title/body for a given card
@@ -4878,6 +4994,7 @@ function InsightsSwipePager({
   // the *inside* of a card never scrolls, per user request.
   return (
     <div
+      className="glev-cluster-scroll"
       style={{
         minHeight: "calc(100dvh - 230px)",
         display: "flex",
@@ -4937,10 +5054,14 @@ function InsightsSwipePager({
                 // feels identical across screens.
                 padding: "6px 14px",
                 display: "flex",
-                alignItems: "center",
+                alignItems: "flex-start",
                 justifyContent: "center",
                 overflow: "hidden",
-              }}
+                // Expose locked max height so inner FlipCards can sync
+                // to the tallest sibling via CSS max() — no per-card
+                // override needed, no prop threading required.
+                "--glev-pager-slot-h": `${maxMeasured != null ? maxMeasured : FIRST_PAINT_H}px`,
+              } as React.CSSProperties}
             >
               <div
                 ref={(el) => { itemRefs.current[idx] = el; }}
@@ -5761,14 +5882,14 @@ function FlipCard({
   const frontShell: React.CSSProperties = variant === "glass" ? glassFront : {
     background: SURFACE,
     border: `1px solid ${BORDER}`,
-    borderRadius: 14,
+    borderRadius: 16,
     padding,
     boxSizing: "border-box",
   };
   const backShell: React.CSSProperties = variant === "glass" ? glassBack : {
     background: `linear-gradient(145deg, ${accent}12, ${SURFACE} 65%)`,
     border: `1px solid ${accent}33`,
-    borderRadius: 14,
+    borderRadius: 16,
     padding,
     boxSizing: "border-box",
   };
@@ -5784,10 +5905,17 @@ function FlipCard({
       aria-pressed={flipped}
     >
       {/* FLIP STAGE — CSS grid stacks front + back in the same cell so
-          each face is rendered exactly once. Card height = max(front, back). */}
+          each face is rendered exactly once. Card height = max(front, back).
+          min-height uses CSS max() so the stage picks the larger of:
+          • the explicit minHeight prop (CARD_MIN_H clamp — the per-card floor)
+          • --glev-pager-slot-h set by InsightsSwipePager on the slot div
+          This makes every card in a cluster match the tallest sibling
+          without any prop-threading or per-cluster overrides. */}
       <div style={{
         display:"grid",
-        minHeight: minHeight || undefined,
+        minHeight: minHeight
+          ? `max(${minHeight}, var(--glev-pager-slot-h, 0px))`
+          : "var(--glev-pager-slot-h, 0px)",
         transformStyle:"preserve-3d",
         transition:"transform 0.55s cubic-bezier(0.4,0,0.2,1)",
         transform: flipped ? "rotateY(180deg)" : "rotateY(0deg)",
@@ -5892,6 +6020,273 @@ function InsightFlipTile({ tile }: { tile: InsightTile }) {
       <div style={{ transition:"opacity 0.15s", ...(flipped ? backShell : frontShell) }}>
         {flipped ? backContent : frontContent}
       </div>
+    </div>
+  );
+}
+
+// ─── Insights Overview Page (drill-in, polished) ─────────────────────────────
+// 5 Cluster-Cards mit Gradient + Icon + KPI-Preview + tier-spezifischem Lock.
+// Zyklus-Cluster nur wenn cycle_logging_enabled === true.
+
+type OverviewTier = "free" | "smart" | "pro" | "plus";
+
+type ClusterDef = {
+  id: InsightsCluster;
+  title: string;
+  tint: string;
+  icon: React.ReactNode;
+  featureFlag: string | null;
+  requiresTier: OverviewTier;
+  requiresCycleEnabled?: boolean;
+};
+
+// Inline SVG icons (Lucide-equivalent paths) — no external dep needed.
+function SvgIcon({ path, size = 22, color }: { path: React.ReactNode; size?: number; color: string }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round">
+      {path}
+    </svg>
+  );
+}
+
+const ICON_DROPLET = (c: string) => (
+  <SvgIcon color={c} path={<path d="M12 22a7 7 0 0 0 7-7c0-2-1-3.9-3-5.5s-3.5-4-4-6.5c-.5 2.5-2 4.9-4 6.5C6 11.1 5 13 5 15a7 7 0 0 0 7 7z"/>}/>
+);
+const ICON_UTENSILS = (c: string) => (
+  <SvgIcon color={c} path={<><path d="M3 2v7c0 1.1.9 2 2 2h4a2 2 0 0 0 2-2V2"/><path d="M7 2v20"/><path d="M21 15V2a5 5 0 0 0-5 5v6c0 1.1.9 2 2 2h3Zm0 0v7"/></>}/>
+);
+const ICON_CPU = (c: string) => (
+  <SvgIcon color={c} path={<><rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/><path d="M15 2v2M9 2v2M15 20v2M9 20v2M2 15h2M2 9h2M20 15h2M20 9h2"/></>}/>
+);
+const ICON_ACTIVITY = (c: string) => (
+  <SvgIcon color={c} path={<polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>}/>
+);
+const ICON_MOON = (c: string) => (
+  <SvgIcon color={c} path={<path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/>}/>
+);
+const ICON_LOCK = (c: string) => (
+  <SvgIcon color={c} size={15} path={<><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></>}/>
+);
+const ICON_CHEVRON = (
+  <SvgIcon color="rgba(255,255,255,0.18)" size={18} path={<path d="m9 18 6-6-6-6"/>}/>
+);
+
+const TIER_BADGE: Record<string, { bg: string; label: string }> = {
+  smart: { bg: "#22D3A0", label: "SMART" },
+  pro:   { bg: "#4F6EF7", label: "PRO" },
+  plus:  { bg: "#7F77DD", label: "GLEV+" },
+};
+
+export default function InsightsPage() {
+  const { canAccess } = usePlan();
+  const router = useRouter();
+  const [paywallOpen, setPaywallOpen] = useState(false);
+  const [paywallTier, setPaywallTier] = useState<"smart" | "pro" | "plus">("smart");
+  const [cycleEnabled, setCycleEnabled] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    fetchCycleLoggingEnabled().then(setCycleEnabled).catch(() => setCycleEnabled(false));
+  }, []);
+
+  const clusterDefs: ClusterDef[] = [
+    {
+      id: "glucose-basics",
+      title: "Glukose",
+      tint: "#4F6EF7",
+      icon: ICON_DROPLET("#4F6EF7"),
+      featureFlag: null,
+      requiresTier: "free",
+    },
+    {
+      id: "meals-bolus",
+      title: "Mahlzeiten",
+      tint: "#22D3A0",
+      icon: ICON_UTENSILS("#22D3A0"),
+      featureFlag: "insights_meals_bolus_cluster",
+      requiresTier: "smart",
+    },
+    {
+      id: "adaptive-engine",
+      title: "Engine",
+      tint: "#FF9500",
+      icon: ICON_CPU("#FF9500"),
+      featureFlag: "insights_adaptive_engine_cluster",
+      requiresTier: "pro",
+    },
+    {
+      id: "workout-activity",
+      title: "Workout",
+      tint: "#7F77DD",
+      icon: ICON_ACTIVITY("#7F77DD"),
+      featureFlag: "insights_workout_activity_cluster",
+      requiresTier: "plus",
+    },
+    {
+      id: "cycle-symptoms",
+      title: "Zyklus",
+      tint: "#FF2D78",
+      icon: ICON_MOON("#FF2D78"),
+      featureFlag: "insights_cycle_symptoms_cluster",
+      requiresTier: "smart",
+      requiresCycleEnabled: true,
+    },
+  ];
+
+  // Filter out cycle cluster if cycle logging is disabled
+  const visibleClusters = clusterDefs.filter((c) => {
+    if (c.requiresCycleEnabled && cycleEnabled !== true) return false;
+    return true;
+  });
+
+  function handleTap(def: ClusterDef, locked: boolean) {
+    if (locked && def.requiresTier !== "free") {
+      setPaywallTier(def.requiresTier as "smart" | "pro" | "plus");
+      setPaywallOpen(true);
+    } else if (!locked) {
+      router.push(`/insights/${def.id}`);
+    }
+  }
+
+  return (
+    <div style={{ maxWidth: 480, margin: "0 auto", padding: "0 16px 32px" }}>
+      {/* Semantic heading */}
+      <h1
+        style={{
+          position: "absolute",
+          width: 1, height: 1, padding: 0, margin: -1,
+          overflow: "hidden", clip: "rect(0,0,0,0)", whiteSpace: "nowrap", border: 0,
+        }}
+      >
+        Insights
+      </h1>
+
+      {/* Page header */}
+      <div style={{ padding: "0 0 20px" }}>
+        <div style={{ fontSize: 28, fontWeight: 700, color: "var(--text)", lineHeight: 1.15 }}>
+          Insights
+        </div>
+        <div style={{ fontSize: 13, color: "var(--text-dim)", marginTop: 4 }}>
+          Karte tippen zum Eintauchen
+        </div>
+      </div>
+
+      {/* Cluster cards */}
+      <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+        {visibleClusters.map((def) => {
+          const cfg = CLUSTER_CONFIGS.find((c) => c.id === def.id);
+          const cardCount = cfg?.cardIds.length ?? 0;
+          const locked = def.featureFlag ? !canAccess(def.featureFlag) : false;
+          const badge = TIER_BADGE[def.requiresTier];
+
+          return (
+            <button
+              key={def.id}
+              type="button"
+              onClick={() => handleTap(def, locked)}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 16,
+                padding: "20px",
+                background: `linear-gradient(135deg, ${def.tint}1a 0%, transparent 50%), var(--surface)`,
+                border: "1px solid var(--border)",
+                borderRadius: 16,
+                cursor: "pointer",
+                textAlign: "left",
+                fontFamily: "inherit",
+                width: "100%",
+                position: "relative",
+                overflow: "hidden",
+                minHeight: 100,
+                opacity: locked ? 0.72 : 1,
+                transition: "opacity 0.2s",
+              }}
+            >
+              {/* Accent stripe */}
+              <div style={{
+                position: "absolute",
+                left: 0, top: 0, bottom: 0,
+                width: 4,
+                background: def.tint,
+                borderRadius: "16px 0 0 16px",
+              }} />
+
+              {/* Icon box */}
+              <div style={{
+                width: 44, height: 44, flexShrink: 0,
+                background: `${def.tint}26`,
+                borderRadius: 12,
+                display: "flex", alignItems: "center", justifyContent: "center",
+                marginLeft: 8,
+              }}>
+                {def.icon}
+              </div>
+
+              {/* Text block */}
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{
+                  display: "flex", alignItems: "center", gap: 6,
+                }}>
+                  <span style={{
+                    fontSize: 17, fontWeight: 500, color: "var(--text)",
+                    whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+                  }}>
+                    {def.title}
+                  </span>
+                  {locked && (
+                    <span style={{ opacity: 0.7, flexShrink: 0, display: "flex", alignItems: "center" }}>
+                      {ICON_LOCK("rgba(255,255,255,0.6)")}
+                    </span>
+                  )}
+                </div>
+                <div style={{ fontSize: 13, color: "var(--text-dim)", marginTop: 2 }}>
+                  {cardCount} Karten
+                </div>
+              </div>
+
+              {/* Chevron */}
+              <div style={{ flexShrink: 0 }}>
+                {ICON_CHEVRON}
+              </div>
+
+              {/* Lock dim overlay — z-index: 1 so badge (z:2) renders above it */}
+              {locked && (
+                <div style={{
+                  position: "absolute",
+                  inset: 0,
+                  background: "rgba(0,0,0,0.38)",
+                  borderRadius: 16,
+                  pointerEvents: "none",
+                  zIndex: 1,
+                }} />
+              )}
+
+              {/* Tier badge — z-index: 2 ensures it's always above the dim overlay */}
+              {locked && badge && (
+                <div style={{
+                  position: "absolute",
+                  top: 12, right: 12,
+                  fontSize: 11, fontWeight: 700, letterSpacing: "0.07em",
+                  padding: "3px 10px",
+                  borderRadius: 20,
+                  background: badge.bg,
+                  color: "#fff",
+                  zIndex: 2,
+                }}>
+                  {badge.label}
+                </div>
+              )}
+            </button>
+          );
+        })}
+      </div>
+
+      <PaywallSheet
+        open={paywallOpen}
+        onClose={() => setPaywallOpen(false)}
+        onPurchaseSuccess={() => {}}
+        initialTier={paywallTier}
+      />
     </div>
   );
 }

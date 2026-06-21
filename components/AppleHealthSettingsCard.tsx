@@ -55,6 +55,12 @@ export default function AppleHealthSettingsCard() {
     useState<{ kind: "success" | "error" | "info"; text: string } | null>(null);
   const [appleHealthPermissionDenied, setAppleHealthPermissionDenied] =
     useState(false);
+  const [activitySyncEnabled, setActivitySyncEnabled] = useState(false);
+  const [activitySyncSubmitting, setActivitySyncSubmitting] = useState(false);
+  const [activitySyncMessage, setActivitySyncMessage] = useState<{
+    kind: "success" | "error";
+    text: string;
+  } | null>(null);
   const [workoutsRange, setWorkoutsRange] = useState<{
     oldest: string | null;
     newest: string | null;
@@ -87,10 +93,11 @@ export default function AppleHealthSettingsCard() {
 
   const loadAppleHealthState = useCallback(async () => {
     try {
-      const [srcRes, statRes, rangeRes] = await Promise.all([
+      const [srcRes, statRes, rangeRes, activityRes] = await Promise.all([
         fetch("/api/cgm/source", { cache: "no-store" }),
         fetch("/api/cgm/apple-health/sync", { cache: "no-store" }),
         fetch("/api/health/workouts/range", { cache: "no-store" }),
+        fetch("/api/health/activity-sync", { cache: "no-store" }),
       ]);
       if (srcRes.ok) {
         const j = (await srcRes.json()) as { source?: string | null };
@@ -123,6 +130,10 @@ export default function AppleHealthSettingsCard() {
           newest: j?.newest ?? null,
           count: j?.count ?? 0,
         });
+      }
+      if (activityRes.ok) {
+        const j = (await activityRes.json()) as { enabled?: boolean };
+        setActivitySyncEnabled(j?.enabled === true);
       }
     } catch {
       /* silent */
@@ -369,6 +380,42 @@ export default function AppleHealthSettingsCard() {
     }
   }
 
+  async function handleActivitySyncToggle(next: boolean) {
+    setActivitySyncMessage(null);
+    if (next && !isNativePlatform) {
+      setActivitySyncMessage({ kind: "error", text: tAh("connect_only_ios") });
+      return;
+    }
+    setActivitySyncSubmitting(true);
+    try {
+      if (next) {
+        const { requestAuthorization } = await import("@/lib/cgm/appleHealthClient");
+        const auth = await requestAuthorization();
+        if (!auth.ok) {
+          setActivitySyncMessage({ kind: "error", text: tAh("permission_denied") });
+          return;
+        }
+      }
+      const res = await fetch("/api/health/activity-sync", {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ enabled: next }),
+        cache: "no-store",
+      });
+      const body = (await res.json().catch(() => ({}))) as { error?: string };
+      if (!res.ok) throw new Error(body?.error || tAh("http_error", { status: res.status }));
+      setActivitySyncEnabled(next);
+      setActivitySyncMessage(null);
+    } catch (err) {
+      setActivitySyncMessage({
+        kind: "error",
+        text: err instanceof Error ? err.message : tAh("connect_failed"),
+      });
+    } finally {
+      setActivitySyncSubmitting(false);
+    }
+  }
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       <div
@@ -399,6 +446,11 @@ export default function AppleHealthSettingsCard() {
           {tAh("web_preview_hint")}
         </div>
       )}
+
+      {/* BG source section label */}
+      <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", color: "var(--text-dim)" }}>
+        {tAh("bg_source_section_label")}
+      </div>
 
       {/* Source toggle */}
       <div
@@ -742,176 +794,6 @@ export default function AppleHealthSettingsCard() {
         )}
       </div>
 
-      {appleHealthSelected && (
-        <div
-          style={{
-            marginTop: 8,
-            padding: "12px 14px",
-            borderRadius: 10,
-            border: `1px solid ${BORDER}`,
-            background: "var(--surface-soft)",
-            display: "flex",
-            flexDirection: "column",
-            gap: 8,
-          }}
-        >
-          <div style={{ fontSize: 13, color: "var(--text-muted)", lineHeight: 1.5 }}>
-            <strong style={{ color: "var(--text)" }}>
-              {tAh("backfill_heading")}
-            </strong>
-            <div style={{ marginTop: 4 }}>
-              {tAh("backfill_description")}
-            </div>
-          </div>
-          <div>
-            <button
-              type="button"
-              onClick={handleBackfillWorkouts}
-              disabled={!isNativePlatform || backfillRunning}
-              title={!isNativePlatform ? tAh("ios_only_tooltip") : undefined}
-              style={{
-                padding: "10px 16px",
-                borderRadius: 10,
-                border: `1px solid ${ACCENT}80`,
-                background: "transparent",
-                color: ACCENT,
-                fontSize: 13,
-                fontWeight: 700,
-                cursor: !isNativePlatform
-                  ? "not-allowed"
-                  : backfillRunning
-                  ? "wait"
-                  : "pointer",
-                opacity: !isNativePlatform || backfillRunning ? 0.5 : 1,
-              }}
-            >
-              {backfillRunning
-                ? tAh("backfill_btn_running")
-                : tAh("backfill_btn_idle")}
-            </button>
-          </div>
-          {backfillRunning && backfillProgress && (
-            <div style={{ fontSize: 13, color: "var(--text-dim)" }}>
-              {tAh("backfill_progress", {
-                inserted: backfillProgress.inserted,
-                fetched: backfillProgress.fetched,
-                daysBack: backfillProgress.daysBack,
-                chunks: backfillProgress.chunks,
-              })}
-            </div>
-          )}
-          {!backfillRunning && backfillResult && (
-            <div
-              style={{
-                fontSize: 13,
-                color: backfillResult.kind === "success" ? GREEN : PINK,
-              }}
-            >
-              {backfillResult.text}
-            </div>
-          )}
-          {workoutsRange && workoutsRange.count > 0 && (
-            <div
-              style={{
-                fontSize: 13,
-                color: "var(--text-dim)",
-                borderTop: `1px dashed ${BORDER}`,
-                paddingTop: 8,
-                marginTop: 2,
-              }}
-            >
-              {tAh("workouts_range", {
-                oldest: workoutsRange.oldest
-                  ? formatLocalDate(workoutsRange.oldest)
-                  : "—",
-                newest: workoutsRange.newest
-                  ? formatLocalDate(workoutsRange.newest)
-                  : "—",
-                count: workoutsRange.count,
-              })}
-            </div>
-          )}
-          {workoutsRange && workoutsRange.count === 0 && (
-            <div
-              style={{
-                fontSize: 13,
-                color: "var(--text-dim)",
-                borderTop: `1px dashed ${BORDER}`,
-                paddingTop: 8,
-                marginTop: 2,
-              }}
-            >
-              {tAh("workouts_range_empty")}
-            </div>
-          )}
-
-          <div
-            style={{
-              marginTop: 8,
-              paddingTop: 12,
-              borderTop: `1px solid ${BORDER}`,
-              fontSize: 13,
-              color: "var(--text-muted)",
-              lineHeight: 1.5,
-            }}
-          >
-            <strong style={{ color: "var(--text)" }}>
-              {t("steps.heading")}
-            </strong>
-            <div style={{ marginTop: 4 }}>
-              {t("steps.description")}
-            </div>
-          </div>
-          <div>
-            <button
-              type="button"
-              onClick={handleBackfillSteps}
-              disabled={!isNativePlatform || stepsBackfillRunning}
-              title={!isNativePlatform ? t("steps.ios_only_tooltip") : undefined}
-              style={{
-                padding: "10px 16px",
-                borderRadius: 10,
-                border: `1px solid ${ACCENT}80`,
-                background: "transparent",
-                color: ACCENT,
-                fontSize: 13,
-                fontWeight: 700,
-                cursor: !isNativePlatform
-                  ? "not-allowed"
-                  : stepsBackfillRunning
-                  ? "wait"
-                  : "pointer",
-                opacity: !isNativePlatform || stepsBackfillRunning ? 0.5 : 1,
-              }}
-            >
-              {stepsBackfillRunning
-                ? t("steps.btn_running")
-                : t("steps.btn_idle")}
-            </button>
-          </div>
-          {stepsBackfillRunning && stepsBackfillProgress && (
-            <div style={{ fontSize: 13, color: "var(--text-dim)" }}>
-              {t("steps.progress", {
-                days: stepsBackfillProgress.days,
-                upserted: stepsBackfillProgress.upserted,
-                daysBack: stepsBackfillProgress.daysBack,
-                chunks: stepsBackfillProgress.chunks,
-              })}
-            </div>
-          )}
-          {!stepsBackfillRunning && stepsBackfillResult && (
-            <div
-              style={{
-                fontSize: 13,
-                color: stepsBackfillResult.kind === "success" ? GREEN : PINK,
-              }}
-            >
-              {stepsBackfillResult.text}
-            </div>
-          )}
-        </div>
-      )}
-
       {appleHealthMessage && (
         <div
           style={{
@@ -928,6 +810,268 @@ export default function AppleHealthSettingsCard() {
           {appleHealthMessage.text}
         </div>
       )}
+
+      {/* ── Activity Sync section (independent of glucose source) ── */}
+      <div
+        style={{
+          borderTop: `1px solid ${BORDER}`,
+          paddingTop: 16,
+          marginTop: 4,
+          display: "flex",
+          flexDirection: "column",
+          gap: 12,
+        }}
+      >
+        <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", color: "var(--text-dim)" }}>
+          {tAh("activity_sync_section_label")}
+        </div>
+
+        <div
+          style={{
+            fontSize: 13,
+            color: "var(--text-muted)",
+            lineHeight: 1.6,
+            background: "var(--surface-soft)",
+            border: `1px solid ${BORDER}`,
+            borderRadius: 10,
+            padding: "10px 14px",
+          }}
+        >
+          {tAh("activity_sync_description")}
+        </div>
+
+        {/* Activity sync toggle */}
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 12,
+            padding: "10px 14px",
+            borderRadius: 10,
+            border: `1px solid ${BORDER}`,
+            background: "var(--surface-soft)",
+          }}
+        >
+          <span style={{ fontSize: 14, color: "var(--text)", fontWeight: 500 }}>
+            {tAh("activity_sync_toggle_label")}
+          </span>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={activitySyncEnabled}
+            disabled={activitySyncSubmitting}
+            onClick={() => void handleActivitySyncToggle(!activitySyncEnabled)}
+            style={{
+              position: "relative",
+              width: 50,
+              height: 28,
+              borderRadius: 14,
+              border: "none",
+              background: activitySyncEnabled ? GREEN : "var(--border)",
+              cursor: activitySyncSubmitting ? "wait" : "pointer",
+              flexShrink: 0,
+              transition: "background 0.2s",
+              opacity: activitySyncSubmitting ? 0.5 : 1,
+            }}
+          >
+            <span
+              style={{
+                position: "absolute",
+                top: 3,
+                left: activitySyncEnabled ? 25 : 3,
+                width: 22,
+                height: 22,
+                borderRadius: "50%",
+                background: "#fff",
+                boxShadow: "0 1px 4px rgba(0,0,0,0.3)",
+                transition: "left 0.2s",
+              }}
+            />
+          </button>
+        </div>
+
+        {activitySyncMessage && (
+          <div
+            style={{
+              fontSize: 13,
+              color: activitySyncMessage.kind === "success" ? GREEN : PINK,
+            }}
+          >
+            {activitySyncMessage.text}
+          </div>
+        )}
+
+        {/* Backfill buttons — visible when activity sync is enabled */}
+        {activitySyncEnabled && (
+          <div
+            style={{
+              padding: "12px 14px",
+              borderRadius: 10,
+              border: `1px solid ${BORDER}`,
+              background: "var(--surface-soft)",
+              display: "flex",
+              flexDirection: "column",
+              gap: 8,
+            }}
+          >
+            <div style={{ fontSize: 13, color: "var(--text-muted)", lineHeight: 1.5 }}>
+              <strong style={{ color: "var(--text)" }}>
+                {tAh("backfill_heading")}
+              </strong>
+              <div style={{ marginTop: 4 }}>
+                {tAh("backfill_description")}
+              </div>
+            </div>
+            <div>
+              <button
+                type="button"
+                onClick={handleBackfillWorkouts}
+                disabled={!isNativePlatform || backfillRunning}
+                title={!isNativePlatform ? tAh("ios_only_tooltip") : undefined}
+                style={{
+                  padding: "10px 16px",
+                  borderRadius: 10,
+                  border: `1px solid ${ACCENT}80`,
+                  background: "transparent",
+                  color: ACCENT,
+                  fontSize: 13,
+                  fontWeight: 700,
+                  cursor: !isNativePlatform
+                    ? "not-allowed"
+                    : backfillRunning
+                    ? "wait"
+                    : "pointer",
+                  opacity: !isNativePlatform || backfillRunning ? 0.5 : 1,
+                }}
+              >
+                {backfillRunning
+                  ? tAh("backfill_btn_running")
+                  : tAh("backfill_btn_idle")}
+              </button>
+            </div>
+            {backfillRunning && backfillProgress && (
+              <div style={{ fontSize: 13, color: "var(--text-dim)" }}>
+                {tAh("backfill_progress", {
+                  inserted: backfillProgress.inserted,
+                  fetched: backfillProgress.fetched,
+                  daysBack: backfillProgress.daysBack,
+                  chunks: backfillProgress.chunks,
+                })}
+              </div>
+            )}
+            {!backfillRunning && backfillResult && (
+              <div
+                style={{
+                  fontSize: 13,
+                  color: backfillResult.kind === "success" ? GREEN : PINK,
+                }}
+              >
+                {backfillResult.text}
+              </div>
+            )}
+            {workoutsRange && workoutsRange.count > 0 && (
+              <div
+                style={{
+                  fontSize: 13,
+                  color: "var(--text-dim)",
+                  borderTop: `1px dashed ${BORDER}`,
+                  paddingTop: 8,
+                  marginTop: 2,
+                }}
+              >
+                {tAh("workouts_range", {
+                  oldest: workoutsRange.oldest
+                    ? formatLocalDate(workoutsRange.oldest)
+                    : "—",
+                  newest: workoutsRange.newest
+                    ? formatLocalDate(workoutsRange.newest)
+                    : "—",
+                  count: workoutsRange.count,
+                })}
+              </div>
+            )}
+            {workoutsRange && workoutsRange.count === 0 && (
+              <div
+                style={{
+                  fontSize: 13,
+                  color: "var(--text-dim)",
+                  borderTop: `1px dashed ${BORDER}`,
+                  paddingTop: 8,
+                  marginTop: 2,
+                }}
+              >
+                {tAh("workouts_range_empty")}
+              </div>
+            )}
+
+            <div
+              style={{
+                marginTop: 8,
+                paddingTop: 12,
+                borderTop: `1px solid ${BORDER}`,
+                fontSize: 13,
+                color: "var(--text-muted)",
+                lineHeight: 1.5,
+              }}
+            >
+              <strong style={{ color: "var(--text)" }}>
+                {t("steps.heading")}
+              </strong>
+              <div style={{ marginTop: 4 }}>
+                {t("steps.description")}
+              </div>
+            </div>
+            <div>
+              <button
+                type="button"
+                onClick={handleBackfillSteps}
+                disabled={!isNativePlatform || stepsBackfillRunning}
+                title={!isNativePlatform ? t("steps.ios_only_tooltip") : undefined}
+                style={{
+                  padding: "10px 16px",
+                  borderRadius: 10,
+                  border: `1px solid ${ACCENT}80`,
+                  background: "transparent",
+                  color: ACCENT,
+                  fontSize: 13,
+                  fontWeight: 700,
+                  cursor: !isNativePlatform
+                    ? "not-allowed"
+                    : stepsBackfillRunning
+                    ? "wait"
+                    : "pointer",
+                  opacity: !isNativePlatform || stepsBackfillRunning ? 0.5 : 1,
+                }}
+              >
+                {stepsBackfillRunning
+                  ? t("steps.btn_running")
+                  : t("steps.btn_idle")}
+              </button>
+            </div>
+            {stepsBackfillRunning && stepsBackfillProgress && (
+              <div style={{ fontSize: 13, color: "var(--text-dim)" }}>
+                {t("steps.progress", {
+                  days: stepsBackfillProgress.days,
+                  upserted: stepsBackfillProgress.upserted,
+                  daysBack: stepsBackfillProgress.daysBack,
+                  chunks: stepsBackfillProgress.chunks,
+                })}
+              </div>
+            )}
+            {!stepsBackfillRunning && stepsBackfillResult && (
+              <div
+                style={{
+                  fontSize: 13,
+                  color: stepsBackfillResult.kind === "success" ? GREEN : PINK,
+                }}
+              >
+                {stepsBackfillResult.text}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

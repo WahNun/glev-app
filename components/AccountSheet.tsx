@@ -5,9 +5,16 @@ import { useTranslations, useLocale } from "next-intl";
 import { useRouter } from "next/navigation";
 import { signOut, getCurrentUser } from "@/lib/auth";
 import { supabase } from "@/lib/supabase";
+import { useIsNative } from "@/lib/platform";
 import { parseDbDate, localeToBcp47 } from "@/lib/time";
 import BottomSheet from "@/components/BottomSheet";
+import PaywallSheet from "@/components/PaywallSheet";
 import { type EffectivePlan } from "@/lib/admin/effectivePlan";
+
+const MANAGE_URL: Record<string, string> = {
+  apple_iap: "https://apps.apple.com/account/subscriptions",
+  stripe: "/api/me/subscription/portal",
+};
 
 const ACCENT = "#4F6EF7";
 const PINK = "#FF2D78";
@@ -52,6 +59,7 @@ export default function AccountSheet({ open, onClose }: AccountSheetProps) {
   const t = useTranslations("account");
   const router = useRouter();
   const dateLocale = localeToBcp47(useLocale());
+  const isNative = useIsNative();
 
   const [email, setEmail] = useState<string>("");
   const [createdAt, setCreatedAt] = useState<string>("");
@@ -64,6 +72,9 @@ export default function AccountSheet({ open, onClose }: AccountSheetProps) {
   const [signOutConfirm, setSignOutConfirm] = useState(false);
   const [pwState, setPwState] = useState<"idle" | "sending" | "ok" | "err">("idle");
   // Retention flow: 0 = not active, 1 = discount offer, 2 = 3-month trial, 3 = feedback + cancel
+  const [paywallOpen, setPaywallOpen] = useState(false);
+  const [optimisticPro, setOptimisticPro] = useState(false);
+  const [subscriptionSource, setSubscriptionSource] = useState<string | null>(null);
   const [retentionStep, setRetentionStep] = useState<0 | 1 | 2 | 3>(0);
   const [retentionLoading, setRetentionLoading] = useState(false);
   const [retentionDone, setRetentionDone] = useState<"discount" | "trial" | "cancelled" | null>(null);
@@ -110,13 +121,14 @@ export default function AccountSheet({ open, onClose }: AccountSheetProps) {
             try {
               const res = await fetch("/api/me/plan", { credentials: "include" });
               if (res.ok) {
-                const j = (await res.json()) as { plan?: EffectivePlan };
+                const j = (await res.json()) as { plan?: EffectivePlan; subscription_source?: string | null };
                 if (!cancelled) {
                   const resolved: EffectivePlan =
                     j.plan === "pro" || j.plan === "beta" || j.plan === "free" || j.plan === "plus"
                       ? j.plan
                       : "free";
                   setPlan(resolved);
+                  if (j.subscription_source) setSubscriptionSource(j.subscription_source);
 
                   // Fetch live subscription data for pro/plus/beta users.
                   // On any failure (network or non-OK response), set to false
@@ -660,9 +672,16 @@ export default function AccountSheet({ open, onClose }: AccountSheetProps) {
           )}
 
           {/* Upgrade card — only shown for free users (not pro/plus/beta). */}
-          {plan !== null && plan !== "pro" && plan !== "plus" && plan !== "beta" && (
+          {(plan !== null && plan !== "pro" && plan !== "plus" && plan !== "beta") && !optimisticPro && (
             <button
-              onClick={() => { onClose(); router.push("/pro"); }}
+              onClick={() => {
+                if (isNative) {
+                  setPaywallOpen(true);
+                } else {
+                  onClose();
+                  router.push("/pro");
+                }
+              }}
               style={{
                 width: "100%", textAlign: "left", cursor: "pointer",
                 background: `linear-gradient(135deg, ${PURPLE}30, ${ACCENT}20)`,
@@ -694,6 +713,26 @@ export default function AccountSheet({ open, onClose }: AccountSheetProps) {
               </svg>
             </button>
           )}
+
+          {/* Subscription management link — shown for active subscribers */}
+          {((plan !== null && plan !== "free") || optimisticPro) && subscriptionSource && MANAGE_URL[subscriptionSource] && (
+            <a
+              href={MANAGE_URL[subscriptionSource]}
+              style={{
+                display: "block", textAlign: "center", fontSize: 13,
+                color: ACCENT, textDecoration: "none", fontWeight: 600,
+                padding: "10px 0", marginBottom: 14,
+              }}
+            >
+              Abo verwalten →
+            </a>
+          )}
+
+          <PaywallSheet
+            open={paywallOpen}
+            onClose={() => setPaywallOpen(false)}
+            onPurchaseSuccess={() => { setOptimisticPro(true); setSubscriptionSource("apple_iap"); }}
+          />
 
           {/* Action rows */}
           <div style={{

@@ -91,17 +91,20 @@ export async function GET(req: NextRequest) {
   }
 
   let subscriptionStatus: string | null = null;
+  let subscriptionSource: string | null = null;
   try {
     const { data: subRow, error: subErr } = await admin
       .from("profiles")
-      .select("subscription_status")
+      .select("subscription_status, subscription_source")
       .eq("user_id", a.user.id)
       .maybeSingle();
-    if (!subErr && subRow && typeof (subRow as { subscription_status?: unknown }).subscription_status === "string") {
-      subscriptionStatus = (subRow as { subscription_status: string }).subscription_status;
+    if (!subErr && subRow) {
+      const r = subRow as { subscription_status?: unknown; subscription_source?: unknown };
+      if (typeof r.subscription_status === "string") subscriptionStatus = r.subscription_status;
+      if (typeof r.subscription_source === "string") subscriptionSource = r.subscription_source;
     }
   } catch {
-    /* column missing in this environment — fall through with null */
+    /* columns missing in this environment — fall through with null */
   }
 
   // Single source of truth: `profiles.plan` is now kept in sync by the
@@ -132,6 +135,7 @@ export async function GET(req: NextRequest) {
       plan,
       trial_active: trialActive,
       trial_ends_at: trialEndAt,
+      subscription_source: subscriptionSource,
     },
     { status: 200, headers: { "cache-control": "no-store" } },
   );

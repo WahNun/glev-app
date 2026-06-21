@@ -1,0 +1,32 @@
+"use client";
+import { Capacitor } from "@capacitor/core";
+import { Purchases } from "@revenuecat/purchases-capacitor";
+
+let initialized = false;
+
+export async function initPurchases(userId: string | null): Promise<void> {
+  if (!Capacitor.isNativePlatform()) return;
+  if (initialized) return;
+
+  const apiKey = process.env.NEXT_PUBLIC_REVENUECAT_IOS_KEY;
+  if (!apiKey) {
+    console.warn("[purchases] NEXT_PUBLIC_REVENUECAT_IOS_KEY missing");
+    return;
+  }
+
+  await Purchases.configure({
+    apiKey,
+    appUserID: userId || undefined,
+  });
+  initialized = true;
+}
+
+export async function setUserId(userId: string): Promise<void> {
+  if (!Capacitor.isNativePlatform() || !initialized) return;
+  await Purchases.logIn({ appUserID: userId });
+}
+
+export async function clearUser(): Promise<void> {
+  if (!Capacitor.isNativePlatform() || !initialized) return;
+  await Purchases.logOut();
+}

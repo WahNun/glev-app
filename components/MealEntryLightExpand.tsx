@@ -168,8 +168,8 @@ export default function MealEntryLightExpand({
   // `clearOnEmpty ? null : undefined` so the caller can distinguish
   // "user cleared the field" (write null) from "field unchanged".
   function parseNum(raw: string, clearOnEmpty: boolean): number | null | undefined {
-    const t = raw.trim();
-    if (t === "") return clearOnEmpty ? null : undefined;
+    const t = raw.trim().replace(",", ".");
+    if (t === "" || t === ".") return clearOnEmpty ? null : undefined;
     const n = Number(t);
     if (!Number.isFinite(n)) return undefined;
     return n;
@@ -301,14 +301,14 @@ export default function MealEntryLightExpand({
         </div>
 
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(110px, 1fr))", gap: 12 }}>
-          <Field label={`${tm("field_carbs")} (${carbUnit.label})`}>     <input type="number" inputMode="decimal" min={0} step={carbUnit.step} placeholder={carbUnit.placeholder} value={eCarbs}    onChange={e => setECarbs(e.target.value)}    style={inp} /></Field>
-          <Field label={tm("field_protein")}>   <input type="number" inputMode="decimal" min={0} step="any" value={eProtein}  onChange={e => setEProtein(e.target.value)}  style={inp} /></Field>
-          <Field label={tm("field_fat")}>       <input type="number" inputMode="decimal" min={0} step="any" value={eFat}      onChange={e => setEFat(e.target.value)}      style={inp} /></Field>
-          <Field label={tm("field_fiber")}>     <input type="number" inputMode="decimal" min={0} step="any" value={eFiber}    onChange={e => setEFiber(e.target.value)}    style={inp} /></Field>
-          <Field label={tm("field_insulin")}>   <input type="number" inputMode="decimal" min={0} step="any" value={eInsulin}  onChange={e => setEInsulin(e.target.value)}  style={inp} /></Field>
-          <Field label={tm("field_bg_before")}> <input type="number" inputMode="decimal" min={0} step="any" value={eBgBefore} onChange={e => setEBgBefore(e.target.value)} style={inp} /></Field>
-          <Field label={tm("field_bg_1h")}>     <input type="number" inputMode="decimal" min={0} step="any" value={eBg1h}     onChange={e => setEBg1h(e.target.value)}     style={inp} /></Field>
-          <Field label={tm("field_bg_2h")}>     <input type="number" inputMode="decimal" min={0} step="any" value={eBg2h}     onChange={e => setEBg2h(e.target.value)}     style={inp} /></Field>
+          <Field label={`${tm("field_carbs")} (${carbUnit.label})`}>     <input type="text" inputMode="decimal" pattern="[0-9]*[.,]?[0-9]*" autoComplete="off" placeholder={carbUnit.placeholder} value={eCarbs}    onChange={e => setECarbs(e.target.value.replace(/[^0-9.,]/g, ""))}    style={inp} /></Field>
+          <Field label={tm("field_protein")}>   <input type="text" inputMode="decimal" pattern="[0-9]*[.,]?[0-9]*" autoComplete="off" value={eProtein}  onChange={e => setEProtein(e.target.value.replace(/[^0-9.,]/g, ""))}  style={inp} /></Field>
+          <Field label={tm("field_fat")}>       <input type="text" inputMode="decimal" pattern="[0-9]*[.,]?[0-9]*" autoComplete="off" value={eFat}      onChange={e => setEFat(e.target.value.replace(/[^0-9.,]/g, ""))}      style={inp} /></Field>
+          <Field label={tm("field_fiber")}>     <input type="text" inputMode="decimal" pattern="[0-9]*[.,]?[0-9]*" autoComplete="off" value={eFiber}    onChange={e => setEFiber(e.target.value.replace(/[^0-9.,]/g, ""))}    style={inp} /></Field>
+          <Field label={tm("field_insulin")}>   <input type="text" inputMode="decimal" pattern="[0-9]*[.,]?[0-9]*" autoComplete="off" value={eInsulin}  onChange={e => setEInsulin(e.target.value.replace(/[^0-9.,]/g, ""))}  style={inp} /></Field>
+          <Field label={tm("field_bg_before")}> <input type="text" inputMode="decimal" pattern="[0-9]*[.,]?[0-9]*" autoComplete="off" value={eBgBefore} onChange={e => setEBgBefore(e.target.value.replace(/[^0-9.,]/g, ""))} style={inp} /></Field>
+          <Field label={tm("field_bg_1h")}>     <input type="text" inputMode="decimal" pattern="[0-9]*[.,]?[0-9]*" autoComplete="off" value={eBg1h}     onChange={e => setEBg1h(e.target.value.replace(/[^0-9.,]/g, ""))}     style={inp} /></Field>
+          <Field label={tm("field_bg_2h")}>     <input type="text" inputMode="decimal" pattern="[0-9]*[.,]?[0-9]*" autoComplete="off" value={eBg2h}     onChange={e => setEBg2h(e.target.value.replace(/[^0-9.,]/g, ""))}     style={inp} /></Field>
           <Field label={tm("field_meal_type")}>
             <select value={eType} onChange={e => setEType(e.target.value)} style={inp}>
               {MEAL_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}

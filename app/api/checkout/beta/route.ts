@@ -4,6 +4,7 @@ import { stripe } from '@/lib/stripe';
 import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
+import { trackEvent } from '@/lib/capi-events';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -150,6 +151,19 @@ export async function POST(req: NextRequest) {
     }
 
     const session = await stripe.checkout.sessions.create(sessionParams);
+
+    if (email) {
+      trackEvent('InitiateCheckout', {
+        user: { email },
+        customData: {
+          content_name: 'Glev Smart',
+          content_ids:  ['glev-smart-monthly'],
+          content_type: 'product',
+        },
+        eventId:   `checkout_${session.id}`,
+        sourceUrl: `${process.env.NEXT_PUBLIC_APP_URL}/beta`,
+      }).catch(() => {});
+    }
 
     return NextResponse.json({ url: session.url });
   } catch (err) {

@@ -3,8 +3,17 @@
 import { useState, useEffect } from "react";
 import { useLocale } from "next-intl";
 import { usePlan } from "@/hooks/usePlan";
+import { useSubscription } from "@/hooks/useSubscription";
+import { useInsightsGateBypassed } from "@/lib/insightsGateBypass";
 import { requiredPlanLabel, FEATURE_TIERS } from "@/lib/planFeatures";
 import { supabase } from "@/lib/supabase";
+import { useIsNative } from "@/lib/platform";
+import PaywallSheet from "@/components/PaywallSheet";
+
+const MANAGE_URL: Record<string, string> = {
+  apple_iap: "https://apps.apple.com/account/subscriptions",
+  stripe: "/api/me/subscription/portal",
+};
 
 const ACCENT = "#4F6EF7";
 
@@ -75,10 +84,20 @@ function UpgradeModal({
   onClose: () => void;
 }) {
   const locale = useLocale();
+  const isNative = useIsNative();
+  const { tier: activeTier, source } = useSubscription();
   const [busy, setBusy] = useState(false);
+  const [paywallOpen, setPaywallOpen] = useState(false);
+  const [optimisticPro, setOptimisticPro] = useState(false);
+
+  const alreadySubscribed = optimisticPro || (activeTier !== null && activeTier !== "free");
 
   const handleUpgrade = async () => {
-    if (busy) return;
+    if (busy || alreadySubscribed) return;
+    if (isNative) {
+      setPaywallOpen(true);
+      return;
+    }
     setBusy(true);
     const url = await startCheckout(locale, tier);
     if (url) {
@@ -156,27 +175,49 @@ function UpgradeModal({
           Ab <strong style={{ color: "var(--text)" }}>{planName}</strong> verfügbar
         </p>
 
-        <button
-          type="button"
-          onClick={() => void handleUpgrade()}
-          disabled={busy}
-          style={{
-            width: "100%",
-            padding: "13px 0",
-            background: busy ? `${ACCENT}88` : ACCENT,
-            color: "#fff",
-            border: "none",
-            borderRadius: 11,
-            fontSize: 14,
-            fontWeight: 700,
-            cursor: busy ? "default" : "pointer",
-            letterSpacing: "-0.01em",
-            transition: "background 0.15s",
-          }}
-        >
-          {busy ? "Weiterleitung …" : "Jetzt upgraden →"}
-        </button>
+        {alreadySubscribed ? (
+          <div style={{ width: "100%", textAlign: "center" }}>
+            <p style={{ fontSize: 13, color: "var(--text-faint)", margin: "0 0 10px" }}>
+              Bereits abonniert via {source === "apple_iap" ? "App Store" : source === "stripe" ? "Stripe" : "Glev"}
+            </p>
+            {source && MANAGE_URL[source] && (
+              <a
+                href={MANAGE_URL[source]}
+                style={{ fontSize: 13, color: ACCENT, textDecoration: "none", fontWeight: 600 }}
+              >
+                Abo verwalten →
+              </a>
+            )}
+          </div>
+        ) : (
+          <button
+            type="button"
+            onClick={() => void handleUpgrade()}
+            disabled={busy}
+            style={{
+              width: "100%",
+              padding: "13px 0",
+              background: busy ? `${ACCENT}88` : ACCENT,
+              color: "#fff",
+              border: "none",
+              borderRadius: 11,
+              fontSize: 14,
+              fontWeight: 700,
+              cursor: busy ? "default" : "pointer",
+              letterSpacing: "-0.01em",
+              transition: "background 0.15s",
+            }}
+          >
+            {busy ? "Weiterleitung …" : "Jetzt upgraden →"}
+          </button>
+        )}
       </div>
+
+      <PaywallSheet
+        open={paywallOpen}
+        onClose={() => { setPaywallOpen(false); onClose(); }}
+        onPurchaseSuccess={() => setOptimisticPro(true)}
+      />
     </>
   );
 }
@@ -195,8 +236,13 @@ export default function UpgradeGate({
   opacity?: number;
 }) {
   const { canAccess, loading } = usePlan();
+  const { source } = useSubscription();
   const locale = useLocale();
+  const isNative = useIsNative();
+  const clusterBypassed = useInsightsGateBypassed();
   const [modalOpen, setModalOpen] = useState(false);
+  const [paywallOpen, setPaywallOpen] = useState(false);
+  const [optimisticPro, setOptimisticPro] = useState(false);
   const [busy, setBusy] = useState(false);
   const [userEmail, setUserEmail] = useState("");
 
@@ -207,7 +253,7 @@ export default function UpgradeGate({
       .catch(() => {});
   }, []);
 
-  if (loading || canAccess(feature)) {
+  if (loading || canAccess(feature) || clusterBypassed) {
     return <>{children}</>;
   }
 
@@ -215,7 +261,11 @@ export default function UpgradeGate({
   const planName = requiredPlanLabel(tier);
 
   const handleUpgrade = async () => {
-    if (busy) return;
+    if (busy || optimisticPro) return;
+    if (isNative) {
+      setPaywallOpen(true);
+      return;
+    }
     setBusy(true);
     const url = await startCheckout(locale, tier);
     if (url) {
@@ -257,11 +307,13 @@ export default function UpgradeGate({
         {modalOpen && (
           <UpgradeModal planName={planName} tier={tier} onClose={() => setModalOpen(false)} />
         )}
+        <PaywallSheet open={paywallOpen} onClose={() => setPaywallOpen(false)} onPurchaseSuccess={() => setOptimisticPro(true)} />
       </>
     );
   }
 
   return (
+    <>
     <div style={{ position: "relative" }}>
       {children && (
         <div
@@ -321,41 +373,47 @@ export default function UpgradeGate({
             {planName}
           </div>
 
-          <button
-            type="button"
-            onClick={() => void handleUpgrade()}
-            disabled={busy}
-            style={{
-              padding: "9px 20px",
-              background: busy ? `${ACCENT}88` : ACCENT,
-              color: "#fff",
-              borderRadius: 9,
-              border: "none",
-              fontSize: 13,
-              fontWeight: 700,
-              letterSpacing: "-0.01em",
-              cursor: busy ? "default" : "pointer",
-              transition: "background 0.15s",
-              whiteSpace: "nowrap",
-            }}
-          >
-            {busy ? "Weiterleitung …" : "Upgraden →"}
-          </button>
+          <>
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); void handleUpgrade(); }}
+              disabled={busy}
+              style={{
+                padding: "9px 20px",
+                background: busy ? `${ACCENT}88` : ACCENT,
+                color: "#fff",
+                borderRadius: 9,
+                border: "none",
+                fontSize: 13,
+                fontWeight: 700,
+                letterSpacing: "-0.01em",
+                cursor: busy ? "default" : "pointer",
+                transition: "background 0.15s",
+                whiteSpace: "nowrap",
+              }}
+            >
+              {busy ? "Weiterleitung …" : "Upgraden →"}
+            </button>
 
-          <a
-            href={moreInfoHref}
-            style={{
-              fontSize: 12,
-              color: "var(--text-faint)",
-              textDecoration: "none",
-              marginTop: 2,
-              opacity: 0.8,
-            }}
-          >
-            Mehr Informationen
-          </a>
+            {!isNative && (
+              <a
+                href={moreInfoHref}
+                style={{
+                  fontSize: 12,
+                  color: "var(--text-faint)",
+                  textDecoration: "none",
+                  marginTop: 2,
+                  opacity: 0.8,
+                }}
+              >
+                Mehr Informationen
+              </a>
+            )}
+          </>
         </div>
       </div>
     </div>
+    <PaywallSheet open={paywallOpen} onClose={() => setPaywallOpen(false)} onPurchaseSuccess={() => setOptimisticPro(true)} />
+    </>
   );
 }

@@ -1,9 +1,35 @@
 import { NextRequest, NextResponse } from "next/server";
 import { parseFoodText } from "@/lib/nutrition/parseFood";
 import { aggregateNutrition } from "@/lib/nutrition/aggregate";
+import { AggregatorTrace } from "@/lib/nutrition/aggregator-trace";
 import { classifyMeal } from "@/lib/meals";
 import { lookupUserFoodHistory } from "@/lib/nutrition/userFoodHistory";
 import { authedClient } from "@/app/api/insulin/_helpers";
+import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
+
+const RATE_LIMIT_MAX = 30;
+const RATE_LIMIT_WINDOW_MS = 60_000;
+
+async function isRateLimited(userId: string): Promise<boolean> {
+  let admin;
+  try { admin = getSupabaseAdmin(); } catch { return false; }
+  const cutoff = new Date(Date.now() - RATE_LIMIT_WINDOW_MS).toISOString();
+  const { count, error } = await admin
+    .from("ai_rate_limit_hits")
+    .select("id", { count: "exact", head: true })
+    .eq("user_id", userId)
+    .gte("hit_at", cutoff);
+  if (error) return false;
+  return (count ?? 0) >= RATE_LIMIT_MAX;
+}
+
+async function addRateLimitHit(userId: string): Promise<void> {
+  let admin;
+  try { admin = getSupabaseAdmin(); } catch { return; }
+  const now = Date.now();
+  await admin.from("ai_rate_limit_hits").insert({ user_id: userId, hit_at: new Date(now).toISOString() });
+  void admin.from("ai_rate_limit_hits").delete().eq("user_id", userId).lt("hit_at", new Date(now - RATE_LIMIT_WINDOW_MS).toISOString());
+}
 
 /**
  * Two-stage nutrition pipeline:
@@ -32,18 +58,29 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "text is required" }, { status: 400 });
   }
 
+  // Rate limit (best-effort: unauthenticated requests pass through).
+  // Auth is re-used below for history lookup — hoist to avoid double call.
+  let earlyAuth: Awaited<ReturnType<typeof authedClient>> | null = null;
+  try { earlyAuth = await authedClient(req); } catch { /* no-op */ }
+  if (earlyAuth?.user?.id) {
+    if (await isRateLimited(earlyAuth.user.id)) {
+      return NextResponse.json({ error: "Rate limit exceeded. Try again in a minute." }, { status: 429, headers: { "Retry-After": "60" } });
+    }
+    void addRateLimitHit(earlyAuth.user.id);
+  }
+
   // Whitelist the locale to the two languages we ship i18n for; anything
   // else falls back to German (the historical default for parseFoodText).
   const locale: "de" | "en" = rawLocale === "en" ? "en" : "de";
 
-  // Stage 1: GPT parser
+  // Stage 1: Mistral parser
   let parsed;
   try {
     parsed = await parseFoodText(text, locale);
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : "Parser failed";
-    // 503 if it's the missing-key sentinel from getOpenAIClient(), else 500.
-    const status = /Missing OpenAI/i.test(msg) ? 503 : 500;
+    // 503 if it's the missing-key sentinel from getMistralChatClient(), else 500.
+    const status = /Missing MISTRAL/i.test(msg) ? 503 : 500;
     // eslint-disable-next-line no-console
     console.log("[PERF parse-food] STAGE 1 FAILED:", msg);
     return NextResponse.json({ error: msg }, { status });
@@ -59,7 +96,7 @@ export async function POST(req: NextRequest) {
   // to the pre-Phase-B behaviour.
   let userHistory: Awaited<ReturnType<typeof lookupUserFoodHistory>> | undefined;
   try {
-    const auth = await authedClient(req);
+    const auth = earlyAuth ?? await authedClient(req);
     if (auth.user && auth.sb) {
       userHistory = await lookupUserFoodHistory(
         auth.sb,
@@ -72,7 +109,8 @@ export async function POST(req: NextRequest) {
   }
 
   // Stage 2: smart routing → user history → OFF / USDA / GPT-estimate fallback
-  const aggregated = await aggregateNutrition(parsed.items, { userHistory });
+  const trace = earlyAuth?.user?.id ? new AggregatorTrace() : undefined;
+  const aggregated = await aggregateNutrition(parsed.items, { userHistory, trace });
   const tAgg = Date.now();
   // eslint-disable-next-line no-console
   console.log("[PERF parse-food] stage 2 (aggregator):", tAgg - tParse, "ms · source:", aggregated.nutritionSource);
@@ -86,6 +124,20 @@ export async function POST(req: NextRequest) {
   // eslint-disable-next-line no-console
   console.log("[PERF parse-food] total:", Date.now() - t0, "ms");
 
+  if (trace && earlyAuth?.user?.id) {
+    let adminSb;
+    try { adminSb = getSupabaseAdmin(); } catch { /* no-op */ }
+    if (adminSb) {
+      void trace.persist({
+        user_id:            earlyAuth.user.id,
+        input_text:         text,
+        supabaseClient:     adminSb,
+        aggregator_version: "1.0",
+        env:                process.env.VERCEL_ENV ?? process.env.NODE_ENV ?? "unknown",
+      });
+    }
+  }
+
   return NextResponse.json({
     // Backward-compat aliases for existing client code:
     parsed: aggregated.items,
@@ -96,6 +148,9 @@ export async function POST(req: NextRequest) {
     description: parsed.description,
     // New fields surfaced by the two-stage pipeline:
     nutritionSource: aggregated.nutritionSource,
+    ...(aggregated.historyMinOccurrences !== undefined
+      ? { historyMinOccurrences: aggregated.historyMinOccurrences }
+      : {}),
     raw: parsed.raw,
   });
 }

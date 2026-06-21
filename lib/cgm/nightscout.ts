@@ -177,7 +177,10 @@ async function fetchEntries(
       `nightscout ${res.status}${body ? ": " + body.slice(0, 120) : ""}`
     );
     e.upstream = true;
-    e.status = res.status === 401 || res.status === 403 ? 401 : 502;
+    // 401/403 → auth failure; 404 → URL wrong; everything else → upstream error
+    e.status = (res.status === 401 || res.status === 403) ? 401
+             : res.status === 404 ? 404
+             : 502;
     throw e;
   }
   const json = (await res.json().catch(() => null)) as unknown;
@@ -301,6 +304,25 @@ export async function getLatest(
   // Cache miss — live fetch and write to cache.
   const entries = await fetchEntries(creds.url, creds.token, 1);
   await writeCacheEntries(userId, entries);
+  return { current: entries[0] ? mapEntry(entries[0]) : null };
+}
+
+/**
+ * Force a live fetch from Nightscout, bypassing the nightscout_readings cache.
+ * Used by /api/cgm/latest when the user explicitly taps Refresh — ensures a
+ * fresh reading lands rather than the cached value from up to 30 min ago.
+ */
+export async function getLatestLive(
+  userId: string
+): Promise<{ current: Reading | null }> {
+  const creds = await getCredentials(userId);
+  if (!creds) {
+    const e: Error & { status?: number } = new Error("nightscout not connected");
+    e.status = 404;
+    throw e;
+  }
+  const entries = await fetchEntries(creds.url, creds.token, 1);
+  if (entries.length > 0) await writeCacheEntries(userId, entries);
   return { current: entries[0] ? mapEntry(entries[0]) : null };
 }
 

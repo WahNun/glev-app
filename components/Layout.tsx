@@ -9,6 +9,7 @@ import GlevLockup from "@/components/GlevLockup";
 import GlevLogo from "@/components/GlevLogo";
 import AccountSheet from "@/components/AccountSheet";
 import DashboardQuickAddSheet from "@/components/DashboardQuickAddSheet";
+import PaywallSheet from "@/components/PaywallSheet";
 import GlevAIButton from "@/components/GlevAIButton";
 import GlevAIConsentModal from "@/components/GlevAIConsentModal";
 import GlevAIChatSheet from "@/components/GlevAIChatSheet";
@@ -16,12 +17,12 @@ import { useGlevAI, type AIState } from "@/lib/useGlevAI";
 import { GlevAIProvider } from "@/lib/glevAIContext";
 import { resolveFabAction } from "@/lib/fabAction";
 import { useFeatureFlag } from "@/lib/featureFlags";
+import { useGlevAIAccess } from "@/lib/useGlevAIAccess";
 import { useScreenContext } from "@/hooks/useScreenContext";
 import { EngineHeaderProvider, useEngineHeader } from "@/lib/engineHeaderContext";
 import TrialCountdownBanner from "@/components/TrialCountdownBanner";
 import { EngineSourceHeaderProvider, useEngineSourceHeader } from "@/lib/engineSourceHeaderContext";
 import { EngineWizardStepProvider, useEngineWizardStep } from "@/lib/engineWizardStepContext";
-import { VoiceRecordingProvider, useVoiceRecording } from "@/lib/voiceRecordingContext";
 import {
   ScopeHeaderProvider, useScopeHeader,
   type ScopeMode,
@@ -99,9 +100,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       <EngineSourceHeaderProvider>
         <EngineWizardStepProvider>
           <ScopeHeaderProvider>
-            <VoiceRecordingProvider>
-              <LayoutInner>{children}</LayoutInner>
-            </VoiceRecordingProvider>
+            <LayoutInner>{children}</LayoutInner>
           </ScopeHeaderProvider>
         </EngineWizardStepProvider>
       </EngineSourceHeaderProvider>
@@ -116,6 +115,7 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
   const locale = useLocale();
   const [aboutOpen, setAboutOpen] = useState(false);
   const [signOutConfirm, setSignOutConfirm] = useState(false);
+  const [fabPaywallOpen, setFabPaywallOpen] = useState(false);
   // The mobile-header AccountSheet trigger was removed in the
   // 2026-05-17 header-decluttering revision (header now only carries
   // the brand lockup + the recording-state pill). Konto/Profil flows
@@ -132,7 +132,7 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
   // (sourced from `profiles.ai_consent_at`), modal/sheet open state,
   // sessionStorage-backed conversation history, and the streaming
   // fetch to /api/ai/chat. See DECISIONS.md D-013.
-  const aiVoiceEnabled = useFeatureFlag("ai_voice");
+  const aiVoiceEnabled = useGlevAIAccess();
   const voiceIntentEnabled = useFeatureFlag("voice_intent_routing") === true;
   // Fullscreen AI chat state — only used on /engine. The sheet variant
   // (glevAi.sheetOpen) is used on all other tabs.
@@ -157,10 +157,6 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
-  // Voice-recording bridge: while the engine is recording, the FAB's
-  // tap means "stop recording" (not "open quick-add"), and a "Speak"
-  // pill appears in the header as a global cue + secondary stop tap.
-  const voice = useVoiceRecording();
   const headerTts = useTTS();
 
   // TTS speaking state — driven by glev:tts-speaking CustomEvents from
@@ -184,29 +180,8 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
     return () => window.removeEventListener("glev:chat-position-changed", handler);
   }, []);
 
-  // arrowHint: briefly show the swipe-up arrow when voice recording starts
-  // while the chat sheet is closed and chatPosition === "swipe".
-  // Auto-clears after 2.4 s — matches the flicker animation duration.
-  const [arrowHint, setArrowHint] = useState(false);
-  const arrowHintTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  useEffect(() => {
-    if (voice.recording && !glevAi.sheetOpen && chatPosition === "swipe" && aiVoiceEnabled) {
-      setArrowHint(true);
-      if (arrowHintTimer.current) clearTimeout(arrowHintTimer.current);
-      arrowHintTimer.current = setTimeout(() => setArrowHint(false), 2400);
-    }
-    // When recording stops or chat opens, hide arrow immediately.
-    if (!voice.recording || glevAi.sheetOpen) {
-      if (arrowHintTimer.current) { clearTimeout(arrowHintTimer.current); arrowHintTimer.current = null; }
-      setArrowHint(false);
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [voice.recording, glevAi.sheetOpen, chatPosition, aiVoiceEnabled]);
-
   // aiThinking: true while the chat sheet's STT mic is active (user
   // speaking into the chat) OR while the AI is streaming a reply.
-  // Kept separate from voice.recording (engine STT) so both can be true
-  // simultaneously without interfering with each other.
   const [aiThinking, setAiThinking] = useState(false);
   useEffect(() => {
     function onTtsSpeaking(e: Event) {
@@ -307,7 +282,6 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
       if (typeof navigator !== "undefined" && "vibrate" in navigator) {
         try { navigator.vibrate?.(15); } catch { /* noop */ }
       }
-      if (voice.recording) return;
       setQuickAddOpen(true);
     }, 500);
   };
@@ -315,11 +289,7 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
     fabClearTimer();
     if (!fabLongFiredRef.current) {
       fabPointerHandledRef.current = true;
-      if (voice.recording) {
-        voice.requestStop();
-      } else {
-        runFabShortTap();
-      }
+      runFabShortTap();
     }
   };
   const fabHandlePointerCancel = () => {
@@ -332,11 +302,7 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
       fabPointerHandledRef.current = false;
       return;
     }
-    if (voice.recording) {
-      voice.requestStop();
-    } else {
-      runFabShortTap();
-    }
+    runFabShortTap();
   };
 
   // Dispatches the FAB short-tap. When ai_voice is enabled and consent is
@@ -378,11 +344,9 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
         router.push("/glev-ai");
         break;
 
-      case "legacy-navigate":
-        // No AI feature flag — navigate to Engine voice mode.
-        // replace (not push) avoids stacking /engine on top of the previous
-        // entry page — which was causing the "nav-flash" after a save.
-        router.replace(`/engine?voice=1&vt=${Date.now()}`);
+      case "open-paywall":
+        // Free user (no AI flag): show Smart-tier PaywallSheet.
+        setFabPaywallOpen(true);
         break;
     }
   };
@@ -430,6 +394,10 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
   // from a long page never leaves the header stuck in the hidden state.
   const mainRef = useRef<HTMLElement>(null);
   const [headerHidden, setHeaderHidden] = useState(false);
+  // true when AI chat is visually "in front" — either the bottom sheet or
+  // the /glev-ai fullscreen page. Drives header controls, z-index, and
+  // scroll-fade behaviour so there is exactly ONE AI header cluster.
+  const isAiSurface = glevAi.sheetOpen || pathname.startsWith("/glev-ai");
   const lastScrollYRef = useRef(0);
   useEffect(() => {
     setHeaderHidden(false);
@@ -454,18 +422,6 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
 
   const navTo = (path: string) => {
     hapticSelection();
-    // 2026-05-18 round 7 (TestFlight tap loss fix): defer voice stop into
-    // a microtask so its setState cascade (recording=false, engine page
-    // teardown, re-render) cannot run synchronously between this call and
-    // the router.push below. Previously a tab tap during an active voice
-    // recording would (a) trigger the capture-phase tap-anywhere-stop
-    // listener in VoiceRecordingProvider AND (b) call requestStop again
-    // here — the resulting double-flush sometimes left React in a state
-    // where the router.push appeared to be queued but never committed on
-    // WKWebView, looking like the tap was "dead".
-    if (voice.recording) {
-      queueMicrotask(() => { try { voice.requestStop(); } catch {} });
-    }
     setPendingPath(path);
     router.push(path);
   };
@@ -772,10 +728,18 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
             /* Task #363: vertical padding is now derived from the
                --nav-top-total / --nav-bottom-total CSS variables
                defined in app/globals.css — single source of truth for
-               header & footer chrome geometry. Buffer of 8 px under
-               the footer prevents sub-pixel scroll rounding from
-               leaking a strip of the next card under the labels. */
-            padding: calc(var(--nav-top-total) + 4px) 16px calc(var(--nav-bottom-total) + 8px) !important;
+               header & footer chrome geometry.
+
+               2026-06-21 hotfix (bottom-nav-overlap-final): Buffer must
+               compensate for zoom: 1.12 on .glev-main. Because .glev-main
+               is both the zoom host and the scroll container, WKWebView
+               scroll geometry shrinks the visible CSS range at max-scroll
+               to clientHeight/z (= ~754 px on a 844-px screen). The last
+               content item's viewport Y at max-scroll = (H − pb) × z.
+               For no overlap: (H − pb) × z ≤ (H − N) − 16 px clearance.
+               Worst-case iPhone 15 Pro Max (H=932): requires buffer ≥ 115 px.
+               120 px gives ≥ 24 px clearance on every current iOS device. */
+            padding: calc(var(--nav-top-total) + 4px) 16px calc(var(--nav-bottom-total) + 120px) !important;
           }
           .glev-entry-row   { grid-template-columns: 1fr auto auto !important; gap: 10px !important; padding: 14px 16px !important; }
           .glev-entry-hide-mobile { display: none !important; }
@@ -792,12 +756,8 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
       `}</style>
 
       {/* MOBILE HEADER — solid surface bg always; logo opens About modal, account icon opens Settings */}
-      {/* aiChatActive: true when the AI chat is visually "in front" —
-          either as a sheet (sheetOpen) or as the /glev-ai fullscreen page.
-          Drives header chip, Reset/Speaker buttons, and z-index. */}
-      {/* eslint-disable-next-line react-hooks/exhaustive-deps */}
       <header className="glev-mobile-head" style={{
-        position: "fixed", top: 0, left: 0, right: 0, zIndex: (glevAi.sheetOpen || pathname.startsWith("/glev-ai")) ? 1102 : 99, overflow: "visible",
+        position: "fixed", top: 0, left: 0, right: 0, zIndex: isAiSurface ? 1102 : 99, overflow: "visible",
         // iOS notch / Dynamic Island: push content below the status bar by
         // honouring safe-area-inset-top, with a sensible fallback for
         // browsers that don't expose it (e.g. desktop dev tools).
@@ -837,10 +797,10 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
         borderBottom: `1px solid ${BORDER}`,
         alignItems: "center", justifyContent: "space-between",
         // Scroll-fade: slide up + fade out on scroll-down, reverse on scroll-up.
-        transform: (headerHidden && !glevAi.sheetOpen && !pathname.startsWith("/glev-ai")) ? "translateY(-100%)" : "translateY(0)",
-        opacity: (headerHidden && !glevAi.sheetOpen && !pathname.startsWith("/glev-ai")) ? 0 : 1,
+        transform: (headerHidden && !isAiSurface) ? "translateY(-100%)" : "translateY(0)",
+        opacity: (headerHidden && !isAiSurface) ? 0 : 1,
         transition: "transform 220ms cubic-bezier(.4,0,.2,1), opacity 220ms ease",
-        pointerEvents: (headerHidden && !glevAi.sheetOpen && !pathname.startsWith("/glev-ai")) ? "none" : undefined,
+        pointerEvents: (headerHidden && !isAiSurface) ? "none" : undefined,
       }}>
         <div
           onClick={() => setAboutOpen(true)}
@@ -855,13 +815,13 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
               das Logo-Quadrat soll in Light Mode NICHT mit-aufhellen,
               sonst löst es sich vom Header optisch auf. */}
           <GlevLockup size={26} color="var(--text)" symbolBg="var(--surface-alt)" />
-          {(glevAi.sheetOpen || pathname.startsWith("/glev-ai")) && (
+          {isAiSurface && (
             <span style={{ fontSize: 13, fontWeight: 700, color: ACCENT, marginLeft: 2, letterSpacing: "-0.01em" }}>
               AI
             </span>
           )}
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: (glevAi.sheetOpen || pathname.startsWith("/glev-ai")) ? 4 : 8, flexShrink: 0 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: isAiSurface ? 4 : 8, flexShrink: 0 }}>
           {/* Engine-Pille im Header wurde entfernt (User-Wunsch
               2026-05-04): "ich will nurnoch das plus symbol nutzen
               im header allerdings müssen dort alle tabs die aktuell
@@ -989,15 +949,21 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
             // diluted — architect flagged this explicitly. The
             // "Source:" prefix is dropped (context = engine header).
             const isUnknown = sourceHdr.source === "unknown";
-            const dotColor = sourceHdr.source === "database"
-              ? "#22D3A0"
-              : sourceHdr.source === "mixed"
-                ? "#FF9500"
-                : sourceHdr.source === "estimated"
-                  ? "#FF2D78"
+            // Green for all DB-backed sources; orange for mixed; pink for estimated; red for unknown.
+            const isGreen = sourceHdr.source === "database" || sourceHdr.source === "user_history"
+              || sourceHdr.source === "open_food_facts" || sourceHdr.source === "usda";
+            const dotColor = isGreen ? "#22D3A0"
+              : sourceHdr.source === "mixed" ? "#FF9500"
+                : sourceHdr.source === "estimated" ? "#FF2D78"
                   : "#FF6B6B";
             const label = tEngineHdr(`nutrition_source_${sourceHdr.source}`);
-            const tip   = tEngineHdr(`nutrition_source_explain_${sourceHdr.source}`);
+            // For user_history with a count, the tooltip includes the precise
+            // "Basiert auf X vorherigen Einträgen" text; other sources use the
+            // static explain key.
+            const baseTip = tEngineHdr(`nutrition_source_explain_${sourceHdr.source}`);
+            const tip = sourceHdr.source === "user_history" && sourceHdr.historyCount != null
+              ? tEngineHdr("nutrition_source_explain_user_history_count", { count: sourceHdr.historyCount })
+              : baseTip;
             return (
               <div
                 title={tip}
@@ -1022,26 +988,28 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
               </div>
             );
           })()}
-          {(glevAi.sheetOpen || pathname.startsWith("/glev-ai")) ? (
+          {isAiSurface ? (
             <>
               <AIStateChip state={glevAi.aiState} />
-              {/* Reset ↻ */}
+              {/* ↻ Reset-Chat — clears in-memory history only, no consent revoke */}
               <button
                 type="button"
-                onClick={glevAi.clearMessages}
-                disabled={glevAi.messages.length === 0 && !glevAi.streaming}
-                aria-label={locale === "en" ? "Reset chat" : "Chat zurücksetzen"}
+                onClick={() => {
+                  const msg = locale === "en"
+                    ? "Clear chat history?"
+                    : "Chat-Verlauf löschen?";
+                  if (window.confirm(msg)) glevAi.clearMessages();
+                }}
+                aria-label={locale === "en" ? "Clear chat history" : "Chat-Verlauf löschen"}
                 style={{
                   background: "none", border: "none", cursor: "pointer",
                   padding: 4, display: "flex", alignItems: "center",
-                  color: glevAi.messages.length === 0 && !glevAi.streaming
-                    ? "var(--text-ghost)" : "var(--text-dim)",
-                  transition: "color 0.15s",
+                  color: "var(--text-muted)",
                 }}
               >
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <polyline points="1 4 1 10 7 10"/>
-                  <path d="M3.51 15a9 9 0 1 0 .49-4.5"/>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
+                  <path d="M3 3v5h5"/>
                 </svg>
               </button>
               {/* Speaker 🔊 */}
@@ -1072,52 +1040,33 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
                   </svg>
                 )}
               </button>
-              {/* Close ✕ — on /glev-ai (fullscreen page) navigate back,
-                  on other tabs close the bottom sheet. */}
+              {/* Close/Back — ← on /glev-ai page, ✕ on sheet */}
               <button
                 type="button"
                 onClick={pathname.startsWith("/glev-ai") ? () => router.back() : glevAi.closeSheet}
-                aria-label={locale === "en" ? "Close Glev AI" : "Glev AI schließen"}
+                aria-label={pathname.startsWith("/glev-ai")
+                  ? (locale === "en" ? "Go back" : "Zurück")
+                  : (locale === "en" ? "Close Glev AI" : "Glev AI schließen")}
                 style={{
                   background: "none", border: "none", cursor: "pointer",
                   padding: 4, display: "flex", alignItems: "center",
                   color: "var(--text-muted)",
                 }}
               >
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-                  <line x1="18" y1="6" x2="6" y2="18" />
-                  <line x1="6" y1="6" x2="18" y2="18" />
-                </svg>
+                {pathname.startsWith("/glev-ai") ? (
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="15 18 9 12 15 6" />
+                  </svg>
+                ) : (
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                    <line x1="18" y1="6" x2="6" y2="18" />
+                    <line x1="6" y1="6" x2="18" y2="18" />
+                  </svg>
+                )}
               </button>
             </>
           ) : (
-            <>
-              <CgmStatusPill locale={locale} />
-              {voice.recording && (
-                <button
-                  type="button"
-                  onClick={voice.requestStop}
-                  aria-label={locale === "en" ? "Stop voice recording" : "Sprachaufnahme beenden"}
-                  style={{
-                    display: "inline-flex", alignItems: "center", gap: 8,
-                    height: 32, padding: "0 12px", borderRadius: 99,
-                    background: `${ACCENT}1f`,
-                    border: `1px solid ${ACCENT}`,
-                    color: ACCENT,
-                    fontSize: 13, fontWeight: 700, letterSpacing: "-0.005em",
-                    cursor: "pointer",
-                    animation: "glevMicPulse 1.4s ease-in-out infinite",
-                    WebkitTapHighlightColor: "transparent",
-                  }}
-                >
-                  <span style={{
-                    width: 8, height: 8, borderRadius: "50%", background: ACCENT,
-                    boxShadow: `0 0 8px ${ACCENT}`,
-                  }} aria-hidden="true" />
-                  Speak
-                </button>
-              )}
-            </>
+            <CgmStatusPill locale={locale} />
           )}
         </div>
       </header>
@@ -1333,8 +1282,8 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
             See fabHandle* handlers above for the interaction logic. */}
         <MobileGlevFab
           label={tNav("glev")}
-          active={quickAddOpen || voice.recording}
-          recording={!!(voice.recording || aiThinking || (aiVoiceEnabled && glevAi.streaming))}
+          active={quickAddOpen}
+          recording={!!(aiThinking || (aiVoiceEnabled && glevAi.streaming))}
           speaking={aiVoiceEnabled ? ttsSpeaking : false}
           sheetOpen={aiVoiceEnabled
             ? (pathname.startsWith("/engine")
@@ -1351,7 +1300,7 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
                     ? false
                     : !glevAi.sheetOpen))
             : false}
-          showArrow={arrowHint}
+          showArrow={false}
           aiState={aiVoiceEnabled ? glevAi.aiState : "idle"}
           audioAnalyserRef={glevAi.audioAnalyserRef}
         />
@@ -1402,8 +1351,8 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
         onClick={fabHandleClick}
         data-glev-fab-hit="true"
         aria-haspopup="dialog"
-        aria-expanded={quickAddOpen || voice.recording}
-        aria-label={voice.recording ? (locale === "en" ? "Glev — stop recording" : "Glev — Aufnahme beenden") : "Glev"}
+        aria-expanded={quickAddOpen}
+        aria-label="Glev"
         style={{
           position: "fixed",
           bottom: "calc(26px + var(--safe-bottom))",
@@ -1435,6 +1384,13 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
           one tap away regardless of which screen the user is on. */}
       <DashboardQuickAddSheet open={quickAddOpen} onClose={() => setQuickAddOpen(false)} />
 
+      {/* PaywallSheet for free users who tap the FAB without an AI plan. */}
+      <PaywallSheet
+        open={fabPaywallOpen}
+        onClose={() => setFabPaywallOpen(false)}
+        initialTier="smart"
+      />
+
       {/* Glev AI Phase 2 (Task #651): consent modal on first tap of
           the floating AI button, streaming chat sheet thereafter. The
           Phase-1 "Coming soon" toast + the placeholder AiHelperSheet
@@ -1461,7 +1417,12 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
               onSend={glevAi.sendMessage}
               onConfirmAction={glevAi.confirmAction}
               onCancelAction={glevAi.cancelAction}
-              onOpenEngineForMeal={glevAi.openEngineForMeal}
+              onOpenEngineForMeal={async (messageId, token) => {
+                await glevAi.openEngineForMeal(messageId, token);
+                // Close the fullscreen overlay so the macros step is visible
+                // after "Macros prüfen →" is tapped while already on /engine.
+                setGlevAiFullscreenOpen(false);
+              }}
               onQuickSaveAction={glevAi.quickSaveAction}
               onDetailOpen={glevAi.navigateToLogScreen}
               onClearChat={glevAi.clearMessages}
@@ -1540,6 +1501,7 @@ type CgmPillStatus = "live" | "connecting" | "delayed" | "offline" | "paused";
 
 function useCgmPillStatus(): CgmPillStatus {
   const [ts, setTs] = useState<string | null | undefined>(undefined);
+  const loadRef = useRef<(() => void) | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -1555,9 +1517,16 @@ function useCgmPillStatus(): CgmPillStatus {
         })
         .catch(() => { if (!cancelled) setTs(null); });
     };
+    loadRef.current = load;
     load();
     const id = setInterval(load, 60_000);
-    return () => { cancelled = true; clearInterval(id); };
+    return () => { cancelled = true; clearInterval(id); loadRef.current = null; };
+  }, []);
+
+  useEffect(() => {
+    const handler = () => { loadRef.current?.(); };
+    window.addEventListener("glev:cgm-source-changed", handler);
+    return () => window.removeEventListener("glev:cgm-source-changed", handler);
   }, []);
 
   if (ts === undefined) return "connecting";
@@ -1573,7 +1542,7 @@ function useCgmPillStatus(): CgmPillStatus {
     : new Date(ts + " UTC");
   const ageMin = (Date.now() - parsed.getTime()) / 60_000;
   if (isNaN(ageMin)) return "offline";
-  if (ageMin < 5)  return "live";
+  if (ageMin < 6)  return "live";
   if (ageMin < 15) return "delayed";
   return "offline";
 }
@@ -1582,9 +1551,9 @@ function CgmStatusPill({ locale: loc }: { locale: string }) {
   const status = useCgmPillStatus();
 
   const cfg: Record<CgmPillStatus, { dot: string; label: string }> = {
-    live:       { dot: "#10b981", label: loc === "en" ? "LIVE"       : "LIVE"      },
+    live:       { dot: "#22D3A0", label: loc === "en" ? "LIVE"       : "LIVE"      },
     connecting: { dot: "#f59e0b", label: loc === "en" ? "CONNECTING" : "VERBINDET" },
-    delayed:    { dot: "#fb923c", label: loc === "en" ? "DELAYED"    : "VERSPÄTET" },
+    delayed:    { dot: "#FF9500", label: loc === "en" ? "DELAYED"    : "VERSPÄTET" },
     offline:    { dot: "#ef4444", label: loc === "en" ? "OFFLINE"    : "OFFLINE"   },
     paused:     { dot: "#9ca3af", label: loc === "en" ? "PAUSED"     : "PAUSIERT"  },
   };
@@ -1808,16 +1777,11 @@ function MobileTab({
 
   // 2026-05-18 round 7 (TestFlight footer-tap loss fix):
   // Previously this tab fired navigation from `onClick` only. On iOS
-  // WKWebView the synthesised click event would intermittently be lost:
-  //   1. Right after a route swap: React re-mounts the entire nav row
-  //      below new RSC output. The button DOM node the WebKit hit-test
-  //      resolved at touchstart is no longer the node that receives the
-  //      click — so the handler never runs, and the tap feels "dead".
-  //   2. While a voice recording is active: VoiceRecordingProvider's
-  //      capture-phase pointerdown listener calls setRecording(false)
-  //      BEFORE the click bubbles. That synchronous state cascade
-  //      tore down the engine page mid-dispatch and the click event
-  //      was sometimes never delivered to this button at all.
+  // WKWebView the synthesised click event would intermittently be lost
+  // right after a route swap: React re-mounts the entire nav row below
+  // new RSC output, so the button DOM node the WebKit hit-test resolved
+  // at touchstart is no longer the node that receives the click — the
+  // handler never runs and the tap feels "dead".
   // Mirror the Glev FAB: act on `pointerup` directly (which fires before
   // the click is synthesized), with movement/cancel guards so a vertical
   // scroll gesture started on the nav doesn't accidentally navigate.

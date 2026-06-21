@@ -101,6 +101,18 @@ export interface SaveMealInput {
    *  Defaults to "Mahlzeit-Bolus" when omitted. Callers that know the user's
    *  brand should pass it so the history shows the real name. */
   insulinName?: string | null;
+  /** Original AI/aggregator estimate captured before user edits. When present,
+   *  saveMeal fires a fire-and-forget insert into meal_estimate_audits so the
+   *  correction rate and model quality can be tracked across AI sources. */
+  aiEstimate?: {
+    carbsGrams:    number | null;
+    proteinGrams:  number | null;
+    fatGrams:      number | null;
+    fiberGrams:    number | null;
+    aiSource:      string | null;
+    aiModelId?:    string | null;
+    aiRequestId?:  string | null;
+  } | null;
 }
 
 /**
@@ -308,6 +320,34 @@ export async function saveMeal(input: SaveMealInput, _deps?: SaveMealDeps): Prom
     throw new Error(error.message);
   }
   logDebug("MEAL_INSERT", { id: data.id, carbs: input.carbsGrams, protein: input.proteinGrams, fat: input.fatGrams, fiber: input.fiberGrams, calories: input.calories, insulin: input.insulinUnits, glucose: input.glucoseBefore, mealType: input.mealType, evaluation: input.evaluation });
+
+  // Audit layer: fire-and-forget insert into meal_estimate_audits so we can
+  // track AI estimate vs final macro corrections per source and model.
+  if (input.aiEstimate) {
+    const est = input.aiEstimate;
+    void (async () => {
+      try {
+        await sb.from("meal_estimate_audits").insert({
+          meal_id:               data.id,
+          user_id:               user.id,
+          ai_estimate_kh_g:      est.carbsGrams,
+          ai_estimate_protein_g: est.proteinGrams,
+          ai_estimate_fat_g:     est.fatGrams,
+          ai_estimate_fiber_g:   est.fiberGrams,
+          ai_source:             est.aiSource,
+          ai_model_id:           est.aiModelId ?? null,
+          ai_request_id:         est.aiRequestId ?? null,
+          final_kh_g:            input.carbsGrams,
+          final_protein_g:       input.proteinGrams ?? null,
+          final_fat_g:           input.fatGrams ?? null,
+          final_fiber_g:         input.fiberGrams ?? null,
+        });
+      } catch (e) {
+        // eslint-disable-next-line no-console
+        console.error("[audit] meal_estimate_audits insert failed:", e);
+      }
+    })();
+  }
 
   // Phase B (per-user food history): passively record each parsed
   // item into the personalised cache so the next parse of the same

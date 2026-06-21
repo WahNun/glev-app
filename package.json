@@ -27,14 +27,14 @@
     "android:version": "node scripts/bump-android-version.mjs show",
     "android:bump:build": "node scripts/bump-android-version.mjs build",
     "asana:sync": "node scripts/sync-asana-sprints.mjs",
-    "telegram:notify": "node scripts/notify-telegram.mjs",
-    "telegram:ask": "node scripts/ask-telegram.mjs",
     "check:engine-doc": "node scripts/check-engine-doc-thresholds.mjs",
     "backfill:evaluations": "npx tsx scripts/backfillMealEvaluations.ts",
     "backfill:outcome-states": "npx tsx scripts/backfillOutcomeStates.ts",
     "backfill:curve-jobs": "npx tsx scripts/backfillCurveJobs.ts",
     "check:outcome-coverage": "node scripts/check-outcome-coverage.mjs",
-    "gh:setup-branch-protection": "node scripts/setup-branch-protection.mjs"
+    "gh:setup-branch-protection": "node scripts/setup-branch-protection.mjs",
+    "prepare": "husky",
+    "typecheck:tests": "tsc --project tsconfig.test.json --noEmit"
   },
   "dependencies": {
     "@capacitor/android": "^8.3.1",
@@ -44,7 +44,9 @@
     "@capacitor/local-notifications": "^8.2.0",
     "@capacitor/push-notifications": "^8.0.3",
     "@capacitor/screen-orientation": "^8.0.1",
-    "@capacitor/share": "^6.0.2",
+    "@capacitor/share": "^8.0.1",
+    "@capacitor/splash-screen": "^8.0.1",
+    "@capawesome/capacitor-apple-sign-in": "^0.1.0",
     "@capgo/capacitor-health": "^8.4.8",
     "@dnd-kit/core": "^6.3.1",
     "@dnd-kit/sortable": "^10.0.0",
@@ -53,12 +55,14 @@
     "@octokit/rest": "^21.1.1",
     "@react-pdf/renderer": "^4.5.1",
     "@replit/connectors-sdk": "^0.4.1",
+    "@revenuecat/purchases-capacitor": "^13.1.7",
     "@supabase/ssr": "^0.10.2",
     "@supabase/supabase-js": "^2.104.0",
     "@types/jszip": "^3.4.0",
     "@vercel/analytics": "^2.0.1",
     "axios": "^1.15.2",
     "googleapis": "^171.4.0",
+    "heic2any": "^0.0.4",
     "jszip": "^3.10.1",
     "next": "^16.2.6",
     "next-intl": "^4.9.2",
@@ -79,6 +83,8 @@
     "@types/node": "^25.3.3",
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",
+    "apple-signin-auth": "^2.0.0",
+    "husky": "^9.1.7",
     "typescript": "~5.9.2"
   }
 }

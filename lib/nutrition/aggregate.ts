@@ -12,6 +12,8 @@ import type {
 } from "./types";
 import type { UserFoodHistoryHit } from "./userFoodHistory";
 import { normalizeFoodName } from "./userFoodHistory";
+import { AggregatorTrace } from "./aggregator-trace";
+import { memCacheGet, memCacheSet } from "./memory-cache";
 
 const ZERO: NutritionPer100 = { carbs_g: 0, protein_g: 0, fat_g: 0, fiber_g: 0 };
 
@@ -44,6 +46,7 @@ interface ResolvedItem {
 async function resolveItem(
   item: ParsedFoodItem,
   history?: Map<string, UserFoodHistoryHit>,
+  trace?: AggregatorTrace,
 ): Promise<ResolvedItem> {
   // Phase B: per-user food history wins over every other source.
   // The history table is per-user and RLS-protected, so a hit here
@@ -54,39 +57,71 @@ async function resolveItem(
     const key = normalizeFoodName(item.name);
     const hit = key ? history.get(key) : undefined;
     if (hit) {
-      // Safety: the history loader already filtered out all-zero rows
-      // and impossible per-100g values, so this hit is trustworthy.
-      return {
-        per100: hit.per100,
-        source: hit.source === "user_confirmed" ? "user_confirmed" : "user_history",
-      };
+      // user_confirmed = explicit chat-macros correction, always trusted.
+      if (hit.source === "user_confirmed") {
+        trace?.recordLookup({ source: "user_history", success: true, latency_ms: 0, hit_count: hit.occurrences });
+        return { per100: hit.per100, source: "user_confirmed" };
+      }
+      // Passive history: require ≥3 occurrences before trusting the cached
+      // macros for T1D dosing. A single logged banana could be a typo or
+      // a one-off unusual portion — fall through to OFF/USDA/GPT until
+      // at least 3 entries have been blended into the average.
+      if (hit.occurrences >= 3) {
+        trace?.recordLookup({ source: "user_history", success: true, latency_ms: 0, hit_count: hit.occurrences });
+        return { per100: hit.per100, source: "user_history" };
+      }
+      // < 3 occurrences: fall through to OFF / USDA / GPT below.
+      trace?.recordLookup({ source: "user_history", success: false, latency_ms: 0, hit_count: hit.occurrences });
     }
   }
 
-  // Phase 3: Promise.any race — both lookups fire simultaneously and the
-  // first non-null hit wins. The slower one's in-flight request continues
-  // until its own timeout (1.5s), but we don't wait for it. Wall time =
+  // Memory cache: skip the entire OFF/USDA race for previously resolved items.
+  // Populated on successful DB hits; LLM estimates are intentionally excluded.
+  const memHit = memCacheGet(item.name);
+  if (memHit) {
+    trace?.recordLookup({ source: "memory_cache", success: true, latency_ms: 0 });
+    return memHit;
+  }
+
+  // Promise.any race — both lookups fire simultaneously and the first
+  // non-null hit wins. The slower one's in-flight request continues until
+  // its own timeout (1.5s), but we don't wait for it. Wall time =
   // min(OFF, USDA) on a hit, max(OFF, USDA) on a full miss — capped at
-  // 1.5s per Phase 3 timeout tightening. Priority tiebreak: if both
-  // respond within the same tick, branded → prefer OFF; generic → prefer USDA.
+  // 1.5s per timeout. Priority tiebreak: if both respond within the same
+  // tick, branded → prefer OFF; generic → prefer USDA.
   const offTerm  = item.search_term_de || item.name;
   const usdaTerm = item.search_term_en || item.name;
 
   // Wrap each lookup as a Promise that rejects when the result is null
   // (Promise.any needs a rejection to fall through to the next).
-  const offHit  = lookupOpenFoodFacts(offTerm).then((r) => {
-    if (!r) throw new Error("off-miss");
+  const offT0 = Date.now();
+  const offHit = lookupOpenFoodFacts(offTerm).then((r) => {
+    const latency_ms = Date.now() - offT0;
+    if (!r) {
+      trace?.recordLookup({ source: "open_food_facts", success: false, latency_ms });
+      throw new Error("off-miss");
+    }
+    trace?.recordLookup({ source: "open_food_facts", success: true, latency_ms, response_excerpt: JSON.stringify(r).slice(0, 200) });
     return { per100: r, source: "open_food_facts" as const };
   });
+
+  const usdaT0 = Date.now();
   const usdaHit = lookupUSDA(usdaTerm).then((r) => {
-    if (!r) throw new Error("usda-miss");
+    const latency_ms = Date.now() - usdaT0;
+    if (!r) {
+      trace?.recordLookup({ source: "usda", success: false, latency_ms });
+      throw new Error("usda-miss");
+    }
+    trace?.recordLookup({ source: "usda", success: true, latency_ms, response_excerpt: JSON.stringify(r).slice(0, 200) });
     return { per100: r, source: "usda" as const };
   });
 
   // Order the race so the preferred source wins when both resolve simultaneously.
   const raceOrder = item.is_branded ? [offHit, usdaHit] : [usdaHit, offHit];
   try {
-    return await Promise.any(raceOrder);
+    const winner = await Promise.any(raceOrder);
+    memCacheSet(item.name, winner.per100, winner.source);
+    return winner;
   } catch {
     // Both DBs missed — fall through to GPT / category-default below.
   }
@@ -94,10 +129,13 @@ async function resolveItem(
   // Both DBs missed → GPT estimate. estimateItemNutrition THROWS on
   // any failure (config, API, all-zero response, IMPOSSIBLE) per the
   // T1D safety contract — see lib/nutrition/estimate.ts.
+  const llmT0 = Date.now();
   try {
     const est = await estimateItemNutrition(item);
+    trace?.recordLookup({ source: "llm", success: true, latency_ms: Date.now() - llmT0 });
     return { per100: est, source: "estimated" };
   } catch {
+    trace?.recordLookup({ source: "llm", success: false, latency_ms: Date.now() - llmT0 });
     // Option C (2026-05-12 — Lucas): before tagging this item as
     // 'unknown' (which escalates the WHOLE meal to nutritionSource
     // 'unknown' and blocks auto-fill — see topLevelSource), try a
@@ -132,17 +170,24 @@ function topLevelSource(items: NutritionItem[]): AggregateSource {
   // DB lookups AND the GPT estimate fell over means the totals can't
   // be trusted for insulin dosing. The UI MUST surface this clearly.
   if (items.some((i) => i.source === "unknown")) return "unknown";
-  // user_history / user_confirmed count as "database" for the UI
-  // badge — they're DB-backed and skipped the GPT estimator. Same
-  // confidence semantics for the dose recommender.
+
   const isDbLike = (s: NutritionSource) =>
     s === "open_food_facts" || s === "usda" ||
     s === "user_history"   || s === "user_confirmed";
-  const allEstimated = items.every((i) => i.source === "estimated");
-  if (allEstimated) return "estimated";
+
   const anyEstimated = items.some((i) => i.source === "estimated");
   if (anyEstimated && items.some((i) => isDbLike(i.source))) return "mixed";
-  return anyEstimated ? "estimated" : "database";
+  if (items.every((i) => i.source === "estimated")) return "estimated";
+
+  // All items resolved from a single source — return specific badge so
+  // the UI can say "Aus deinen Logs / Open Food Facts / USDA" instead
+  // of the generic "Datenbank ✓".
+  if (items.every((i) => i.source === "user_history" || i.source === "user_confirmed")) return "user_history";
+  if (items.every((i) => i.source === "open_food_facts")) return "open_food_facts";
+  if (items.every((i) => i.source === "usda")) return "usda";
+
+  // Mix of different DB sources (e.g. OFF item + USDA item) — generic.
+  return "database";
 }
 
 export interface AggregateOptions {
@@ -157,12 +202,16 @@ export interface AggregateOptions {
    * that don't pass this option keep working unchanged.
    */
   userHistory?: Map<string, UserFoodHistoryHit>;
+  /** When provided, each lookup stage records timing + success into this trace. Persist is the caller's responsibility. */
+  trace?: AggregatorTrace;
 }
 
 export async function aggregateNutrition(
   items: ParsedFoodItem[],
   opts: AggregateOptions = {},
 ): Promise<AggregatedNutrition> {
+  const { trace } = opts;
+
   if (items.length === 0) {
     return {
       items: [],
@@ -171,12 +220,14 @@ export async function aggregateNutrition(
     };
   }
 
+  trace?.setParsedFood(items);
+
   // Parallel resolve — each item makes at most 2 HTTP calls + 1 GPT call,
   // each with its own 3-4s timeout. With N items the total wall time is
   // bounded by the slowest item, not N × budget. History hits short-
   // circuit before any HTTP call and resolve synchronously.
   const resolved = await Promise.all(
-    items.map((it) => resolveItem(it, opts.userHistory)),
+    items.map((it) => resolveItem(it, opts.userHistory, trace)),
   );
 
   const finalItems: NutritionItem[] = items.map((it, i) => {
@@ -218,15 +269,32 @@ export async function aggregateNutrition(
   const calories = Math.round(totals.carbs * 4 + totals.protein * 4 + totals.fat * 9);
 
   const nutritionSource = topLevelSource(finalItems);
+
+  // Compute the minimum occurrence count across all user-history-resolved
+  // items so the UI badge can show "Basiert auf X vorherigen Einträgen".
+  let historyMinOccurrences: number | undefined;
+  if (nutritionSource === "user_history" && opts.userHistory) {
+    const counts: number[] = [];
+    for (const it of finalItems) {
+      const hit = opts.userHistory.get(normalizeFoodName(it.name));
+      if (hit) counts.push(hit.occurrences);
+    }
+    if (counts.length > 0) historyMinOccurrences = Math.min(...counts);
+  }
+
   const srcCounts = finalItems.reduce<Record<string, number>>((acc, it) => {
     acc[it.source] = (acc[it.source] ?? 0) + 1;
     return acc;
   }, {});
   console.log(`[nutritionMetrics] items=${finalItems.length} sources=${JSON.stringify(srcCounts)} topLevel=${nutritionSource}`);
 
+  trace?.setFinalSource(nutritionSource);
+  trace?.setFinalMacros({ ...totals, calories });
+
   return {
     items: finalItems,
     totals: { ...totals, calories },
     nutritionSource,
+    ...(historyMinOccurrences !== undefined ? { historyMinOccurrences } : {}),
   };
 }

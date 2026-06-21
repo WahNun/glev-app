@@ -4,8 +4,10 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations, useLocale } from "next-intl";
 import { usePlan } from "@/hooks/usePlan";
+import { useIsNative } from "@/lib/platform";
 import { getHistoryCutoffISO, clampFromToPlan } from "@/lib/historyLimit";
 import UpgradeGate from "@/components/UpgradeGate";
+import PaywallSheet from "@/components/PaywallSheet";
 import { supabase } from "@/lib/supabase";
 import {
   fetchAllMeals,
@@ -319,11 +321,13 @@ export default function ExportPanel() {
   const { canAccess, plan, trialActive } = usePlan();
   const planCutoff = getHistoryCutoffISO(plan, trialActive);
   const router = useRouter();
+  const isNative = useIsNative();
   const t = useTranslations("export");
   const bcp47 = localeToBcp47(useLocale());
   const { unit: carbUnit, label: carbUnitLabel } = useCarbUnit();
   const [busy, setBusy] = useState<Kind | null>(null);
   const [msg, setMsg]   = useState<{ kind: "ok" | "err"; text: string } | null>(null);
+  const [paywallOpen, setPaywallOpen] = useState(false);
   // Which data kinds to include in the bulk CSV zip. Restored from
   // localStorage so the clinician's last selection survives page reloads
   // and fresh panel opens. All four on only on the very first visit.
@@ -1487,7 +1491,13 @@ export default function ExportPanel() {
               </button>
             ) : (
               <button
-                onClick={() => router.push("/pro")}
+                onClick={() => {
+                  if (isNative) {
+                    setPaywallOpen(true);
+                  } else {
+                    router.push("/pro");
+                  }
+                }}
                 style={{
                   flex: "1 1 200px",
                   padding: "14px", borderRadius: 12,
@@ -1545,7 +1555,13 @@ export default function ExportPanel() {
               </button>
             ) : (
               <button
-                onClick={() => router.push("/pro")}
+                onClick={() => {
+                  if (isNative) {
+                    setPaywallOpen(true);
+                  } else {
+                    router.push("/pro");
+                  }
+                }}
                 style={{
                   flex: "1 1 200px",
                   padding: "14px", borderRadius: 12,
@@ -1614,6 +1630,13 @@ export default function ExportPanel() {
       }}>
         {t("carb_unit_note", { unit: carbUnitLabel })}
       </div>
+
+      <PaywallSheet
+        open={paywallOpen}
+        onClose={() => setPaywallOpen(false)}
+        onPurchaseSuccess={() => setPaywallOpen(false)}
+        initialTier="plus"
+      />
     </div>
   );
 }

@@ -354,11 +354,16 @@ function ConfirmInner() {
       const accessToken  = hp.get("access_token");
       const refreshToken = hp.get("refresh_token");
       const errCode      = hp.get("error_code") || hp.get("error");
+      const hashType     = hp.get("type");
 
       // Belt-and-suspenders: if a session ever arrives via the SDK/setSession,
-      // surface the form too.
+      // surface the form too. Guard SIGNED_IN for signup/email confirmations:
+      // those navigate to /onboarding instead of showing the password form.
       const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
-        if (event === "PASSWORD_RECOVERY" || event === "SIGNED_IN") {
+        if (event === "PASSWORD_RECOVERY") {
+          setState((s) => (s.kind === "ready" ? s : { kind: "ready" }));
+        }
+        if (event === "SIGNED_IN" && hashType !== "signup" && hashType !== "email") {
           setState((s) => (s.kind === "ready" ? s : { kind: "ready" }));
         }
       });
@@ -377,6 +382,10 @@ function ConfirmInner() {
             if (se) {
               setState({ kind: "invalid", reason: se.message });
             } else {
+              if (hashType === "signup" || hashType === "email") {
+                router.replace("/onboarding");
+                return;
+              }
               setState({ kind: "ready" });
               // Strip the token hash from the address bar.
               if (typeof window !== "undefined") {
@@ -428,7 +437,13 @@ function ConfirmInner() {
       // frischen Session, nicht via getSession() das evtl. noch null liefert.
       activateTrial(sessionToken);
 
-      setState({ kind: "ready" });
+      if (type === "signup" || type === "email") {
+        // Email-Confirmation: User hat beim /signup bereits ein Passwort gesetzt.
+        // Passwort-Form überspringen — direkt zum Onboarding.
+        router.replace("/onboarding");
+        return;
+      }
+      setState({ kind: "ready" }); // invite / recovery → Passwort-Form
     } catch (err) {
       if (isLinkAlreadyUsed(err)) {
         setState({

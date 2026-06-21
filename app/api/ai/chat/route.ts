@@ -2,7 +2,7 @@ import { NextRequest, NextResponse, after } from "next/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import OpenAI from "openai";
 import { authedClient, type AuthOk, type AuthErr } from "@/app/api/insulin/_helpers";
-import { getOpenAIClient } from "@/lib/ai/openaiClient";
+import { getMistralChatClient } from "@/lib/ai/openaiClient";
 import { GLEV_CHAT_SYSTEM_PROMPT } from "@/lib/ai/glevChatPrompt";
 import { errorResponse } from "@/lib/api/errorResponse";
 import { getUserFriendlyMessage } from "@/lib/ai/errorMessages";
@@ -22,6 +22,9 @@ import {
 } from "@/lib/ai/glevTools";
 import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
 import { callWithRetry, defaultGetRetryAfterSec } from "@/lib/ai/retryWithRateLimit";
+import { computeEffectivePlan } from "@/lib/admin/effectivePlan";
+import { canAccess } from "@/lib/planFeatures";
+import { EngineTrace } from "@/lib/engine/trace";
 
 // Maximum number of sequential tool-call rounds before we stop calling
 // OpenAI with `tools` and force a streamed final answer. Two is enough
@@ -237,8 +240,8 @@ type ChatBody = {
   // Europe/Berlin.
   timezone?: string | null;
   /** Optional file attachments uploaded via /api/ai/upload.
-   *  Images → gpt-4o-mini (vision built-in).
-   *  PDFs   → text prepended to message, then gpt-4o-mini. */
+   *  Images → pixtral-12b-2409 (vision) in Phase 1.
+   *  PDFs   → text prepended to message, then mistral-large-latest. */
   attachments?: ChatAttachment[];
 };
 
@@ -473,26 +476,40 @@ async function loadActiveSystemPrompt(): Promise<string> {
 }
 
 /**
- * Checks whether `user_settings.feature_flags.ai_voice` is `true` for
- * the given user. Returns a 403 NextResponse when the flag is absent or
- * false, and `null` when the check passes (request may proceed).
+ * Checks whether the user is allowed to use Glev AI.
  *
+ * Access is granted when EITHER:
+ *   1. Admin has set ai_voice = true in user_settings.feature_flags
+ *      (Friends & Family / beta-tester override)
+ *   2. User has Glev Smart, Pro, or Plus subscription (plan-gated)
+ *
+ * Returns a 403 NextResponse when neither condition is met, null otherwise.
  * Exported for unit testing (dependency-injection of the Supabase client).
  */
 export async function checkChatFlag(
   sb: SupabaseClient,
   userId: string,
 ): Promise<NextResponse | null> {
-  const { data: settingsRow } = await sb
-    .from("user_settings")
-    .select("feature_flags")
-    .eq("user_id", userId)
-    .maybeSingle();
-  const featureFlags = (settingsRow?.feature_flags ?? {}) as Record<string, unknown>;
-  if (featureFlags.ai_voice !== true) {
-    return errorResponse("PERMISSION_DENIED", 403);
-  }
-  return null;
+  // Parallel: feature-flag + profile plan check
+  const [settingsResult, profileResult] = await Promise.all([
+    sb.from("user_settings").select("feature_flags").eq("user_id", userId).maybeSingle(),
+    sb.from("profiles").select("manual_plan_override, manual_plan_expires_at, plan, trial_end_at").eq("user_id", userId).maybeSingle(),
+  ]);
+
+  const featureFlags = (settingsResult.data?.feature_flags ?? {}) as Record<string, unknown>;
+  if (featureFlags.ai_voice === true) return null; // admin override → allow
+
+  const p = profileResult.data;
+  const trialActive = p?.trial_end_at ? Date.parse(p.trial_end_at) > Date.now() : false;
+  const effectivePlan = computeEffectivePlan({
+    manual_plan_override: p?.manual_plan_override ?? null,
+    manual_plan_expires_at: p?.manual_plan_expires_at ?? null,
+    plan: p?.plan ?? null,
+  });
+
+  if (canAccess("glev_ai", effectivePlan, trialActive)) return null;
+
+  return errorResponse("PERMISSION_DENIED", 403);
 }
 
 /**
@@ -503,7 +520,7 @@ export async function checkChatFlag(
  * - `auth`: pre-resolved auth result. When omitted `handleChatPost` calls
  *   `authedClient(req)` itself (production path).
  * - `getOpenAI`: factory that returns an OpenAI client. When omitted the
- *   real `getOpenAIClient()` is used. Tests can pass a spy here to assert
+ *   real `getMistralChatClient()` is used. Tests can pass a spy here to assert
  *   that no OpenAI call occurs when the feature-flag gate blocks early.
  * - `timeoutMs`: stream timeout in milliseconds. Defaults to 18 000. Tests
  *   can lower this to make timeout scenarios fast.
@@ -581,8 +598,8 @@ export async function handleChatPost(
   const timezone: string | null = v.body.timezone ?? null;
   const attachments: ChatAttachment[] = v.body.attachments ?? [];
 
-  // 5. OpenAI client
-  const _getOpenAI = deps.getOpenAI ?? getOpenAIClient;
+  // 5. Mistral client (via OpenAI-compat SDK)
+  const _getOpenAI = deps.getOpenAI ?? getMistralChatClient;
   let client;
   try {
     client = _getOpenAI();
@@ -636,6 +653,50 @@ export async function handleChatPost(
   // This keeps the streaming UX intact (tokens still arrive live) while
   // adding the read-only tool layer (Phase 3 / Task 1). Write-tools
   // come in Task 2 behind a UI-confirmation gate.
+
+  // Hoist attachment filters so both Phase 1 (tool-call round) and Phase 2
+  // (streaming) share the same references without re-computing.
+  const imageAttachments = attachments.filter((a) => a.mimeType.startsWith("image/"));
+  const pdfAttachments   = attachments.filter((a) => a.mimeType === "application/pdf");
+  const hasImages = imageAttachments.length > 0;
+
+  // photo_analysis trace — created when images are present; persisted
+  // fire-and-forget after the stream completes via after().
+  let photoTrace: EngineTrace | null = null;
+  let photoAdminSb: ReturnType<typeof getSupabaseAdmin> | null = null;
+  if (hasImages) {
+    try { photoAdminSb = getSupabaseAdmin(); } catch { /* no-op */ }
+    if (photoAdminSb) {
+      photoTrace = new EngineTrace("photo_analysis", {
+        image_count:        imageAttachments.length,
+        image_bytes_sizes:  imageAttachments.map((a) => a.url.length), // url length as proxy; real size unknown here
+        mime_types:         imageAttachments.map((a) => a.mimeType),
+      });
+    }
+  }
+
+  // Pre-Phase-1: attach images to the last user message NOW so pixtral-12b-2409
+  // can see the food photo in the tool-call round and
+  // fire log_meal_entry.  Without this, images were only appended in Phase 2
+  // where tools are not available — so the model described the food in text
+  // instead of logging it.
+  if (hasImages) {
+    const lastUserIdx = messages.length - 1;
+    if (messages[lastUserIdx]?.role === "user" && typeof messages[lastUserIdx].content === "string") {
+      const textContent = messages[lastUserIdx].content as string;
+      messages[lastUserIdx] = {
+        role: "user",
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        content: [
+          { type: "text", text: textContent },
+          ...imageAttachments.map((a) => ({
+            type: "image_url" as const,
+            image_url: { url: a.url },
+          })),
+        ] as any,
+      };
+    }
+  }
 
   const timeoutMs = deps.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   const _sleep = deps.sleep ?? ((ms: number) => new Promise((r) => setTimeout(r, ms)));
@@ -765,12 +826,14 @@ export async function handleChatPost(
         // confused and called both. We reject the duplicate with a stub so no
         // second influence card appears in the UI.
         let alcoholDualEmittedThisRequest = false;
+        let mealPrepEmittedThisRequest = false;
         for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
           if (timedOut || closed) return;
 
+          const pixtralT0 = Date.now();
           const completion = await callOpenAIWithRetry(
             () => client.chat.completions.create({
-              model: "gpt-4o-mini",
+              model: hasImages ? "pixtral-12b-2409" : "mistral-large-latest",
               max_tokens: 300,
               temperature: 0.4,
               messages,
@@ -786,6 +849,19 @@ export async function handleChatPost(
 
           const choice = completion?.choices?.[0];
           const toolCalls = choice?.message?.tool_calls ?? [];
+
+          // photo_analysis step: capture pixtral call result on round 0
+          if (hasImages && photoTrace && round === 0) {
+            photoTrace.recordStep("pixtral_call", {
+              success:    true,
+              latency_ms: Date.now() - pixtralT0,
+              detail: {
+                model:           "pixtral-12b-2409",
+                tool_calls_count: toolCalls.length,
+                tool_names:      toolCalls.map((c) => 'function' in c ? c.function?.name : undefined).filter(Boolean),
+              },
+            });
+          }
           if (!toolCalls.length) {
             // ── Feedback Guard (response-side) ────────────────────────
             // OpenAI responded with text but no tool call. If the text
@@ -928,6 +1004,7 @@ export async function handleChatPost(
               // then both pending_actions so the client renders two chips.
               pendingEmittedThisRound = true;
               alcoholDualEmittedThisRequest = true; // block any subsequent log_influence_entry(alcohol)
+              mealPrepEmittedThisRequest = true;
               const [mealAction, inflAction] = result.dual_pending_actions;
               const mp = mealAction.payload as Record<string, unknown> | undefined;
               if (mp) {
@@ -938,6 +1015,7 @@ export async function handleChatPost(
                     protein: typeof mp.protein_grams === "number" ? mp.protein_grams : null,
                     fat:     typeof mp.fat_grams     === "number" ? mp.fat_grams     : null,
                     fiber:   typeof mp.fiber_grams   === "number" ? mp.fiber_grams   : null,
+                    ...(typeof mp.nutritionSource === "string" ? { nutritionSource: mp.nutritionSource } : {}),
                     ...(mp.meal_time_explicit === true && typeof mp.logged_at === "string" && mp.logged_at ? { meal_time: mp.logged_at } : {}),
                   },
                 }));
@@ -951,11 +1029,12 @@ export async function handleChatPost(
                 content: JSON.stringify({
                   status: "awaiting_user_confirmation",
                   kind: "log_meal_entry+log_influence_entry",
-                  note: "Zwei Bestätigungs-Buttons erscheinen automatisch: Mahlzeit + Alkohol-Einflussfaktor. Antworte mit EINEM kurzen Satz ('Soll ich Mahlzeit und Alkohol-Einflussfaktor so speichern?').",
+                  note: "Chip erscheint automatisch. Kein weiterer Text nötig.",
                 }),
               });
             } else if (isPendingActionEnvelope(result)) {
               pendingEmittedThisRound = true;
+              if (result.pending_action.kind === "log_meal_entry") mealPrepEmittedThisRequest = true;
               // For log_meal_entry: emit meal_prep BEFORE pending_action so the
               // client can queue the macro data and associate the token when
               // pending_action arrives (useGlevAI assigns token to the last
@@ -973,6 +1052,7 @@ export async function handleChatPost(
                       protein: typeof p.protein_grams === "number" ? p.protein_grams : null,
                       fat: typeof p.fat_grams === "number" ? p.fat_grams : null,
                       fiber: typeof p.fiber_grams === "number" ? p.fiber_grams : null,
+                      ...(typeof p.nutritionSource === "string" ? { nutritionSource: p.nutritionSource } : {}),
                       ...(p.meal_time_explicit === true && typeof p.logged_at === "string" && p.logged_at ? { meal_time: p.logged_at } : {}),
                     },
                   }),
@@ -987,8 +1067,9 @@ export async function handleChatPost(
                   status: "awaiting_user_confirmation",
                   kind: result.pending_action.kind,
                   summary: result.pending_action.summary,
-                  note:
-                    "Bestätigung erfolgt durch UI-Button. Antworte mit EINEM kurzen Satz, der natürlich zur Aktion überleitet (z. B. 'Soll ich das so speichern?'). Stelle KEINE Rückfragen nach Daten, frage NICHT erneut nach Bestätigung — der Button erscheint automatisch.",
+                  note: result.pending_action.kind === "log_meal_entry"
+                    ? "Chip erscheint automatisch. Kein weiterer Text nötig."
+                    : "Bestätigung erfolgt durch UI-Button. Antworte mit EINEM kurzen Satz, der natürlich zur Aktion überleitet. Stelle KEINE Rückfragen — der Button erscheint automatisch.",
                 }),
               });
             } else if (isNavigateEnvelope(result)) {
@@ -1049,11 +1130,17 @@ export async function handleChatPost(
 
         if (timedOut || closed) return;
 
+        // Meal-log turns: chip IS the full response — skip streaming phase.
+        if (mealPrepEmittedThisRequest) {
+          send("[DONE]");
+          safeClose();
+          return;
+        }
+
         // ── Phase 2: stream the final answer ────────────────────────
-        // gpt-4o-mini handles both text and image inputs natively (vision built-in).
-        // PDFs are prepended as text so OpenAI receives the actual document content.
-        const imageAttachments = attachments.filter((a) => a.mimeType.startsWith("image/"));
-        const pdfAttachments   = attachments.filter((a) => a.mimeType === "application/pdf");
+        // imageAttachments / pdfAttachments / hasImages are hoisted above Phase 1.
+        // Images were already applied to the user message before Phase 1 so the
+        // model could call log_meal_entry; no re-application needed here.
 
         // Extract text from PDF attachments and prepend to the last user
         // message so OpenAI receives the actual document content.
@@ -1087,31 +1174,9 @@ export async function handleChatPost(
           }
         }
 
-        const hasImages = imageAttachments.length > 0;
-
-        // For vision: replace the last user message with a content-array
-        // that includes the text plus image_url objects (OpenAI format).
-        if (hasImages) {
-          const lastUserIdx = messages.length - 1;
-          if (messages[lastUserIdx]?.role === "user") {
-            const textContent = messages[lastUserIdx].content as string;
-            messages[lastUserIdx] = {
-              role: "user",
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              content: [
-                { type: "text", text: textContent },
-                ...imageAttachments.map((a) => ({
-                  type: "image_url" as const,
-                  image_url: { url: a.url },
-                })),
-              ],
-            };
-          }
-        }
-
         const streamResult = await callOpenAIWithRetry(
           () => client.chat.completions.create({
-            model: "gpt-4o-mini",
+            model: "mistral-large-latest",
             max_tokens: hasImages ? 512 : 300,
             temperature: 0.4,
             messages,
@@ -1179,6 +1244,22 @@ export async function handleChatPost(
       }
     },
   });
+
+  // photo_analysis trace: persist fire-and-forget after the stream is sent
+  if (photoTrace && photoAdminSb) {
+    const _photoTrace = photoTrace;
+    const _photoAdminSb = photoAdminSb;
+    const _userId = user.id;
+    _photoTrace.setOutput({ image_count: imageAttachments.length });
+    after(async () => {
+      void _photoTrace.persist({
+        user_id:     _userId,
+        supabase:    _photoAdminSb,
+        app_version: process.env.npm_package_version ?? "unknown",
+        env:         process.env.VERCEL_ENV ?? process.env.NODE_ENV ?? "unknown",
+      });
+    });
+  }
 
   return new Response(stream, {
     headers: {

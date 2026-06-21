@@ -14,7 +14,7 @@ export type CarbUnit = "g" | "BE" | "KE";
 
 export const CARB_UNITS: Record<
   CarbUnit,
-  { label: string; gPerUnit: number; description: string; step: number; placeholder: string }
+  { label: string; gPerUnit: number; description: string; step: number; placeholder: string; icrSuffix: string }
 > = {
   g: {
     label: "g KH",
@@ -22,6 +22,7 @@ export const CARB_UNITS: Record<
     description: "Gramm Kohlenhydrate (international)",
     step: 1,
     placeholder: "z.B. 60",
+    icrSuffix: "g/IE",
   },
   BE: {
     label: "BE",
@@ -29,6 +30,7 @@ export const CARB_UNITS: Record<
     description: "Broteinheit — 1 BE = 12g KH (Deutschland, Österreich)",
     step: 0.5,
     placeholder: "z.B. 5",
+    icrSuffix: "BE/IE",
   },
   KE: {
     label: "KE",
@@ -36,6 +38,7 @@ export const CARB_UNITS: Record<
     description: "Kohlenhydrateinheit — 1 KE = 10g KH (Schweiz)",
     step: 0.5,
     placeholder: "z.B. 6",
+    icrSuffix: "KE/IE",
   },
 };
 
@@ -83,4 +86,13 @@ export function formatCarbs(grams: number, unit: CarbUnit): string {
 // Pretty ICR: "24 g KH/IE", "2 BE/IE", "2.4 KE/IE".
 export function formatICR(icrGperIE: number, unit: CarbUnit): string {
   return `${icrToUnit(icrGperIE, unit)} ${CARB_UNITS[unit].label}/IE`;
+}
+
+// Dual-display: "27g KH (2.3 BE)" when unit != g, "27g KH" otherwise.
+// Used in the bolus-breakdown sheet so the transparency line shows both
+// units when the user has switched to BE/KE mode.
+export function formatWithBoth(grams: number, unit: CarbUnit): string {
+  if (unit === "g") return `${Math.round(grams)}g KH`;
+  const unitVal = gToUnit(grams, unit);
+  return `${Math.round(grams)}g KH (${unitVal} ${CARB_UNITS[unit].label})`;
 }

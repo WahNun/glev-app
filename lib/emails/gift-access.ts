@@ -23,14 +23,18 @@ export function giftAccessHtml(
   locale: EmailLocale = "de",
   appUrl?: string | null,
   email?: string | null,
+  signupUrl?: string | null,
 ): string {
   const first = escapeHtml(firstNameFrom(name));
   const baseUrl = (appUrl || "https://glev.app").replace(/\/$/, "");
   const dashUrl = `${baseUrl}/dashboard`;
   const unsubUrl = email ? buildUnsubscribeUrl(baseUrl, email) : null;
+  const ctaUrl = signupUrl ?? dashUrl;
+  const ctaTextDe = signupUrl ? "Passwort setzen & starten →" : "Zum Dashboard →";
+  const ctaTextEn = signupUrl ? "Set password & start →" : "Go to dashboard →";
 
-  if (locale === "en") return giftAccessHtmlEn(first, plan, expiresAt, dashUrl, unsubUrl);
-  return giftAccessHtmlDe(first, plan, expiresAt, dashUrl, unsubUrl);
+  if (locale === "en") return giftAccessHtmlEn(first, plan, expiresAt, ctaUrl, unsubUrl, ctaTextEn);
+  return giftAccessHtmlDe(first, plan, expiresAt, ctaUrl, unsubUrl, ctaTextDe);
 }
 
 function planNameDe(plan: "pro" | "plus"): string {
@@ -67,8 +71,9 @@ function giftAccessHtmlDe(
   first: string | null,
   plan: "pro" | "plus",
   expiresAt: string | null | undefined,
-  dashUrl: string,
+  ctaUrl: string,
   unsubUrl: string | null | undefined,
+  ctaText: string,
 ): string {
   const greeting = first ? `Hallo ${first}` : "Hallo";
   const planName = planNameDe(plan);
@@ -120,9 +125,9 @@ function giftAccessHtmlDe(
               <table cellpadding="0" cellspacing="0" style="margin:0 auto 24px;">
                 <tr>
                   <td style="background:#4F6EF7;border-radius:8px;">
-                    <a href="${dashUrl}"
+                    <a href="${ctaUrl}"
                        style="display:inline-block;padding:16px 36px;color:#ffffff;font-size:16px;font-weight:700;text-decoration:none;letter-spacing:0.2px;">
-                      Zum Dashboard →
+                      ${ctaText}
                     </a>
                   </td>
                 </tr>
@@ -157,8 +162,9 @@ function giftAccessHtmlEn(
   first: string | null,
   plan: "pro" | "plus",
   expiresAt: string | null | undefined,
-  dashUrl: string,
+  ctaUrl: string,
   unsubUrl: string | null | undefined,
+  ctaText: string,
 ): string {
   const greeting = first ? `Hi ${first}` : "Hi there";
   const planName = planNameEn(plan);
@@ -210,9 +216,9 @@ function giftAccessHtmlEn(
               <table cellpadding="0" cellspacing="0" style="margin:0 auto 24px;">
                 <tr>
                   <td style="background:#4F6EF7;border-radius:8px;">
-                    <a href="${dashUrl}"
+                    <a href="${ctaUrl}"
                        style="display:inline-block;padding:16px 36px;color:#ffffff;font-size:16px;font-weight:700;text-decoration:none;letter-spacing:0.2px;">
-                      Go to dashboard →
+                      ${ctaText}
                     </a>
                   </td>
                 </tr>

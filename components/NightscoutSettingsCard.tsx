@@ -70,6 +70,7 @@ export default function NightscoutSettingsCard() {
   const [disconnecting, setDisconnecting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [apiSecretHint, setApiSecretHint] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -126,7 +127,12 @@ export default function NightscoutSettingsCard() {
       });
       const data = (await res.json().catch(() => ({}))) as SyncPostResponse;
       if (!res.ok) {
-        setError(data.error ?? t("err_default"));
+        const msg = res.status === 401 ? t("err_401")
+                  : res.status === 404 ? t("err_404")
+                  : res.status === 504 ? t("err_timeout")
+                  : res.status >= 500  ? t("err_5xx")
+                  : data.error ?? t("err_default");
+        setError(msg);
         return;
       }
       setConnected(true);
@@ -283,12 +289,26 @@ export default function NightscoutSettingsCard() {
             type="password"
             placeholder={hasToken ? t("token_placeholder_saved") : t("token_placeholder_new")}
             value={token}
-            onChange={(e) => setToken(e.target.value)}
+            onChange={(e) => {
+              setToken(e.target.value);
+              // Heuristic: classic API_SECRET = alphanumeric, no dashes, 12+ chars
+              const v = e.target.value.trim();
+              setApiSecretHint(v.length >= 12 && /^[a-zA-Z0-9]+$/.test(v));
+            }}
             disabled={submitting || disconnecting}
             style={inp}
             autoComplete="new-password"
             spellCheck={false}
           />
+          {apiSecretHint ? (
+            <div style={{ fontSize: 11, color: "#F59E0B", marginTop: 5, lineHeight: 1.5 }}>
+              {t("token_api_secret_hint")}
+            </div>
+          ) : (
+            <div style={{ fontSize: 11, color: "var(--text-ghost)", marginTop: 5, lineHeight: 1.5 }}>
+              {t("token_hint")}
+            </div>
+          )}
         </div>
 
         {error && (

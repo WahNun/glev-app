@@ -271,6 +271,17 @@ export default function CurrentDayGlucoseCard({ showMealNodes = false }: { showM
     }
   }, [loadHistory]);
 
+  // When the user connects or switches CGM source in Settings, pick up
+  // the new data immediately without waiting for the 60s polling cadence.
+  useEffect(() => {
+    const handler = () => {
+      invalidateCgmCache();
+      loadHistory();
+    };
+    window.addEventListener("glev:cgm-source-changed", handler);
+    return () => window.removeEventListener("glev:cgm-source-changed", handler);
+  }, [loadHistory]);
+
   return (
     <div
       onClick={() => s.kind === "ok" && setFlipped((f) => !f)}
@@ -1051,6 +1062,7 @@ function RollingChart({ readings, showMealNodes }: { readings: ChartPoint[]; sho
 }
 
 function BackStats({ readings }: { readings: Array<{ t: number; v: number }> }) {
+  const t = useTranslations("dashboard");
   // Today's-Summary TIR/TAR/TBR tiles use the same user-saved band
   // (user_settings.target_min_mgdl / target_max_mgdl, Migration
   // 20260517) as Insights + the PDF so all three surfaces agree.
@@ -1071,7 +1083,7 @@ function BackStats({ readings }: { readings: Array<{ t: number; v: number }> }) 
     [readings, todayStart],
   );
   if (todayReadings.length === 0) {
-    return <div style={{ color: "var(--text-dim)", fontSize: 14 }}>No readings yet today.</div>;
+    return <div style={{ color: "var(--text-dim)", fontSize: 14 }}>{t("glucose_back_no_readings")}</div>;
   }
   const values = todayReadings.map((r) => r.v);
   const avg = Math.round(values.reduce((a, b) => a + b, 0) / values.length);
@@ -1083,24 +1095,24 @@ function BackStats({ readings }: { readings: Array<{ t: number; v: number }> }) 
   const tbr = Math.round((below / values.length) * 100);
   const max = todayReadings.reduce((a, b) => (b.v > a.v ? b : a));
   const min = todayReadings.reduce((a, b) => (b.v < a.v ? b : a));
-  const fmtTime = (t: number) => new Date(t).toLocaleTimeString("en", { hour: "numeric", minute: "2-digit" });
+  const fmtTime = (ts: number) => new Date(ts).toLocaleTimeString("en", { hour: "numeric", minute: "2-digit" });
 
   const stats: Array<{ l: string; v: string; c?: string }> = [
-    { l: "Daily avg", v: `${avg} mg/dL`, c: colorFor(avg, RANGE_LOW, RANGE_HIGH) },
-    { l: "Time in range", v: `${tir}%`, c: tir >= 70 ? GREEN : tir >= 50 ? ORANGE : PINK },
-    { l: `Time above ${RANGE_HIGH}`, v: `${tar}%`, c: tar > 25 ? ORANGE : "var(--text-strong)" },
-    { l: `Time below ${RANGE_LOW}`,  v: `${tbr}%`, c: tbr > 4 ? PINK : "var(--text-strong)" },
-    { l: "Highest", v: `${Math.round(max.v)}`, c: ORANGE },
-    { l: "Lowest", v: `${Math.round(min.v)}`, c: PINK },
+    { l: t("glucose_back_daily_avg"), v: `${avg} mg/dL`, c: colorFor(avg, RANGE_LOW, RANGE_HIGH) },
+    { l: t("glucose_back_time_in_range"), v: `${tir}%`, c: tir >= 70 ? GREEN : tir >= 50 ? ORANGE : PINK },
+    { l: t("glucose_back_time_above", { high: RANGE_HIGH }), v: `${tar}%`, c: tar > 25 ? ORANGE : "var(--text-strong)" },
+    { l: t("glucose_back_time_below", { low: RANGE_LOW }),   v: `${tbr}%`, c: tbr > 4 ? PINK : "var(--text-strong)" },
+    { l: t("glucose_back_highest"), v: `${Math.round(max.v)}`, c: ORANGE },
+    { l: t("glucose_back_lowest"),  v: `${Math.round(min.v)}`, c: PINK },
   ];
 
   return (
     <>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <div style={{ fontSize: 13, color: ACCENT, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase" }}>
-          Today's summary
+          {t("glucose_back_title")}
         </div>
-        <span style={{ fontSize: 11, color: "var(--text-ghost)" }}>↺ back</span>
+        <span style={{ fontSize: 11, color: "var(--text-ghost)" }}>{t("flip_back")}</span>
       </div>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8, flex: 1 }}>
         {stats.map((s) => (

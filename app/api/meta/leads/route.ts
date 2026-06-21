@@ -25,6 +25,7 @@
 import { createClient } from "@supabase/supabase-js";
 import crypto from "node:crypto";
 import { provisionMetaLead } from "@/lib/meta-lead-provisioning";
+import { trackEvent } from "@/lib/capi-events";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -181,8 +182,26 @@ async function processChange(value: any, pageId: string) {
     .upsert(row, { onConflict: "leadgen_id", ignoreDuplicates: true });
   if (error) throw error;
 
-  // Test-Leads (Meta-Testformular) nicht provisionieren.
+  // Test-Leads (Meta-Testformular) nicht provisionieren und kein CAPI feuern.
   if (!mapped.is_test && mapped.email) {
+    // CAPI Lead via Layer-One Gateway.
+    // event_id=lead-{leadgenId} dedupliziert Webhook-Retries.
+    trackEvent("Lead", {
+      user: {
+        email: mapped.email,
+        first_name: mapped.first_name || undefined,
+        last_name: mapped.last_name || undefined,
+        phone: mapped.phone || undefined,
+        country: "de",
+      },
+      eventId: `lead-${leadgenId}`,
+      sourceUrl: "https://www.facebook.com",
+      customData: {
+        lead_source: "meta_lead_form",
+        ...(row.form_id ? { form_id: row.form_id } : {}),
+      },
+    }).catch((e) => console.warn("[meta/leads] CAPI Lead failed (non-fatal):", e));
+
     const locale = /^de/i.test(lead.locale ?? "") ? "de" : "de";
     const result = await provisionMetaLead(mapped.email, mapped.full_name || null, locale, mapped.phone || null);
     if (!result.ok) {

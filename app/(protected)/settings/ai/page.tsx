@@ -1,11 +1,13 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { supabase } from "@/lib/supabase";
-import { useFeatureFlag } from "@/lib/featureFlags";
+import { useGlevAIAccess } from "@/lib/useGlevAIAccess";
+import { useIsNative } from "@/lib/platform";
+import PaywallSheet from "@/components/PaywallSheet";
 import { type TtsSpeed, TTS_SPEED_KEY, TTS_SPEED_EVENT } from "@/hooks/useTTS";
 
 const ACCENT = "#4F6EF7";
@@ -14,7 +16,21 @@ const BORDER = "var(--border)";
 export default function AiSettingsPage() {
   const t = useTranslations("settings");
   const router = useRouter();
-  const aiVoiceEnabled = useFeatureFlag("ai_voice");
+  const glevAiAccess = useGlevAIAccess();
+  const isNative = useIsNative();
+  const [paywallOpen, setPaywallOpen] = useState(false);
+  // Error fallback: if the access check is still null after 8 s (e.g. the
+  // plan API is unreachable), treat as no-access rather than staying blank.
+  const [accessTimedOut, setAccessTimedOut] = useState(false);
+  const accessTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    if (glevAiAccess !== null) {
+      if (accessTimeoutRef.current) clearTimeout(accessTimeoutRef.current);
+      return;
+    }
+    accessTimeoutRef.current = setTimeout(() => setAccessTimedOut(true), 8_000);
+    return () => { if (accessTimeoutRef.current) clearTimeout(accessTimeoutRef.current); };
+  }, [glevAiAccess]);
 
   const [aiConsentGranted, setAiConsentGranted] = useState<boolean | null>(null);
   const [aiConsentBusy, setAiConsentBusy] = useState(false);
@@ -236,12 +252,44 @@ export default function AiSettingsPage() {
     }
   }, [aiConsentBusy, aiScopeBusy, aiConsentGranted, aiScopeGlucose, aiScopeIob, aiScopeHistory, aiScopeFeedback, t]);
 
-  if (aiVoiceEnabled === false) {
-    router.replace("/settings");
-    return null;
+  if (glevAiAccess === null && !accessTimedOut) {
+    return (
+      <div style={{ maxWidth: 480, margin: "0 auto", padding: 16, paddingBottom: 80 }}>
+        <div style={{ marginBottom: 20 }}>
+          <Link
+            href="/settings"
+            style={{ fontSize: 13, color: ACCENT, textDecoration: "none", display: "inline-block", marginBottom: 8 }}
+          >
+            ← {t("ai_settings_back")}
+          </Link>
+          <h1 style={{ fontSize: 22, fontWeight: 800, letterSpacing: "-0.03em", margin: 0 }}>
+            {t("ai_page_title")}
+          </h1>
+        </div>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", paddingTop: 48, flexDirection: "column", gap: 14 }}>
+          <div style={{ width: 28, height: 28, border: `3px solid ${ACCENT}30`, borderTop: `3px solid ${ACCENT}`, borderRadius: "50%", animation: "glev-spin 0.8s linear infinite" }} />
+          <style>{`@keyframes glev-spin{to{transform:rotate(360deg)}}`}</style>
+        </div>
+      </div>
+    );
   }
 
-  if (aiVoiceEnabled === null) {
+  // Timeout fallback: treat as no-access so the user gets the paywall
+  // instead of a permanent blank screen.
+  const effectiveAccess = accessTimedOut ? false : glevAiAccess;
+
+  if (effectiveAccess === false) {
+    if (isNative) {
+      return (
+        <PaywallSheet
+          open={true}
+          onClose={() => router.back()}
+          initialTier="smart"
+        />
+      );
+    }
+    // Web: go to pricing page
+    router.replace("/pro");
     return null;
   }
 

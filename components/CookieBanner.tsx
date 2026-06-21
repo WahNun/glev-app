@@ -15,6 +15,7 @@
 
 import { useEffect, useState } from "react";
 import { useLocale } from "next-intl";
+import { Capacitor } from "@capacitor/core";
 
 const STORAGE_KEY = "glev_cookie_consent";
 const ACCENT = "#4F6EF7";
@@ -177,6 +178,7 @@ export default function CookieBanner({ forceVisible = false }: { forceVisible?: 
     return () => clearTimeout(t);
   }, [forceVisible]);
 
+  if (Capacitor.isNativePlatform()) return null;
   if (!visible) return null;
 
   const acceptAll = () => { writeConsent({ v: 2, necessary: true, analytics: true, marketing: true }); setVisible(false); };

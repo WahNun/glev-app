@@ -47,6 +47,7 @@ export type PendingActionState =
   | "pending"
   | "confirming"
   | "confirmed"
+  | "engine_opened"  // meal chip: navigated to Engine, save not yet confirmed
   | "cancelled"
   | "error";
 
@@ -77,6 +78,8 @@ export type MealPendingPayload = {
   glucose_before: number | null;
   /** Stable ID used to subscribe to meal_prep_refinements Realtime channel. */
   meal_prep_id?:  string;
+  /** Top-level nutrition source from the aggregator pipeline. */
+  nutritionSource?: string;
   /** Per-item breakdown with resolved sources. Present when aggregator ran. */
   items?:         ParsedFood[];
   /** Total alcohol in grams across all items — triggers Dual-Emission. */
@@ -130,6 +133,8 @@ export type MealQueueItem = {
     /** ISO-8601 meal time (with UTC offset) set by the AI when the user
      *  named a historical time ("vor 3 Minuten"). Absent = treat as now. */
     meal_time?: string;
+    /** Top-level nutrition source from the aggregator pipeline. */
+    nutritionSource?: string;
   };
   /** Display label derived from input_text (max 40 chars). */
   label: string;
@@ -165,7 +170,7 @@ export type ContextSnapshot = {
   lastMealSummary?: string;
 };
 
-const HISTORY_KEY = "glev_ai_history_v1";
+const HISTORY_KEY = "glev_ai_history_v2";
 const MAX_HISTORY = 10;
 
 const NEUTRAL = "Keine Daten verfügbar";
@@ -173,7 +178,7 @@ const NEUTRAL = "Keine Daten verfügbar";
 function safeReadHistory(): GlevChatMessage[] {
   if (typeof window === "undefined") return [];
   try {
-    const raw = window.sessionStorage.getItem(HISTORY_KEY);
+    const raw = window.localStorage.getItem(HISTORY_KEY);
     if (!raw) return [];
     const arr = JSON.parse(raw);
     if (!Array.isArray(arr)) return [];
@@ -194,12 +199,21 @@ function safeReadHistory(): GlevChatMessage[] {
 function safeWriteHistory(history: GlevChatMessage[]) {
   if (typeof window === "undefined") return;
   try {
-    const trimmed = history.slice(-MAX_HISTORY).map((m) => ({
-      id: m.id,
-      role: m.role,
-      content: m.content,
-    }));
-    window.sessionStorage.setItem(HISTORY_KEY, JSON.stringify(trimmed));
+    const trimmed = history.slice(-MAX_HISTORY).map((m) => {
+      const base = { id: m.id, role: m.role, content: m.content };
+      if (!m.pendingActions?.length) return base;
+      // Persist non-terminal chips so they survive session restores (app
+      // backgrounded on iOS, page refresh). Normalize confirming → pending
+      // because mid-flight confirms have unknown outcome after reload.
+      const actions = m.pendingActions
+        .filter((a) => a.state !== "cancelled" && a.state !== "confirmed")
+        .map((a) => ({
+          ...a,
+          state: (a.state === "confirming" ? "pending" : a.state) as PendingActionState,
+        }));
+      return actions.length ? { ...base, pendingActions: actions } : base;
+    });
+    window.localStorage.setItem(HISTORY_KEY, JSON.stringify(trimmed));
   } catch {
     /* ignore quota / privacy errors */
   }
@@ -377,7 +391,7 @@ export function useGlevAI(opts?: {
     setModalOpen(false);
     setConsentGranted(false);
     if (typeof window !== "undefined") {
-      try { window.sessionStorage.removeItem(HISTORY_KEY); } catch { /* ignore */ }
+      try { window.localStorage.removeItem(HISTORY_KEY); } catch { /* ignore */ }
     }
     try {
       await fetch("/api/ai/consent", { method: "DELETE" });
@@ -403,7 +417,7 @@ export function useGlevAI(opts?: {
       setSheetOpen(false);
       setModalOpen(false);
       setConsentGranted(false);
-      try { window.sessionStorage.removeItem(HISTORY_KEY); } catch { /* ignore */ }
+      try { window.localStorage.removeItem(HISTORY_KEY); } catch { /* ignore */ }
     };
     const onOpenModal = () => {
       // Triggered by Settings toggle — mark so grantConsent() skips setSheetOpen.
@@ -418,7 +432,7 @@ export function useGlevAI(opts?: {
     };
   }, []);
 
-  /** Clear the chat history — wipes sessionStorage + in-memory messages + pending meal queue. */
+  /** Clear the chat history — wipes localStorage + in-memory messages + pending meal queue. */
   const clearMessages = useCallback(() => {
     if (abortRef.current) {
       try { abortRef.current.abort(); } catch { /* noop */ }
@@ -429,7 +443,7 @@ export function useGlevAI(opts?: {
     setPendingMealNavQueue([]);
     pendingMealQueueRef.current = [];
     if (typeof window !== "undefined") {
-      try { window.sessionStorage.removeItem(HISTORY_KEY); } catch { /* ignore */ }
+      try { window.localStorage.removeItem(HISTORY_KEY); } catch { /* ignore */ }
     }
   }, []);
 
@@ -467,6 +481,29 @@ export function useGlevAI(opts?: {
     }, 1_000);
     return () => clearTimeout(id);
   }, [rateLimitCountdown]);
+
+  // Listen for glev:meal-ai-saved (dispatched by the Engine page after saveMeal).
+  // Transitions all engine_opened chips to confirmed and clears the meal nav queue.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const handler = () => {
+      setMessages((prev) =>
+        prev.map((m) => ({
+          ...m,
+          pendingActions: m.pendingActions?.map((pa) =>
+            pa.state === "engine_opened"
+              ? { ...pa, state: "confirmed" as PendingActionState }
+              : pa,
+          ),
+        })),
+      );
+      setPendingMealNavQueue([]);
+      pendingMealQueueRef.current = [];
+    };
+    window.addEventListener("glev:meal-ai-saved", handler);
+    return () => window.removeEventListener("glev:meal-ai-saved", handler);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Stable ref so the countdown effect can call sendMessage without
   // being listed as a dependency (avoids infinite loop risk).
@@ -605,6 +642,7 @@ export function useGlevAI(opts?: {
                 protein: number | null;
                 fat: number | null;
                 fiber: number | null;
+                nutritionSource?: string;
               };
             }
             let parsed: SseFrame | null = null;
@@ -999,32 +1037,55 @@ export function useGlevAI(opts?: {
       // Search the flushed state queue first, then fall back to the ref queue
       // (items live in the ref while the stream is still running, and are
       // only moved to state after streaming ends).
-      const match =
+      const queueMatch =
         pendingMealNavQueue.find((item) => item.token === token) ??
         pendingMealQueueRef.current.find((item) => item.token === token);
 
-      if (match) {
-        // Remove from whichever queue the item was in.
-        setPendingMealNavQueue((prev) => prev.filter((item) => item.token !== token));
-        pendingMealQueueRef.current = pendingMealQueueRef.current.filter(
-          (item) => item.token !== token,
-        );
-        if (typeof window !== "undefined") {
-          try {
-            sessionStorage.setItem("glev_pending_meal", JSON.stringify(match.mealPrep));
-            sessionStorage.setItem("glev_engine_back_to", "/glev-ai");
-          } catch { /* ignore quota / privacy errors */ }
-          window.dispatchEvent(new CustomEvent("glev:meal-prefill"));
+      // Fallback: reconstruct mealPrep from the chip payload when the queue is
+      // empty (session restored, app backgrounded + killed, or queue cleared).
+      // The chip's payload carries the same macro data as the meal_prep frame.
+      let mealPrep: MealQueueItem["mealPrep"] | null = queueMatch?.mealPrep ?? null;
+      if (!mealPrep) {
+        for (const m of messages) {
+          if (m.id !== messageId) continue;
+          const pa = m.pendingActions?.find((a) => a.token === token);
+          if (pa?.payload) {
+            const p = pa.payload as MealPendingPayload;
+            mealPrep = {
+              input_text: p.input_text ?? "",
+              carbs: p.carbs_grams ?? 0,
+              protein: p.protein_grams ?? null,
+              fat: p.fat_grams ?? null,
+              fiber: p.fiber_grams ?? null,
+              ...(p.meal_time_explicit && p.logged_at ? { meal_time: p.logged_at } : {}),
+              ...(p.nutritionSource ? { nutritionSource: p.nutritionSource } : {}),
+            };
+          }
+          break;
         }
-        optsRef.current?.onNavigate?.("/engine");
       }
-      // Mark the chip as confirmed locally — no server call, no DB insert.
-      // The actual meal row is created by the Engine save flow. Calling
-      // confirmAction here would trigger execLogMealEntry → duplicate entry.
-      // The ai_pending_actions row expires naturally after its TTL.
-      if (match) {
-        setMessages((prev) => patchAction(prev, messageId, token, { state: "confirmed" }));
+
+      if (!mealPrep) return;
+
+      // Write meal data every time (re-navigation after back needs fresh sessionStorage
+      // because the Engine page clears glev_pending_meal on mount).
+      if (typeof window !== "undefined") {
+        try {
+          sessionStorage.setItem("glev_pending_meal", JSON.stringify(mealPrep));
+          sessionStorage.setItem("glev_engine_back_to", "/glev-ai");
+        } catch { /* ignore quota / privacy errors */ }
+        window.dispatchEvent(new CustomEvent("glev:meal-prefill"));
       }
+      // Keep the item in pendingMealNavQueue — do NOT remove it yet.
+      // It stays so that "Macros prüfen →" re-navigation (second tap) can
+      // re-write sessionStorage without needing to reconstruct from payload.
+      // Cleared by the glev:meal-ai-saved handler when the meal is saved.
+
+      // Transition chip to engine_opened (not confirmed) — chip stays visible
+      // with a "Macros prüfen →" CTA so the user can navigate back into the
+      // Engine after returning to the chat.
+      setMessages((prev) => patchAction(prev, messageId, token, { state: "engine_opened" }));
+      optsRef.current?.onNavigate?.("/engine");
     },
   };
 }

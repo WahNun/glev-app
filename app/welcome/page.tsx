@@ -245,7 +245,9 @@ function WelcomeInner() {
       email: verify.email,
       password,
       options: {
-        emailRedirectTo: `${window.location.origin}/auth/callback?next=/dashboard`,
+        emailRedirectTo: `${window.location.origin}/auth/callback?next=/dashboard&lang=${
+          (document.documentElement.lang || navigator.language || "").split("-")[0] === "de" ? "de" : "en"
+        }`,
       },
     });
 

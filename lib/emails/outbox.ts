@@ -230,6 +230,7 @@ export interface GiftAccessPayload {
   expiresAt?: string | null;
   appUrl?: string | null;
   locale?: EmailLocale;
+  signupUrl?: string | null;
 }
 
 /**
@@ -420,6 +421,7 @@ function renderTemplate(
           locale,
           p.appUrl ?? null,
           recipientEmail ?? null,
+          p.signupUrl ?? null,
         ),
       };
     }

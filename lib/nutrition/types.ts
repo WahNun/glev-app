@@ -31,7 +31,19 @@ export type NutritionSource =
 // 'unknown' means at least one item failed even GPT estimate. The UI
 // must NOT silently use the totals for insulin dosing — it shows a
 // red warning badge so the user knows to enter values manually.
-export type AggregateSource = "database" | "mixed" | "estimated" | "unknown";
+// Specific DB sources ('user_history' | 'open_food_facts' | 'usda') are
+// returned when ALL items resolved from that single source, so the UI
+// badge can say "Aus deinen Logs / Open Food Facts / USDA" instead of
+// the generic "Datenbank ✓" bucket.
+export type AggregateSource =
+  | "database"        // mix of DB sources (OFF + USDA), or generic fallback
+  | "user_history"    // every item from the per-user food log
+  | "open_food_facts" // every item from Open Food Facts
+  | "usda"            // every item from USDA FoodData Central
+  | "mixed"           // at least one DB hit AND at least one GPT estimate
+  | "estimated"       // every item fell back to GPT estimate
+  | "vision_estimate" // macros estimated from a meal photo (pixtral-12b-2409 vision)
+  | "unknown";        // at least one item failed even GPT estimate (hard warning)
 
 /**
  * Structured item produced by the GPT parser. NO macros — those are
@@ -97,4 +109,10 @@ export interface AggregatedNutrition {
   totals:          NutritionTotals;
   /** Top-level provenance for UI badge: all-DB, mixed, or full GPT-fallback */
   nutritionSource: AggregateSource;
+  /**
+   * Minimum occurrence count across all user-history-resolved items.
+   * Only set when `nutritionSource === 'user_history'`. Used by the
+   * engine header badge to show "Basiert auf X vorherigen Einträgen".
+   */
+  historyMinOccurrences?: number;
 }

@@ -9,7 +9,7 @@ import { extractFullNameFromSession } from '@/lib/stripeCheckout';
 import { createClient } from '@supabase/supabase-js';
 import { enqueueEmail } from '@/lib/emails/outbox';
 import { scheduleDripEmails } from '@/lib/emails/drip-scheduler';
-import { sendCapiEvent } from '@/lib/fb-capi-server';
+import { trackEvent } from '@/lib/capi-events';
 
 // Lazy admin client — constructing it at module load is fine (no
 // network), but the env vars may be missing in certain build contexts.
@@ -219,6 +219,7 @@ export async function POST(req: NextRequest) {
         .update({
           subscription_status: 'beta',
           plan: 'beta',
+          subscription_source: 'stripe',
         })
         .eq('email', email)
         .select('id');
@@ -355,8 +356,8 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    // CAPI Purchase — fire-and-forget. Kein Stripe-Retry bei Meta-Fehlern.
-    // event_id = sessionId dedupliziert gegen Browser-Pixel falls vorhanden.
+    // CAPI Purchase + Subscribe via Layer-One Gateway — fire-and-forget.
+    // Kein Stripe-Retry bei Meta-Fehlern. event_id dedupliziert Webhook-Retries.
     {
       const capiCountry =
         typeof session.customer_details?.address?.country === 'string'
@@ -366,26 +367,39 @@ export async function POST(req: NextRequest) {
         typeof session.amount_total === 'number' ? session.amount_total / 100 : 9.9;
       const capiSub =
         typeof session.subscription === 'string' ? session.subscription : undefined;
-      sendCapiEvent(
-        {
-          email,
-          externalId:     email,
-          subscriptionId: capiSub,
-          country:        capiCountry,
+
+      // Subscribe nur für Subscription-Sessions (nicht One-Time-Payment)
+      if (capiSub) {
+        trackEvent('Subscribe', {
+          user: { email, external_id: email, country: capiCountry },
+          customData: {
+            value: capiValue,
+            currency: 'EUR',
+            content_name: 'Glev Smart',
+            content_ids: ['glev-smart-monthly'],
+            content_type: 'product',
+          },
+          eventId: `subscribe_${capiSub}`,
+          sourceUrl: `${appUrl}/beta/success`,
+        }).catch((e) =>
+          // eslint-disable-next-line no-console
+          console.warn('[webhook] CAPI Subscribe failed (non-fatal):', e),
+        );
+      }
+
+      trackEvent('Purchase', {
+        user: { email, external_id: email, country: capiCountry },
+        customData: {
+          value: capiValue,
+          currency: 'EUR',
+          content_name: 'Glev Smart',
+          content_ids: ['glev-smart-monthly'],
+          content_type: 'product',
+          order_id: sessionId,
         },
-        {
-          eventName:      'Purchase',
-          eventId:        `purchase_${sessionId}`,
-          eventSourceUrl: `${appUrl}/beta/success`,
-          actionSource:   'website',
-          value:          capiValue,
-          currency:       'EUR',
-          contentName:    'Glev Smart',
-          contentIds:     ['glev-smart-monthly'],
-          contentType:    'product',
-          orderId:        sessionId,
-        },
-      ).catch((e) =>
+        eventId: `purchase_${sessionId}`,
+        sourceUrl: `${appUrl}/beta/success`,
+      }).catch((e) =>
         // eslint-disable-next-line no-console
         console.warn('[webhook] CAPI Purchase failed (non-fatal):', e),
       );

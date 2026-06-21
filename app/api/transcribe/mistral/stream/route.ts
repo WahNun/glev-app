@@ -12,7 +12,7 @@ function voxtralFileName(mimeType: string): string {
   if (mimeType.startsWith("audio/mpeg") || mimeType.startsWith("audio/mp3")) return "audio.mp3";
   if (mimeType.startsWith("audio/ogg")) return "audio.ogg";
   if (mimeType.startsWith("audio/wav")) return "audio.wav";
-  return "audio.webm"; // default — covers audio/webm;codecs=opus (Chrome/Safari/Firefox)
+  return "audio.webm";
 }
 
 function isMistral429(e: unknown): boolean {
@@ -163,6 +163,10 @@ export async function POST(req: NextRequest) {
   // eslint-disable-next-line no-console
   console.log("[STT stream] audio received:", Math.round(file.size / 1024), "KB");
 
+  // Strip codec parameter — Voxtral supports WebM natively but rejects
+  // "audio/webm;codecs=opus" with error 3310. Bare "audio/webm" is accepted.
+  const cleanMime = file.type.split(";")[0];
+
   const stream = new ReadableStream({
     async start(controller) {
       const enc = new TextEncoder();
@@ -174,7 +178,7 @@ export async function POST(req: NextRequest) {
       try {
         const t1 = Date.now();
 
-        const audioFile = new File([file], voxtralFileName(file.type), { type: file.type });
+        const audioFile = new File([file], voxtralFileName(cleanMime), { type: cleanMime });
 
         const eventStream = await mistral.audio.transcriptions.stream({
           model: "voxtral-mini-latest",

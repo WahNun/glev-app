@@ -28,11 +28,13 @@
  *      untouched without forcing a backfill of the new column.
  */
 
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { adminClient } from "./supabase";
 import * as llu from "./llu";
 import * as nightscout from "./nightscout";
 import * as appleHealth from "./appleHealth";
 import type { Reading } from "./llu";
+import { EngineTrace } from "@/lib/engine/trace";
 
 export type { Reading };
 export type CgmSource = "llu" | "nightscout" | "apple_health";
@@ -86,6 +88,59 @@ export async function getHistory(
   }
   const r = await llu.getHistory(userId);
   return { ...r, source };
+}
+
+/**
+ * Traced wrapper around `getHistory`. Emits a `cgm_fetch` row into
+ * `engine_traces` via the provided admin client. Fire-and-forget — errors
+ * from the trace persist never affect the CGM data returned to callers.
+ */
+export async function getHistoryWithTrace(
+  userId: string,
+  opts: { supabase: SupabaseClient; appVersion: string; env: string },
+): Promise<{ current: Reading | null; history: Reading[]; source: CgmSource }> {
+  const trace = new EngineTrace("cgm_fetch", { user_id: userId });
+  const t0 = Date.now();
+  let result: { current: Reading | null; history: Reading[]; source: CgmSource } | undefined;
+
+  try {
+    const source = await resolveSource(userId);
+    trace.recordStep("source_resolve", { success: true, detail: { source } });
+
+    const t1 = Date.now();
+    result = await getHistory(userId);
+    const fetchLatency = Date.now() - t1;
+
+    trace.recordStep("fetch", {
+      success:    true,
+      latency_ms: fetchLatency,
+      detail:     { source: result.source, count: result.history.length },
+    });
+    trace.setOutput({
+      count_readings: result.history.length,
+      oldest_ts:      result.history.at(-1)?.timestamp ?? null,
+      newest_ts:      result.history.at(0)?.timestamp ?? null,
+      source:         result.source,
+    });
+  } catch (e) {
+    trace.setError(e instanceof Error ? e.message : String(e));
+    void trace.persist({
+      user_id:     userId,
+      supabase:    opts.supabase,
+      app_version: opts.appVersion,
+      env:         opts.env,
+    });
+    throw e;
+  }
+
+  void trace.persist({
+    user_id:     userId,
+    supabase:    opts.supabase,
+    app_version: opts.appVersion,
+    env:         opts.env,
+  });
+  void t0; // available for total latency if needed
+  return result;
 }
 
 /**

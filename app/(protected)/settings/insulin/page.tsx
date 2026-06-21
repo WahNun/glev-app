@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useState, useCallback, useEffect, useRef, type ReactNode } from "react";
 import { useTranslations, useLocale } from "next-intl";
+import { useCarbUnit } from "@/hooks/useCarbUnit";
 import { useRouter } from "next/navigation";
 import {
   fetchInsulinSettings, saveInsulinSettings,
@@ -70,6 +71,7 @@ export default function InsulinSettingsPage() {
   const router = useRouter();
   const uiLocale = useLocale();
   const bcp47 = localeToBcp47(uiLocale);
+  const carbUnit = useCarbUnit();
   const insulinTouchedRef = useRef(false);
   const pendingClampRef = useRef<{ notice: string } | null>(null);
 
@@ -197,7 +199,16 @@ export default function InsulinSettingsPage() {
 
   const closeFooter = <button type="button" onClick={closeSheet} style={{ width: "100%", padding: "12px 16px", borderRadius: 12, border: `1px solid ${BORDER}`, background: "var(--surface-soft)", color: "var(--text-strong)", fontSize: 14, fontWeight: 600, cursor: "pointer" }}>{t("sheet_close")}</button>;
 
-  const icrSub = t("subtitle_icr", { value: settings.icr });
+  const icrTitle = { g: t("icr_title_g"), BE: t("icr_title_BE"), KE: t("icr_title_KE") }[carbUnit.unit];
+  const icrBodyLabel = { g: t("icr_label_g"), BE: t("icr_label_BE"), KE: t("icr_label_KE") }[carbUnit.unit];
+  const icrHintText = { g: t("icr_hint_g"), BE: t("icr_hint_BE"), KE: t("icr_hint_KE") }[carbUnit.unit];
+  const icrDisplayValue = carbUnit.fromGrams(settings.icr ?? 10);
+  const icrSub =
+    carbUnit.unit === "g"
+      ? t("subtitle_icr", { value: settings.icr })
+      : carbUnit.unit === "BE"
+        ? t("subtitle_icr_BE", { value: icrDisplayValue })
+        : t("subtitle_icr_KE", { value: icrDisplayValue });
   const cfSub = t("subtitle_cf", { value: settings.cf });
   const targetBgSub = t("subtitle_target_bg", { value: settings.targetBg });
   const diaSub = settings.diaMinutes != null ? t("subtitle_dia", { minutes: settings.diaMinutes }) : t("subtitle_dia_unset");
@@ -205,18 +216,18 @@ export default function InsulinSettingsPage() {
 
   const sheetContent: Record<SheetKey, { title: string; body: ReactNode; footer: ReactNode }> = {
     icr: {
-      title: t("insulin_to_carb_ratio"),
+      title: icrTitle,
       body: (
         <div>
-          <p style={{ fontSize: 13, color: "var(--text-dim)", lineHeight: 1.5, marginBottom: 12 }}>{t("icr_label")}</p>
-          <SnapSlider value={settings.icr ?? 10} onChange={(v) => upd("icr", v)} onRawChange={(raw) => { const clamped = Math.max(5, Math.min(30, raw)); pendingClampRef.current = Math.abs(clamped - raw) > 0.001 ? { notice: t("clamp_notice", { value: `${clamped} g/IE`, min: 5, max: 30 }) } : null; }} min={5} max={30} step={1} unit="g/IE" accent={ACCENT} ariaLabel={t("insulin_to_carb_ratio")} />
+          <p style={{ fontSize: 13, color: "var(--text-dim)", lineHeight: 1.5, marginBottom: 12 }}>{icrBodyLabel}</p>
+          <SnapSlider value={settings.icr ?? 10} onChange={(v) => upd("icr", v)} onRawChange={(raw) => { const clamped = Math.max(5, Math.min(30, raw)); pendingClampRef.current = Math.abs(clamped - raw) > 0.001 ? { notice: t("clamp_notice", { value: `${clamped} g/IE`, min: 5, max: 30 }) } : null; }} min={5} max={30} step={1} unit={carbUnit.icrUnitSuffix} accent={ACCENT} ariaLabel={icrTitle} />
           <div style={{ display: "flex", justifyContent: "space-between", marginTop: 6, paddingLeft: 2, paddingRight: 2 }}>
             {[5, 10, 15, 20, 25, 30].map((tick) => <span key={tick} style={{ fontSize: 10, color: (settings.icr ?? 10) === tick ? ACCENT : "var(--text-ghost)", fontWeight: (settings.icr ?? 10) === tick ? 700 : 400, transition: "color 150ms ease" }}>{tick}</span>)}
           </div>
-          <div style={{ fontSize: 13, color: "var(--text-ghost)", marginTop: 8 }}>{t("icr_hint")}</div>
+          <div style={{ fontSize: 13, color: "var(--text-ghost)", marginTop: 8 }}>{icrHintText}</div>
           {engineIcrInfo.value != null && engineIcrInfo.sampleSize > 0 ? (
             <div style={{ marginTop: 14, padding: "10px 12px", background: "var(--surface-soft)", border: `1px solid var(--border-soft)`, borderRadius: 10, fontSize: 12, color: "var(--text-dim)", lineHeight: 1.5 }}>
-              {t("icr_engine_suggestion", { value: Math.round(engineIcrInfo.value * 10) / 10, n: engineIcrInfo.sampleSize })}
+              {t("icr_engine_suggestion", { value: carbUnit.fromGrams(engineIcrInfo.value), n: engineIcrInfo.sampleSize })}
             </div>
           ) : engineIcrInfo.sampleSize > 0 ? (
             <div style={{ marginTop: 10, fontSize: 12, color: "var(--text-faint)" }}>{t("icr_engine_warming_up", { n: engineIcrInfo.sampleSize })}</div>
@@ -444,7 +455,7 @@ export default function InsulinSettingsPage() {
 
       <SettingsSection>
         <SubgroupLabel label={t("group_insulin_params")} />
-        <SettingsRow iconColor={ACCENT} icon={<svg {...iconProps}><path d="M18 6L6 18" /><path d="M14 4l6 6" /><path d="M4 14l6 6" /></svg>} label={t("insulin_to_carb_ratio")} subtitle={icrSub} ariaLabel={t("row_open_aria", { label: t("insulin_to_carb_ratio") })} onClick={() => openSheetWith("icr")} />
+        <SettingsRow iconColor={ACCENT} icon={<svg {...iconProps}><path d="M18 6L6 18" /><path d="M14 4l6 6" /><path d="M4 14l6 6" /></svg>} label={icrTitle} subtitle={icrSub} ariaLabel={t("row_open_aria", { label: icrTitle })} onClick={() => openSheetWith("icr")} />
         <SettingsRow iconColor={ACCENT} icon={<svg {...iconProps}><circle cx="12" cy="12" r="9" /><circle cx="12" cy="12" r="5" /><circle cx="12" cy="12" r="1.5" /></svg>} label={t("correction_factor")} subtitle={cfSub} ariaLabel={t("row_open_aria", { label: t("correction_factor") })} onClick={() => openSheetWith("cf")} />
         <SettingsRow iconColor={ACCENT} icon={<svg {...iconProps}><path d="M12 2C8 8 6 12 6 15a6 6 0 0 0 12 0c0-3-2-7-6-13z" /></svg>} label={t("row_target_bg")} subtitle={targetBgSub} ariaLabel={t("row_open_aria", { label: t("row_target_bg") })} onClick={() => openSheetWith("targetBg")} />
         <SettingsRow iconColor={ACCENT} icon={<svg {...iconProps}><path d="M18 6L6 18" /><path d="M14 4l6 6" /><path d="M4 14l6 6" /></svg>} label={t("row_dia")} subtitle={diaSub} ariaLabel={t("row_open_aria", { label: t("row_dia") })} onClick={() => openSheetWith("dia")} />

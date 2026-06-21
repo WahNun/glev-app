@@ -1,4 +1,4 @@
-import { getOpenAIClient } from "@/lib/ai/openaiClient";
+import { getMistralChatClient } from "@/lib/ai/openaiClient";
 import type { NutritionPer100, ParsedFoodItem } from "./types";
 
 /**
@@ -50,12 +50,12 @@ export async function estimateItemNutrition(
   item: ParsedFoodItem,
 ): Promise<NutritionPer100> {
   let openai;
-  try { openai = getOpenAIClient(); }
+  try { openai = getMistralChatClient(); }
   catch (e) {
     // Configuration failure (missing API key etc) — must NOT default
     // to zeros for a T1D dosing app. Surface to the aggregator so
     // the item is marked 'unknown' and the UI requires manual entry.
-    const msg = e instanceof Error ? e.message : "OpenAI client unavailable";
+    const msg = e instanceof Error ? e.message : "Mistral client unavailable";
     throw new NutritionEstimateError(`Estimator init failed: ${msg}`, item.name);
   }
 
@@ -63,15 +63,8 @@ export async function estimateItemNutrition(
   try {
     const completion = await openai.chat.completions.create(
       {
-        model: "gpt-4o-mini",
-        response_format: {
-          type: "json_schema",
-          json_schema: {
-            name: "per100g_nutrition",
-            strict: true,
-            schema: ESTIMATE_SCHEMA,
-          },
-        },
+        model: "mistral-small-latest",
+        response_format: { type: "json_object" },
         temperature: 0.1,
         max_tokens: 100,
         messages: [

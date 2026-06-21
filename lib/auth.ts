@@ -19,7 +19,11 @@ export async function signUp(email: string, password: string): Promise<{ needsEm
   // must also be whitelisted in Supabase Dashboard → Authentication →
   // URL Configuration → Redirect URLs.
   const emailRedirectTo =
-    typeof window !== "undefined" ? `${window.location.origin}/auth/callback` : undefined;
+    typeof window !== "undefined"
+      ? `${window.location.origin}/auth/callback?lang=${
+          (document.documentElement.lang || navigator.language || "").split("-")[0] === "de" ? "de" : "en"
+        }`
+      : undefined;
   const { data, error } = await supabase.auth.signUp({
     email,
     password,

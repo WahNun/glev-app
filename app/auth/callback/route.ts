@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
+import { trackEvent } from "@/lib/capi-events";
 
 /**
  * Email-confirmation / magic-link callback.
@@ -48,6 +49,19 @@ export async function GET(req: NextRequest) {
 
     const { data: sessionData, error } = await supabase.auth.exchangeCodeForSession(code);
     if (!error) {
+      // CAPI CompleteRegistration via Layer-One Gateway — fires for email
+      // confirmation and magic-link sign-ins (not password resets).
+      // event_id=signup-{userId} is stable so Webhook retries deduplicate.
+      const confEmail = sessionData.session?.user?.email;
+      const confUserId = sessionData.session?.user?.id;
+      if (confEmail && next !== "/auth/confirm") {
+        trackEvent("CompleteRegistration", {
+          user: { email: confEmail, external_id: confUserId },
+          eventId: `signup-${confUserId ?? confEmail}`,
+          sourceUrl: `${origin}/signup`,
+        }).catch(() => {});
+      }
+
       // If coming from free-trial signup, set trial_end_at now that we have a session.
       if (next === "/onboarding" && sessionData.session?.access_token) {
         try {
