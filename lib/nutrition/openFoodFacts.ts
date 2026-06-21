@@ -96,7 +96,11 @@ export async function lookupOpenFoodFacts(
       ? term.toLowerCase().slice(0, -1)
       : term.toLowerCase();
     const escaped = stem.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    const wordRe = new RegExp(`\\b${escaped}s?\\b`, "i");
+    // For terms ending in -e (e.g. "banane"), also accept the German -n plural
+    // ("bananen") in addition to the English -s plural. "bananenchips" is
+    // correctly rejected because "n" is followed by more word characters.
+    const pluralSuffix = stem.endsWith("e") ? "[sn]?" : "s?";
+    const wordRe = new RegExp(`\\b${escaped}${pluralSuffix}\\b`, "i");
     const matching = products.filter((p) =>
       wordRe.test((p?.product_name ?? "").toLowerCase()),
     );

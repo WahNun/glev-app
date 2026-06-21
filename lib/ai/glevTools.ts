@@ -46,6 +46,7 @@ import {
 } from "@/lib/iob";
 import { aggregateNutrition } from "@/lib/nutrition/aggregate";
 import { getCachedUserHistory } from "@/lib/nutrition/userHistoryCache";
+import { parseFoodText } from "@/lib/nutrition/parseFood";
 import type { ParsedFoodItem, AggregateSource } from "@/lib/nutrition/types";
 import { applyAlcoholFallback, sumAlcoholG, hasAlcoholKeyword } from "@/lib/ai/alcoholFallback";
 
@@ -1642,23 +1643,42 @@ async function toolLogMealEntry(
       // aggregator can resolve user-history / OFF / USDA per-100g values.
       // Results are then scaled to match the AI-provided carbs estimate.
       const usingFallback = rawItems.length === 0;
-      const parsedItems: ParsedFoodItem[] = usingFallback
-        ? (inputText ? [{
-            name:               inputText.slice(0, 100),
-            grams:              100,
-            is_branded:         false,
-            search_term_en:     inputText.slice(0, 100),
-            search_term_de:     inputText.slice(0, 100),
-            quantity_specified: false,
-          }] : [])
-        : rawItems.map((i) => ({
-            name:               String(i.name),
-            grams:              Number(i.grams),
-            is_branded:         false,
-            search_term_en:     String(i.name),
-            search_term_de:     String(i.name),
+      let parsedItems: ParsedFoodItem[];
+      if (usingFallback) {
+        parsedItems = inputText ? [{
+          name:               inputText.slice(0, 100),
+          grams:              100,
+          is_branded:         false,
+          search_term_en:     inputText.slice(0, 100),
+          search_term_de:     inputText.slice(0, 100),
+          quantity_specified: false,
+        }] : [];
+      } else {
+        // rawItems.name is the food name in the user's language (e.g. "banane").
+        // Passing it directly as search_term_en causes a USDA miss for every
+        // non-English name — USDA only has English entries ("banana", not "banane").
+        // parseFoodText generates the correct bilingual terms: search_term_en
+        // ("banana") for USDA and search_term_de ("banane") for OFF.
+        let parseResult: { items: ParsedFoodItem[] } | null = null;
+        try {
+          const itemsText = rawItems.map((i) => `${i.grams}g ${i.name}`).join(", ");
+          parseResult = await parseFoodText(itemsText, "de");
+        } catch {
+          // Non-fatal: fall back to item.name for both terms.
+          // USDA will miss for non-English names; OFF may still succeed.
+        }
+        parsedItems = rawItems.map((raw, idx) => {
+          const parsed = parseResult?.items[idx];
+          return {
+            name:               String(raw.name),
+            grams:              Number(raw.grams),
+            is_branded:         parsed?.is_branded ?? false,
+            search_term_en:     parsed?.search_term_en ?? String(raw.name),
+            search_term_de:     parsed?.search_term_de ?? String(raw.name),
             quantity_specified: true,
-          }));
+          };
+        });
+      }
 
       if (parsedItems.length === 0) return undefined;
 
