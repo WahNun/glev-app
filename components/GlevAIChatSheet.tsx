@@ -1816,10 +1816,10 @@ export default function GlevAIChatSheet({
           overflow: "hidden",
         } : {
           position: "fixed",
+          top: "var(--nav-top-total)",
           bottom: "var(--nav-bottom-total)",
           left: 0,
           right: 0,
-          height: "calc(85dvh - var(--nav-bottom-total))",
           background: SHEET_BG,
           color: "var(--text)",
           borderRadius: "20px 20px 0 0",
