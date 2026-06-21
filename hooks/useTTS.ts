@@ -206,6 +206,13 @@ export function extractAssistantText(text: string): string {
   return cleaned.length > 600 ? cleaned.slice(0, 600).trimEnd() + " …" : cleaned;
 }
 
+// Entry in the sentence-by-sentence streaming TTS queue.
+type StreamQueueEntry = {
+  promise: Promise<string | null>;
+  blobUrl: string | null;
+  loaded: boolean;
+};
+
 export function useTTS() {
   const [speaking, setSpeaking] = useState(false);
   /** ID of the message currently being spoken, or null when idle. */
@@ -229,6 +236,11 @@ export function useTTS() {
   // Web Audio AnalyserNode — populated when Mistral TTS plays, null otherwise.
   // Exposed so callers can drive FAB amplitude animation.
   const analyserRef = useRef<AnalyserNode | null>(null);
+  // Streaming TTS sentence queue — sentences are fetched in parallel with the
+  // LLM stream and played back in order for sub-2s first audio latency.
+  const streamQueueRef = useRef<StreamQueueEntry[]>([]);
+  const streamPlayingRef = useRef(false);
+  const [streamActive, setStreamActive] = useState(false);
 
   useEffect(() => {
     setEnabled(readPref(TTS_MUTE_KEY, true));
@@ -297,6 +309,14 @@ export function useTTS() {
 
   const stop = useCallback(() => {
     stoppedIntentionally.current = true;
+    // Clear streaming sentence queue and revoke any loaded blob URLs.
+    streamQueueRef.current.forEach((e) => {
+      if (e.blobUrl) URL.revokeObjectURL(e.blobUrl);
+      e.promise.then((url) => { if (url) URL.revokeObjectURL(url); });
+    });
+    streamQueueRef.current = [];
+    streamPlayingRef.current = false;
+    setStreamActive(false);
     // Stop Mistral HTML audio if playing
     if (audioRef.current) {
       audioRef.current.pause();
@@ -353,6 +373,114 @@ export function useTTS() {
   // need speed in its dep array (which would recreate it on every user pref change).
   const speedRef = useRef<TtsSpeed>(speed);
   useEffect(() => { speedRef.current = speed; }, [speed]);
+
+  // ── Streaming TTS queue playback ────────────────────────────────────────
+  // Plays queued entries in order. Called when an entry becomes ready or when
+  // the previous entry finishes. Not a useCallback — no external dep required.
+  function playFromStreamQueue() {
+    const q = streamQueueRef.current;
+    if (q.length === 0) {
+      streamPlayingRef.current = false;
+      setStreamActive(false);
+      setSpeaking(false);
+      setSpeakingId(null);
+      return;
+    }
+    const first = q[0];
+    if (!first.loaded) {
+      // Not ready yet — will be resumed when the fetch promise resolves.
+      streamPlayingRef.current = false;
+      return;
+    }
+    q.shift();
+    streamPlayingRef.current = true;
+    if (!first.blobUrl) {
+      // Fetch failed for this sentence — skip to next.
+      playFromStreamQueue();
+      return;
+    }
+    const url = first.blobUrl;
+    const ctx = getAudioCtx();
+    const audio = new Audio(url);
+    audio.playbackRate = speedToFloat(speedRef.current);
+    audioRef.current = audio;
+    if (ctx) {
+      try {
+        const src = ctx.createMediaElementSource(audio);
+        const an = ctx.createAnalyser();
+        an.fftSize = 256;
+        src.connect(an);
+        an.connect(ctx.destination);
+        analyserRef.current = an;
+      } catch { /* non-fatal — no analyser if Web Audio unavailable */ }
+    }
+    audio.onplay = () => { setSpeaking(true); };
+    audio.onended = () => {
+      audioRef.current = null;
+      analyserRef.current = null;
+      URL.revokeObjectURL(url);
+      if (stoppedIntentionally.current) {
+        streamPlayingRef.current = false;
+        setSpeaking(false);
+      } else {
+        playFromStreamQueue();
+      }
+    };
+    audio.onerror = () => {
+      audioRef.current = null;
+      analyserRef.current = null;
+      URL.revokeObjectURL(url);
+      playFromStreamQueue();
+    };
+    setSpeaking(true);
+    audio.play().catch(() => {
+      URL.revokeObjectURL(url);
+      audioRef.current = null;
+      playFromStreamQueue();
+    });
+  }
+
+  /** Enqueue a sentence for streaming TTS playback. Fetch starts immediately
+   *  (parallel to the ongoing LLM token stream) and the audio plays as soon
+   *  as the fetch resolves and the preceding entry finishes. */
+  const enqueueStreamSentence = useCallback(
+    (text: string) => {
+      if (!enabled || !text.trim()) return;
+      const clean = extractAssistantText(text);
+      if (!clean) return;
+      stoppedIntentionally.current = false;
+      setStreamActive(true);
+      const entry: StreamQueueEntry = {
+        promise: Promise.resolve(null),
+        blobUrl: null,
+        loaded: false,
+      };
+      const p: Promise<string | null> = fetch("/api/tts/mistral", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: clean, speed: speedRef.current }),
+        signal: AbortSignal.timeout(12_000),
+      })
+        .then(async (res) => {
+          if (!res.ok) return null;
+          const blob = await res.blob();
+          return URL.createObjectURL(blob);
+        })
+        .catch(() => null);
+      entry.promise = p;
+      streamQueueRef.current.push(entry);
+      p.then((url) => {
+        if (stoppedIntentionally.current) {
+          if (url) URL.revokeObjectURL(url);
+          return;
+        }
+        entry.blobUrl = url;
+        entry.loaded = true;
+        if (!streamPlayingRef.current) playFromStreamQueue();
+      });
+    },
+    [enabled],
+  );
 
   const speak = useCallback(
     async (text: string, id?: string) => {
@@ -485,5 +613,5 @@ export function useTTS() {
     return () => { stop(); };
   }, [stop]);
 
-  return { speak, stop, speaking, speakingId, enabled, toggleEnabled, autoRead, toggleAutoRead, intentAnnounce, toggleIntentAnnounce, speed, setSpeed, analyserRef };
+  return { speak, stop, speaking, speakingId, enabled, toggleEnabled, autoRead, toggleAutoRead, intentAnnounce, toggleIntentAnnounce, speed, setSpeed, analyserRef, enqueueStreamSentence, streamActive };
 }

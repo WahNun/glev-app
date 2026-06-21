@@ -1558,6 +1558,13 @@ export default function GlevAIChatSheet({
   const inputRef2 = useRef(input);
   inputRef2.current = input;
 
+  // Tracks whether the current/last message was sent via voice input.
+  // Used to auto-trigger streaming TTS even when autoRead is off.
+  const lastSentViaVoiceRef = useRef(false);
+  // Set to true when any glev:tts-sentence event fires during the current stream.
+  // Prevents the end-of-stream full-text speak() from duplicating audio.
+  const streamingSentencesFiredRef = useRef(false);
+
   const {
     isListening,
     isTranscribing,
@@ -1580,6 +1587,9 @@ export default function GlevAIChatSheet({
         ? `${inputRef2.current} ${text}`.trim()
         : text.trim();
       setInput("");
+      // Mark as voice-initiated so streaming TTS fires regardless of autoRead.
+      lastSentViaVoiceRef.current = true;
+      streamingSentencesFiredRef.current = false;
       onSendRef.current(combined);
     },
     onPartialTranscript: (text) => {
@@ -1595,6 +1605,37 @@ export default function GlevAIChatSheet({
 
   const tts = useTTS();
 
+  // Streaming TTS: listen for per-sentence events dispatched by useGlevAI
+  // and enqueue them for parallel TTS fetch + ordered playback.
+  useEffect(() => {
+    const onSentence = (e: Event) => {
+      const sentence = (e as CustomEvent<string>).detail;
+      if (!tts.enabled) return;
+      if (!tts.autoRead && !lastSentViaVoiceRef.current) return;
+      streamingSentencesFiredRef.current = true;
+      tts.enqueueStreamSentence(sentence);
+    };
+    const onStreamDone = () => {
+      // Reset voice flag after stream completes so the next text-only
+      // message doesn't inherit streaming TTS.
+      lastSentViaVoiceRef.current = false;
+    };
+    window.addEventListener("glev:tts-sentence", onSentence);
+    window.addEventListener("glev:tts-stream-done", onStreamDone);
+    return () => {
+      window.removeEventListener("glev:tts-sentence", onSentence);
+      window.removeEventListener("glev:tts-stream-done", onStreamDone);
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tts.enabled, tts.autoRead, tts.enqueueStreamSentence]);
+
+  // Interrupt: stop streaming TTS immediately when the user starts recording.
+  useEffect(() => {
+    if (isListening) tts.stop();
+  // tts.stop is a stable callback — no risk of infinite loop.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isListening]);
+
   // TTS: announce recognised intent aloud as soon as pendingIntent is set.
   // Only fires when tts.enabled AND tts.intentAnnounce (opt-in, default off).
   // The speech starts immediately — before the chip animation — so the user
@@ -1608,14 +1649,23 @@ export default function GlevAIChatSheet({
   }, [pendingIntent]);
 
   // TTS: auto-play last assistant message when streaming stops.
-  // Controlled by tts.autoRead (user preference set in the chat header).
+  // Skipped when streaming TTS already handled audio sentence-by-sentence.
   const prevStreamingRef = useRef(false);
   useEffect(() => {
-    if (prevStreamingRef.current && !streaming && tts.enabled && tts.autoRead) {
-      const last = messages[messages.length - 1];
-      if (last?.role === "assistant" && last.content) {
-        void tts.speak(last.content, last.id);
+    if (!prevStreamingRef.current && streaming) {
+      // Reset flag at stream start so each new message gets a clean state.
+      streamingSentencesFiredRef.current = false;
+    }
+    if (prevStreamingRef.current && !streaming) {
+      // Only fall back to full-text speak when streaming TTS did NOT fire
+      // (text-only input + autoRead on, or streaming TTS failed entirely).
+      if (!streamingSentencesFiredRef.current && tts.enabled && tts.autoRead) {
+        const last = messages[messages.length - 1];
+        if (last?.role === "assistant" && last.content) {
+          void tts.speak(last.content, last.id);
+        }
       }
+      streamingSentencesFiredRef.current = false;
     }
     prevStreamingRef.current = streaming;
   // eslint-disable-next-line react-hooks/exhaustive-deps
