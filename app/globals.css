@@ -358,6 +358,15 @@ textarea,
   .glev-tir-sweep { animation: none; opacity: 0; }
 }
 
+/* Cluster-detail pager surface — padding-bottom ensures card footer and
+   medical disclaimer clear the floating bottom-nav pill even when
+   zoom: 1.12 shrinks the effective WKWebView scroll range. Mirrors the
+   .glev-main bottom buffer formula. Apply to any inner cluster surface
+   that renders its own flex column outside the page-level padding zone. */
+.glev-cluster-scroll {
+  padding-bottom: calc(var(--nav-bottom-total) + 120px) !important;
+}
+
 /* ─── Landscape-Lock (Web/PWA-Fallback) ──────────────────────
    Native-Shells (iOS + Android) sperren Portrait bereits hart via
    Info.plist bzw. AndroidManifest. Im Browser/PWA gibt es keinen
