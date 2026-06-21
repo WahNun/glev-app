@@ -1,0 +1,9 @@
+User-agent: *
+Allow: /
+
+Disallow: /api/
+Disallow: /glev-ops/
+Disallow: /onboarding
+Disallow: /auth/
+
+Sitemap: https://glev.app/sitemap.xml

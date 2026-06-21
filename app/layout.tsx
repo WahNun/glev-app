@@ -118,6 +118,11 @@ const STRUCTURED_DATA = {
       description:
         "Dokumentations-App für Typ-1-Diabetes: Mahlzeiten per Sprache, CGM-Daten, Muster im Verlauf",
       inLanguage: "de-DE",
+      potentialAction: {
+        "@type": "SearchAction",
+        target: "https://glev.app/?q={search_term_string}",
+        "query-input": "required name=search_term_string",
+      },
     },
     {
       "@type": "SoftwareApplication",
@@ -169,6 +174,7 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary_large_image",
+    site: "@glevapp",
     title: "Glev – Diabetes-Tagebuch per Sprache",
     description:
       "Mahlzeiten loggen · CGM-Daten · Muster erkennen. Kein Medizinprodukt.",
