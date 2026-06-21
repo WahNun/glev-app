@@ -21,7 +21,7 @@ export function resolveActiveDose(
   manualDose: string,
   iob: number
 ): number | null {
-  const manualNum = parseFloat(manualDose);
+  const manualNum = parseFloat(manualDose.replace(",", "."));
   if (manualDose.trim() !== "" && Number.isFinite(manualNum) && manualNum >= 0) {
     return manualNum;
   }

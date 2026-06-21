@@ -246,21 +246,21 @@ export default function SnapSlider({
         {editing ? (
           <input
             autoFocus
-            type="number"
+            type="text"
             inputMode="decimal"
-            step={step}
-            min={min}
-            max={max}
+            pattern="[0-9]*[.,]?[0-9]*"
+            autoComplete="off"
+            autoCorrect="off"
+            spellCheck={false}
             value={draft}
             onChange={e => {
-              const v = e.target.value;
+              const raw = e.target.value;
+              const cleaned = raw.replace(/[^0-9.,]/g, "");
+              const firstSep = cleaned.search(/[.,]/);
+              const v = firstSep === -1
+                ? cleaned
+                : cleaned.slice(0, firstSep + 1) + cleaned.slice(firstSep + 1).replace(/[.,]/g, "");
               setDraft(v);
-              // Live-commit on every keystroke so the parent's state is
-              // always in sync with what the user sees. Fixes an iOS
-              // WKWebView race where tapping Save fires before the
-              // input's onBlur → commitDraft path runs, causing the
-              // PATCH to send the stale (unedited) value. User-report
-              // 2026-05-18 ("Dauer ändern klappt manchmal nicht").
               const parsed = Number((v ?? "").replace(",", "."));
               if (Number.isFinite(parsed)) {
                 // Notify parent of the raw value on every keystroke —

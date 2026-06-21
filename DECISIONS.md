@@ -2,6 +2,7 @@
 
 ## Decisions
 
+| 2026-06-21 | Bolus-Manuell-Input Komma-Fix | [BUGFIX] HTML number-Input akzeptiert kein Komma in DE-Locale. type="text" + inputMode="decimal" + Komma-zu-Punkt-Parsing. Betroffen: manualDose (engine/page), MealEntryLightExpand (8 Inputs), ManualEntryModal (5 Inputs), SnapSlider (Edit-Mode). parseNum/num/resolveActiveDose normalisieren Komma via replace(",",".") vor parseFloat. Plus Audit: glucose-Inputs korrekt auf inputMode="numeric". |
 | 2026-06-21 | todayMeals.reduce Type-Annotation Hotfix | [BUGFIX] PR #60 Code hatte reduce() ohne Type-Annotation → acc inferred als unknown. Lokaler DailyTotals-Type + explicit reduce<DailyTotals>() Cast. Zweiter Build-Fix in Folge nach PR #64. Gleiches Muster bei rows.reduce() auf Zeile 2865 präventiv gepatcht. |
 | 2026-06-21 | Glev-AI READ-Tools: Tagesziele + Dashboard + Insights | [FEATURE] Tool-Catalog erweitert um get_macro_targets, get_dashboard_summary, get_today_macros_so_far, get_insights_summary, get_pattern_alerts. System-Prompt aktualisiert. AI hat jetzt Zugriff auf die zentralen User-Surfaces, nicht nur Mahlzeit-/Bolus-Historie. |
 | 2026-06-21 | Aggregator Performance-Optimierung | [PERF] OFF+USDA parallel race (statt sequenziell), Memory-Cache LRU 500 Entries, LLM-Fallback nur bei beidem Fail, Item-Batching parallel. Erwartet p50 unter 500ms für non-cache-Pfade. Baseline + after-Tabelle in docs/aggregator-perf-baseline.md. |

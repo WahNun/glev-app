@@ -3194,26 +3194,36 @@ export default function EnginePage() {
                         <button
                           type="button"
                           onClick={() => {
-                            const v = Math.max(0, Math.round(((parseFloat(manualDose) || 0) * 10 - 1)) / 10);
+                            const v = Math.max(0, Math.round(((parseFloat(manualDose.replace(",", ".")) || 0) * 10 - 1)) / 10);
                             setManualDose(v === 0 ? "" : String(v));
                           }}
                           style={{ background: "transparent", border: "none", color: "var(--text-dim)", fontSize: 18, cursor: "pointer", padding: "0 2px", lineHeight: 1, WebkitTapHighlightColor: "transparent" }}
                         >−</button>
                         <input
-                          type="number"
+                          type="text"
                           inputMode="decimal"
+                          pattern="[0-9]*[.,]?[0-9]*"
+                          autoComplete="off"
+                          autoCorrect="off"
+                          spellCheck={false}
                           value={manualDose}
-                          onChange={e => setManualDose(e.target.value)}
+                          onChange={e => {
+                            const raw = e.target.value;
+                            const cleaned = raw.replace(/[^0-9.,]/g, "");
+                            const firstSep = cleaned.search(/[.,]/);
+                            const normalized = firstSep === -1
+                              ? cleaned
+                              : cleaned.slice(0, firstSep + 1) + cleaned.slice(firstSep + 1).replace(/[.,]/g, "");
+                            setManualDose(normalized);
+                          }}
                           placeholder="—"
-                          step="0.1"
-                          min="0"
-                          style={{ flex: 1, background: "transparent", border: "none", outline: "none", fontFamily: "var(--font-mono)", fontSize: 14, fontWeight: 700, color: "var(--text)", textAlign: "center", width: 0, minWidth: 0, MozAppearance: "textfield" } as React.CSSProperties}
+                          style={{ flex: 1, background: "transparent", border: "none", outline: "none", fontFamily: "var(--font-mono)", fontSize: 14, fontWeight: 700, color: "var(--text)", textAlign: "center", width: 0, minWidth: 0 } as React.CSSProperties}
                         />
                         <span style={{ fontSize: 11, color: "var(--text-faint)", fontFamily: "var(--font-mono)", flexShrink: 0 }}>{tEngine("units_short")}</span>
                         <button
                           type="button"
                           onClick={() => {
-                            const v = Math.round(((parseFloat(manualDose) || 0) * 10 + 1)) / 10;
+                            const v = Math.round(((parseFloat(manualDose.replace(",", ".")) || 0) * 10 + 1)) / 10;
                             setManualDose(String(v));
                           }}
                           style={{ background: "transparent", border: "none", color: "var(--text-dim)", fontSize: 18, cursor: "pointer", padding: "0 2px", lineHeight: 1, WebkitTapHighlightColor: "transparent" }}
