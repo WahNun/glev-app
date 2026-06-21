@@ -1,3 +1,4 @@
+import type { SupabaseClient } from "@supabase/supabase-js";
 import type { AdaptiveICR, TimeOfDay } from "./adaptiveICR";
 import type { InsulinLog } from "../insulin";
 import type { ExerciseLog } from "../exercise";
@@ -10,6 +11,7 @@ import { parseDbTs } from "@/lib/time";
 // engine page's safetyNotesFromLogs all consult one definition.
 import { isHighActivityDay } from "./evaluation";
 import { DEFAULT_ICR, DEFAULT_CF, DEFAULT_TARGET_BG } from "./constants";
+import { EngineTrace } from "./trace";
 
 export interface RecommendInput {
   carbs: number;
@@ -222,4 +224,142 @@ export function recommendDose(input: RecommendInput): RecommendOutput {
     icrSource,
     reasoning: reasoningParts.join(" "),
   };
+}
+
+export type RecommendTraceOpts = {
+  user_id: string;
+  supabase: SupabaseClient;
+  app_version: string;
+  env: string;
+  iob?: number | null;
+  manual_offset?: number | null;
+};
+
+/**
+ * Traced wrapper around `recommendDose`. Fires two fire-and-forget rows into
+ * `engine_traces`: one for `icr_lookup` (slot selection + engine vs user ICR
+ * comparison) and one for `bolus_calc` (full dose computation with all steps).
+ * Never throws — trace errors are silently swallowed so they cannot affect the
+ * recommendation result.
+ */
+export async function recommendDoseWithTrace(
+  input: RecommendInput,
+  opts: RecommendTraceOpts,
+): Promise<RecommendOutput> {
+  const t0 = Date.now();
+  const result = recommendDose(input);
+  const latency = Date.now() - t0;
+
+  const traceEnv = {
+    user_id: opts.user_id,
+    supabase: opts.supabase,
+    app_version: opts.app_version,
+    env: opts.env,
+  };
+
+  // ── icr_lookup trace ────────────────────────────────────────────────
+  const icrTrace = new EngineTrace("icr_lookup", {
+    time_of_day:           input.timeOfDay ?? null,
+    adaptive_icr_global:   input.adaptiveICR.global,
+    adaptive_icr_morning:  input.adaptiveICR.morning,
+    adaptive_icr_afternoon: input.adaptiveICR.afternoon,
+    adaptive_icr_evening:  input.adaptiveICR.evening,
+    sample_size:           input.adaptiveICR.sampleSize,
+    windows_count:         input.adaptiveICR.windows.length,
+  });
+  icrTrace.recordStep("icr_resolution", {
+    success: true,
+    detail: { icr_used: result.icrUsed, source: result.icrSource },
+  });
+  if (input.adaptiveICR.windows.length > 0) {
+    icrTrace.recordStep("user_icr_schedule_comparison", {
+      success: true,
+      detail: {
+        windows: input.adaptiveICR.windows.map((w) => ({
+          slot:        w.slotIndex,
+          label:       w.label,
+          manual_icr:  w.manualIcr,
+          learned_icr: w.learnedIcr,
+          sample_size: w.sampleSize,
+        })),
+      },
+    });
+  }
+  icrTrace.setOutput({
+    icr_used: result.icrUsed,
+    source:   result.icrSource === "default" ? "default" : "engine_adaptive",
+  });
+  void icrTrace.persist(traceEnv);
+
+  // ── bolus_calc trace ────────────────────────────────────────────────
+  const bolusTrace = new EngineTrace("bolus_calc", {
+    current_bg:    input.currentBG,
+    target_bg:     input.targetBG ?? DEFAULT_TARGET_BG,
+    carbs_g:       input.carbs,
+    icr_used:      result.icrUsed,
+    cf_used:       input.correctionFactor ?? DEFAULT_CF,
+    time_of_day:   input.timeOfDay ?? null,
+    iob:           opts.iob ?? null,
+    manual_offset: opts.manual_offset ?? null,
+  });
+
+  if (result.blocked) {
+    bolusTrace.recordStep("safety_block", {
+      success: false,
+      detail: {
+        reason:     "bg_below_safety_floor",
+        current_bg: input.currentBG,
+        floor:      SAFETY_BG_MIN,
+      },
+    });
+  } else {
+    bolusTrace.recordStep("icr_lookup", {
+      success: true,
+      detail: { icr_used: result.icrUsed, source: result.icrSource, carbs: input.carbs },
+    });
+    bolusTrace.recordStep("carb_dose", {
+      success: true,
+      detail: { carbs: input.carbs, icr: result.icrUsed, dose: result.carbDose },
+    });
+    if (result.correctionDose > 0) {
+      bolusTrace.recordStep("correction_dose", {
+        success: true,
+        detail: {
+          current_bg: input.currentBG,
+          target_bg:  input.targetBG ?? DEFAULT_TARGET_BG,
+          cf:         input.correctionFactor ?? DEFAULT_CF,
+          dose:       result.correctionDose,
+        },
+      });
+    }
+    if (opts.iob != null && opts.iob > 0) {
+      bolusTrace.recordStep("iob_subtraction", {
+        success: true,
+        detail: { iob: opts.iob },
+      });
+    }
+    bolusTrace.recordStep("total", {
+      success:    true,
+      latency_ms: latency,
+      detail: {
+        recommended_units: result.recommendedUnits,
+        confidence:        result.confidence,
+        clamped:           result.recommendedUnits === MAX_DOSE_UNITS,
+      },
+    });
+  }
+
+  bolusTrace.setOutput({
+    suggested_units: result.recommendedUnits,
+    components: {
+      carb_dose:       result.carbDose,
+      correction_dose: result.correctionDose,
+      blocked:         result.blocked,
+      confidence:      result.confidence,
+      icr_source:      result.icrSource,
+    },
+  });
+  void bolusTrace.persist(traceEnv);
+
+  return result;
 }

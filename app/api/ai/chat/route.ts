@@ -24,6 +24,7 @@ import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
 import { callWithRetry, defaultGetRetryAfterSec } from "@/lib/ai/retryWithRateLimit";
 import { computeEffectivePlan } from "@/lib/admin/effectivePlan";
 import { canAccess } from "@/lib/planFeatures";
+import { EngineTrace } from "@/lib/engine/trace";
 
 // Maximum number of sequential tool-call rounds before we stop calling
 // OpenAI with `tools` and force a streamed final answer. Two is enough
@@ -659,6 +660,21 @@ export async function handleChatPost(
   const pdfAttachments   = attachments.filter((a) => a.mimeType === "application/pdf");
   const hasImages = imageAttachments.length > 0;
 
+  // photo_analysis trace — created when images are present; persisted
+  // fire-and-forget after the stream completes via after().
+  let photoTrace: EngineTrace | null = null;
+  let photoAdminSb: ReturnType<typeof getSupabaseAdmin> | null = null;
+  if (hasImages) {
+    try { photoAdminSb = getSupabaseAdmin(); } catch { /* no-op */ }
+    if (photoAdminSb) {
+      photoTrace = new EngineTrace("photo_analysis", {
+        image_count:        imageAttachments.length,
+        image_bytes_sizes:  imageAttachments.map((a) => a.url.length), // url length as proxy; real size unknown here
+        mime_types:         imageAttachments.map((a) => a.mimeType),
+      });
+    }
+  }
+
   // Pre-Phase-1: attach images to the last user message NOW so pixtral-12b-2409
   // can see the food photo in the tool-call round and
   // fire log_meal_entry.  Without this, images were only appended in Phase 2
@@ -814,6 +830,7 @@ export async function handleChatPost(
         for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
           if (timedOut || closed) return;
 
+          const pixtralT0 = Date.now();
           const completion = await callOpenAIWithRetry(
             () => client.chat.completions.create({
               model: hasImages ? "pixtral-12b-2409" : "mistral-large-latest",
@@ -832,6 +849,19 @@ export async function handleChatPost(
 
           const choice = completion?.choices?.[0];
           const toolCalls = choice?.message?.tool_calls ?? [];
+
+          // photo_analysis step: capture pixtral call result on round 0
+          if (hasImages && photoTrace && round === 0) {
+            photoTrace.recordStep("pixtral_call", {
+              success:    true,
+              latency_ms: Date.now() - pixtralT0,
+              detail: {
+                model:           "pixtral-12b-2409",
+                tool_calls_count: toolCalls.length,
+                tool_names:      toolCalls.map((c: { function?: { name?: string } }) => c.function?.name).filter(Boolean),
+              },
+            });
+          }
           if (!toolCalls.length) {
             // ── Feedback Guard (response-side) ────────────────────────
             // OpenAI responded with text but no tool call. If the text
@@ -1214,6 +1244,22 @@ export async function handleChatPost(
       }
     },
   });
+
+  // photo_analysis trace: persist fire-and-forget after the stream is sent
+  if (photoTrace && photoAdminSb) {
+    const _photoTrace = photoTrace;
+    const _photoAdminSb = photoAdminSb;
+    const _userId = user.id;
+    _photoTrace.setOutput({ image_count: imageAttachments.length });
+    after(async () => {
+      void _photoTrace.persist({
+        user_id:     _userId,
+        supabase:    _photoAdminSb,
+        app_version: process.env.npm_package_version ?? "unknown",
+        env:         process.env.VERCEL_ENV ?? process.env.NODE_ENV ?? "unknown",
+      });
+    });
+  }
 
   return new Response(stream, {
     headers: {
