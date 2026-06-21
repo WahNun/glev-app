@@ -228,7 +228,7 @@ export default function IOBCard({ insulin, insulinType, meals, currentBg, onLogB
       style={{
         background: "var(--surface)",
         border: "1px solid var(--border)",
-        borderRadius: 18,
+        borderRadius: 16,
         boxShadow: view === "bolus" && !cleared ? `inset 0 0 28px ${color}09` : "none",
         overflow: "hidden",
         cursor: "pointer",

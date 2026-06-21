@@ -154,8 +154,8 @@ export default function FingerstickLogCard() {
     <div style={{
       background: SURFACE,
       border: `1px solid ${BORDER}`,
-      borderRadius: 14,
-      padding: "14px 14px 12px",
+      borderRadius: 16,
+      padding: "16px 20px",
       display: "flex", flexDirection: "column", gap: 12,
     }}>
       <div>
