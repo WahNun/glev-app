@@ -627,7 +627,7 @@ export default function DashboardPage() {
   // so the visible UI never jumps when data arrives. Feels much faster
   // than the old centered spinner because the user sees the page shape
   // immediately instead of staring at a tiny spinner on a blank screen.
-  if (loading) return <GlevLoadingPattern />;
+  if (loading) return <GlevLoadingPattern variant="splash" />;
 
   const cards = buildCards(meals, t);
   const rateCards = cards.filter(c => c.key !== "control");
