@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import { getMistralClient } from "@/lib/ai/mistralClient";
 import { authedClient } from "@/app/api/insulin/_helpers";
 import { isSTTRateLimited, addSTTRateLimitHit, STT_MIN_BLOB_BYTES } from "@/lib/ai/sttRateLimiter";
+import { isWebm, convertWebmToWav } from "@/lib/ai/audioConverter";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -163,6 +164,24 @@ export async function POST(req: NextRequest) {
   // eslint-disable-next-line no-console
   console.log("[STT stream] audio received:", Math.round(file.size / 1024), "KB");
 
+  // Voxtral cannot decode WebM/Opus (error 3310). Convert to WAV before streaming.
+  let audioBlob: Blob = file;
+  let audioMime: string = file.type;
+  if (isWebm(file.type)) {
+    try {
+      const converted = await convertWebmToWav(file);
+      audioBlob = new Blob([converted.buffer], { type: converted.mimeType });
+      audioMime = converted.mimeType;
+    } catch (convErr) {
+      // eslint-disable-next-line no-console
+      console.log("[STT stream] format_conversion FAILED:", convErr instanceof Error ? convErr.message : convErr);
+      return new Response(
+        `data: ${JSON.stringify({ type: "error", error: "Audio-Konversion fehlgeschlagen. Bitte nochmal versuchen." })}\n\n`,
+        { status: 500, headers: { "Content-Type": "text/event-stream" } },
+      );
+    }
+  }
+
   const stream = new ReadableStream({
     async start(controller) {
       const enc = new TextEncoder();
@@ -174,7 +193,7 @@ export async function POST(req: NextRequest) {
       try {
         const t1 = Date.now();
 
-        const audioFile = new File([file], voxtralFileName(file.type), { type: file.type });
+        const audioFile = new File([audioBlob], voxtralFileName(audioMime), { type: audioMime });
 
         const eventStream = await mistral.audio.transcriptions.stream({
           model: "voxtral-mini-latest",

@@ -4,6 +4,7 @@ import { authedClient } from "@/app/api/insulin/_helpers";
 import { isSTTRateLimited, addSTTRateLimitHit, STT_MIN_BLOB_BYTES } from "@/lib/ai/sttRateLimiter";
 import { EngineTrace } from "@/lib/engine/trace";
 import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
+import { isWebm, convertWebmToWav } from "@/lib/ai/audioConverter";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -118,11 +119,42 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // Voxtral cannot decode WebM/Opus (error 3310). Convert to WAV first.
+    let audioBlob: Blob = file;
+    let audioMime: string = file.type;
+    if (isWebm(file.type)) {
+      const tConv = Date.now();
+      try {
+        const converted = await convertWebmToWav(file);
+        audioBlob = new Blob([converted.buffer], { type: converted.mimeType });
+        audioMime = converted.mimeType;
+        if (trace && traceEnv) {
+          trace.recordStep("format_conversion", {
+            success:    true,
+            latency_ms: Date.now() - tConv,
+            detail:     { input_mime: file.type, output_mime: audioMime },
+          });
+        }
+      } catch (convErr) {
+        if (trace && traceEnv) {
+          trace.recordStep("format_conversion", {
+            success:    false,
+            latency_ms: Date.now() - tConv,
+            detail:     { error: convErr instanceof Error ? convErr.message : String(convErr) },
+          });
+          trace.setError("format_conversion_failed");
+          void trace.persist(traceEnv);
+        }
+        return NextResponse.json(
+          { error: "Audio-Konversion fehlgeschlagen. Bitte nochmal versuchen." },
+          { status: 500 },
+        );
+      }
+    }
+
     const t1 = Date.now();
 
-    // Voxtral identifies the audio format from the file extension.
-    // Without a filename the API returns 400 "Audio input could not be decoded."
-    const audioFile = new File([file], voxtralFileName(file.type), { type: file.type });
+    const audioFile = new File([audioBlob], voxtralFileName(audioMime), { type: audioMime });
 
     let text: string;
     try {
