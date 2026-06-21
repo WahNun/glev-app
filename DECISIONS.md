@@ -535,3 +535,5 @@ Neue Tabelle `public.glev_ops_users` (id, email, password_hash, role, name, must
 | 2026-06-21 | Pre-Commit-Hook + GitHub-Action TypeScript-Check | [INFRA] Husky-Setup mit pre-commit Hook der `pnpm tsc --noEmit` ausführt. Plus GitHub-Action als Backup. Verhindert Type-Errors auf main wie bei PR #64 + Folge-Hotfix. |
 
 | 2026-06-21 | Tests temporär vom tsc Pre-Commit excluded | [CHORE] Pre-Launch Bandage: `tests/**` im tsconfig.json excluded. Separates tsconfig.test.json für gezielten Test-Check (`pnpm typecheck:tests`). Tech-Debt-Sweep der 18 pre-existing Test-Errors als V1.1-Backlog. |
+
+| 2026-06-21 | Rezept-Suggestion-Tool | [FEATURE] Neues Tool suggest_meal_for_remaining_macros. Berechnet verbleibende Makro-Lücke (Tagesziel minus bisher geloggt), scored User-History-Favoriten (occurrences ≥ 3) per Euklidischer Distanz, ergänzt 2 Mistral-generierte Rezept-Ideen (mistral-small-latest). Trace-Typ recipe_suggestion in engine_traces. Compliance-Linie hält: kulinarische Vorschläge, kein BZ-Bezug, kein Insulin, Disclaimer im Tool-Result. |

@@ -52,6 +52,8 @@ import type { ParsedFoodItem, AggregateSource } from "@/lib/nutrition/types";
 import { applyAlcoholFallback, sumAlcoholG, hasAlcoholKeyword } from "@/lib/ai/alcoholFallback";
 import { computeControlScore } from "@/lib/controlScore";
 import { detectPattern } from "@/lib/engine/patterns";
+import { EngineTrace } from "@/lib/engine/trace";
+import { getMistralChatClient } from "@/lib/ai/openaiClient";
 
 // ── Tool definitions (Mistral function-calling schema) ───────────────
 export const GLEV_TOOLS = [
@@ -798,6 +800,34 @@ Wenn der Nutzer einen Markennamen nennt, leite insulin_type automatisch aus der 
       parameters: { type: "object", properties: {}, required: [] },
     },
   },
+  {
+    type: "function" as const,
+    function: {
+      name: "suggest_meal_for_remaining_macros",
+      description:
+        "Schlägt 2-4 Mahlzeit-Ideen oder Rezepte vor, deren Makro-Profile zu den verbleibenden Tageszielen des Users passen. Kombiniert User-History (Favoriten aus user_food_history mit occurrences ≥ 3) mit KI-generierten Rezept-Vorschlägen. Aufrufen bei Fragen wie 'was soll ich kochen', 'was passt zu meinen Zielen', 'Rezept-Vorschlag', 'was kann ich heute Abend essen'.",
+      parameters: {
+        type: "object",
+        properties: {
+          meal_type: {
+            type: "string",
+            enum: ["breakfast", "lunch", "dinner", "snack"],
+            description: "Optional: Mahlzeit-Typ. Falls nicht gesetzt: heuristisch anhand Uhrzeit.",
+          },
+          dietary_constraints: {
+            type: "array",
+            items: { type: "string" },
+            description: "Optional: Ernährungseinschränkungen, z. B. ['vegetarisch', 'glutenfrei'].",
+          },
+          max_prep_min: {
+            type: "number",
+            description: "Optional: maximale Zubereitungszeit in Minuten.",
+          },
+        },
+        required: [],
+      },
+    },
+  },
 ];
 
 export type GlevToolName =
@@ -829,7 +859,8 @@ export type GlevToolName =
   | "get_today_macros_so_far"
   | "get_dashboard_summary"
   | "get_insights_summary"
-  | "get_pattern_alerts";
+  | "get_pattern_alerts"
+  | "suggest_meal_for_remaining_macros";
 
 /**
  * Marker shape returned by every WRITE-tool. The chat-route handler
@@ -1025,6 +1056,8 @@ export async function executeGlevTool(
         return await toolGetInsightsSummary(sb, userId, args, userTimezone);
       case "get_pattern_alerts":
         return await toolGetPatternAlerts(sb, userId);
+      case "suggest_meal_for_remaining_macros":
+        return await toolSuggestMealForRemainingMacros(sb, userId, args, userTimezone);
       case "log_meal_entry":
         return await toolLogMealEntry(sb, userId, args, userTimezone);
       case "log_bolus_entry":
@@ -3153,6 +3186,229 @@ async function toolGetPatternAlerts(
     counts:      pattern.counts,
     ...(pattern.curveInsights ? { curve_insights: pattern.curveInsights } : {}),
   };
+}
+
+async function toolSuggestMealForRemainingMacros(
+  sb: SupabaseClient,
+  userId: string,
+  args: Record<string, unknown>,
+  userTimezone: string | null,
+): Promise<unknown> {
+  const mealType = typeof args.meal_type === "string" ? args.meal_type : undefined;
+  const dietaryConstraints = Array.isArray(args.dietary_constraints)
+    ? (args.dietary_constraints as unknown[]).filter((s): s is string => typeof s === "string")
+    : undefined;
+  const maxPrepMin = typeof args.max_prep_min === "number" ? args.max_prep_min : undefined;
+
+  const trace = new EngineTrace("recipe_suggestion", {
+    meal_type: mealType,
+    dietary_constraints: dietaryConstraints,
+    max_prep_min: maxPrepMin,
+  });
+
+  // 1. Fetch targets + today's macros in parallel
+  const [targetsRaw, soFarRaw] = await Promise.all([
+    toolGetMacroTargets(sb, userId),
+    toolGetTodayMacrosSoFar(sb, userId, userTimezone),
+  ]);
+
+  const targets = targetsRaw as {
+    carbs_g: number | null; protein_g: number | null;
+    fat_g: number | null;   fiber_g: number | null;
+  };
+  const soFar = soFarRaw as {
+    carbs_g: number; protein_g: number; fat_g: number; fiber_g: number;
+  };
+
+  const remaining = {
+    carbs:   Math.max(0, (targets.carbs_g   ?? 0) - (soFar.carbs_g   ?? 0)),
+    protein: Math.max(0, (targets.protein_g ?? 0) - (soFar.protein_g ?? 0)),
+    fat:     Math.max(0, (targets.fat_g     ?? 0) - (soFar.fat_g     ?? 0)),
+    fiber:   Math.max(0, (targets.fiber_g   ?? 0) - (soFar.fiber_g   ?? 0)),
+  };
+
+  trace.recordStep("macro_gap_computed", { success: true, detail: remaining });
+
+  // 2. Fetch user favorites (occurrences >= 3, sorted by frequency)
+  const { data: historyRows, error: historyErr } = await sb
+    .from("user_food_history")
+    .select("display_name, typical_grams, carbs_per_100g, protein_per_100g, fat_per_100g, fiber_per_100g, occurrences")
+    .gte("occurrences", 3)
+    .order("occurrences", { ascending: false })
+    .limit(20);
+
+  type HistoryRow = {
+    display_name: string; typical_grams: number;
+    carbs_per_100g: number; protein_per_100g: number;
+    fat_per_100g: number; fiber_per_100g: number;
+    occurrences: number;
+  };
+  const historyItems: HistoryRow[] = historyErr ? [] : ((historyRows ?? []) as HistoryRow[]);
+
+  trace.recordStep("user_history_fetched", {
+    success: !historyErr,
+    detail: { count: historyItems.length },
+  });
+
+  // 3. Score favorites by Euclidean distance to remaining macros
+  const remainingNorm = Math.sqrt(
+    remaining.carbs ** 2 + remaining.protein ** 2 + remaining.fat ** 2 + remaining.fiber ** 2,
+  ) || 1;
+
+  const scoredHistory = historyItems.map((item) => {
+    const portionCarbs   = (item.carbs_per_100g   * item.typical_grams) / 100;
+    const portionProtein = (item.protein_per_100g * item.typical_grams) / 100;
+    const portionFat     = (item.fat_per_100g     * item.typical_grams) / 100;
+    const portionFiber   = (item.fiber_per_100g   * item.typical_grams) / 100;
+
+    const dist = Math.sqrt(
+      (remaining.carbs   - portionCarbs)   ** 2 +
+      (remaining.protein - portionProtein) ** 2 +
+      (remaining.fat     - portionFat)     ** 2 +
+      (remaining.fiber   - portionFiber)   ** 2,
+    );
+    const fitScore = Math.round(Math.max(0, 1 - dist / (remainingNorm * 2)) * 100) / 100;
+
+    const dominant = remaining.protein >= remaining.carbs
+      ? `Protein-Lücke von ${Math.round(remaining.protein)}g`
+      : `KH-Lücke von ${Math.round(remaining.carbs)}g`;
+
+    return {
+      name:         item.display_name,
+      macros: {
+        kh:      Math.round(portionCarbs   * 10) / 10,
+        protein: Math.round(portionProtein * 10) / 10,
+        fat:     Math.round(portionFat     * 10) / 10,
+        fiber:   Math.round(portionFiber   * 10) / 10,
+      },
+      prep_minutes: null as number | null,
+      source:       "user_history" as const,
+      fit_score:    fitScore,
+      occurrences:  item.occurrences,
+      reasoning:    `passt zu deiner ${dominant} und du hattest es schon ${item.occurrences}×`,
+    };
+  });
+
+  scoredHistory.sort((a, b) => b.fit_score - a.fit_score);
+  const topHistory = scoredHistory.slice(0, 2);
+
+  // 4. Mistral-generated recipe ideas
+  type GeneratedSuggestion = {
+    name: string;
+    macros: { kh: number; protein: number; fat: number; fiber: number };
+    prep_minutes: number | null;
+    source: "generated";
+    fit_score: number;
+    reasoning: string;
+  };
+  let generatedSuggestions: GeneratedSuggestion[] = [];
+
+  try {
+    const client = getMistralChatClient();
+    const tz = userTimezone && isValidTimezone(userTimezone) ? userTimezone : "Europe/Berlin";
+    const localHour = new Date().toLocaleString("en-US", { timeZone: tz, hour: "numeric", hour12: false });
+    const hour = parseInt(localHour, 10);
+    const inferredType = mealType ?? (
+      hour >= 5 && hour < 11 ? "breakfast"
+      : hour >= 11 && hour < 15 ? "lunch"
+      : hour >= 17 && hour < 22 ? "dinner"
+      : "snack"
+    );
+
+    const dietStr  = dietaryConstraints?.length ? ` Ernährungsweise: ${dietaryConstraints.join(", ")}.` : "";
+    const prepStr  = maxPrepMin ? ` Max. Zubereitungszeit: ${maxPrepMin} Minuten.` : "";
+
+    const prompt =
+      `Du bist ein Koch-Assistent. Schlage genau 2 Mahlzeit-Ideen vor, die zur folgenden verbleibenden Makro-Lücke des Nutzers passen:\n` +
+      `KH: ~${Math.round(remaining.carbs)}g, Protein: ~${Math.round(remaining.protein)}g, Fett: ~${Math.round(remaining.fat)}g, Ballaststoffe: ~${Math.round(remaining.fiber)}g.\n` +
+      `Mahlzeit-Typ: ${inferredType}.${dietStr}${prepStr}\n\n` +
+      `Antworte NUR mit einem gültigen JSON-Array (kein Markdown, kein Text davor oder danach):\n` +
+      `[{"name":"Gerichtname","macros":{"kh":N,"protein":N,"fat":N,"fiber":N},"prep_minutes":N,"reasoning":"1 Satz warum dieses Gericht gut zur Makro-Lücke passt"}]\n\n` +
+      `WICHTIG: Keine BZ-Bezüge, keine Insulin-Angaben, keine medizinischen Aussagen. Nur kulinarische Beschreibung.`;
+
+    const resp = await client.chat.completions.create({
+      model: "mistral-small-latest",
+      messages: [{ role: "user", content: prompt }],
+      temperature: 0.7,
+      max_tokens: 500,
+    });
+
+    const raw = (resp.choices[0]?.message?.content ?? "[]").trim()
+      .replace(/^```(?:json)?\s*/i, "")
+      .replace(/\s*```$/i, "");
+
+    type RawRecipe = { name: string; macros: { kh: number; protein: number; fat: number; fiber: number }; prep_minutes: number; reasoning: string };
+    const parsed = JSON.parse(raw) as RawRecipe[];
+
+    generatedSuggestions = (Array.isArray(parsed) ? parsed : []).slice(0, 2).map((r) => {
+      const kh      = Number(r.macros?.kh)      || 0;
+      const protein = Number(r.macros?.protein)  || 0;
+      const fat     = Number(r.macros?.fat)      || 0;
+      const fiber   = Number(r.macros?.fiber)    || 0;
+      const dist = Math.sqrt(
+        (remaining.carbs   - kh)      ** 2 +
+        (remaining.protein - protein) ** 2 +
+        (remaining.fat     - fat)     ** 2 +
+        (remaining.fiber   - fiber)   ** 2,
+      );
+      return {
+        name:         typeof r.name === "string" ? r.name : "Rezeptvorschlag",
+        macros:       { kh, protein, fat, fiber },
+        prep_minutes: typeof r.prep_minutes === "number" ? r.prep_minutes : null,
+        source:       "generated" as const,
+        fit_score:    Math.round(Math.max(0, 1 - dist / (remainingNorm * 2)) * 100) / 100,
+        reasoning:    typeof r.reasoning === "string" ? r.reasoning : "Guter Makro-Mix für deine verbleibende Tageslücke.",
+      };
+    });
+
+    trace.recordStep("mistral_recipes_generated", {
+      success: true,
+      detail: { count: generatedSuggestions.length },
+    });
+  } catch (e) {
+    trace.recordStep("mistral_recipes_generated", {
+      success: false,
+      detail: { error: e instanceof Error ? e.message : "unknown" },
+    });
+  }
+
+  // 5. Merge, sort by fit_score, cap at 4
+  const suggestions = [
+    ...topHistory.map(({ occurrences: _oc, ...s }) => s),
+    ...generatedSuggestions,
+  ].sort((a, b) => b.fit_score - a.fit_score).slice(0, 4);
+
+  const result = {
+    suggestions,
+    remaining: {
+      kh:      Math.round(remaining.carbs   * 10) / 10,
+      protein: Math.round(remaining.protein * 10) / 10,
+      fat:     Math.round(remaining.fat     * 10) / 10,
+      fiber:   Math.round(remaining.fiber   * 10) / 10,
+    },
+    disclaimer: "Vorschlag, kein verbindlicher Mahlzeit-Plan. Bespreche Mengen mit deinem Diabetes-Team.",
+  };
+
+  trace.setOutput({
+    suggestion_count:  suggestions.length,
+    history_count:     topHistory.length,
+    generated_count:   generatedSuggestions.length,
+    history_dominant:  topHistory.length >= generatedSuggestions.length,
+  });
+
+  // 6. Fire-and-forget engine trace (admin client bypasses RLS)
+  let adminSbForTrace;
+  try { adminSbForTrace = getSupabaseAdmin(); } catch { /* no-op */ }
+  if (adminSbForTrace) {
+    void trace.persist({
+      user_id:     userId,
+      supabase:    adminSbForTrace,
+      app_version: "1.0",
+      env:         process.env.VERCEL_ENV ?? process.env.NODE_ENV ?? "unknown",
+    });
+  }
+
+  return result;
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────
