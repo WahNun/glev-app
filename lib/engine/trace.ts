@@ -5,7 +5,8 @@ export type TraceType =
   | "icr_lookup"
   | "cgm_fetch"
   | "voice_intent"
-  | "photo_analysis";
+  | "photo_analysis"
+  | "recipe_suggestion";
 
 export type TraceStep = {
   name: string;
