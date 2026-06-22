@@ -107,18 +107,24 @@ export async function POST(req: NextRequest) {
     const cleanMime = file.type.split(";")[0];
 
     // Client-side recording metadata for trace observability.
-    const platformMime = (form.get("platform_mime") as string | null) ?? file.type;
-    const converted    = form.get("converted") === "true";
-    const convMsRaw    = form.get("conversion_ms");
-    const conversionMs = convMsRaw ? Number(convMsRaw) : undefined;
+    const platformMime          = (form.get("platform_mime") as string | null) ?? file.type;
+    const converted             = form.get("converted") === "true";
+    const convMsRaw             = form.get("conversion_ms");
+    const conversionMs          = convMsRaw ? Number(convMsRaw) : undefined;
+    const localDecodeValidated  = form.get("local_decode_validated") !== "false";
+    const fellBackToWav         = form.get("fell_back_to_wav") === "true";
+    const validationMs          = Number(form.get("validation_ms") ?? 0);
 
     const trace = traceEnv
       ? new EngineTrace("voice_intent", {
-          platform_mime: platformMime,
-          upload_mime:   file.type,
-          audio_bytes:   file.size,
+          platform_mime:          platformMime,
+          upload_mime:            file.type,
+          audio_bytes:            file.size,
           converted,
           ...(converted && conversionMs !== undefined ? { conversion_ms: conversionMs } : {}),
+          local_decode_validated: localDecodeValidated,
+          fell_back_to_wav:       fellBackToWav,
+          validation_ms:          validationMs,
         })
       : null;
 

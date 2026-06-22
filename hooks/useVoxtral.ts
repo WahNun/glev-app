@@ -36,6 +36,7 @@ import { useRef, useState, useCallback, useEffect } from "react";
 
 import { ERROR_MESSAGES } from "@/lib/ai/errors";
 import { convertToWav } from "@/lib/audio/wavEncoder";
+import { validateAndPrepare } from "@/lib/audio/preUploadValidate";
 
 /**
  * Sentinel returned via onError when the OS microphone permission is denied.
@@ -124,6 +125,9 @@ type TranscribeMetadata = {
   platformMime: string;
   converted: boolean;
   conversionMs?: number;
+  localDecodeValidated: boolean;
+  fellBackToWav: boolean;
+  validationMs: number;
 };
 
 function uploadFilename(mimeType: string): string {
@@ -154,6 +158,9 @@ export async function transcribeWithFallback(
     if (metadata.conversionMs !== undefined) {
       form.append("conversion_ms", String(metadata.conversionMs));
     }
+    form.append("local_decode_validated", String(metadata.localDecodeValidated));
+    form.append("fell_back_to_wav", String(metadata.fellBackToWav));
+    form.append("validation_ms", String(metadata.validationMs));
   };
 
   // ── Attempt 1: SSE streaming ────────────────────────────────────────────
@@ -390,8 +397,13 @@ export function useVoxtral({ onTranscript, onPartialTranscript, onError }: UseVo
         let uploadBlob: Blob = recorded;
         let uploadMime: string = fmt.mimeType;
         let conversionMs: number | undefined;
+        let localDecodeValidated = true;
+        let fellBackToWav = false;
+        let validationMs = 0;
 
         if (fmt.needsConversion) {
+          // Non-iOS: we build the WAV container ourselves — guaranteed valid.
+          // Skip decode validation and go straight to conversion.
           try {
             const t0conv = Date.now();
             uploadBlob = await convertToWav(recorded);
@@ -400,11 +412,32 @@ export function useVoxtral({ onTranscript, onPartialTranscript, onError }: UseVo
             // eslint-disable-next-line no-console
             console.log(`[voice] converted to wav in ${conversionMs}ms`);
           } catch (convErr) {
-            // Conversion failed — fall back to raw webm upload
             // eslint-disable-next-line no-console
             console.warn("[voice] WAV conversion failed, uploading raw blob:", convErr);
             uploadBlob = recorded;
             uploadMime = fmt.mimeType;
+          }
+        } else {
+          // iOS: validate the m4a container locally before upload.
+          // Corrupt containers get converted to WAV, clean ones pass through.
+          try {
+            const v = await validateAndPrepare(recorded, fmt.mimeType);
+            uploadBlob         = v.uploadBlob;
+            uploadMime         = v.uploadMime;
+            localDecodeValidated = v.validated;
+            fellBackToWav      = v.fellBackToWav;
+            validationMs       = v.validationMs;
+            if (v.fellBackToWav) {
+              // eslint-disable-next-line no-console
+              console.warn(`[voice] corrupt m4a detected, fell back to WAV (${v.validationMs}ms)`);
+            } else {
+              // eslint-disable-next-line no-console
+              console.log(`[voice] m4a validated ok in ${v.validationMs}ms`);
+            }
+          } catch (valErr) {
+            // validateAndPrepare itself failed — upload raw and let server handle it
+            // eslint-disable-next-line no-console
+            console.warn("[voice] validateAndPrepare threw, uploading raw blob:", valErr);
           }
         }
 
@@ -428,9 +461,12 @@ export function useVoxtral({ onTranscript, onPartialTranscript, onError }: UseVo
           ac.signal,
           handleRateLimit,
           {
-            platformMime: fmt.mimeType,
-            converted:    uploadMime === "audio/wav",
+            platformMime:        fmt.mimeType,
+            converted:           uploadMime === "audio/wav",
             conversionMs,
+            localDecodeValidated,
+            fellBackToWav,
+            validationMs,
           },
         ).finally(() => {
           // Clear the timeout on any outcome (success, error, or abort) so
