@@ -6,7 +6,6 @@ import { extractFullNameFromSession } from "@/lib/stripeCheckout";
 import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
 import { enqueueEmail } from "@/lib/emails/outbox";
 import { scheduleDripEmails } from "@/lib/emails/drip-scheduler";
-import { trackEvent } from "@/lib/capi-events";
 import { isPlusPriceId } from "@/lib/stripeWebhookHelpers";
 
 export const runtime = "nodejs";
@@ -468,42 +467,6 @@ export async function POST(req: NextRequest) {
           // is also visible.
           // eslint-disable-next-line no-console
           console.warn("[pro/webhook] no email on completed session — skipping welcome mail", session.id);
-        }
-
-        // CAPI Purchase — fire-and-forget. Blockiert nie den Webhook-Return,
-        // da Meta-Fehler kein Stripe-Retry-Grund sind. event_id = session.id
-        // stellt sicher dass Browser-Pixel (falls vorhanden) dedupliziert wird.
-        if (email) {
-          const planName = session.metadata?.plan_name || (isPlus ? "Glev+" : "Glev Pro");
-          const planId   = session.metadata?.plan_id   || (isPlus ? "glev-plus-monthly" : "glev-pro-monthly");
-          const value    =
-            typeof session.amount_total === "number"
-              ? session.amount_total / 100
-              : isPlus ? 29 : 14.9;
-          const currency: "EUR" | "USD" =
-            typeof session.currency === "string" && session.currency.toUpperCase() === "USD"
-              ? "USD"
-              : "EUR";
-          trackEvent("Purchase", {
-            user: {
-              email,
-              external_id: email,
-              country: sessionCountry?.toLowerCase() ?? "de",
-            },
-            customData: {
-              value,
-              currency,
-              content_name: planName,
-              content_ids:  [planId],
-              content_type: "product",
-              order_id:     session.id,
-            },
-            eventId:   `purchase_${session.id}`,
-            sourceUrl: `${resolveAppUrl(req)}/pro/success`,
-          }).catch((e) =>
-            // eslint-disable-next-line no-console
-            console.warn("[pro/webhook] CAPI Purchase failed (non-fatal):", e),
-          );
         }
 
         // Reward the referrer when the new user's first payment comes in

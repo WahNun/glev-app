@@ -35,10 +35,6 @@ function PreviewProCTA({ block = true, prefillEmail }: { block?: boolean; prefil
     setError(null);
     setLoading(true);
 
-    if (typeof window !== "undefined" && (window as unknown as { fbq?: (...args: unknown[]) => void }).fbq) {
-      (window as unknown as { fbq: (...args: unknown[]) => void }).fbq("track", "InitiateCheckout");
-    }
-
     let email: string | undefined = prefillEmail;
     try {
       if (supabase) {
@@ -129,12 +125,6 @@ function PreviewProContent() {
   const t = useTranslations("previewPro");
   const searchParams = useSearchParams();
   const prefillEmail = searchParams.get("email") ?? undefined;
-
-  useEffect(() => {
-    if (typeof window !== "undefined" && (window as unknown as { fbq?: (...args: unknown[]) => void }).fbq) {
-      (window as unknown as { fbq: (...args: unknown[]) => void }).fbq("trackCustom", "ViewProPagePreview");
-    }
-  }, []);
 
   return (
     <main

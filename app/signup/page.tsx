@@ -17,7 +17,6 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useLocale } from "next-intl";
 import { supabase } from "@/lib/supabase";
-import { trackEvent } from "@/lib/fb-capi-client";
 import {
   ACCENT,
   ACCENT_HOVER,
@@ -96,13 +95,6 @@ export default function SignupPage() {
     });
   }, [router]);
 
-  // Pixel: ViewContent on mount
-  useEffect(() => {
-    if (typeof window !== "undefined" && (window as unknown as { fbq?: (...args: unknown[]) => void }).fbq) {
-      (window as unknown as { fbq: (...args: unknown[]) => void }).fbq("trackCustom", "ViewFreeTrialSignup");
-    }
-  }, []);
-
   // ── Step 1: Create account ──────────────────────────────────────────
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -165,28 +157,6 @@ export default function SignupPage() {
         }
       }
 
-      // Pixel Lead event (Browser) — CAPI parallel via trackEvent weiter unten.
-      // eventID koordiniert mit dem CompleteRegistration-Event in /auth/callback.
-      if (typeof window !== "undefined" && (window as unknown as { fbq?: (...args: unknown[]) => void }).fbq) {
-        (window as unknown as { fbq: (...args: unknown[]) => void }).fbq("track", "Lead", {}, { eventID: `signup-${data.user.id}` });
-      }
-      // Server CAPI Lead — fire-and-forget, blockiert nicht den Step-Wechsel
-      const nameParts = name.trim().split(/\s+/);
-      trackEvent(
-        {
-          email,
-          firstName: nameParts[0],
-          lastName: nameParts.slice(1).join(" ") || undefined,
-          country: "de",
-        },
-        {
-          eventName: "Lead",
-          contentName: "Glev Pro Trial",
-          contentIds: ["glev-pro-monthly"],
-          contentType: "product",
-        },
-      ).catch(() => {/* fire-and-forget */});
-
       // → Step 2 (profile data) regardless of whether email confirm is needed
       setStep("profile");
       setLoading(false);
@@ -217,28 +187,6 @@ export default function SignupPage() {
             sensor_type: usesCgm === "ja" ? (sensorType || null) : null,
           },
         }).catch((e) => console.warn("[signup] profile update failed:", e));
-      }
-
-      // CAPI StartTrial — phone + name jetzt bekannt (Step 2 vollständig)
-      {
-        const nameParts = name.trim().split(/\s+/);
-        trackEvent(
-          {
-            email,
-            phone: phone || undefined,
-            firstName: nameParts[0],
-            lastName: nameParts.slice(1).join(" ") || undefined,
-            country: "de",
-          },
-          {
-            eventName: "StartTrial",
-            value: 14.9,
-            currency: "EUR",
-            contentName: "Glev Pro Trial",
-            contentIds: ["glev-pro-monthly"],
-            contentType: "product",
-          },
-        ).catch(() => {/* fire-and-forget */});
       }
 
       // Fire-and-forget CRM notification — all form data + meta fields
