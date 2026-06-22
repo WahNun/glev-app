@@ -561,6 +561,9 @@ export function useGlevAI(opts?: {
         ac.abort();
       }, CLIENT_ABORT_MS);
 
+      let sentenceBuf = "";
+      let streamEndedNormally = false;
+      const MIN_TTS_SENTENCE = 20;
       try {
         const res = await fetch("/api/ai/chat", {
           method: "POST",
@@ -606,6 +609,9 @@ export function useGlevAI(opts?: {
         const decoder = new TextDecoder();
         let buffer = "";
         let done = false;
+        // Streaming TTS: accumulate tokens into sentences and dispatch each
+        // as soon as the sentence boundary is detected so TTS can start
+        // fetching audio in parallel with the continued LLM stream.
         while (!done) {
           const { value, done: d } = await reader.read();
           done = d;
@@ -739,9 +745,23 @@ export function useGlevAI(opts?: {
                     : m,
                 ),
               );
+              // Sentence detection: buffer token, dispatch complete sentences
+              // for parallel TTS fetching (Perplexity-style streaming audio).
+              sentenceBuf += parsed.token;
+              let boundaryIdx: number;
+              while ((boundaryIdx = sentenceBuf.search(/[.!?]\s/)) !== -1) {
+                const sentence = sentenceBuf.slice(0, boundaryIdx + 1).trim();
+                sentenceBuf = sentenceBuf.slice(boundaryIdx + 2).trimStart();
+                if (sentence.length >= MIN_TTS_SENTENCE && typeof window !== "undefined") {
+                  window.dispatchEvent(
+                    new CustomEvent<string>("glev:tts-sentence", { detail: sentence }),
+                  );
+                }
+              }
             }
           }
         }
+        streamEndedNormally = true;
       } catch (e) {
         // AbortError = stream was cancelled by navigation (closeSheet) or
         // user action — this is intentional and must never show as an error.
@@ -801,6 +821,18 @@ export function useGlevAI(opts?: {
           );
         }
       } finally {
+        // Flush any remaining sentence buffer and signal stream end to TTS queue.
+        if (typeof window !== "undefined") {
+          if (streamEndedNormally) {
+            const remaining = sentenceBuf.trim();
+            if (remaining.length >= MIN_TTS_SENTENCE) {
+              window.dispatchEvent(
+                new CustomEvent<string>("glev:tts-sentence", { detail: remaining }),
+              );
+            }
+          }
+          window.dispatchEvent(new CustomEvent("glev:tts-stream-done"));
+        }
         clearTimeout(clientAbortTimer);
         clearTimeout(slowTimerId);
         setIsSlow(false);
