@@ -131,6 +131,9 @@ export async function POST(req: NextRequest) {
   let platformMime = "";
   let converted = false;
   let conversionMs: number | undefined;
+  let localDecodeValidated = true;
+  let fellBackToWav = false;
+  let validationMs = 0;
   try {
     const form = await req.formData();
     const raw = form.get("audio");
@@ -144,10 +147,13 @@ export async function POST(req: NextRequest) {
       );
     }
     file = raw;
-    platformMime = (form.get("platform_mime") as string | null) ?? file.type;
-    converted    = form.get("converted") === "true";
-    const cmRaw  = form.get("conversion_ms");
-    conversionMs = cmRaw ? Number(cmRaw) : undefined;
+    platformMime         = (form.get("platform_mime") as string | null) ?? file.type;
+    converted            = form.get("converted") === "true";
+    const cmRaw          = form.get("conversion_ms");
+    conversionMs         = cmRaw ? Number(cmRaw) : undefined;
+    localDecodeValidated = form.get("local_decode_validated") !== "false";
+    fellBackToWav        = form.get("fell_back_to_wav") === "true";
+    validationMs         = Number(form.get("validation_ms") ?? 0);
   } catch {
     return new Response(
       `data: ${JSON.stringify({ type: "error", error: "Failed to parse form data" })}\n\n`,
@@ -188,11 +194,14 @@ export async function POST(req: NextRequest) {
     : null;
   const trace = traceEnv
     ? new EngineTrace("voice_intent", {
-        platform_mime: platformMime || file.type,
-        upload_mime:   file.type,
-        audio_bytes:   file.size,
+        platform_mime:          platformMime || file.type,
+        upload_mime:            file.type,
+        audio_bytes:            file.size,
         converted,
         ...(converted && conversionMs !== undefined ? { conversion_ms: conversionMs } : {}),
+        local_decode_validated: localDecodeValidated,
+        fell_back_to_wav:       fellBackToWav,
+        validation_ms:          validationMs,
       })
     : null;
 
