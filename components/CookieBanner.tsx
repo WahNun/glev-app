@@ -1,16 +1,16 @@
 "use client";
 
 /**
- * CookieBanner — DSGVO-konformer Cookie-Consent-Banner mit granularen Kategorien.
+ * CookieBanner — DSGVO-konformer Cookie-Consent-Banner.
  *
  * Erste Ebene:  kompakter Text + „Alle ablehnen" / „Einstellungen" / „Alle akzeptieren"
- * Zweite Ebene: drei Kategorien mit Toggle-Switches + „Auswahl speichern"
+ * Zweite Ebene: zwei Kategorien mit Toggle-Switches + „Auswahl speichern"
  *
- * Storage-Format v2: { v: 2, necessary: true, analytics: boolean, marketing: boolean }
- * Migration v1 → v2: "accepted" → marketing:true, analytics:false
- *                    "rejected" → marketing:false, analytics:false
+ * Storage-Format v2: { v: 2, necessary: true, analytics: boolean }
+ * Migration v1 → v2: "accepted" → analytics:true
+ *                    "rejected" → analytics:false
  *
- * window.__consent = { marketing, analytics } — rückwärtskompatibel für fb-capi-client.ts
+ * window.__consent = { analytics } — für serverseitige Consent-Checks
  */
 
 import { useEffect, useState } from "react";
@@ -24,7 +24,6 @@ interface ConsentV2 {
   v: 2;
   necessary: true;
   analytics: boolean;
-  marketing: boolean;
 }
 
 function readConsent(): ConsentV2 | null {
@@ -36,8 +35,8 @@ function readConsent(): ConsentV2 | null {
     const parsed = JSON.parse(raw) as Partial<ConsentV2>;
     if (parsed.v === 2) return parsed as ConsentV2;
     // v1 migration
-    if (raw === "accepted") return { v: 2, necessary: true, analytics: false, marketing: true };
-    if (raw === "rejected")  return { v: 2, necessary: true, analytics: false, marketing: false };
+    if (raw === "accepted") return { v: 2, necessary: true, analytics: true };
+    if (raw === "rejected")  return { v: 2, necessary: true, analytics: false };
   } catch { /* ignore */ }
   return null;
 }
@@ -45,8 +44,7 @@ function readConsent(): ConsentV2 | null {
 function writeConsent(c: ConsentV2) {
   try { localStorage.setItem(STORAGE_KEY, JSON.stringify(c)); } catch { /* ignore */ }
   if (typeof window !== "undefined") {
-    (window as Window & { __consent?: { marketing: boolean; analytics: boolean } }).__consent = {
-      marketing: c.marketing,
+    (window as Window & { __consent?: { analytics: boolean } }).__consent = {
       analytics: c.analytics,
     };
   }
@@ -119,14 +117,12 @@ type BannerCopy = {
   necessaryDesc: string;
   analyticsTitle: string;
   analyticsDesc: string;
-  marketingTitle: string;
-  marketingDesc: string;
   rejectAllDetail: string;
   saveChoice: string;
 };
 
 const DE: BannerCopy = {
-  body: "Wir nutzen Cookies für Analyse und Werbemessung.",
+  body: "Wir nutzen Cookies für Authentifizierung und anonymisierte Nutzungsanalyse.",
   privacyLink: "Datenschutzerklärung",
   rejectAll: "Alle ablehnen",
   settings: "Einstellungen",
@@ -136,15 +132,13 @@ const DE: BannerCopy = {
   necessaryTitle: "Notwendig",
   necessaryDesc: "Session-Management, Authentifizierung, Sprachpräferenz. Immer aktiv.",
   analyticsTitle: "Analyse",
-  analyticsDesc: "Anonymisierte Auswertung wie Glev genutzt wird — hilft uns, die App zu verbessern.",
-  marketingTitle: "Marketing",
-  marketingDesc: "Meta-Pixel und Facebook CAPI zur Messung der Werbewirkung.",
+  analyticsDesc: "Google Analytics und Vercel Analytics zur anonymisierten Nutzungsanalyse.",
   rejectAllDetail: "Alle ablehnen",
   saveChoice: "Auswahl speichern",
 };
 
 const EN: BannerCopy = {
-  body: "We use cookies for analytics and advertising measurement.",
+  body: "We use cookies for authentication and anonymised usage analysis.",
   privacyLink: "Privacy policy",
   rejectAll: "Reject all",
   settings: "Manage settings",
@@ -154,9 +148,7 @@ const EN: BannerCopy = {
   necessaryTitle: "Necessary",
   necessaryDesc: "Session management, authentication, language preference. Always active.",
   analyticsTitle: "Analytics",
-  analyticsDesc: "Anonymised usage data that helps us improve the app.",
-  marketingTitle: "Marketing",
-  marketingDesc: "Meta Pixel and Facebook CAPI for advertising measurement.",
+  analyticsDesc: "Google Analytics and Vercel Analytics for anonymised usage analysis.",
   rejectAllDetail: "Reject all",
   saveChoice: "Save my choices",
 };
@@ -168,7 +160,6 @@ export default function CookieBanner({ forceVisible = false }: { forceVisible?: 
   const [visible, setVisible] = useState(forceVisible);
   const [showDetails, setShowDetails] = useState(false);
   const [analytics, setAnalytics] = useState(false);
-  const [marketing, setMarketing] = useState(false);
 
   useEffect(() => {
     if (forceVisible) return;
@@ -181,9 +172,9 @@ export default function CookieBanner({ forceVisible = false }: { forceVisible?: 
   if (Capacitor.isNativePlatform()) return null;
   if (!visible) return null;
 
-  const acceptAll = () => { writeConsent({ v: 2, necessary: true, analytics: true, marketing: true }); setVisible(false); };
-  const rejectAll = () => { writeConsent({ v: 2, necessary: true, analytics: false, marketing: false }); setVisible(false); };
-  const saveChoice = () => { writeConsent({ v: 2, necessary: true, analytics, marketing }); setVisible(false); };
+  const acceptAll = () => { writeConsent({ v: 2, necessary: true, analytics: true }); setVisible(false); };
+  const rejectAll = () => { writeConsent({ v: 2, necessary: true, analytics: false }); setVisible(false); };
+  const saveChoice = () => { writeConsent({ v: 2, necessary: true, analytics }); setVisible(false); };
 
   return (
     <div
@@ -235,11 +226,6 @@ export default function CookieBanner({ forceVisible = false }: { forceVisible?: 
             title={C.analyticsTitle}
             description={C.analyticsDesc}
             checked={analytics} onChange={setAnalytics}
-          />
-          <CategoryRow
-            title={C.marketingTitle}
-            description={C.marketingDesc}
-            checked={marketing} onChange={setMarketing}
           />
 
           <div style={{ display: "flex", gap: 8, marginTop: 16, justifyContent: "flex-end" }}>

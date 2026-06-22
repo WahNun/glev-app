@@ -34,10 +34,6 @@ function PreviewProCTA({ block = true }: { block?: boolean }) {
     setError(null);
     setLoading(true);
 
-    if (typeof window !== "undefined" && (window as unknown as { fbq?: (...args: unknown[]) => void }).fbq) {
-      (window as unknown as { fbq: (...args: unknown[]) => void }).fbq("track", "InitiateCheckout");
-    }
-
     let email: string | undefined;
     try {
       if (supabase) {
@@ -126,12 +122,6 @@ const SECTION_WRAP_NARROW: React.CSSProperties = {
 
 function PreviewProContent() {
   const t = useTranslations("previewPro");
-
-  useEffect(() => {
-    if (typeof window !== "undefined" && (window as unknown as { fbq?: (...args: unknown[]) => void }).fbq) {
-      (window as unknown as { fbq: (...args: unknown[]) => void }).fbq("trackCustom", "ViewProTrialPage");
-    }
-  }, []);
 
   return (
     <main
@@ -238,11 +228,6 @@ function PreviewProContent() {
                 onMouseLeave={(e) => {
                   (e.currentTarget as HTMLAnchorElement).style.background = "transparent";
                   (e.currentTarget as HTMLAnchorElement).style.borderColor = "rgba(255,255,255,0.18)";
-                }}
-                onClick={() => {
-                  if (typeof window !== "undefined" && (window as unknown as { fbq?: (...args: unknown[]) => void }).fbq) {
-                    (window as unknown as { fbq: (...args: unknown[]) => void }).fbq("trackCustom", "ClickFreeTrialCTA");
-                  }
                 }}
               >
                 7 Tage kostenlos testen
@@ -463,11 +448,6 @@ function PreviewProContent() {
                 minHeight: 50,
                 boxSizing: "border-box",
                 width: "100%",
-              }}
-              onClick={() => {
-                if (typeof window !== "undefined" && (window as unknown as { fbq?: (...args: unknown[]) => void }).fbq) {
-                  (window as unknown as { fbq: (...args: unknown[]) => void }).fbq("trackCustom", "ClickFreeTrialCTA");
-                }
               }}
             >
               7 Tage kostenlos testen

@@ -35,10 +35,6 @@ function PreviewProCTA({ block = true }: { block?: boolean }) {
     setError(null);
     setLoading(true);
 
-    if (typeof window !== "undefined" && (window as unknown as { fbq?: (...args: unknown[]) => void }).fbq) {
-      (window as unknown as { fbq: (...args: unknown[]) => void }).fbq("track", "InitiateCheckout");
-    }
-
     let email: string | undefined;
     try {
       if (supabase) {
@@ -127,12 +123,6 @@ const SECTION_WRAP_NARROW: React.CSSProperties = {
 
 function PreviewProContent() {
   const t = useTranslations("previewPro");
-
-  useEffect(() => {
-    if (typeof window !== "undefined" && (window as unknown as { fbq?: (...args: unknown[]) => void }).fbq) {
-      (window as unknown as { fbq: (...args: unknown[]) => void }).fbq("trackCustom", "ViewProPagePreview");
-    }
-  }, []);
 
   return (
     <main

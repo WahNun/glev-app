@@ -34,10 +34,6 @@ function PreviewBetaCTA({ block = true }: { block?: boolean }) {
     setError(null);
     setLoading(true);
 
-    if (typeof window !== "undefined" && (window as unknown as { fbq?: (...args: unknown[]) => void }).fbq) {
-      (window as unknown as { fbq: (...args: unknown[]) => void }).fbq("track", "InitiateCheckout");
-    }
-
     let email: string | undefined;
     try {
       if (supabase) {
@@ -126,12 +122,6 @@ const SECTION_WRAP_NARROW: React.CSSProperties = {
 
 function PreviewBetaContent() {
   const t = useTranslations("previewBeta");
-
-  useEffect(() => {
-    if (typeof window !== "undefined" && (window as unknown as { fbq?: (...args: unknown[]) => void }).fbq) {
-      (window as unknown as { fbq: (...args: unknown[]) => void }).fbq("trackCustom", "ViewBetaPagePreview");
-    }
-  }, []);
 
   return (
     <main
