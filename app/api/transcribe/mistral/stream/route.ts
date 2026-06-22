@@ -2,6 +2,8 @@ import { NextRequest } from "next/server";
 import { getMistralClient } from "@/lib/ai/mistralClient";
 import { authedClient } from "@/app/api/insulin/_helpers";
 import { isSTTRateLimited, addSTTRateLimitHit, STT_MIN_BLOB_BYTES } from "@/lib/ai/sttRateLimiter";
+import { EngineTrace } from "@/lib/engine/trace";
+import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -126,6 +128,9 @@ export async function POST(req: NextRequest) {
   }
 
   let file: Blob;
+  let platformMime = "";
+  let converted = false;
+  let conversionMs: number | undefined;
   try {
     const form = await req.formData();
     const raw = form.get("audio");
@@ -139,6 +144,10 @@ export async function POST(req: NextRequest) {
       );
     }
     file = raw;
+    platformMime = (form.get("platform_mime") as string | null) ?? file.type;
+    converted    = form.get("converted") === "true";
+    const cmRaw  = form.get("conversion_ms");
+    conversionMs = cmRaw ? Number(cmRaw) : undefined;
   } catch {
     return new Response(
       `data: ${JSON.stringify({ type: "error", error: "Failed to parse form data" })}\n\n`,
@@ -167,6 +176,26 @@ export async function POST(req: NextRequest) {
   // "audio/webm;codecs=opus" with error 3310. Bare "audio/webm" is accepted.
   const cleanMime = file.type.split(";")[0];
 
+  let adminSb;
+  try { adminSb = getSupabaseAdmin(); } catch { /* no-op */ }
+  const traceEnv = adminSb
+    ? {
+        user_id:     auth.user.id,
+        supabase:    adminSb,
+        app_version: process.env.npm_package_version ?? "unknown",
+        env:         process.env.VERCEL_ENV ?? process.env.NODE_ENV ?? "unknown",
+      }
+    : null;
+  const trace = traceEnv
+    ? new EngineTrace("voice_intent", {
+        platform_mime: platformMime || file.type,
+        upload_mime:   file.type,
+        audio_bytes:   file.size,
+        converted,
+        ...(converted && conversionMs !== undefined ? { conversion_ms: conversionMs } : {}),
+      })
+    : null;
+
   const stream = new ReadableStream({
     async start(controller) {
       const enc = new TextEncoder();
@@ -186,11 +215,21 @@ export async function POST(req: NextRequest) {
         });
 
         await processTranscriptionStream(eventStream, sendEvent);
+        const sttLatency = Date.now() - t1;
         // eslint-disable-next-line no-console
         console.log("[STT stream] done · total:", Date.now() - t0, "ms");
+        if (trace && traceEnv) {
+          trace.recordStep("voxtral_stt_stream", { success: true, latency_ms: sttLatency, detail: { model: "voxtral-mini-latest" } });
+          void trace.persist(traceEnv);
+        }
       } catch (e) {
         // eslint-disable-next-line no-console
         console.log("[STT stream] FAILED after", Date.now() - t0, "ms:", e instanceof Error ? e.message : e);
+        if (trace && traceEnv) {
+          trace.setError(e instanceof Error ? e.message : String(e));
+          trace.recordStep("voxtral_stt_stream", { success: false, detail: { error: String(e) } });
+          void trace.persist(traceEnv);
+        }
         if (isMistral429(e)) {
           const retry_after_sec = getRetryAfterSec(e);
           sendEvent({ type: "error", error: "Zu viele Anfragen. Bitte kurz warten.", retry_after_sec });

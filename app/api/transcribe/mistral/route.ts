@@ -106,11 +106,19 @@ export async function POST(req: NextRequest) {
     // "audio/webm;codecs=opus" with error 3310. Bare "audio/webm" is accepted.
     const cleanMime = file.type.split(";")[0];
 
+    // Client-side recording metadata for trace observability.
+    const platformMime = (form.get("platform_mime") as string | null) ?? file.type;
+    const converted    = form.get("converted") === "true";
+    const convMsRaw    = form.get("conversion_ms");
+    const conversionMs = convMsRaw ? Number(convMsRaw) : undefined;
+
     const trace = traceEnv
       ? new EngineTrace("voice_intent", {
-          audio_bytes_size: file.size,
-          mime_type:        file.type,
-          clean_mime:       cleanMime,
+          platform_mime: platformMime,
+          upload_mime:   file.type,
+          audio_bytes:   file.size,
+          converted,
+          ...(converted && conversionMs !== undefined ? { conversion_ms: conversionMs } : {}),
         })
       : null;
 

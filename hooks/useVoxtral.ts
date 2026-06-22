@@ -35,6 +35,7 @@ import { useRef, useState, useCallback, useEffect } from "react";
  */
 
 import { ERROR_MESSAGES } from "@/lib/ai/errors";
+import { convertToWav } from "@/lib/audio/wavEncoder";
 
 /**
  * Sentinel returned via onError when the OS microphone permission is denied.
@@ -42,6 +43,30 @@ import { ERROR_MESSAGES } from "@/lib/ai/errors";
  * instead of the generic red error toast.
  */
 export const MIC_PERM_DENIED = "MIC_PERM_DENIED" as const;
+
+type RecordingFormat = {
+  mimeType: string;
+  fileExt: "m4a" | "webm";
+  needsConversion: boolean;
+};
+
+/**
+ * Pick the best recording format for the current platform.
+ * iOS Safari/WKWebView records audio/mp4 (AAC) natively — Voxtral-supported, no conversion needed.
+ * Chrome/Firefox/Android record webm/opus which must be converted to WAV before upload.
+ */
+function pickRecordingFormat(): RecordingFormat {
+  if (typeof MediaRecorder !== "undefined" && MediaRecorder.isTypeSupported("audio/mp4")) {
+    return { mimeType: "audio/mp4", fileExt: "m4a", needsConversion: false };
+  }
+  if (typeof MediaRecorder !== "undefined" && MediaRecorder.isTypeSupported("audio/webm;codecs=opus")) {
+    return { mimeType: "audio/webm;codecs=opus", fileExt: "webm", needsConversion: true };
+  }
+  if (typeof MediaRecorder !== "undefined" && MediaRecorder.isTypeSupported("audio/webm")) {
+    return { mimeType: "audio/webm", fileExt: "webm", needsConversion: true };
+  }
+  throw new Error("No supported MediaRecorder format on this browser");
+}
 
 const STT_STREAM_ROUTE = "/api/transcribe/mistral/stream";
 const STT_REST_ROUTE = "/api/transcribe/mistral";
@@ -95,6 +120,18 @@ export interface UseVoxtralReturn {
  *   started a new recording and the stale in-flight request must not
  *   overwrite the freshly cleared error state).
  */
+type TranscribeMetadata = {
+  platformMime: string;
+  converted: boolean;
+  conversionMs?: number;
+};
+
+function uploadFilename(mimeType: string): string {
+  if (mimeType.includes("mp4") || mimeType.includes("m4a")) return "audio.m4a";
+  if (mimeType.includes("wav")) return "audio.wav";
+  return "audio.webm";
+}
+
 export async function transcribeWithFallback(
   blob: Blob,
   mimeType: string,
@@ -103,20 +140,28 @@ export async function transcribeWithFallback(
   onError?: (err: string) => void,
   signal?: AbortSignal,
   onRateLimit?: (retryAfterSec: number) => void,
+  metadata?: TranscribeMetadata,
 ): Promise<void> {
   // If already aborted before we start, exit immediately and silently.
   if (signal?.aborted) return;
 
-  // Derive correct extension from actual mimeType so Mistral can decode it.
-  // iOS records audio/mp4 — sending it as "recording.webm" causes a 400.
-  const ext = mimeType.includes("mp4") ? "m4a" : "webm";
-  const filename = `recording.${ext}`;
+  const filename = uploadFilename(mimeType);
+
+  const appendMetadata = (form: FormData) => {
+    if (!metadata) return;
+    form.append("platform_mime", metadata.platformMime);
+    form.append("converted", String(metadata.converted));
+    if (metadata.conversionMs !== undefined) {
+      form.append("conversion_ms", String(metadata.conversionMs));
+    }
+  };
 
   // ── Attempt 1: SSE streaming ────────────────────────────────────────────
   let ssePropagatedRateLimit = false;
   try {
     const form = new FormData();
     form.append("audio", blob, filename);
+    appendMetadata(form);
 
     const res = await fetch(STT_STREAM_ROUTE, { method: "POST", body: form, signal });
 
@@ -179,6 +224,7 @@ export async function transcribeWithFallback(
   try {
     const form = new FormData();
     form.append("audio", blob, filename);
+    appendMetadata(form);
 
     const res = await fetch(STT_REST_ROUTE, { method: "POST", body: form, signal });
     if (!res.ok) {
@@ -218,7 +264,7 @@ export function useVoxtral({ onTranscript, onPartialTranscript, onError }: UseVo
   const recorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const streamRef = useRef<MediaStream | null>(null);
-  const mimeTypeRef = useRef<string>("");
+  const formatRef = useRef<RecordingFormat | null>(null);
   /**
    * Holds the AbortController for the currently in-flight transcribeWithFallback
    * call. Aborted by startListening() before any new recording begins, so a
@@ -305,34 +351,34 @@ export function useVoxtral({ onTranscript, onPartialTranscript, onError }: UseVo
       streamRef.current = mediaStream;
       chunksRef.current = [];
 
-      // Prefer webm/opus (Chrome/Android); fall back to mp4 (iOS Safari /
-      // WKWebView which only supports AAC-in-MP4). Empty string = browser default.
-      const mimeType = MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
-        ? "audio/webm;codecs=opus"
-        : MediaRecorder.isTypeSupported("audio/webm")
-          ? "audio/webm"
-          : MediaRecorder.isTypeSupported("audio/mp4")
-            ? "audio/mp4"
-            : "";
-      mimeTypeRef.current = mimeType;
+      // iOS Safari/WKWebView records audio/mp4 (AAC) natively — no conversion needed.
+      // Chrome/Android records webm/opus and we convert to WAV client-side before upload.
+      let format: RecordingFormat;
+      try {
+        format = pickRecordingFormat();
+      } catch {
+        onError?.("Kein unterstütztes Audio-Format gefunden.");
+        mediaStream.getTracks().forEach((t) => t.stop());
+        return;
+      }
+      formatRef.current = format;
 
-      const recorder = new MediaRecorder(mediaStream, mimeType ? { mimeType } : {});
+      const recorder = new MediaRecorder(mediaStream, { mimeType: format.mimeType });
       recorderRef.current = recorder;
 
       recorder.ondataavailable = (e) => {
         if (e.data.size > 0) chunksRef.current.push(e.data);
       };
 
-      recorder.onstop = () => {
+      recorder.onstop = async () => {
         // Stop all tracks so the mic indicator light goes off
         streamRef.current?.getTracks().forEach((t) => t.stop());
         streamRef.current = null;
 
         if (chunksRef.current.length === 0) return;
 
-        const blob = new Blob(chunksRef.current, {
-          type: mimeTypeRef.current || "audio/webm",
-        });
+        const fmt = formatRef.current ?? { mimeType: "audio/webm", fileExt: "webm" as const, needsConversion: true };
+        const recorded = new Blob(chunksRef.current, { type: fmt.mimeType });
         chunksRef.current = [];
 
         // Create a fresh AbortController for this transcription run so it can
@@ -340,6 +386,27 @@ export function useVoxtral({ onTranscript, onPartialTranscript, onError }: UseVo
         const ac = new AbortController();
         transcribeAbortRef.current = ac;
         setIsTranscribing(true);
+
+        let uploadBlob: Blob = recorded;
+        let uploadMime: string = fmt.mimeType;
+        let conversionMs: number | undefined;
+
+        if (fmt.needsConversion) {
+          try {
+            const t0conv = Date.now();
+            uploadBlob = await convertToWav(recorded);
+            conversionMs = Date.now() - t0conv;
+            uploadMime = "audio/wav";
+            // eslint-disable-next-line no-console
+            console.log(`[voice] converted to wav in ${conversionMs}ms`);
+          } catch (convErr) {
+            // Conversion failed — fall back to raw webm upload
+            // eslint-disable-next-line no-console
+            console.warn("[voice] WAV conversion failed, uploading raw blob:", convErr);
+            uploadBlob = recorded;
+            uploadMime = fmt.mimeType;
+          }
+        }
 
         // 20s safety timeout: if Voxtral never responds, abort and surface a
         // user-friendly error. The check `!ac.signal.aborted` ensures only one
@@ -353,13 +420,18 @@ export function useVoxtral({ onTranscript, onPartialTranscript, onError }: UseVo
         }, STT_TIMEOUT_MS);
 
         void transcribeWithFallback(
-          blob,
-          mimeTypeRef.current,
+          uploadBlob,
+          uploadMime,
           onTranscript,
           onPartialTranscript,
           onError,
           ac.signal,
           handleRateLimit,
+          {
+            platformMime: fmt.mimeType,
+            converted:    uploadMime === "audio/wav",
+            conversionMs,
+          },
         ).finally(() => {
           // Clear the timeout on any outcome (success, error, or abort) so
           // it can never fire after the transcription has already settled.
