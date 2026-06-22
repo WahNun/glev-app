@@ -561,6 +561,9 @@ export function useGlevAI(opts?: {
         ac.abort();
       }, CLIENT_ABORT_MS);
 
+      let sentenceBuf = "";
+      let streamEndedNormally = false;
+      const MIN_TTS_SENTENCE = 20;
       try {
         const res = await fetch("/api/ai/chat", {
           method: "POST",
@@ -609,9 +612,6 @@ export function useGlevAI(opts?: {
         // Streaming TTS: accumulate tokens into sentences and dispatch each
         // as soon as the sentence boundary is detected so TTS can start
         // fetching audio in parallel with the continued LLM stream.
-        let sentenceBuf = "";
-        let streamEndedNormally = false;
-        const MIN_TTS_SENTENCE = 20;
         while (!done) {
           const { value, done: d } = await reader.read();
           done = d;
