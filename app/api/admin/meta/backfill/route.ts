@@ -1,6 +1,6 @@
 // POST /api/admin/meta/backfill
 // Fetcht alle Leads von der Meta-Seite und provisioniert fehlende Einträge.
-// Geschützt via ADMIN_API_SECRET Header.
+// Geschützt via META_BACKFILL_AUTH Bearer-Token (dediziert für den Tarn-Worker).
 
 import { createClient } from "@supabase/supabase-js";
 import { provisionMetaLead } from "@/lib/meta-lead-provisioning";
@@ -65,10 +65,10 @@ export async function GET() {
 
 export async function POST(req: Request) {
   try {
-    const ADMIN_SECRET = process.env.ADMIN_API_SECRET ?? "";
+    const META_BACKFILL_AUTH = process.env.META_BACKFILL_AUTH ?? "";
     const authHeader = req.headers.get("authorization") ?? "";
-    const secret = authHeader.replace(/^Bearer\s+/i, "").trim();
-    if (!ADMIN_SECRET || secret !== ADMIN_SECRET) {
+    const token = authHeader.replace(/^Bearer\s+/i, "").trim();
+    if (!META_BACKFILL_AUTH || !token || token !== META_BACKFILL_AUTH) {
       return Response.json({ error: "unauthorized" }, { status: 401 });
     }
 
