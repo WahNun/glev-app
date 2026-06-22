@@ -19,6 +19,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
     { url: "https://glev.app/contact", lastModified: LAST_MOD, changeFrequency: "yearly", priority: 0.4 },
     { url: "https://glev.app/support", lastModified: LAST_MOD, changeFrequency: "monthly", priority: 0.6 },
     { url: "https://glev.app/legal", lastModified: LAST_MOD, changeFrequency: "yearly", priority: 0.3 },
+    { url: "https://glev.app/legal/eula", lastModified: LAST_MOD, changeFrequency: "yearly", priority: 0.3 },
     { url: "https://glev.app/login", lastModified: LAST_MOD, changeFrequency: "yearly", priority: 0.2 },
   ];
 }

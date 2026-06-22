@@ -1128,6 +1128,14 @@ export default function PreviewHome() {
             >
               {t("footer_impressum")}
             </Link>
+            {" · "}
+            <Link
+              href="/legal/eula"
+              style={{ color: "inherit", textDecoration: "none" }}
+              aria-label="End User License Agreement (EULA)"
+            >
+              EULA
+            </Link>
           </span>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
