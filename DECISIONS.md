@@ -2,6 +2,7 @@
 
 ## Decisions
 
+| 2026-06-22 | Voxtral 3310 final via Hybrid m4a/WAV | [VOICE] iOS recordet m4a nativ (Voxtral-supported, kein Conversion). Non-iOS konvertiert webm/opus zu WAV (16 kHz mono 16-bit PCM little-endian) client-side vor Upload via Web Audio API + OfflineAudioContext. Mistral Support 2026-06-22 bestätigte alle Formate + empfahl WAV als safest path. MIME-Strip aus PR #74 ist nicht relevant (laut Mistral), kann bleiben. |
 | 2026-06-22 | PR #75 Voice-Streaming Scope-Fix | [VOICE] try-block-scoped Vars rausgezogen für finally-Access. Voice-Loop komplett. |
 | 2026-06-21 | Voxtral Audio-Format-Konversion Hotfix | [BUGFIX] Voxtral konnte WebM-Opus nicht dekodieren (Status 400, code 3310). engine_traces zeigten 6/6 voice_intent-Fails in 2h. Fix: server-side Konversion von WebM zu 16kHz Mono WAV via @ffmpeg/ffmpeg (ffmpeg-wasm, CDN-geladen, module-level Cache) vor dem Mistral-Call. Betrifft beide Routes: /api/transcribe/mistral und /api/transcribe/mistral/stream. Trace-Step "format_conversion" annotiert input/output MIME + Latency. |
 | 2026-06-21 | Bolus-Manuell-Input Komma-Fix | [BUGFIX] HTML number-Input akzeptiert kein Komma in DE-Locale. type="text" + inputMode="decimal" + Komma-zu-Punkt-Parsing. Betroffen: manualDose (engine/page), MealEntryLightExpand (8 Inputs), ManualEntryModal (5 Inputs), SnapSlider (Edit-Mode). parseNum/num/resolveActiveDose normalisieren Komma via replace(",",".") vor parseFloat. Plus Audit: glucose-Inputs korrekt auf inputMode="numeric". |
