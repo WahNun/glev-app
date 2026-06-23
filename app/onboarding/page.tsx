@@ -16,8 +16,10 @@
  * so each screen stays focused and the file diff stays readable.
  */
 
-import { Suspense, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { supabase } from "@/lib/supabase";
+import { trackSignupConversion } from "@/lib/analytics/signupConversion";
 import WelcomeStep from "./welcome";
 import AboutYouStep from "./about-you";
 import LogMealStep from "./log-meal";
@@ -41,6 +43,13 @@ function OnboardingFlow() {
   const router = useRouter();
   const params = useSearchParams();
   const [submitting, setSubmitting] = useState(false);
+  const [userId, setUserId] = useState<string | null>(null);
+
+  useEffect(() => {
+    supabase?.auth.getUser().then((res) => {
+      if (res.data.user?.id) setUserId(res.data.user.id);
+    });
+  }, []);
   const raw = parseInt(params.get("step") ?? "0", 10);
   const step = (Number.isFinite(raw) ? Math.min(8, Math.max(0, raw)) : 0) as Step;
 
@@ -63,6 +72,7 @@ function OnboardingFlow() {
     } catch {
       /* swallow */
     }
+    if (userId) trackSignupConversion(userId);
     if (typeof window !== "undefined") {
       window.location.href = "/dashboard";
     }
