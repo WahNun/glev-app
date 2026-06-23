@@ -72,7 +72,19 @@ function OnboardingFlow() {
     } catch {
       /* swallow */
     }
-    if (userId) trackSignupConversion(userId);
+    if (userId) {
+      trackSignupConversion(userId);
+      // Server-side Meta CAPI via Tarn-Worker (fire-and-forget, deduped)
+      const dedupKey = `glev_meta_signup_${userId}`;
+      if (!localStorage.getItem(dedupKey)) {
+        localStorage.setItem(dedupKey, Date.now().toString());
+        fetch('/api/internal/signup-conversion', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ eventId: `signup-${userId}-${Date.now()}` }),
+        }).catch((err) => console.warn('[meta-signup] fetch failed:', err));
+      }
+    }
     if (typeof window !== "undefined") {
       window.location.href = "/dashboard";
     }
