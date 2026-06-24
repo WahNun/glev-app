@@ -2,6 +2,7 @@
 
 ## Decisions
 
+| 2026-06-23 | Soro Blog SEO Phase 1 — RSS-Integration | [SEO] RSS-Feed-URL: app.trysoro.com/api/rss/3e94583a-baad-4296-a2ef-e7d445982516. Sitemap dynamisch erweitert (async + Soro-Articles mit pubDate), generateMetadata + generateStaticParams für /blog/[slug]. Cache: 1h in-memory + Next.js revalidate:3600. Phase 2 (Search Console Submit + interne Verlinkung) folgt nach Apple Re-Review. |
 | 2026-06-22 | Voxtral Pre-Upload-Validation Fallback | [VOICE] iOS-Safari-MediaRecorder produziert gelegentlich corrupte m4a-Container. Pre-Upload local decodeAudioData-Test fängt das ab → automatische WAV-Conversion bei Decode-Failure. Production-Traces zeigten ~50% Failure-Rate bei iOS m4a vor diesem Fix. Trace-Layer um local_decode_validated, fell_back_to_wav, validation_ms erweitert. |
 | 2026-06-22 | Voxtral 3310 final via Hybrid m4a/WAV | [VOICE] iOS recordet m4a nativ (Voxtral-supported, kein Conversion). Non-iOS konvertiert webm/opus zu WAV (16 kHz mono 16-bit PCM little-endian) client-side vor Upload via Web Audio API + OfflineAudioContext. Mistral Support 2026-06-22 bestätigte alle Formate + empfahl WAV als safest path. MIME-Strip aus PR #74 ist nicht relevant (laut Mistral), kann bleiben. |
 | 2026-06-22 | PR #75 Voice-Streaming Scope-Fix | [VOICE] try-block-scoped Vars rausgezogen für finally-Access. Voice-Loop komplett. |
