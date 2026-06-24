@@ -33,13 +33,14 @@ import { adminClient } from "./supabase";
 import * as llu from "./llu";
 import * as nightscout from "./nightscout";
 import * as appleHealth from "./appleHealth";
+import * as dexcom from "./dexcom";
 import type { Reading } from "./llu";
 import { EngineTrace } from "@/lib/engine/trace";
 
 export type { Reading };
-export type CgmSource = "llu" | "nightscout" | "apple_health";
+export type CgmSource = "llu" | "nightscout" | "apple_health" | "dexcom";
 
-const VALID_SOURCES = new Set<CgmSource>(["llu", "nightscout", "apple_health"]);
+const VALID_SOURCES = new Set<CgmSource>(["llu", "nightscout", "apple_health", "dexcom"]);
 
 /**
  * Determine which CGM source a user is using. Cheap single-row select;
@@ -84,6 +85,10 @@ export async function getHistory(
   }
   if (source === "apple_health") {
     const r = await appleHealth.getHistory(userId);
+    return { ...r, source };
+  }
+  if (source === "dexcom") {
+    const r = await dexcom.getHistory(userId);
     return { ...r, source };
   }
   const r = await llu.getHistory(userId);
@@ -156,6 +161,10 @@ export async function getLatest(
   }
   if (source === "apple_health") {
     const r = await appleHealth.getLatest(userId);
+    return { ...r, source };
+  }
+  if (source === "dexcom") {
+    const r = await dexcom.getLatest(userId);
     return { ...r, source };
   }
   const r = await llu.getLatest(userId);

@@ -29,7 +29,7 @@ import { adminClient } from "@/lib/cgm/supabase";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const ALLOWED = new Set(["llu", "nightscout", "apple_health"]);
+const ALLOWED = new Set(["llu", "nightscout", "apple_health", "dexcom"]);
 
 export async function GET(req: NextRequest) {
   const { user, error: authErr } = await authenticate(req);
@@ -73,7 +73,7 @@ export async function PATCH(req: NextRequest) {
     next = body.source;
   } else {
     return NextResponse.json(
-      { error: "source must be one of 'llu' | 'nightscout' | 'apple_health' or null" },
+      { error: "source must be one of 'llu' | 'nightscout' | 'apple_health' | 'dexcom' or null" },
       { status: 400 }
     );
   }

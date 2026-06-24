@@ -32,6 +32,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { adminClient } from "@/lib/cgm/supabase";
 import * as llu from "@/lib/cgm/llu";
 import * as nightscout from "@/lib/cgm/nightscout";
+import * as dexcom from "@/lib/cgm/dexcom";
 import type { Reading } from "@/lib/cgm/llu";
 import { parseLluTs } from "@/lib/time";
 import { fillNearbyChecks } from "@/lib/mealTimelineChecks";
@@ -43,7 +44,7 @@ export const dynamic = "force-dynamic";
 // if a future source returns more we don't want a runaway upsert.
 const MAX_ROWS_PER_USER = 500;
 
-type PollSource = "llu" | "nightscout";
+type PollSource = "llu" | "nightscout" | "dexcom";
 
 function unauthorized() {
   return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -80,16 +81,26 @@ export interface PollOneDeps {
   fillFn?: typeof fillNearbyChecks;
 }
 
+function resolveGetHistory(
+  source: PollSource
+): (userId: string) => Promise<{ history: Reading[]; current?: Reading | null }> {
+  if (source === "nightscout") return nightscout.getHistory;
+  if (source === "dexcom")    return dexcom.getHistory;
+  return llu.getHistory;
+}
+
 export async function pollOne(
   userId: string,
   source: PollSource,
   deps?: PollOneDeps,
 ): Promise<{ ok: true; inserted: number; source: PollSource } | { ok: false; source: PollSource; error: string }> {
   try {
-    const getHistoryFn = deps?.getHistory ?? (source === "llu" ? llu.getHistory : nightscout.getHistory);
+    const getHistoryFn = deps?.getHistory ?? resolveGetHistory(source);
     const out = await getHistoryFn(userId);
     const history = out?.history || [];
-    const current = source === "llu" ? out?.current ?? null : null;
+    // LLU and Dexcom expose a distinct "current" reading (live connection data);
+    // Nightscout's current == history[0], so we skip it to avoid duplicate rows.
+    const current = (source === "llu" || source === "dexcom") ? out?.current ?? null : null;
     if (history.length === 0 && !current) return { ok: true, inserted: 0, source };
 
     const rows: SampleRow[] = [];
@@ -156,7 +167,7 @@ async function handle(req: NextRequest): Promise<NextResponse> {
   const [credsRes, profilesRes] = await Promise.all([
     admin
       .from("cgm_credentials")
-      .select("user_id, llu_email"),
+      .select("user_id, llu_email, dexcom_username"),
     admin
       .from("profiles")
       .select("user_id, cgm_source, nightscout_url"),
@@ -172,26 +183,30 @@ async function handle(req: NextRequest): Promise<NextResponse> {
   }
 
   type ProfileRow = { user_id: string; cgm_source: string | null; nightscout_url: string | null };
-  type CredRow    = { user_id: string; llu_email: string | null };
+  type CredRow    = { user_id: string; llu_email: string | null; dexcom_username: string | null };
 
   const profileByUser = new Map<string, ProfileRow>();
   for (const p of (profilesRes.data ?? []) as ProfileRow[]) {
     profileByUser.set(p.user_id, p);
   }
-  const lluUsers = new Set<string>();
+  const lluUsers    = new Set<string>();
+  const dexcomUsers = new Set<string>();
   for (const c of (credsRes.data ?? []) as CredRow[]) {
-    if (c.llu_email) lluUsers.add(c.user_id);
+    if (c.llu_email)       lluUsers.add(c.user_id);
+    if (c.dexcom_username) dexcomUsers.add(c.user_id);
   }
 
-  // Resolve effective source per user — same rule as lib/cgm/index.ts
-  // resolveSource(): explicit cgm_source wins, otherwise nightscout_url
-  // presence picks Nightscout, otherwise legacy LLU.
+  // Resolve effective source per user — mirrors lib/cgm/index.ts resolveSource().
   const toPoll: { userId: string; source: PollSource }[] = [];
   const seen = new Set<string>();
   for (const p of profileByUser.values()) {
     seen.add(p.user_id);
     const explicit = p.cgm_source;
     if (explicit === "apple_health") continue;
+    if (explicit === "dexcom" && dexcomUsers.has(p.user_id)) {
+      toPoll.push({ userId: p.user_id, source: "dexcom" });
+      continue;
+    }
     if (explicit === "nightscout" && p.nightscout_url) {
       toPoll.push({ userId: p.user_id, source: "nightscout" });
       continue;
