@@ -13,62 +13,231 @@ import { SettingsSection, SettingsRow, ConnectedDot } from "@/components/Setting
 const ACCENT = "#4F6EF7", BORDER = "var(--border)";
 const iconProps = { width: 16, height: 16, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: 2, strokeLinecap: "round" as const, strokeLinejoin: "round" as const };
 
-const DEXCOM_KB_URL = "https://nightscout.pro/knowledge-base/dexcom";
+type DexcomCardProps = { onConnected: () => void; onDisconnected: () => void; isConnected: boolean };
 
-function DexcomSheetBody() {
-  const t = useTranslations("settings_cgm");
-  const openKb = () => {
-    try { window.open(DEXCOM_KB_URL, "_blank", "noopener,noreferrer"); } catch {}
+function DexcomDirectCard({ onConnected, onDisconnected, isConnected }: DexcomCardProps) {
+  const t = useTranslations("cgm");
+  const [region, setRegion] = useState<"eu" | "us">("eu");
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [testStatus, setTestStatus] = useState<"idle" | "testing" | "ok" | "error">("idle");
+  const [testMsg, setTestMsg] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [disconnecting, setDisconnecting] = useState(false);
+
+  const inputStyle: React.CSSProperties = {
+    width: "100%",
+    padding: "10px 12px",
+    borderRadius: 10,
+    border: `1px solid ${BORDER}`,
+    background: "var(--surface-soft)",
+    color: "var(--text-strong)",
+    fontSize: 14,
+    outline: "none",
+    boxSizing: "border-box",
   };
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-      <p style={{ fontSize: 14, color: "var(--text-body)", lineHeight: 1.6, margin: 0 }}>
-        {t("sheet_dexcom_body")}
-      </p>
 
-      {/* Nightscout KB callout */}
-      <div style={{
-        borderRadius: 12,
-        border: "1px solid var(--border)",
-        background: "var(--surface-soft)",
-        padding: "14px 16px",
-        display: "flex", flexDirection: "column", gap: 10,
-      }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <svg width={15} height={15} viewBox="0 0 24 24" fill="none" stroke={ACCENT} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-            <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
-            <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
-          </svg>
-          <span style={{ fontSize: 13, fontWeight: 600, color: "var(--text-strong)" }}>
-            nightscout.pro
-          </span>
+  async function handleTest() {
+    setTestStatus("testing");
+    setTestMsg("");
+    try {
+      const res = await fetch("/api/cgm/dexcom/test", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username, password, region }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setTestStatus("ok");
+        setTestMsg(t("dexcom.test_success"));
+      } else {
+        setTestStatus("error");
+        const code = data?.error as string | undefined;
+        if (code === "test_invalid_credentials") {
+          setTestMsg(t("dexcom.test_invalid_credentials"));
+        } else if (code === "test_invalid_region") {
+          setTestMsg(t("dexcom.test_invalid_region"));
+        } else {
+          setTestMsg(code ?? t("dexcom.test_invalid_credentials"));
+        }
+      }
+    } catch {
+      setTestStatus("error");
+      setTestMsg(t("dexcom.test_invalid_credentials"));
+    }
+  }
+
+  async function handleSave() {
+    setSaving(true);
+    try {
+      const res = await fetch("/api/cgm/dexcom/credentials", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username, password, region }),
+      });
+      if (res.ok) {
+        onConnected();
+      } else {
+        const data = await res.json();
+        setTestStatus("error");
+        setTestMsg(data?.error ?? "Fehler beim Speichern");
+      }
+    } catch {
+      setTestStatus("error");
+      setTestMsg("Netzwerkfehler");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleDisconnect() {
+    setDisconnecting(true);
+    try {
+      await fetch("/api/cgm/dexcom/credentials", { method: "DELETE" });
+      onDisconnected();
+    } catch {
+      // ignore
+    } finally {
+      setDisconnecting(false);
+    }
+  }
+
+  if (isConnected) {
+    return (
+      <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+        <div style={{ padding: "12px 14px", borderRadius: 10, background: "var(--surface-soft)", border: `1px solid ${BORDER}` }}>
+          <p style={{ margin: 0, fontSize: 14, color: "var(--text-body)" }}>
+            ✓ {t("dexcom.test_success")}
+          </p>
         </div>
-        <p style={{ fontSize: 13, color: "var(--text-body)", lineHeight: 1.55, margin: 0 }}>
-          {t("sheet_dexcom_kb_intro")}
+        <p style={{ fontSize: 12, color: "var(--text-dim)", margin: 0 }}>
+          {t("dexcom.disclaimer_inofficial_api")}
         </p>
         <button
           type="button"
-          onClick={openKb}
-          style={{
-            alignSelf: "flex-start",
-            padding: "8px 14px",
-            borderRadius: 8,
-            border: `1px solid ${ACCENT}`,
-            background: "transparent",
-            color: ACCENT,
-            fontSize: 13,
-            fontWeight: 600,
-            cursor: "pointer",
-            letterSpacing: "0.01em",
-          }}
+          onClick={handleDisconnect}
+          disabled={disconnecting}
+          style={{ padding: "11px 16px", borderRadius: 10, border: `1px solid ${BORDER}`, background: "var(--surface-soft)", color: "var(--text-body)", fontSize: 14, fontWeight: 600, cursor: "pointer" }}
         >
-          {t("sheet_dexcom_kb_label")}
+          {disconnecting ? "…" : t("dexcom.disconnect_btn")}
         </button>
       </div>
+    );
+  }
 
-      {/* Compliance disclaimer */}
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      {/* Region picker */}
+      <div>
+        <p style={{ margin: "0 0 8px", fontSize: 13, fontWeight: 600, color: "var(--text-strong)" }}>
+          {t("dexcom.region_label")}
+        </p>
+        <div style={{ display: "flex", gap: 8 }}>
+          {(["eu", "us"] as const).map((r) => (
+            <button
+              key={r}
+              type="button"
+              onClick={() => setRegion(r)}
+              style={{
+                flex: 1,
+                padding: "9px 12px",
+                borderRadius: 10,
+                border: `1.5px solid ${region === r ? ACCENT : BORDER}`,
+                background: region === r ? `${ACCENT}18` : "var(--surface-soft)",
+                color: region === r ? ACCENT : "var(--text-body)",
+                fontSize: 13,
+                fontWeight: 600,
+                cursor: "pointer",
+              }}
+            >
+              {r === "eu" ? t("dexcom.region_eu") : t("dexcom.region_us")}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Username */}
+      <div>
+        <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "var(--text-strong)", marginBottom: 6 }}>
+          {t("dexcom.username_label")}
+        </label>
+        <input
+          type="text"
+          autoComplete="username"
+          value={username}
+          onChange={(e) => { setUsername(e.target.value); setTestStatus("idle"); }}
+          style={inputStyle}
+        />
+      </div>
+
+      {/* Password */}
+      <div>
+        <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "var(--text-strong)", marginBottom: 6 }}>
+          {t("dexcom.password_label")}
+        </label>
+        <input
+          type="password"
+          autoComplete="current-password"
+          value={password}
+          onChange={(e) => { setPassword(e.target.value); setTestStatus("idle"); }}
+          style={inputStyle}
+        />
+      </div>
+
+      {/* Test result */}
+      {testStatus !== "idle" && (
+        <p style={{ margin: 0, fontSize: 13, color: testStatus === "ok" ? "#22c55e" : "#ef4444" }}>
+          {testStatus === "testing" ? "…" : testMsg}
+        </p>
+      )}
+
+      {/* Test button */}
+      <button
+        type="button"
+        onClick={handleTest}
+        disabled={!username || !password || testStatus === "testing"}
+        style={{
+          padding: "11px 16px",
+          borderRadius: 10,
+          border: `1px solid ${ACCENT}`,
+          background: "transparent",
+          color: ACCENT,
+          fontSize: 14,
+          fontWeight: 600,
+          cursor: !username || !password || testStatus === "testing" ? "not-allowed" : "pointer",
+          opacity: !username || !password ? 0.5 : 1,
+        }}
+      >
+        {testStatus === "testing" ? "…" : t("dexcom.test_btn")}
+      </button>
+
+      {/* Save button — only enabled after successful test */}
+      {testStatus === "ok" && (
+        <button
+          type="button"
+          onClick={handleSave}
+          disabled={saving}
+          style={{
+            padding: "11px 16px",
+            borderRadius: 10,
+            border: "none",
+            background: ACCENT,
+            color: "#fff",
+            fontSize: 14,
+            fontWeight: 700,
+            cursor: "pointer",
+          }}
+        >
+          {saving ? "…" : t("dexcom.save_btn")}
+        </button>
+      )}
+
+      {/* Info */}
       <p style={{ fontSize: 12, color: "var(--text-dim)", lineHeight: 1.55, margin: 0 }}>
-        {t("sheet_dexcom_disclaimer")}
+        {t("dexcom.info_eu_servers")}
+      </p>
+      <p style={{ fontSize: 12, color: "var(--text-dim)", lineHeight: 1.55, margin: 0 }}>
+        {t("dexcom.disclaimer_inofficial_api")}
       </p>
     </div>
   );
@@ -113,6 +282,19 @@ function useAppleHealthConnected(): boolean {
   return connected;
 }
 
+function useDexcomDirectConnected(): boolean {
+  const [connected, setConnected] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/cgm/source", { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : Promise.reject()))
+      .then((data) => { if (!cancelled) setConnected(data?.source === "dexcom"); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, []);
+  return connected;
+}
+
 function useAppleHealthActivityConnected(): boolean {
   const [enabled, setEnabled] = useState(false);
   useEffect(() => {
@@ -136,6 +318,9 @@ export default function CgmSettingsPage() {
   const nightscoutConnected = useNightscoutConnected();
   const appleHealthConnected = useAppleHealthConnected();
   const appleHealthActivityConnected = useAppleHealthActivityConnected();
+  const [dexcomConnected, setDexcomConnected] = useState(false);
+  const dexcomInit = useDexcomDirectConnected();
+  useEffect(() => { setDexcomConnected(dexcomInit); }, [dexcomInit]);
   const [isNativePlatform, setIsNativePlatform] = useState(false);
   const cgmSetupHandledRef = useRef(false);
 
@@ -180,11 +365,20 @@ export default function CgmSettingsPage() {
   );
 
   const sheetMap: Record<SheetKey, { title: string; body: React.ReactNode }> = {
-    libre2:        { title: t("row_libre2"),              body: <CgmSettingsCard /> },
-    nightscout:    { title: t("row_nightscout"),          body: <NightscoutSettingsCard /> },
-    dexcom:        { title: t("sheet_dexcom_title"),      body: <DexcomSheetBody /> },
-    apple_health:  { title: t("row_apple_health"),        body: <AppleHealthSettingsCard /> },
-    setup_request: { title: tReq("intro_title"),          body: <CgmSetupRequestForm onSuccess={closeSheet} /> },
+    libre2:        { title: t("row_libre2"),         body: <CgmSettingsCard /> },
+    nightscout:    { title: t("row_nightscout"),     body: <NightscoutSettingsCard /> },
+    dexcom:        {
+      title: t("sheet_dexcom_title"),
+      body: (
+        <DexcomDirectCard
+          isConnected={dexcomConnected}
+          onConnected={() => { setDexcomConnected(true); closeSheet(); }}
+          onDisconnected={() => { setDexcomConnected(false); closeSheet(); }}
+        />
+      ),
+    },
+    apple_health:  { title: t("row_apple_health"),   body: <AppleHealthSettingsCard /> },
+    setup_request: { title: tReq("intro_title"),     body: <CgmSetupRequestForm onSuccess={closeSheet} /> },
   };
   const active = openSheet ? sheetMap[openSheet] : null;
 
@@ -239,7 +433,7 @@ export default function CgmSettingsPage() {
           iconColor={ACCENT}
           icon={<svg {...iconProps}><circle cx="12" cy="12" r="3" /><circle cx="12" cy="12" r="9" /></svg>}
           label={t("row_cgm_dexcom")}
-          subtitle={t("subtitle_coming_soon")}
+          rightAdornment={dexcomConnected ? <ConnectedDot label={t("status_connected")} /> : undefined}
           ariaLabel={t("row_open_aria", { label: t("row_cgm_dexcom") })}
           onClick={() => setOpenSheet("dexcom")}
         />

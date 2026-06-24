@@ -2697,7 +2697,24 @@
     "unsure_hint": "Wenn du unsicher bist, teste Glev zuerst über die <link>Beta</link>.",
     "modal_title": "Nightscout",
     "modal_body": "Nightscout ist eine Open-Source-Lösung, mit der du deine CGM-Daten in Echtzeit teilen und in andere Apps integrieren kannst.\n\nWenn du Dexcom oder Medtronic nutzt, kannst du Glev über Nightscout verbinden.",
-    "modal_cta": "Mehr erfahren"
+    "modal_cta": "Mehr erfahren",
+    "dexcom": {
+      "title": "Dexcom Share",
+      "subtitle": "G6, G7 und One+ direkt verbinden",
+      "region_label": "Region",
+      "region_eu": "🌍 EU / International",
+      "region_us": "🇺🇸 USA",
+      "username_label": "Dexcom-Benutzername",
+      "password_label": "Dexcom-Passwort",
+      "test_btn": "Verbindung testen",
+      "save_btn": "Verbindung speichern",
+      "disconnect_btn": "Trennen",
+      "test_success": "Verbindung erfolgreich!",
+      "test_invalid_credentials": "Benutzername oder Passwort falsch. Bitte prüfe deine Dexcom-Zugangsdaten.",
+      "test_invalid_region": "Falsche Region. Bitte EU oder USA prüfen.",
+      "info_eu_servers": "Glev verbindet sich direkt mit dem Dexcom Share API. EU-Nutzer verwenden automatisch den EU-Server (shareous1.dexcom.com).",
+      "disclaimer_inofficial_api": "Dexcom Share ist eine inoffizielle Schnittstelle — von der Community reverse-engineered, seit Jahren stabil und von vielen Apps genutzt (xDrip, Nightscout, Sugarmate). Nicht offiziell von Dexcom unterstützt."
+    }
   },
   "previewBeta": {
     "hero_title": "Gründer-Deal sichern.\nDer Juni geht auf uns!",

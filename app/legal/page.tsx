@@ -144,6 +144,7 @@ function LegalPageInner() {
                     <tr><td><strong>Stripe, Inc.</strong></td><td>Payment processing</td><td>USA / EU</td><td><span className="badge warning">USA possible</span></td></tr>
                     <tr><td><strong>Mistral AI SAS</strong></td><td>AI language model (chat, voice STT/TTS, photo analysis, meal parsing, intent classification, macros estimation)</td><td>EU (France)</td><td><span className="badge">EU region</span></td></tr>
                     <tr><td><strong>Meta Platforms Ireland Ltd.</strong></td><td>Transmission of lead data from Facebook/Instagram ad forms</td><td>EU (Ireland)</td><td><span className="badge">EU region</span></td></tr>
+                    <tr><td><strong>Dexcom, Inc.</strong></td><td>Dexcom Share API — glucose data retrieval for users who connect via Dexcom Share Direct. Credentials are transmitted encrypted; EU users connect to the EU endpoint (shareous1.dexcom.com).</td><td>USA / EU endpoint</td><td><span className="badge warning">USA (HQ)</span></td></tr>
                   </tbody>
                 </table>
                 <p>We have deliberately chosen the <strong>EU region Ireland</strong> for Supabase so that all health and account data is stored and processed within the European Union. There is <strong>no mirroring to third countries</strong> — database replication stays entirely within the EU.</p>
@@ -175,6 +176,7 @@ function LegalPageInner() {
                     <tr><td><strong>Stripe, Inc.</strong></td><td>Zahlungsabwicklung</td><td>USA / EU</td><td><span className="badge warning">USA möglich</span></td></tr>
                     <tr><td><strong>Mistral AI SAS</strong></td><td>KI-Sprachmodell (Chat, Sprach-Erkennung & Text-to-Speech, Foto-Analyse, Mahlzeiten-Parsing, Intent-Klassifikation, Nährwert-Schätzung)</td><td>EU (Frankreich)</td><td><span className="badge">EU-Region</span></td></tr>
                     <tr><td><strong>Meta Platforms Ireland Ltd.</strong></td><td>Übermittlung von Lead-Daten aus Facebook/Instagram-Werbeformularen</td><td>EU (Irland)</td><td><span className="badge">EU-Region</span></td></tr>
+                    <tr><td><strong>Dexcom, Inc.</strong></td><td>Dexcom Share API — Abruf von Glukosedaten für Nutzer, die Dexcom Share Direct aktivieren. Zugangsdaten werden verschlüsselt übertragen; EU-Nutzer verwenden automatisch den EU-Endpunkt (shareous1.dexcom.com).</td><td>USA / EU-Endpunkt</td><td><span className="badge warning">USA (HQ)</span></td></tr>
                   </tbody>
                 </table>
                 <p>Wir haben für Supabase bewusst die <strong>EU-Region Irland</strong> gewählt, damit alle Gesundheits- und Kontodaten innerhalb der Europäischen Union gespeichert und verarbeitet werden. Es findet <strong>keine Spiegelung in Drittländer</strong> statt – die Datenbank-Replikation bleibt vollständig innerhalb der EU.</p>
