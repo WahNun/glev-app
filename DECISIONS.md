@@ -560,6 +560,16 @@ Neue Tabelle `public.glev_ops_users` (id, email, password_hash, role, name, must
 
 | 2026-06-24 | Dexcom Share Direct als 4. CGM-Quelle | [FEATURE] Dexcom Share API (inoffiziell, reverse-engineered, stabil) als 4. direkter CGM-Source neben LLU/Nightscout/Apple-Health. lib/cgm/dexcom.ts mit baseUrl-Region-Switch (EU shareous1.dexcom.com / US share2.dexcom.com), Login via ApplicationId d89443d2..., Session-Cache L1 Map + L2 Supabase (25min), 5-Min-Polling im cgm-poll Cron. cgm_credentials-Erweiterung: dexcom_username, dexcom_password_encrypted, dexcom_region, dexcom_session_id, dexcom_session_expires Spalten; llu_email nullable gemacht fuer Dexcom-only-User. cgm_source='dexcom' in profiles. Settings-UI DexcomDirectCard mit Region-Picker + Test-Button + Save-Button. API: /api/cgm/dexcom/test + /api/cgm/dexcom/credentials. i18n DE+EN unter cgm.dexcom.*. Privacy: Dexcom Inc als Auftragsverarbeiter gelistet. Pattern 1:1 wie LLU-Integration. |
 
+## 2026-06-25 Paywall Copy Compliance Fix
+
+Paywall-Audit ergab 5 falsche Claims in messages/de.json + messages/en.json. Korrekturen:
+
+Smart-Tier: "KI-Mahlzeitenerkennung per Sprache" → "Glev KI-Assistent" (meal_log_voice ist free/all, glev_ai ist smart-exklusiv); "Unbegrenzte Logs" → "60 Tage Verlauf" (unlimited_history ist Plus-Feature); "TIR-Auswertung & Insights" → "Hypo-Warnung" (tir_analysis ist Pro-Gate, hypo_warning ist smart).
+
+Pro-Tier: "Engine: KI-Insulin-Coach" → "Glev Engine" (Apple-Review-Risiko + EU-MDR-Grauzone bei "KI-Insulin-Coach"; Engine selbst ist real implementiert); "Glucose-Vorhersage 60 min" entfernt → "TIR-Auswertung & Insights" (kein Forecast-Algorithmus im Code, TIR hierher verschoben); "Mahlzeiten-Bibliothek" entfernt → "HbA1c & GMI" (food_memory ist all-Tier, hba1c_gmi ist pro); "Trainings-Mode" entfernt → "90 Tage Verlauf" (feature nicht implementiert, history_90d ist pro).
+
+Keine Code-Gate-Änderungen. Nur i18n-Copy.
+
 ## 2026-06-25 Dexcom Toast-Feedback
 - Success + Error Toast im Dexcom-Connect-Flow ergänzt
 - Nutzt bestehendes Toast-System (useState + fixed div[role=status], identisch mit LanguageSync.tsx)
