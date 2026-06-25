@@ -58,6 +58,7 @@ const ALL_GROUPS: ReadonlyArray<NavGroup> = [
     label: "Dev",
     items: [
       { href: "/glev-ops/dev-cockpit", label: "Dev Cockpit" },
+      { href: "/glev-ops/lead-flow", label: "Lead Flow" },
     ],
   },
 ];
