@@ -577,3 +577,15 @@ Keine Code-Gate-Änderungen. Nur i18n-Copy.
 - Success-Toast zeigt "Dexcom erfolgreich verbunden" nach Sheet-Close (State auf Page-Level, überlebt Unmount der Card)
 - Error-Toast zeigt tatsächliche API-Fehlermeldung: "Verbindung fehlgeschlagen: <errMsg>"
 - Kein generischer Fallback — errMsg direkt aus data.error der API-Response
+
+## 2026-06-25 Paywall Trial Guard — resolvePaywallState
+
+Doppel-Trial-Bug: PaywallSheet zeigte "7 Tage gratis" CTA statisch an alle User — ohne Prüfung ob (a) ein aktives RC-Entitlement vorliegt, (b) ein Supabase-Trial noch läuft, oder (c) der Apple IAP Trial bereits verbraucht ist.
+
+Fix: lib/resolvePaywallState.ts — neue Funktion `resolvePaywallState(customerInfo, trialActive, productIds)` gibt einen von 4 States zurück, Priority-Order:
+1. `subscribed` — RC-Entitlement glev_smart|glev_pro|glev_plus aktiv → PaywallSheet schließt sofort (onClose())
+2. `supabase_trial_active` — profiles.trial_end_at in der Zukunft → CTA zeigt "Abo sichern", Karten-Label zeigt "Probe-Monat aktiv — noch N Tage"
+3. `ineligible` — Purchases.checkTrialOrIntroductoryPriceEligibility() meldet INTRO_ELIGIBILITY_STATUS_INELIGIBLE für mind. 1 Produkt → CTA zeigt "Jetzt abonnieren", kein Trial-Text auf Karten
+4. `eligible_for_trial` — Bestandsverhalten: "7 Tage kostenlos testen" + "Pro starten — 7 Tage gratis"
+
+PaywallSheet ruft getOfferings() + getCustomerInfo() parallel auf (kein Extra-Netzwerk-Roundtrip). resolvePaywallState wird direkt danach aufgerufen mit den productIds aus den Offerings. Loading-Spinner bleibt bis beide Promises resolved sind. Neue i18n-Keys: trial_active_label, trial_active_cta, ineligible_cta (DE+EN). Fail-open: jeder Fehler in checkTrialOrIntroductoryPriceEligibility → "eligible_for_trial".
