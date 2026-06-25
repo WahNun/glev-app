@@ -14,7 +14,7 @@ export async function POST(req: NextRequest) {
 
   const { data: leads, error } = await supabase
     .from("meta_leads")
-    .select("id, email, leadgen_id, created_at")
+    .select("id, email, leadgen_id, received_at")
     .gte("received_at", "2026-06-22T00:00:00Z");
 
   if (error) {
