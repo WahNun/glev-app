@@ -570,6 +570,7 @@ Pro-Tier: "Engine: KI-Insulin-Coach" → "Glev Engine" (Apple-Review-Risiko + EU
 
 Keine Code-Gate-Änderungen. Nur i18n-Copy.
 
+
 ## 2026-06-25 Dexcom Toast-Feedback
 - Success + Error Toast im Dexcom-Connect-Flow ergänzt
 - Nutzt bestehendes Toast-System (useState + fixed div[role=status], identisch mit LanguageSync.tsx)
