@@ -1,9 +1,5 @@
 import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
-import {
-  loginAction,
-  grantPlanByEmailAction,
-  grantBetaFreeYearAction,
-} from "./actions";
+import { loginAction } from "./actions";
 import { isAdminAuthed } from "@/lib/adminAuth";
 import UsersTable, { type UserRow } from "./UsersTable";
 import UserUpsertForm from "./UserUpsertForm";
@@ -275,42 +271,6 @@ export default async function AdminUsersPage({
   });
 
   const deletedParam = Array.isArray(sp.deleted) ? sp.deleted[0] : sp.deleted;
-  const grantedParam = Array.isArray(sp.granted) ? sp.granted[0] : sp.granted;
-  const grantedPlanParam = Array.isArray(sp.plan) ? sp.plan[0] : sp.plan;
-  const grantErrParam = Array.isArray(sp.grant_err) ? sp.grant_err[0] : sp.grant_err;
-  const grantErrEmail = Array.isArray(sp.email) ? sp.email[0] : sp.email;
-  const grantErrMsg =
-    grantErrParam === "email"
-      ? "Bitte gültige E-Mail eingeben."
-      : grantErrParam === "plan"
-        ? "Ungültiger Plan."
-        : grantErrParam === "lookup"
-          ? "User-Suche fehlgeschlagen — bitte später erneut versuchen."
-          : grantErrParam === "notfound"
-            ? `Keine Account mit ${grantErrEmail ?? "dieser E-Mail"} gefunden. User muss sich erst registriert haben.`
-            : grantErrParam === "db"
-              ? `Datenbank-Fehler beim Freischalten von ${grantErrEmail ?? "User"}.`
-              : null;
-
-  // Beta-Free-Year-Programm — eigene Banner + Fehler, damit man sieht
-  // ob NUR der Plan oder auch Welcome-Mail+Drip durchgegangen sind.
-  const bfyGrantedParam = Array.isArray(sp.bfy_granted)
-    ? sp.bfy_granted[0]
-    : sp.bfy_granted;
-  const bfyUntilParam = Array.isArray(sp.until) ? sp.until[0] : sp.until;
-  const bfyNewParam = Array.isArray(sp.new) ? sp.new[0] : sp.new;
-  const bfyPlanParam = Array.isArray(sp.plan) ? sp.plan[0] : sp.plan;
-  const bfyErrParam = Array.isArray(sp.bfy_err) ? sp.bfy_err[0] : sp.bfy_err;
-  const bfyErrMsg =
-    bfyErrParam === "email"
-      ? "Bitte gültige E-Mail eingeben."
-      : bfyErrParam === "lookup"
-        ? "User-Suche fehlgeschlagen — bitte später erneut versuchen."
-        : bfyErrParam === "invite"
-          ? `Konnte ${grantErrEmail ?? "User"} nicht neu anlegen — bitte Logs prüfen.`
-          : bfyErrParam === "db"
-            ? `Datenbank-Fehler beim Beta-Free-Year-Freischalten von ${grantErrEmail ?? "User"}.`
-            : null;
 
   return (
     <main style={pageStyle}>
@@ -341,146 +301,10 @@ export default async function AdminUsersPage({
           User <strong>{deletedParam}</strong> wurde komplett gelöscht.
         </p>
       ) : null}
-      {grantedParam ? (
-        <p style={successStyle}>
-          ✓ <strong>{grantedParam}</strong> wurde auf{" "}
-          <strong>{grantedPlanParam ?? "—"}</strong> freigeschaltet (manueller
-          Plan-Override gesetzt, hat Vorrang vor Stripe).
-        </p>
-      ) : null}
-      {grantErrMsg ? <p style={errStyle}>{grantErrMsg}</p> : null}
-      {bfyGrantedParam ? (
-        <p style={successStyle}>
-          ✓ <strong>{bfyGrantedParam}</strong> wurde ins{" "}
-          <strong>{bfyPlanParam === "pro" ? "Pro" : "Beta"}-Free-Year-Programm</strong>
-          {" "}aufgenommen — Zugang bis <strong>{bfyUntilParam ?? "—"}</strong>,
-          Welcome-Mail{bfyPlanParam === "pro" ? "" : " + Drip (Tag 7/14/30)"} eingeplant.
-          {bfyNewParam ? (
-            <>
-              {" "}<strong>Neuer Account angelegt</strong> — die Welcome-Mail
-              enthält einen Login-Link, der zur Account-Einrichtung
-              (Name + Passwort) führt.
-            </>
-          ) : null}
-        </p>
-      ) : null}
-      {bfyErrMsg ? <p style={errStyle}>{bfyErrMsg}</p> : null}
       {authErr ? <p style={errStyle}>auth.users-Fehler: {authErr}</p> : null}
       {profilesRes.error ? (
         <p style={errStyle}>profiles-Fehler: {profilesRes.error.message}</p>
       ) : null}
-
-      {/* Quick-Grant — DEPRECATED: Im neuen "User anlegen / Plan setzen"-Formular oben verfügbar */}
-      <section style={{ ...grantBoxStyle, opacity: 0.5, pointerEvents: "none" }}>
-        <div style={deprecatedBadge}>DEPRECATED — bitte neues Formular oben verwenden</div>
-        <h2 style={{ fontSize: 14, margin: "0 0 4px", color: "#111", fontWeight: 700 }}>
-          Schnell-Freischaltung per E-Mail
-        </h2>
-        <p style={{ fontSize: 12, color: "#666", margin: "0 0 12px" }}>
-          User muss bereits registriert sein. Setzt einen manuellen
-          Plan-Override — überschreibt Stripe-Status, ohne ihn zu verändern.
-          Reversibel über die Detailseite.
-        </p>
-        <form
-          action={grantPlanByEmailAction}
-          style={{
-            display: "flex",
-            gap: 8,
-            flexWrap: "wrap",
-            alignItems: "stretch",
-          }}
-        >
-          <input
-            type="email"
-            name="email"
-            required
-            placeholder="user@example.com"
-            style={{ ...inputStyle, flex: "1 1 240px", minWidth: 200 }}
-          />
-          <select
-            name="plan"
-            defaultValue="beta"
-            style={{ ...inputStyle, flex: "0 0 160px" }}
-          >
-            <option value="beta">S — Smart (9 €/Mo)</option>
-            <option value="pro">M — Pro (14,90 €/Mo)</option>
-            <option value="plus">L — Plus (29 €/Mo)</option>
-            <option value="free">⛔ Free — Zugang entziehen</option>
-          </select>
-          <input
-            type="text"
-            name="note"
-            placeholder="Notiz (optional, z.B. Name)"
-            style={{ ...inputStyle, flex: "1 1 220px", minWidth: 180 }}
-          />
-          <button type="submit" style={btnStyle}>
-            Freischalten
-          </button>
-        </form>
-      </section>
-
-      {/* Free-Year-Programm — DEPRECATED: Im neuen "User anlegen / Plan setzen"-Formular oben verfügbar */}
-      <section style={{ ...bfyBoxStyle, opacity: 0.5, pointerEvents: "none" }}>
-        <div style={deprecatedBadge}>DEPRECATED — bitte neues Formular oben verwenden</div>
-        <h2 style={{ fontSize: 14, margin: "0 0 4px", color: "#065f46", fontWeight: 700 }}>
-          Free-Year-Programm (Friends &amp; Family / Diabetolog:innen)
-        </h2>
-        <p style={{ fontSize: 12, color: "#065f46", margin: "0 0 12px" }}>
-          1 Jahr kostenloser Zugang — wahlweise <strong>Beta</strong> (Friends
-          &amp; Family, mit Onboarding-Drip Tag 7/14/30) oder <strong>Pro</strong>
-          {" "}(Diabetolog:innen, Multiplikator:innen — ohne Drip).
-          Sendet Welcome-Mail mit explizitem End-Datum.
-          Funktioniert auch für noch <strong>nicht registrierte</strong> User
-          — dann legen wir den Account stumm an, die Welcome-Mail enthält
-          einen Login-Link, und auf <code>/welcome/beta</code> setzt
-          die Person Name + Passwort. Idempotent — zweimal klicken schadet nicht.
-        </p>
-        <form
-          action={grantBetaFreeYearAction}
-          style={{
-            display: "flex",
-            gap: 8,
-            flexWrap: "wrap",
-            alignItems: "stretch",
-          }}
-        >
-          <input
-            type="email"
-            name="email"
-            required
-            placeholder="user@example.com"
-            style={{ ...inputStyle, flex: "1 1 200px", minWidth: 180 }}
-          />
-          <input
-            type="text"
-            name="fullName"
-            placeholder="Name (optional, sonst fragen wir bei Signup)"
-            style={{ ...inputStyle, flex: "1 1 200px", minWidth: 180 }}
-          />
-          <select
-            name="plan"
-            defaultValue="beta"
-            style={{ ...inputStyle, flex: "0 0 200px", minWidth: 160 }}
-            title="Plan-Auswahl"
-          >
-            <option value="beta">S — Smart (1 Jahr, Friends &amp; Family)</option>
-            <option value="pro">M — Pro (1 Jahr, z.B. Diabetolog:innen)</option>
-            <option value="plus">L — Plus (1 Jahr)</option>
-          </select>
-          <input
-            type="text"
-            name="note"
-            placeholder='Notiz (optional)'
-            style={{ ...inputStyle, flex: "1 1 180px", minWidth: 160 }}
-          />
-          <button type="submit" style={bfyBtnStyle}>
-            1 Jahr freischalten + Welcome
-          </button>
-        </form>
-      </section>
-
-      {/* Backfill-Button ist nach /admin/settings umgezogen — er wird
-          selten gebraucht und nahm hier nur Platz weg. */}
 
       <UsersTable rows={rows} pageSize={PAGE_SIZE} truncated={rows.length === PAGE_SIZE} />
     </main>
@@ -496,23 +320,6 @@ const pageStyle: React.CSSProperties = {
   background: "#fff",
   minHeight: "100vh",
 };
-const inputStyle: React.CSSProperties = {
-  padding: "10px 12px",
-  border: "1px solid #ccc",
-  borderRadius: 6,
-  fontSize: 14,
-  fontFamily: "inherit",
-};
-const btnStyle: React.CSSProperties = {
-  padding: "10px 16px",
-  background: "#111",
-  color: "#fff",
-  border: "none",
-  borderRadius: 6,
-  fontSize: 14,
-  fontWeight: 600,
-  cursor: "pointer",
-};
 const primaryBtnStyle: React.CSSProperties = {
   padding: "8px 14px",
   background: "#111",
@@ -527,13 +334,6 @@ const errStyle: React.CSSProperties = {
   fontSize: 14,
   margin: "0 0 8px",
 };
-const grantBoxStyle: React.CSSProperties = {
-  background: "#f9fafb",
-  border: "1px solid #e5e7eb",
-  borderRadius: 8,
-  padding: 14,
-  marginBottom: 16,
-};
 const successStyle: React.CSSProperties = {
   color: "#047857",
   fontSize: 14,
@@ -542,33 +342,4 @@ const successStyle: React.CSSProperties = {
   padding: "8px 12px",
   borderRadius: 6,
   border: "1px solid #a7f3d0",
-};
-const bfyBoxStyle: React.CSSProperties = {
-  background: "#ecfdf5",
-  border: "1px solid #a7f3d0",
-  borderRadius: 8,
-  padding: 14,
-  marginBottom: 16,
-};
-const bfyBtnStyle: React.CSSProperties = {
-  padding: "10px 16px",
-  background: "#047857",
-  color: "#fff",
-  border: "none",
-  borderRadius: 6,
-  fontSize: 14,
-  fontWeight: 600,
-  cursor: "pointer",
-};
-const deprecatedBadge: React.CSSProperties = {
-  display: "inline-block",
-  fontSize: 10,
-  fontWeight: 700,
-  letterSpacing: "0.08em",
-  textTransform: "uppercase",
-  background: "#6b7280",
-  color: "#fff",
-  borderRadius: 4,
-  padding: "2px 6px",
-  marginBottom: 8,
 };

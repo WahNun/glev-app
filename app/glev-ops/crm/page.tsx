@@ -5,7 +5,6 @@ import AdminLoginForm from "../_components/AdminLoginForm";
 import { computeEffectivePlan } from "@/lib/admin/effectivePlan";
 import CrmView, { type CrmUserRow, type CrmBetaRow, type CrmProRow } from "./CrmView";
 import Link from "next/link";
-import { grantPlanByEmailAction, grantBetaFreeYearAction } from "../users/actions";
 import { createMetaLeadAction } from "../buyers/actions";
 import ActivatePendingButton from "../buyers/ActivatePendingButton";
 import ReminderButton from "../buyers/ReminderButton";
@@ -35,30 +34,6 @@ export default async function CrmPage({
   const createdParam = Array.isArray(sp.created) ? sp.created[0] : sp.created;
   const leadErrParam = Array.isArray(sp.lead_err) ? sp.lead_err[0] : sp.lead_err;
   const deletedParam = Array.isArray(sp.deleted) ? sp.deleted[0] : sp.deleted;
-  const grantedParam = Array.isArray(sp.granted) ? sp.granted[0] : sp.granted;
-  const grantedPlanParam = Array.isArray(sp.plan) ? sp.plan[0] : sp.plan;
-  const grantErrParam = Array.isArray(sp.grant_err) ? sp.grant_err[0] : sp.grant_err;
-  const grantErrEmail = Array.isArray(sp.email) ? sp.email[0] : sp.email;
-  const bfyGrantedParam = Array.isArray(sp.bfy_granted) ? sp.bfy_granted[0] : sp.bfy_granted;
-  const bfyUntilParam = Array.isArray(sp.until) ? sp.until[0] : sp.until;
-  const bfyNewParam = Array.isArray(sp.new) ? sp.new[0] : sp.new;
-  const bfyPlanParam = Array.isArray(sp.plan) ? sp.plan[0] : sp.plan;
-  const bfyErrParam = Array.isArray(sp.bfy_err) ? sp.bfy_err[0] : sp.bfy_err;
-
-  const grantErrMsg =
-    grantErrParam === "email" ? "Bitte gültige E-Mail eingeben."
-    : grantErrParam === "plan" ? "Ungültiger Plan."
-    : grantErrParam === "lookup" ? "User-Suche fehlgeschlagen — bitte später erneut versuchen."
-    : grantErrParam === "notfound" ? `Kein Account mit ${grantErrEmail ?? "dieser E-Mail"} gefunden. User muss sich erst registriert haben.`
-    : grantErrParam === "db" ? `Datenbank-Fehler beim Freischalten von ${grantErrEmail ?? "User"}.`
-    : null;
-
-  const bfyErrMsg =
-    bfyErrParam === "email" ? "Bitte gültige E-Mail eingeben."
-    : bfyErrParam === "lookup" ? "User-Suche fehlgeschlagen — bitte später erneut versuchen."
-    : bfyErrParam === "invite" ? `Konnte ${grantErrEmail ?? "User"} nicht neu anlegen — bitte Logs prüfen.`
-    : bfyErrParam === "db" ? `Datenbank-Fehler beim Beta-Free-Year-Freischalten von ${grantErrEmail ?? "User"}.`
-    : null;
 
   const sb = getSupabaseAdmin();
 
@@ -319,15 +294,6 @@ export default async function CrmPage({
 
       {authErr && <p style={errStyle}>auth.users-Fehler: {authErr}</p>}
       {deletedParam && <p style={successStyle}>User <strong>{deletedParam}</strong> wurde komplett gelöscht.</p>}
-      {grantedParam && <p style={successStyle}>✓ <strong>{grantedParam}</strong> wurde auf <strong>{grantedPlanParam ?? "—"}</strong> freigeschaltet.</p>}
-      {grantErrMsg && <p style={errStyle}>{grantErrMsg}</p>}
-      {bfyGrantedParam && (
-        <p style={successStyle}>
-          ✓ <strong>{bfyGrantedParam}</strong> wurde ins <strong>{bfyPlanParam === "pro" ? "Pro" : "Beta"}-Free-Year-Programm</strong> aufgenommen — Zugang bis <strong>{bfyUntilParam ?? "—"}</strong>, Welcome-Mail{bfyPlanParam === "pro" ? "" : " + Drip (Tag 7/14/30)"} eingeplant.
-          {bfyNewParam ? <> <strong>Neuer Account angelegt</strong> — Login-Link in der Welcome-Mail.</> : null}
-        </p>
-      )}
-      {bfyErrMsg && <p style={errStyle}>{bfyErrMsg}</p>}
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(340px, 1fr))", gap: 12, marginBottom: 24 }}>
         <TestLeadInjector />
@@ -355,39 +321,6 @@ export default async function CrmPage({
           </div>
         </section>
 
-        <section style={{ ...panelStyle, opacity: 0.45, pointerEvents: "none" }}>
-          <div style={crmDeprecatedBadge}>DEPRECATED — Nutzer-Seite verwenden</div>
-          <h2 style={panelTitle}>Schnell-Freischaltung</h2>
-          <p style={{ fontSize: 12, color: "#666", margin: "0 0 10px" }}>User muss bereits registriert sein. Setzt manuellen Plan-Override.</p>
-          <form action={grantPlanByEmailAction} style={flexForm}>
-            <input type="email" name="email" required placeholder="user@example.com" style={{ ...inputStyle, flex: "1 1 200px" }} />
-            <select name="plan" defaultValue="beta" style={inputStyle}>
-              <option value="beta">S — Smart</option>
-              <option value="pro">M — Pro</option>
-              <option value="plus">L — Plus</option>
-              <option value="free">⛔ Free entziehen</option>
-            </select>
-            <input type="text" name="note" placeholder="Notiz (optional)" style={{ ...inputStyle, flex: "1 1 160px" }} />
-            <button type="submit" style={btnStyle}>Freischalten</button>
-          </form>
-        </section>
-
-        <section style={{ ...panelStyle, background: "#ecfdf5", borderColor: "#a7f3d0", opacity: 0.45, pointerEvents: "none" }}>
-          <div style={crmDeprecatedBadge}>DEPRECATED — Nutzer-Seite verwenden</div>
-          <h2 style={{ ...panelTitle, color: "#065f46" }}>Free-Year-Programm</h2>
-          <p style={{ fontSize: 12, color: "#065f46", margin: "0 0 10px" }}>1 Jahr kostenloser Zugang. Funktioniert auch für noch nicht registrierte User.</p>
-          <form action={grantBetaFreeYearAction} style={flexForm}>
-            <input type="email" name="email" required placeholder="user@example.com" style={{ ...inputStyle, flex: "1 1 180px" }} />
-            <input type="text" name="fullName" placeholder="Name (optional)" style={{ ...inputStyle, flex: "1 1 160px" }} />
-            <select name="plan" defaultValue="beta" style={inputStyle}>
-              <option value="beta">S — Smart (Friends &amp; Family)</option>
-              <option value="pro">M — Pro (Diabetolog:innen)</option>
-              <option value="plus">L — Plus</option>
-            </select>
-            <input type="text" name="note" placeholder="Notiz (optional)" style={{ ...inputStyle, flex: "1 1 140px" }} />
-            <button type="submit" style={{ ...btnStyle, background: "#047857" }}>1 Jahr + Welcome →</button>
-          </form>
-        </section>
       </div>
 
       <CrmView users={users} beta={betaRows} pro={proRows} pageSize={PAGE_SIZE} />
@@ -417,4 +350,3 @@ const flexForm: React.CSSProperties = { display: "flex", flexWrap: "wrap", gap: 
 const primaryBtn: React.CSSProperties = { padding: "8px 14px", background: "#111", color: "#fff", borderRadius: 6, fontSize: 14, fontWeight: 600, textDecoration: "none" };
 const errStyle: React.CSSProperties = { color: "#c00", fontSize: 14, margin: "0 0 10px" };
 const successStyle: React.CSSProperties = { color: "#047857", fontSize: 14, margin: "0 0 10px", background: "#ecfdf5", padding: "8px 12px", borderRadius: 6, border: "1px solid #a7f3d0" };
-const crmDeprecatedBadge: React.CSSProperties = { display: "inline-block", fontSize: 10, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", background: "#6b7280", color: "#fff", borderRadius: 4, padding: "2px 6px", marginBottom: 8 };
