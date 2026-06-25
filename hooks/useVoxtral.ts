@@ -316,6 +316,20 @@ export function useVoxtral({ onTranscript, onPartialTranscript, onError }: UseVo
     setRateLimitUntil(Date.now() + retryAfterSec * 1_000);
   }, []);
 
+  // Idempotent cleanup: stops all mic tracks, nulls refs, resets state.
+  // Called before getUserMedia, after transcription settles, and on unmount.
+  const releaseAudio = useCallback(() => {
+    streamRef.current?.getTracks().forEach((t) => t.stop());
+    streamRef.current = null;
+    recorderRef.current = null;
+    setIsListening(false);
+    setIsTranscribing(false);
+  }, []);
+
+  useEffect(() => {
+    return () => { releaseAudio(); };
+  }, [releaseAudio]);
+
   const startListening = useCallback(async () => {
     if (typeof window === "undefined") return;
     if (isListening) return;
@@ -334,6 +348,10 @@ export function useVoxtral({ onTranscript, onPartialTranscript, onError }: UseVo
       transcribeAbortRef.current = null;
     }
     setIsTranscribing(false);
+
+    // Ensure no previous stream is still open — on iOS a lingering AudioSession
+    // from a prior error state can freeze the WKWebView.
+    releaseAudio();
 
     // On Android the runtime RECORD_AUDIO permission must be granted before
     // getUserMedia() is called — Capacitor's WebView does not auto-prompt for
@@ -481,6 +499,9 @@ export function useVoxtral({ onTranscript, onPartialTranscript, onError }: UseVo
             transcribeAbortRef.current = null;
             setIsTranscribing(false);
           }
+          // Idempotent — ensures AudioSession is released on iOS even after a
+          // mid-stream decode error (Mistral error 3310) that freezes the app.
+          releaseAudio();
         });
       };
 
@@ -493,12 +514,16 @@ export function useVoxtral({ onTranscript, onPartialTranscript, onError }: UseVo
         (e.name === "NotAllowedError" || e.name === "PermissionDeniedError");
       onError?.(isPermDenied ? MIC_PERM_DENIED : e instanceof Error ? e.message : "Mikrofon nicht verfügbar");
     }
-  }, [isListening, rateLimitUntil, onTranscript, onPartialTranscript, onError, handleRateLimit]);
+  }, [isListening, rateLimitUntil, onTranscript, onPartialTranscript, onError, handleRateLimit, releaseAudio]);
 
   const stopListening = useCallback(() => {
     if (recorderRef.current && recorderRef.current.state !== "inactive") {
       recorderRef.current.stop();
     }
+    // Eagerly stop tracks — on iOS, onstop may be delayed or not fire when the
+    // recorder enters an error state, so we can't rely on onstop alone.
+    streamRef.current?.getTracks().forEach((t) => t.stop());
+    streamRef.current = null;
     setIsListening(false);
   }, []);
 
