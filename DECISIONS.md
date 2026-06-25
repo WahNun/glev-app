@@ -560,6 +560,8 @@ Neue Tabelle `public.glev_ops_users` (id, email, password_hash, role, name, must
 
 | 2026-06-24 | Dexcom Share Direct als 4. CGM-Quelle | [FEATURE] Dexcom Share API (inoffiziell, reverse-engineered, stabil) als 4. direkter CGM-Source neben LLU/Nightscout/Apple-Health. lib/cgm/dexcom.ts mit baseUrl-Region-Switch (EU shareous1.dexcom.com / US share2.dexcom.com), Login via ApplicationId d89443d2..., Session-Cache L1 Map + L2 Supabase (25min), 5-Min-Polling im cgm-poll Cron. cgm_credentials-Erweiterung: dexcom_username, dexcom_password_encrypted, dexcom_region, dexcom_session_id, dexcom_session_expires Spalten; llu_email nullable gemacht fuer Dexcom-only-User. cgm_source='dexcom' in profiles. Settings-UI DexcomDirectCard mit Region-Picker + Test-Button + Save-Button. API: /api/cgm/dexcom/test + /api/cgm/dexcom/credentials. i18n DE+EN unter cgm.dexcom.*. Privacy: Dexcom Inc als Auftragsverarbeiter gelistet. Pattern 1:1 wie LLU-Integration. |
 
+| 2026-06-25 | Lead-Webhook nach CAPI-Entfernung wiederhergestellt | [BUGFIX] app/api/meta/leads/route.ts wurde in PR #76 zusammen mit CAPI/Pixel gelöscht — Meta Lead Form Submissions landeten nicht mehr in Supabase/CRM. Root Cause: DECISIONS.md PR #76 listete META_VERIFY_TOKEN, META_APP_SECRET, META_PAGE_ACCESS_TOKEN, META_PAGE_ID, GRAPH_API_VERSION, LEAD_NOTIFY_WEBHOOK als "zu löschen", obwohl diese vom Webhook (nicht CAPI) benötigt werden. Fix: Route neu erstellt, CAPI-Import (lib/capi-events.ts) und trackEvent()-Aufruf entfernt, META_SYSTEM_USER_TOKEN-Logik vereinfacht (nur noch PAGE_ACCESS_TOKEN), LEAD_NOTIFY_WEBHOOK → CRM_WEBHOOK_URL (Meta-unabhängig). Vars META_VERIFY_TOKEN, META_APP_SECRET, META_PAGE_ACCESS_TOKEN, META_PAGE_ID, GRAPH_API_VERSION, CRM_WEBHOOK_URL wieder in .env.example mit "# Lead Form Webhook — nicht entfernen". Vars die dauerhaft weg bleiben: NEXT_PUBLIC_FB_PIXEL_ID, CAPI_GATEWAY_URL, CAPI_SHARED_SECRET, META_APP_ID, META_SYSTEM_USER_TOKEN. |
+
 ## 2026-06-25 Paywall Copy Compliance Fix
 
 Paywall-Audit ergab 5 falsche Claims in messages/de.json + messages/en.json. Korrekturen:
@@ -569,6 +571,7 @@ Smart-Tier: "KI-Mahlzeitenerkennung per Sprache" → "Glev KI-Assistent" (meal_l
 Pro-Tier: "Engine: KI-Insulin-Coach" → "Glev Engine" (Apple-Review-Risiko + EU-MDR-Grauzone bei "KI-Insulin-Coach"; Engine selbst ist real implementiert); "Glucose-Vorhersage 60 min" entfernt → "TIR-Auswertung & Insights" (kein Forecast-Algorithmus im Code, TIR hierher verschoben); "Mahlzeiten-Bibliothek" entfernt → "HbA1c & GMI" (food_memory ist all-Tier, hba1c_gmi ist pro); "Trainings-Mode" entfernt → "90 Tage Verlauf" (feature nicht implementiert, history_90d ist pro).
 
 Keine Code-Gate-Änderungen. Nur i18n-Copy.
+
 
 ## 2026-06-25 Dexcom Toast-Feedback
 - Success + Error Toast im Dexcom-Connect-Flow ergänzt
