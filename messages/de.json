@@ -2953,7 +2953,9 @@
       "help_option_title": "Mein Sensor ist nicht dabei oder ich brauche Hilfe",
       "help_option_body": "Setup-Unterstützung anfragen — wir kommen auf dich zu.",
       "help_modal_title": "Setup-Hilfe anfragen",
-      "help_modal_after": "Weiter ohne CGM-Verbindung"
+      "help_modal_after": "Weiter ohne CGM-Verbindung",
+      "continue_to_dashboard": "Weiter zum Dashboard",
+      "skip_setup": "Einrichtung überspringen"
     },
     "glevButton": {
       "headline": "Dein zentraler Button",

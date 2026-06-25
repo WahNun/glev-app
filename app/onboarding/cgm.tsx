@@ -40,6 +40,9 @@ import {
   TEXT_DIM,
 } from "./_shared";
 import CgmSetupRequestForm from "@/components/CgmSetupRequestForm";
+import AppleHealthSettingsCard from "@/components/AppleHealthSettingsCard";
+import CgmSettingsCard from "@/components/CgmSettingsCard";
+import NightscoutSettingsCard from "@/components/NightscoutSettingsCard";
 
 type Vendor = "dexcom" | "libre" | "medtronic" | "other";
 type Method = "apple_health" | "librelinkup" | "nightscout";
@@ -70,15 +73,16 @@ export default function CgmStep({
 }) {
   const t = useTranslations("onboarding.cgm");
   const [vendor, setVendor] = useState<Vendor | null>(null);
+  const [selectedMethod, setSelectedMethod] = useState<Method | null>(null);
   const [busy, setBusy] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
   const [helpSubmitted, setHelpSubmitted] = useState(false);
 
-  // Method click — complete onboarding (so the gate stops bouncing
-  // the user back here), then go to Dashboard via onSkip. Best-effort:
-  // if the POST fails we still navigate; worst case the user sees
-  // onboarding once more on next sign-in.
-  async function pickMethod(_method: Method) {
+  function pickMethod(method: Method) {
+    setSelectedMethod(method);
+  }
+
+  async function completeOnboarding() {
     if (busy) return;
     setBusy(true);
     try {
@@ -93,12 +97,88 @@ export default function CgmStep({
     onSkip();
   }
 
-  // Stage-internal back: from method-picker, going back returns to
-  // the vendor-picker rather than to the previous onboarding step.
+  // Stage-internal back: C → B, B → A, help → A, A → previous step.
   function back() {
     if (showHelp) { setShowHelp(false); return; }
-    if (vendor != null) setVendor(null);
-    else onBack();
+    if (selectedMethod != null) { setSelectedMethod(null); return; }
+    if (vendor != null) { setVendor(null); return; }
+    onBack();
+  }
+
+  // Stage C — inline setup card after method selection.
+  if (selectedMethod != null) {
+    return (
+      <Shell
+        step={6}
+        onNext={completeOnboarding}
+        onBack={back}
+        onSkip={onSkip}
+        primaryDisabled={primaryDisabled || busy}
+        hidePrimary
+      >
+        <div>
+          <h1
+            style={{
+              fontSize: 22,
+              fontWeight: 800,
+              margin: 0,
+              letterSpacing: "-0.02em",
+              marginBottom: 6,
+              lineHeight: 1.2,
+            }}
+          >
+            {t(`method_${selectedMethod}_title`)}
+          </h1>
+        </div>
+
+        {selectedMethod === "apple_health" && <AppleHealthSettingsCard />}
+        {selectedMethod === "librelinkup" && <CgmSettingsCard />}
+        {selectedMethod === "nightscout" && <NightscoutSettingsCard />}
+
+        <button
+          onClick={completeOnboarding}
+          disabled={busy}
+          style={{
+            background: ACCENT,
+            border: "none",
+            color: "#fff",
+            fontSize: 15,
+            fontWeight: 700,
+            cursor: busy ? "wait" : "pointer",
+            textAlign: "center",
+            padding: "13px 14px",
+            fontFamily: "inherit",
+            borderRadius: 14,
+            opacity: busy ? 0.6 : 1,
+            marginTop: 4,
+            width: "100%",
+          }}
+        >
+          {t("continue_to_dashboard")}
+        </button>
+
+        <button
+          onClick={completeOnboarding}
+          disabled={busy}
+          style={{
+            background: "transparent",
+            border: "none",
+            color: TEXT_DIM,
+            fontSize: 13,
+            fontWeight: 600,
+            cursor: busy ? "wait" : "pointer",
+            textAlign: "center",
+            padding: "8px 14px",
+            fontFamily: "inherit",
+            textDecoration: "underline",
+            textUnderlineOffset: 3,
+            opacity: busy ? 0.5 : 1,
+          }}
+        >
+          {t("skip_setup")}
+        </button>
+      </Shell>
+    );
   }
 
   // Help modal: after successful submit the user can either wait or
