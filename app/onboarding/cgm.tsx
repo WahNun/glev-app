@@ -27,7 +27,6 @@
  */
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import {
   Shell,
@@ -59,14 +58,6 @@ const VENDOR_COLOR: Record<Vendor, string> = {
   other:     PINK,
 };
 
-// Map onboarding-method → settings-sheet key. Apple Health lives
-// inside the libre2 sheet (CgmSettingsCard renders the AH section
-// at the bottom of that card on iOS).
-const METHOD_TO_SHEET: Record<Method, "libre2" | "nightscout"> = {
-  librelinkup:  "libre2",
-  apple_health: "libre2",
-  nightscout:   "nightscout",
-};
 
 export default function CgmStep({
   onSkip,
@@ -78,18 +69,16 @@ export default function CgmStep({
   primaryDisabled?: boolean;
 }) {
   const t = useTranslations("onboarding.cgm");
-  const router = useRouter();
   const [vendor, setVendor] = useState<Vendor | null>(null);
   const [busy, setBusy] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
   const [helpSubmitted, setHelpSubmitted] = useState(false);
 
-  // Method click — complete onboarding first (so the gate stops
-  // bouncing the user back here), THEN deep-link to settings with
-  // the right sheet pre-opened. Best-effort: if the POST fails we
-  // still navigate, the worst outcome is the user sees onboarding
-  // once more on next sign-in.
-  async function pickMethod(method: Method) {
+  // Method click — complete onboarding (so the gate stops bouncing
+  // the user back here), then go to Dashboard via onSkip. Best-effort:
+  // if the POST fails we still navigate; worst case the user sees
+  // onboarding once more on next sign-in.
+  async function pickMethod(_method: Method) {
     if (busy) return;
     setBusy(true);
     try {
@@ -101,9 +90,7 @@ export default function CgmStep({
     } catch {
       /* swallow */
     }
-    if (typeof window !== "undefined") {
-      window.location.href = `/settings?cgmSetup=${method}`;
-    }
+    onSkip();
   }
 
   // Stage-internal back: from method-picker, going back returns to
