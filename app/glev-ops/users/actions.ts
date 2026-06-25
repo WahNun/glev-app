@@ -877,6 +877,7 @@ export async function clearManualPlanAction(formData: FormData): Promise<void> {
     .from("profiles")
     .update({
       manual_plan_override: null,
+      manual_plan_expires_at: null,
       manual_plan_note: null,
       manual_plan_set_at: null,
     })
@@ -1182,7 +1183,14 @@ export async function cancelAndBanAction(formData: FormData): Promise<void> {
   // noch „pro" und das ist verwirrend in den Audit-Logs.
   await sb
     .from("profiles")
-    .update({ plan: "free", subscription_status: "cancelled" })
+    .update({
+      plan: "free",
+      subscription_status: "cancelled",
+      manual_plan_override: null,
+      manual_plan_expires_at: null,
+      manual_plan_note: null,
+      manual_plan_set_at: null,
+    })
     .eq("user_id", userId);
 
   await writeAuditLog({

@@ -643,3 +643,13 @@ Fix: `app/api/ai/consent/route.ts` — Gate prüft jetzt BEIDE Bedingungen:
 Admin-Client (service-role) wird für den Fallback-Pfad verwendet — gleiche Begründung wie in `api/me/plan`: RLS auf `subscription_status` ist nicht garantiert zuverlässig via Anon-Key.
 
 Sekundär: `app/(protected)/settings/ai/page.tsx` — Master-Toggle onClick deaktiviert wenn `aiConsentGranted === null` (Loading-State). Vorher: `toggleAiConsent` wurde aufgerufen und returned stumm. Jetzt: Guard in onClick verhindert den Aufruf, opacity 0.55 + cursor not-allowed signalisieren den Lade-Zustand bereits visuell.
+
+## 2026-06-25 meta-lead-provisioning: action_link → hashed_token
+
+Bug: `generateLink()` gibt bei PKCE-aktivierten Supabase-Configs `properties.action_link` als `null` zurück. Dadurch wurde kein Invite- oder Recovery-Link versendet.
+
+Fix: `lib/meta-lead-provisioning.ts` nutzt jetzt `properties.hashed_token` und baut den Verify-URL selbst:
+- Invite (neuer User): `SUPABASE_URL/auth/v1/verify?token=<ht>&type=invite&redirect_to=…`
+- Recovery (bestehender User): `…&type=recovery&redirect_to=…`
+
+`action_link` wird nicht mehr gelesen. Fallback-Logging bleibt: wenn `hashed_token` ebenfalls fehlt, wird ein Error geloggt und kein Link versendet.

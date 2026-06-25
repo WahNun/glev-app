@@ -150,11 +150,14 @@ export async function provisionMetaLead(
         email,
         options: { redirectTo: `${APP_URL}/auth/confirm?lang=${effectiveLocale}&email=${encodeURIComponent(email)}` },
       });
-      inviteUrl = rec?.properties?.action_link ?? null;
+      const recHt = rec?.properties?.hashed_token;
+      inviteUrl = recHt
+        ? `${process.env.NEXT_PUBLIC_SUPABASE_URL}/auth/v1/verify?token=${recHt}&type=recovery&redirect_to=${encodeURIComponent(`${APP_URL}/auth/confirm?lang=${effectiveLocale}&email=${encodeURIComponent(email)}`)}`
+        : null;
       if (!inviteUrl) {
         // eslint-disable-next-line no-console
         console.error(
-          `[meta-lead-provisioning] recovery generateLink returned no action_link for ${email} — invite email will NOT be sent`,
+          `[meta-lead-provisioning] recovery generateLink returned no hashed_token for ${email} — invite email will NOT be sent`,
         );
       }
     } else {
@@ -162,11 +165,14 @@ export async function provisionMetaLead(
     }
   } else {
     userId = linkData!.user!.id;
-    inviteUrl = linkData?.properties?.action_link ?? null;
+    const ht = linkData?.properties?.hashed_token;
+    inviteUrl = ht
+      ? `${process.env.NEXT_PUBLIC_SUPABASE_URL}/auth/v1/verify?token=${ht}&type=invite&redirect_to=${encodeURIComponent(`${APP_URL}/auth/confirm?lang=${effectiveLocale}&email=${encodeURIComponent(email)}`)}`
+      : null;
     if (!inviteUrl) {
       // eslint-disable-next-line no-console
       console.error(
-        `[meta-lead-provisioning] invite generateLink returned no action_link for ${email} — invite email will NOT be sent`,
+        `[meta-lead-provisioning] invite generateLink returned no hashed_token for ${email} — invite email will NOT be sent`,
       );
     }
   }
