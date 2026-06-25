@@ -2,6 +2,8 @@
 
 ## Decisions
 
+| 2026-06-25 | Unified User Upsert Form in glev-ops | [REFACTOR] Konsolidiert 5+ separate User-Anlegen/Plan-Vergabe-Flows in ein einziges Formular (`app/glev-ops/users/UserUpsertForm.tsx`). Felder: E-Mail, Vorname, Nachname, Telefon, Sprache, Plan (Free/Smart/Pro/Plus), Dauer (7T/1M/3M/6M/1J/Unbegrenzt/Custom-Datepicker), Tag/Label (Geschenkt/Friends & Family/Diablog.inn/Beta-Tester/Influencer/Presse/Custom), Freitext-Notiz, Checkboxen Welcome-Mail + Trial (7 Tage). Upsert-Logik: existierender User → Plan+Label updaten, neuer User → Account+Plan in einem Schritt. Plan=Free → nur Account anlegen ohne Override. Neue Server-Action `upsertUserAction` gibt strukturiertes Ergebnis zurück (kein redirect), Inline-Feedback im Formular. Alte Quick-Grant- und Free-Year-Blöcke auf users/page.tsx und crm/page.tsx als DEPRECATED markiert (visuell ausgegraut, pointer-events:none), nicht gelöscht. Meta-Lead-Block auf CRM-Seite bleibt (anderer Use Case). Abgedeckte Actions: grantBetaFreeYearAction, setManualPlanAction, createUserAction, grantPlanByEmailAction. |
+
 | 2026-06-25 | Trial Activation Link Expiry — 7-Tage-Fenster via Reactivation Flow | [AUTH] Supabase `generateLink` hat kein per-call `expiresIn`. OTP-Expiry ist eine Projekt-Einstellung (Supabase Dashboard → Auth → Email → OTP Expiry, derzeit 24h). Code-seitige Lösung: (1) `email` in alle `redirectTo`-URLs eingefügt (`provisionMetaLead` invite+recovery, `resend-invite`, `reactivate-trial`) damit die Confirm-Page den User kennt. (2) Neuer Endpoint `POST /api/auth/reactivate-trial` — generiert frischen Recovery-Link wenn `trial_start_at IS NULL` (noch nicht aktiviert); `alreadyActivated: true` wenn bereits aktiv. (3) Confirm-Page zeigt "Neuen Aktivierungslink anfordern"-Button im `invalid`-State wenn `?email=` in der URL ist — ruft Reactivation-Endpoint auf, zeigt Loading/Sent/AlreadyActivated-Feedback. (4) Email-Template `ctaHint` von "24h" auf "7 Tage Zeit" geändert (akkurat: User kann innerhalb 7 Tage immer einen neuen 24h-Link anfordern). Effektives User-Fenster = 7 Tage solange Trial nicht aktiviert. Supabase OTP Expiry kann optional im Dashboard auf 604800s erhöht werden um den ersten Click-Pfad zu verlängern, ist aber nicht notwendig für korrekte Funktion. |
 | 2026-06-25 | Lead Flow Diagramm in glev-ops | [DEV] Neuer Tab "Lead Flow" unter /glev-ops/lead-flow (Dev-Gruppe). SVG-basiertes interaktives Diagramm: Meta Lead Form → /api/meta/leads → /api/crm/signup-notification → Aktivierungs-Link → /api/auth/activate-trial → Paywall → IAP/Stripe → subscription_tier. Fehler-Pfad (Link abgelaufen → /auth/confirm → /api/auth/reactivate-trial) als separate rote Branch. Info-Box: Webhook-404-Bug 22.06.–25.06. Implementierung: inline SVG mit React-State für Click-to-Detail-Panel, CSS-Hover-Highlighting. Keine externe Library, passt zum bestehenden Inline-Style-Pattern des Admin-Panels. |
 | 2026-06-23 | Soro Blog SEO Phase 1 — RSS-Integration | [SEO] RSS-Feed-URL: app.trysoro.com/api/rss/3e94583a-baad-4296-a2ef-e7d445982516. Sitemap dynamisch erweitert (async + Soro-Articles mit pubDate), generateMetadata + generateStaticParams für /blog/[slug]. Cache: 1h in-memory + Next.js revalidate:3600. Phase 2 (Search Console Submit + interne Verlinkung) folgt nach Apple Re-Review. |
@@ -607,6 +609,18 @@ Lösung: Trial-Aktivierungsemails sollen zukünftig nicht mehr den `action_link`
 4. Error-Handling: "Link abgelaufen" + Reactivation-Button bei `state.kind === "invalid"`
 
 i18n: `auth.activate_cta` in messages/de.json + messages/en.json hinzugefügt.
+
+## 2026-06-25 Lead-Flow-Diagramm um Tarn-CAPI-Layer erweitert
+
+`app/glev-ops/lead-flow/LeadFlowDiagram.tsx` um den Outbound-Conversion-Layer ergänzt.
+
+Neue Nodes: "User Signup / Onboarding Complete" (Trigger), "app/api/internal/signup-conversion" (interner Endpoint, amber), "Tarn-Worker: mealpatterns.app/api/conversion" (externer Proxy-Service, live seit 23.06), "Meta CAPI" (Signup-Event, Conversion-Attribution), "GA4: ads_conversion_SIGNUP_1" (Google Analytics Conversion-Event).
+
+Verbindungen: Signup Complete → signup-conversion → Tarn-Worker (Bearer META_TARN_CAPI_SECRET) → Meta CAPI (gestrichelt) + GA4 (gestrichelt).
+
+Backfill-Gap-Warnung hinzugefügt: Node "⚠️ Backfill Endpoint — kein CAPI-Signal" mit Hinweis auf Fix in PR #92 (pending).
+
+Info-Box aktualisiert: Tarn-Worker live seit 23.06 (mealpatterns.app), glev.app Meta-dunkel-Pattern seit PR #76 (22.06).
 
 ## 2026-06-25 Glev AI Consent Gate auf Plan-User erweitert
 

@@ -6,6 +6,7 @@ import {
 } from "./actions";
 import { isAdminAuthed } from "@/lib/adminAuth";
 import UsersTable, { type UserRow } from "./UsersTable";
+import UserUpsertForm from "./UserUpsertForm";
 import Link from "next/link";
 import { computeEffectivePlan } from "@/lib/admin/effectivePlan";
 import AdminLoginForm from "../_components/AdminLoginForm";
@@ -332,6 +333,9 @@ export default async function AdminUsersPage({
         </Link>
       </div>
 
+      {/* Unified Upsert Form — ersetzt Quick-Grant + Free-Year + Nutzer-anlegen */}
+      <UserUpsertForm />
+
       {deletedParam ? (
         <p style={successStyle}>
           User <strong>{deletedParam}</strong> wurde komplett gelöscht.
@@ -366,8 +370,9 @@ export default async function AdminUsersPage({
         <p style={errStyle}>profiles-Fehler: {profilesRes.error.message}</p>
       ) : null}
 
-      {/* Quick-Grant: User per E-Mail freischalten ohne Klick durch die Liste */}
-      <section style={grantBoxStyle}>
+      {/* Quick-Grant — DEPRECATED: Im neuen "User anlegen / Plan setzen"-Formular oben verfügbar */}
+      <section style={{ ...grantBoxStyle, opacity: 0.5, pointerEvents: "none" }}>
+        <div style={deprecatedBadge}>DEPRECATED — bitte neues Formular oben verwenden</div>
         <h2 style={{ fontSize: 14, margin: "0 0 4px", color: "#111", fontWeight: 700 }}>
           Schnell-Freischaltung per E-Mail
         </h2>
@@ -414,11 +419,9 @@ export default async function AdminUsersPage({
         </form>
       </section>
 
-      {/* Free-Year-Programm: 1 Jahr Beta ODER Pro + Welcome-Mail
-          (+ Drip Tag 7/14/30 nur für Beta). Funktioniert wie
-          Quick-Grant, plus Onboarding-Touches. Pro-Variante ist für
-          Diabetolog:innen / Multiplikator:innen gedacht. */}
-      <section style={bfyBoxStyle}>
+      {/* Free-Year-Programm — DEPRECATED: Im neuen "User anlegen / Plan setzen"-Formular oben verfügbar */}
+      <section style={{ ...bfyBoxStyle, opacity: 0.5, pointerEvents: "none" }}>
+        <div style={deprecatedBadge}>DEPRECATED — bitte neues Formular oben verwenden</div>
         <h2 style={{ fontSize: 14, margin: "0 0 4px", color: "#065f46", fontWeight: 700 }}>
           Free-Year-Programm (Friends &amp; Family / Diabetolog:innen)
         </h2>
@@ -556,4 +559,16 @@ const bfyBtnStyle: React.CSSProperties = {
   fontSize: 14,
   fontWeight: 600,
   cursor: "pointer",
+};
+const deprecatedBadge: React.CSSProperties = {
+  display: "inline-block",
+  fontSize: 10,
+  fontWeight: 700,
+  letterSpacing: "0.08em",
+  textTransform: "uppercase",
+  background: "#6b7280",
+  color: "#fff",
+  borderRadius: 4,
+  padding: "2px 6px",
+  marginBottom: 8,
 };

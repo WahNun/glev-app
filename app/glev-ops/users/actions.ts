@@ -10,7 +10,7 @@ import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
 import { getStripe } from "@/lib/stripeServer";
 import { writeAuditLog, isSchemaMissingError } from "@/lib/admin/audit";
 import { enqueueEmail } from "@/lib/emails/outbox";
-import { scheduleDripEmails, scheduleGiftDripEmails } from "@/lib/emails/drip-scheduler";
+import { scheduleDripEmails, scheduleGiftDripEmails, scheduleTrialEmails } from "@/lib/emails/drip-scheduler";
 import type { EmailLocale } from "@/lib/emails/beta-welcome";
 import { buildGiftYearInviteRedirectTo } from "@/lib/admin/grantYearHelpers";
 
@@ -434,6 +434,240 @@ export async function grantBetaFreeYearAction(formData: FormData): Promise<void>
   redirect(
     `/glev-ops/users?bfy_granted=${encodeURIComponent(email)}&until=${encodeURIComponent(expiresAt.slice(0, 10))}&plan=${plan}${isNewUser ? "&new=1" : ""}`,
   );
+}
+
+// ---------------------------------------------------------------------------
+// Unified Upsert Form — Account anlegen oder Plan setzen in einem Schritt.
+// Ersetzt Quick-Grant + Free-Year-Programm + createUserAction für die meisten
+// Admin-Use-Cases. Gibt ein strukturiertes Ergebnis zurück (kein redirect)
+// damit die Fehlermeldung inline im Formular angezeigt werden kann.
+// ---------------------------------------------------------------------------
+
+export type UpsertUserResult =
+  | { ok: true; email: string; isNew: boolean; plan: string; expiresAt: string | null }
+  | { ok: false; error: string };
+
+const UPSERT_DURATION_DAYS: Record<string, number> = {
+  "7d": 7,
+  "30d": 30,
+  "90d": 90,
+  "180d": 180,
+  "365d": 365,
+};
+
+export async function upsertUserAction(formData: FormData): Promise<UpsertUserResult> {
+  try {
+    const adminToken = await requireAdminToken();
+
+    const email = String(formData.get("email") ?? "").trim().toLowerCase();
+    const firstName = String(formData.get("firstName") ?? "").trim() || null;
+    const lastName = String(formData.get("lastName") ?? "").trim() || null;
+    const phone = String(formData.get("phone") ?? "").trim() || null;
+    const language = String(formData.get("language") ?? "de");
+    const plan = String(formData.get("plan") ?? "free");
+    const duration = String(formData.get("duration") ?? "unlimited");
+    const customDate = String(formData.get("customDate") ?? "").trim() || null;
+    const giftLabelDropdown = String(formData.get("giftLabel") ?? "").trim();
+    const giftLabelCustom = String(formData.get("giftLabelCustom") ?? "").trim() || null;
+    const manualPlanNote = String(formData.get("manualPlanNote") ?? "").trim() || null;
+    const sendWelcome = formData.get("sendWelcome") === "1";
+    const activateTrial = formData.get("activateTrial") === "1";
+
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      return { ok: false, error: "Bitte gültige E-Mail eingeben." };
+    }
+    if (!["free", "beta", "pro", "plus"].includes(plan)) {
+      return { ok: false, error: "Ungültiger Plan." };
+    }
+    if (!["de", "en"].includes(language)) {
+      return { ok: false, error: "Ungültige Sprache." };
+    }
+
+    const fullName = [firstName, lastName].filter(Boolean).join(" ") || null;
+    const giftLabel =
+      giftLabelDropdown === "custom"
+        ? (giftLabelCustom || null)
+        : giftLabelDropdown || null;
+
+    // Compute expiry date
+    let expiresAt: string | null = null;
+    if (plan !== "free" && duration !== "unlimited") {
+      if (duration === "custom" && customDate) {
+        const d = new Date(customDate);
+        if (!isNaN(d.getTime())) expiresAt = d.toISOString();
+      } else if (UPSERT_DURATION_DAYS[duration]) {
+        expiresAt = new Date(
+          Date.now() + UPSERT_DURATION_DAYS[duration] * 24 * 60 * 60 * 1000,
+        ).toISOString();
+      }
+    }
+
+    const sb = getSupabaseAdmin();
+    const appUrl =
+      (process.env.NEXT_PUBLIC_APP_URL ?? "").replace(/\/$/, "") || "https://glev.app";
+
+    // Look up existing user (same pagination strategy as grantPlanByEmailAction)
+    let found: { id: string } | null = null;
+    try {
+      const { data, error } = await sb.auth.admin.listUsers({ page: 1, perPage: 1000 });
+      if (error) throw error;
+      found =
+        (data?.users ?? []).find((u) => (u.email ?? "").toLowerCase() === email) ?? null;
+    } catch (e) {
+      console.warn("[upsertUser] listUsers failed:", e);
+      return { ok: false, error: "User-Suche fehlgeschlagen — bitte später erneut versuchen." };
+    }
+
+    let isNew = false;
+    let userId: string;
+    let signupUrl: string | null = null;
+
+    if (!found) {
+      // New user: create account (email pre-confirmed, no password)
+      isNew = true;
+      const { data: created, error: createErr } = await sb.auth.admin.createUser({
+        email,
+        email_confirm: true,
+        user_metadata: {
+          ...(fullName ? { full_name: fullName } : {}),
+          ...(phone ? { phone } : {}),
+        },
+      });
+      if (createErr || !created?.user?.id) {
+        return {
+          ok: false,
+          error: `Account anlegen fehlgeschlagen: ${createErr?.message ?? "unbekannt"}`,
+        };
+      }
+      userId = created.user.id;
+
+      if (sendWelcome && plan !== "free") {
+        const { data: linkData } = await sb.auth.admin.generateLink({
+          type: "magiclink",
+          email,
+          options: { redirectTo: buildGiftYearInviteRedirectTo(process.env.NEXT_PUBLIC_APP_URL) },
+        });
+        signupUrl = linkData?.properties?.action_link ?? null;
+      }
+    } else {
+      // Existing user
+      userId = found.id;
+      if (phone) {
+        await sb.auth.admin
+          .updateUserById(userId, { user_metadata: { phone } })
+          .catch(() => {});
+      }
+      if (sendWelcome && plan !== "free") {
+        const { data: linkData } = await sb.auth.admin.generateLink({
+          type: "magiclink",
+          email,
+          options: { redirectTo: `${appUrl}/dashboard` },
+        });
+        signupUrl = linkData?.properties?.action_link ?? null;
+      }
+    }
+
+    // Fetch current profile for audit + display_name fallback
+    const { data: before } = await sb
+      .from("profiles")
+      .select(
+        "user_id, manual_plan_override, manual_plan_expires_at, manual_plan_note, plan, language, display_name, gift_label",
+      )
+      .eq("user_id", userId)
+      .maybeSingle();
+    const beforeRow = before as Record<string, unknown> | null;
+
+    // Build profile patch
+    const now = new Date();
+    const patch: Record<string, unknown> = { language };
+    if (fullName) patch.display_name = fullName;
+
+    if (plan !== "free") {
+      patch.manual_plan_override = plan;
+      patch.manual_plan_expires_at = expiresAt;
+      patch.manual_plan_note = manualPlanNote;
+      patch.manual_plan_set_at = now.toISOString();
+      if (giftLabel) patch.gift_label = giftLabel;
+    } else {
+      // Free: update metadata without touching plan override
+      if (giftLabel) patch.gift_label = giftLabel;
+      if (manualPlanNote) patch.manual_plan_note = manualPlanNote;
+    }
+
+    // Trial activation: set trial_start_at + trial_end_at (plan override provides access)
+    if (activateTrial && plan !== "free") {
+      const trialEnd = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+      patch.trial_start_at = now.toISOString();
+      patch.trial_end_at = trialEnd.toISOString();
+    }
+
+    let dbErr: { message: string } | null = null;
+    if (isNew) {
+      const { error } = await sb
+        .from("profiles")
+        .upsert({ user_id: userId, created_by_admin: true, ...patch }, { onConflict: "user_id" });
+      dbErr = error;
+    } else {
+      const { error } = await sb.from("profiles").update(patch).eq("user_id", userId);
+      dbErr = error;
+    }
+
+    if (dbErr) {
+      return { ok: false, error: `Profil-Fehler: ${dbErr.message}` };
+    }
+
+    // Welcome mail (uses beta-free-year-welcome for all plan types)
+    if (sendWelcome && plan !== "free") {
+      const locale: EmailLocale = language === "en" ? "en" : "de";
+      const planForMail: "beta" | "pro" | "plus" =
+        plan === "plus" ? "plus" : plan === "pro" ? "pro" : "beta";
+      try {
+        await enqueueEmail({
+          recipient: email,
+          template: "beta-free-year-welcome",
+          payload: {
+            name: fullName ?? (beforeRow?.display_name as string | null) ?? null,
+            appUrl,
+            // BetaFreeYearWelcomePayload requires a non-null string; for
+            // unlimited grants we use a far-future date as display value.
+            expiresAt: expiresAt ?? "2099-12-31T00:00:00.000Z",
+            locale,
+            signupUrl,
+            plan: planForMail,
+          },
+          dedupeKey: `upsert:${userId}:${plan}:${expiresAt ?? "inf"}`,
+        });
+      } catch (e) {
+        console.warn("[upsertUser] enqueueEmail failed:", e);
+      }
+    }
+
+    // Trial emails (Day 6 reminder + Day 7 expiry)
+    if (activateTrial && plan !== "free") {
+      const locale: EmailLocale = language === "en" ? "en" : "de";
+      const displayName = fullName ?? (beforeRow?.display_name as string | null) ?? null;
+      try {
+        await scheduleTrialEmails(email, displayName, now, locale);
+      } catch (e) {
+        console.warn("[upsertUser] scheduleTrialEmails failed:", e);
+      }
+    }
+
+    await writeAuditLog({
+      action: isNew ? "upsert_user_create" : "upsert_user_update",
+      targetUserId: userId,
+      targetEmail: email,
+      before: beforeRow,
+      after: { plan, expiresAt, giftLabel, ...patch },
+      note: `UpsertForm plan=${plan} dur=${duration} label=${giftLabel ?? "—"}`,
+      adminToken,
+    });
+
+    revalidateUserPaths(userId);
+    return { ok: true, email, isNew, plan, expiresAt };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : String(e) };
+  }
 }
 
 // ---------------------------------------------------------------------------

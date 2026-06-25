@@ -355,7 +355,8 @@ export default async function CrmPage({
           </div>
         </section>
 
-        <section style={panelStyle}>
+        <section style={{ ...panelStyle, opacity: 0.45, pointerEvents: "none" }}>
+          <div style={crmDeprecatedBadge}>DEPRECATED — Nutzer-Seite verwenden</div>
           <h2 style={panelTitle}>Schnell-Freischaltung</h2>
           <p style={{ fontSize: 12, color: "#666", margin: "0 0 10px" }}>User muss bereits registriert sein. Setzt manuellen Plan-Override.</p>
           <form action={grantPlanByEmailAction} style={flexForm}>
@@ -371,7 +372,8 @@ export default async function CrmPage({
           </form>
         </section>
 
-        <section style={{ ...panelStyle, background: "#ecfdf5", borderColor: "#a7f3d0" }}>
+        <section style={{ ...panelStyle, background: "#ecfdf5", borderColor: "#a7f3d0", opacity: 0.45, pointerEvents: "none" }}>
+          <div style={crmDeprecatedBadge}>DEPRECATED — Nutzer-Seite verwenden</div>
           <h2 style={{ ...panelTitle, color: "#065f46" }}>Free-Year-Programm</h2>
           <p style={{ fontSize: 12, color: "#065f46", margin: "0 0 10px" }}>1 Jahr kostenloser Zugang. Funktioniert auch für noch nicht registrierte User.</p>
           <form action={grantBetaFreeYearAction} style={flexForm}>
@@ -415,3 +417,4 @@ const flexForm: React.CSSProperties = { display: "flex", flexWrap: "wrap", gap: 
 const primaryBtn: React.CSSProperties = { padding: "8px 14px", background: "#111", color: "#fff", borderRadius: 6, fontSize: 14, fontWeight: 600, textDecoration: "none" };
 const errStyle: React.CSSProperties = { color: "#c00", fontSize: 14, margin: "0 0 10px" };
 const successStyle: React.CSSProperties = { color: "#047857", fontSize: 14, margin: "0 0 10px", background: "#ecfdf5", padding: "8px 12px", borderRadius: 6, border: "1px solid #a7f3d0" };
+const crmDeprecatedBadge: React.CSSProperties = { display: "inline-block", fontSize: 10, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", background: "#6b7280", color: "#fff", borderRadius: 4, padding: "2px 6px", marginBottom: 8 };
