@@ -55,7 +55,7 @@ export async function POST(req: NextRequest) {
   const { data: linkData, error: linkError } = await admin.auth.admin.generateLink({
     type: "recovery",
     email,
-    options: { redirectTo: `${APP_URL}/auth/confirm` },
+    options: { redirectTo: `${APP_URL}/auth/confirm?email=${encodeURIComponent(email)}` },
   });
 
   if (linkError || !linkData?.properties?.action_link) {

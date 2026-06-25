@@ -34,6 +34,8 @@ type State =
   | { kind: "saving" }
   | { kind: "saved" };
 
+type ReactivationStatus = "idle" | "loading" | "sent" | "alreadyActivated" | "error";
+
 type Strings = {
   loadingMoment: string;
   passwordFormTitle: string;
@@ -55,6 +57,12 @@ type Strings = {
   errNoLinkInitial: string;
   errExpiredUsed: string;
   errLinkAlreadyUsed: string;
+  btnRequestNewLink: string;
+  btnRequestingNewLink: string;
+  newLinkSentTitle: string;
+  newLinkSentBody: string;
+  newLinkError: string;
+  alreadyActivated: string;
   copyForType: {
     invite:   { title: string; sub: string; cta: string };
     recovery: { title: string; sub: string; cta: string };
@@ -85,6 +93,12 @@ const DE: Strings = {
   errNoLinkInitial: "Kein gültiger Bestätigungs-Link — bitte fordere einen neuen Link an.",
   errExpiredUsed: "Dieser Reset-Link ist abgelaufen oder wurde bereits verwendet. Bitte fordere einen neuen an.",
   errLinkAlreadyUsed: "Dieser Link wurde bereits verwendet. Falls du per SMS und Email je einen Link erhalten hast, wurde das Konto bereits über den ersten Klick aktiviert. Bitte logge dich direkt ein.",
+  btnRequestNewLink: "Neuen Aktivierungslink anfordern",
+  btnRequestingNewLink: "Sende neuen Link …",
+  newLinkSentTitle: "Neuer Link gesendet ✓",
+  newLinkSentBody: "Prüfe deinen Email-Posteingang.",
+  newLinkError: "Fehler beim Senden. Bitte versuche es erneut oder schreibe uns.",
+  alreadyActivated: "Dein Konto ist bereits aktiv — bitte logge dich direkt ein.",
   copyForType: {
     invite: {
       title: "Account einrichten",
@@ -135,6 +149,12 @@ const EN: Strings = {
   errNoLinkInitial: "No valid confirmation link — please request a new link.",
   errExpiredUsed: "This reset link has expired or has already been used. Please request a new one.",
   errLinkAlreadyUsed: "This link has already been used. If you received both an SMS and an email link, your account was activated on the first click. Please log in directly.",
+  btnRequestNewLink: "Request new activation link",
+  btnRequestingNewLink: "Sending new link …",
+  newLinkSentTitle: "New link sent ✓",
+  newLinkSentBody: "Check your email inbox.",
+  newLinkError: "Error sending link. Please try again or contact us.",
+  alreadyActivated: "Your account is already active — please log in directly.",
   copyForType: {
     invite: {
       title: "Set up your account",
@@ -305,6 +325,9 @@ function ConfirmInner() {
   const langParam   = params.get("lang");
   const locale = (langParam === "de" || langParam === "en") ? langParam : nextIntlLocale;
   const C = locale === "en" ? EN : DE;
+  // ?email= injected by provisioning redirectTo — used to pre-fill the reactivation flow
+  // when a link has expired and the user needs a new activation email.
+  const emailParam  = params.get("email");
 
   // Implicit/hash recovery flow: Supabase redirects to
   // /auth/confirm#access_token=…&type=recovery (or #error_code=otp_expired on a
@@ -330,6 +353,8 @@ function ConfirmInner() {
   const [password, setPassword] = useState("");
   const [confirm, setConfirm]   = useState("");
   const [error, setError]       = useState<string | null>(null);
+  const [reactivationStatus, setReactivationStatus] = useState<ReactivationStatus>("idle");
+  const [reactivationError, setReactivationError]   = useState<string | null>(null);
 
   useEffect(() => {
     if (!supabase) {
@@ -458,6 +483,31 @@ function ConfirmInner() {
     }
   }
 
+  async function handleRequestNewLink() {
+    if (!emailParam) return;
+    setReactivationStatus("loading");
+    setReactivationError(null);
+    try {
+      const res = await fetch("/api/auth/reactivate-trial", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: emailParam, locale }),
+      });
+      const data = await res.json().catch(() => ({})) as Record<string, unknown>;
+      if (!res.ok) {
+        setReactivationStatus("error");
+        setReactivationError(typeof data.error === "string" ? data.error : C.newLinkError);
+      } else if (data.alreadyActivated) {
+        setReactivationStatus("alreadyActivated");
+      } else {
+        setReactivationStatus("sent");
+      }
+    } catch {
+      setReactivationStatus("error");
+      setReactivationError(C.newLinkError);
+    }
+  }
+
   async function handleSetPassword(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
@@ -539,15 +589,64 @@ function ConfirmInner() {
           <div style={{ fontSize: 16, fontWeight: 600, color: state.linkUsed ? "rgba(255,255,255,0.85)" : PINK, marginBottom: 10 }}>
             {state.linkUsed ? C.linkUsedTitle : C.invalidTitle}
           </div>
-          <div style={{ fontSize: 13, color: "rgba(255,255,255,0.55)", lineHeight: 1.5, marginBottom: 22 }}>
+          <div style={{ fontSize: 13, color: "rgba(255,255,255,0.55)", lineHeight: 1.5, marginBottom: 18 }}>
             {state.reason}
           </div>
+
+          {/* Reactivation flow — only when email is in URL and account not yet used */}
+          {emailParam && !state.linkUsed && reactivationStatus !== "sent" && reactivationStatus !== "alreadyActivated" && (
+            <button
+              type="button"
+              onClick={handleRequestNewLink}
+              disabled={reactivationStatus === "loading"}
+              style={{
+                width: "100%",
+                padding: "13px",
+                background: `linear-gradient(135deg, ${ACCENT}, #6B8BFF)`,
+                border: "none",
+                borderRadius: 12,
+                color: "white",
+                fontSize: 14,
+                fontWeight: 700,
+                cursor: reactivationStatus === "loading" ? "not-allowed" : "pointer",
+                opacity: reactivationStatus === "loading" ? 0.7 : 1,
+                marginBottom: 12,
+                transition: "all 0.15s",
+              }}
+            >
+              {reactivationStatus === "loading" ? C.btnRequestingNewLink : C.btnRequestNewLink}
+            </button>
+          )}
+
+          {reactivationStatus === "sent" && (
+            <div style={{ marginBottom: 16 }}>
+              <div style={{ fontSize: 14, fontWeight: 600, color: GREEN, marginBottom: 4 }}>
+                {C.newLinkSentTitle}
+              </div>
+              <div style={{ fontSize: 13, color: "rgba(255,255,255,0.55)" }}>
+                {C.newLinkSentBody}
+              </div>
+            </div>
+          )}
+
+          {reactivationStatus === "alreadyActivated" && (
+            <div style={{ fontSize: 13, color: "rgba(255,255,255,0.7)", marginBottom: 16 }}>
+              {C.alreadyActivated}
+            </div>
+          )}
+
+          {reactivationStatus === "error" && reactivationError && (
+            <div style={{ fontSize: 13, color: PINK, marginBottom: 12 }}>
+              {reactivationError}
+            </div>
+          )}
+
           <Link
             href="/login"
             style={{
               display: "inline-block",
               padding: "10px 18px",
-              background: state.linkUsed
+              background: state.linkUsed || reactivationStatus === "alreadyActivated"
                 ? `linear-gradient(135deg, ${ACCENT}, #6B8BFF)`
                 : "rgba(255,255,255,0.07)",
               borderRadius: 9,
@@ -557,7 +656,7 @@ function ConfirmInner() {
               textDecoration: "none",
             }}
           >
-            {state.linkUsed ? C.toLogin : C.backToLogin}
+            {state.linkUsed || reactivationStatus === "alreadyActivated" ? C.toLogin : C.backToLogin}
           </Link>
         </div>
       )}
