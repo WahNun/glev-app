@@ -144,6 +144,21 @@ export default function UsersTable({
   const [filter, setFilter] = useState<Filter>("all");
   const [currency, setCurrency] = useState<string>(""); // "" = alle
   const [country, setCountry] = useState<string>(""); // "" = alle
+  const [sortCol, setSortCol] = useState<"email" | "last_sign_in_at" | "created_at" | "plan" | "display_name">("last_sign_in_at");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
+
+  function handleSort(col: typeof sortCol) {
+    if (col === sortCol) {
+      setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    } else {
+      setSortCol(col);
+      setSortDir("desc");
+    }
+  }
+  function sortIndicator(col: typeof sortCol) {
+    if (col !== sortCol) return " ⇅";
+    return sortDir === "asc" ? " ▲" : " ▼";
+  }
 
   // Currency-Optionen sind eine kleine, geschlossene Menge (eur/usd plus
   // alles andere was Stripe je geschickt hat). Land-Optionen wachsen
@@ -208,6 +223,25 @@ export default function UsersTable({
       return true;
     });
   }, [rows, q, filter, currency, country]);
+
+  const sorted = useMemo(() => {
+    return [...filtered].sort((a, b) => {
+      let av: string | null;
+      let bv: string | null;
+      switch (sortCol) {
+        case "email":         av = a.email;           bv = b.email;           break;
+        case "display_name":  av = a.display_name;    bv = b.display_name;    break;
+        case "plan":          av = a.plan;             bv = b.plan;            break;
+        case "last_sign_in_at": av = a.last_sign_in_at; bv = b.last_sign_in_at; break;
+        case "created_at":    av = a.created_at;      bv = b.created_at;      break;
+      }
+      if (av == null && bv == null) return 0;
+      if (av == null) return 1;
+      if (bv == null) return -1;
+      const cmp = av < bv ? -1 : av > bv ? 1 : 0;
+      return sortDir === "asc" ? cmp : -cmp;
+    });
+  }, [filtered, sortCol, sortDir]);
 
   return (
     <div>
@@ -288,9 +322,15 @@ export default function UsersTable({
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
           <thead>
             <tr style={{ background: "#f8f8f8", textAlign: "left" }}>
-              <th style={thStyle}>E-Mail</th>
-              <th style={thStyle}>Name</th>
-              <th style={thStyle}>Plan</th>
+              <th style={{ ...thStyle, cursor: "pointer", userSelect: "none" }} onClick={() => handleSort("email")}>
+                E-Mail{sortIndicator("email")}
+              </th>
+              <th style={{ ...thStyle, cursor: "pointer", userSelect: "none" }} onClick={() => handleSort("display_name")}>
+                Name{sortIndicator("display_name")}
+              </th>
+              <th style={{ ...thStyle, cursor: "pointer", userSelect: "none" }} onClick={() => handleSort("plan")}>
+                Plan{sortIndicator("plan")}
+              </th>
               <th style={thStyle}>Status</th>
               <th style={thStyle}>CGM</th>
               <th
@@ -301,13 +341,17 @@ export default function UsersTable({
               </th>
               <th style={thStyle}>Currency</th>
               <th style={thStyle}>Land</th>
-              <th style={thStyle}>Letzter Login</th>
-              <th style={thStyle}>Angelegt</th>
+              <th style={{ ...thStyle, cursor: "pointer", userSelect: "none" }} onClick={() => handleSort("last_sign_in_at")}>
+                Letzter Login{sortIndicator("last_sign_in_at")}
+              </th>
+              <th style={{ ...thStyle, cursor: "pointer", userSelect: "none" }} onClick={() => handleSort("created_at")}>
+                Angelegt{sortIndicator("created_at")}
+              </th>
               <th style={thStyle}></th>
             </tr>
           </thead>
           <tbody>
-            {filtered.map((r) => {
+            {sorted.map((r) => {
               const trialActive = isTrialActive(r);
               const c = trialActive ? { bg: "#fef9c322", fg: "#92400e" } : planColor(r.plan);
               const flags: string[] = [];
