@@ -3340,5 +3340,8 @@
     "privacy": "Datenschutz",
     "terms": "AGB",
     "renewal_notice": "Abos verlängern sich automatisch bis zur Kündigung."
+  },
+  "auth": {
+    "activate_cta": "Konto aktivieren"
   }
 }

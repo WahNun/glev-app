@@ -3338,5 +3338,8 @@
     "privacy": "Privacy",
     "terms": "Terms",
     "renewal_notice": "Subscriptions auto-renew until cancelled."
+  },
+  "auth": {
+    "activate_cta": "Activate account"
   }
 }

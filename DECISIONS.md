@@ -593,3 +593,17 @@ Fix: lib/resolvePaywallState.ts — neue Funktion `resolvePaywallState(customerI
 4. `eligible_for_trial` — Bestandsverhalten: "7 Tage kostenlos testen" + "Pro starten — 7 Tage gratis"
 
 PaywallSheet ruft getOfferings() + getCustomerInfo() parallel auf (kein Extra-Netzwerk-Roundtrip). resolvePaywallState wird direkt danach aufgerufen mit den productIds aus den Offerings. Loading-Spinner bleibt bis beide Promises resolved sind. Neue i18n-Keys: trial_active_label, trial_active_cta, ineligible_cta (DE+EN). Fail-open: jeder Fehler in checkTrialOrIntroductoryPriceEligibility → "eligible_for_trial".
+
+## 2026-06-25 Two-Step Confirmation für Trial-Aktivierung
+
+Grund: Email-Prefetch-Scanner (Outlook SafeLinks, Gmail, Proofpoint) rufen die Aktivierungs-URL automatisch auf bevor der User die Email sieht. Bei Links die direkt auf Supabase's `/auth/v1/verify` zeigen (action_link) wird der OTP dabei serverseitig verbraucht — der User sieht beim eigenen Klick "Link abgelaufen".
+
+Lösung: Trial-Aktivierungsemails sollen zukünftig nicht mehr den `action_link` enthalten, sondern die URL `?token=HASHED_TOKEN&email=USER@EMAIL` direkt auf `/auth/confirm`. Der `hashed_token` aus Supabase's `generateLink`-Response wird dabei in einen URL-Parameter `token` verpackt. Dieser Token wird vom Scanner NICHT verbraucht (er liegt nur in der URL), weil `verifyOtp()` nie beim Seitenaufruf ausgelöst wird.
+
+`app/auth/confirm/page.tsx` erkennt `?token=xxx` als neues URL-Format und:
+1. Zeigt Button "Konto aktivieren" + Text "Klicke unten um deinen kostenlosen Glev-Zugang zu aktivieren."
+2. Ruft `verifyOtp({ token_hash: token })` erst beim Button-Click auf
+3. Danach: `activateTrial(sessionToken)` fire-and-forget, dann Passwort-Form (wie bisher)
+4. Error-Handling: "Link abgelaufen" + Reactivation-Button bei `state.kind === "invalid"`
+
+i18n: `auth.activate_cta` in messages/de.json + messages/en.json hinzugefügt.

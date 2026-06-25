@@ -63,6 +63,8 @@ type Strings = {
   newLinkSentBody: string;
   newLinkError: string;
   alreadyActivated: string;
+  activateCta: string;
+  activateSub: string;
   copyForType: {
     invite:   { title: string; sub: string; cta: string };
     recovery: { title: string; sub: string; cta: string };
@@ -99,6 +101,8 @@ const DE: Strings = {
   newLinkSentBody: "Prüfe deinen Email-Posteingang.",
   newLinkError: "Fehler beim Senden. Bitte versuche es erneut oder schreibe uns.",
   alreadyActivated: "Dein Konto ist bereits aktiv — bitte logge dich direkt ein.",
+  activateCta: "Konto aktivieren",
+  activateSub: "Klicke unten um deinen kostenlosen Glev-Zugang zu aktivieren.",
   copyForType: {
     invite: {
       title: "Account einrichten",
@@ -155,6 +159,8 @@ const EN: Strings = {
   newLinkSentBody: "Check your email inbox.",
   newLinkError: "Error sending link. Please try again or contact us.",
   alreadyActivated: "Your account is already active — please log in directly.",
+  activateCta: "Activate account",
+  activateSub: "Click below to activate your free Glev access.",
   copyForType: {
     invite: {
       title: "Set up your account",
@@ -316,10 +322,14 @@ function ConfirmInner() {
   const type        = params.get("type") ?? "recovery";
   const code        = params.get("code");
   const tokenHash   = params.get("token_hash");
+  // ?token= is the scanner-safe format: the email embeds the Supabase hashed_token
+  // directly in the confirm URL instead of the action_link. Scanners load the page
+  // and see only a button — they never call verifyOtp, so the token stays valid.
+  const token       = params.get("token");
   // Set by /auth/callback after it already exchanged the code server-side.
   // The session is live in cookies; we skip straight to the password form.
   const sessionReady = params.get("session") === "ready";
-  const hasParams   = Boolean(code || tokenHash || sessionReady);
+  const hasParams   = Boolean(code || tokenHash || token || sessionReady);
   // ?lang= from the provisioning redirectTo — overrides next-intl cookie/header locale
   // so users arriving from a German SMS link always see German even when roaming abroad.
   const langParam   = params.get("lang");
@@ -447,9 +457,9 @@ function ConfirmInner() {
         const { data, error: ex } = await supabase.auth.exchangeCodeForSession(code);
         if (ex) throw ex;
         sessionToken = data.session?.access_token ?? null;
-      } else if (tokenHash) {
+      } else if (tokenHash || token) {
         const { data, error: vo } = await supabase.auth.verifyOtp({
-          token_hash: tokenHash,
+          token_hash: (tokenHash ?? token)!,
           type: type as "recovery" | "invite" | "email" | "signup" | "email_change" | "magiclink",
         });
         if (vo) throw vo;
@@ -548,7 +558,9 @@ function ConfirmInner() {
   return (
     <Shell>
       {state.kind === "needs_confirm" && (() => {
-        const c = copyForType(type, C);
+        const c = token
+          ? { title: C.activateCta, sub: C.activateSub, cta: C.activateCta }
+          : copyForType(type, C);
         return (
           <div style={{ textAlign: "center" }}>
             <div style={{ fontSize: 11, color: "rgba(255,255,255,0.35)", letterSpacing: "0.12em", marginBottom: 10 }}>
