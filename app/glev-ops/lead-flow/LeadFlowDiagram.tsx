@@ -186,7 +186,7 @@ const NODES: FlowNode[] = [
   // ── info box ──────────────────────────────────────────────────────────────
   {
     id: "webhook-404",
-    x: 620, y: 30, w: 255, h: 115,
+    x: 620, y: 30, w: 255, h: 165,
     color: C.indigo, bg: "#0d0d1a",
     title: "ℹ Webhook 404 (historisch)",
     lines: [
@@ -195,9 +195,68 @@ const NODES: FlowNode[] = [
       "Leads nicht erfasst,",
       "kein Trial-E-Mail versendet.",
       "Behoben 25.06.",
+      "Tarn-Worker live 23.06",
+      "→ mealpatterns.app",
+      "Meta-dunkel: PR #76 (22.06)",
     ],
     detail:
-      "Historischer Bug: /api/meta/leads antwortete mit 404. Meta-Webhooks schlugen fehl. Leads aus diesem Zeitraum wurden nicht erfasst. Behoben durch Route-Fix am 25.06.2026.",
+      "Historischer Bug: /api/meta/leads antwortete mit 404. Meta-Webhooks schlugen fehl. Leads aus diesem Zeitraum wurden nicht erfasst. Behoben durch Route-Fix am 25.06.2026. Tarn-Worker live seit 23.06 auf mealpatterns.app. glev.app Meta-dunkel-Pattern seit PR #76 (22.06).",
+  },
+  // ── outbound conversion nodes ───────────────────────────────────────────────
+  {
+    id: "signup-trigger",
+    x: 30, y: 1310, w: 280, h: 70,
+    color: C.green, bg: "#0d1a0d",
+    title: "User Signup / Onboarding Complete",
+    lines: ["Trigger — nach Trial-Aktivierung"],
+    detail:
+      "Wird nach erfolgreichem Onboarding / Trial-Aktivierung gefeuert. Startet den Outbound-Conversion-Signal-Layer für Meta CAPI und GA4.",
+  },
+  {
+    id: "signup-conversion",
+    x: 30, y: 1430, w: 280, h: 80,
+    color: C.amber, bg: "#1a1000",
+    title: "app/api/internal/signup-conversion",
+    lines: ["→ Tarn-Worker (Bearer-Auth)", "→ glev.app Meta-dunkel"],
+    detail:
+      "Interner API-Endpoint. Weiterleitung des Conversion-Events an den Tarn-Worker auf mealpatterns.app via Bearer-Token (META_TARN_CAPI_SECRET).",
+    codeRef: "app/api/internal/signup-conversion/route.ts",
+  },
+  {
+    id: "tarn-worker",
+    x: 30, y: 1565, w: 280, h: 105,
+    color: C.purple, bg: "#140d1a",
+    title: "Tarn-Worker: mealpatterns.app/api/conversion",
+    lines: ["glev.app Meta-dunkel", "Live seit 23.06.2026"],
+    detail:
+      "Externer Proxy-Service auf mealpatterns.app. Sendet Conversion-Events an Meta CAPI und GA4 ohne direkten Bezug zu glev.app (Meta-Darkening-Pattern). Live seit 23.06.2026.",
+  },
+  {
+    id: "meta-capi-outbound",
+    x: 345, y: 1570, w: 215, h: 60,
+    color: C.blue, bg: "#0d0d1a",
+    title: "Meta CAPI",
+    lines: ["Signup-Event · Conversion-Attribution"],
+    detail:
+      "Facebook Conversion API empfängt das Signup-Event vom Tarn-Worker. Conversion-Attribution ohne Browser-Pixel.",
+  },
+  {
+    id: "ga4-conversion",
+    x: 345, y: 1645, w: 215, h: 60,
+    color: C.red, bg: "#1a0a0a",
+    title: "GA4: ads_conversion_SIGNUP_1",
+    lines: ["Google Analytics — Conversion-Event"],
+    detail:
+      "Google Analytics 4 Conversion-Event via Tarn-Worker. Tracking-Event: ads_conversion_SIGNUP_1.",
+  },
+  {
+    id: "backfill-gap",
+    x: 620, y: 1310, w: 255, h: 100,
+    color: C.amber, bg: "#1a1000",
+    title: "⚠️ Backfill Endpoint",
+    lines: ["kein CAPI-Signal", "Fix in PR #92 (pending)"],
+    detail:
+      "Backfill-Endpoint für Leads aus der 404-Periode (22.06–25.06) sendet kein CAPI-Signal. Diese Leads haben kein Conversion-Tracking. Fix folgt in PR #92.",
   },
 ];
 
@@ -320,7 +379,7 @@ export default function LeadFlowDiagram() {
       <div style={{ overflowX: "auto", overflowY: "visible" }}>
         <svg
           width={900}
-          height={1260}
+          height={1800}
           style={{ display: "block" }}
           aria-label="Glev Lead Flow Diagramm"
         >
@@ -383,6 +442,26 @@ export default function LeadFlowDiagram() {
           >
             ↩ neuer Link → zurück zu Schritt 4
           </text>
+
+          {/* ── outbound section separator ───────────────────────────────── */}
+          <line x1={30} y1={1272} x2={875} y2={1272} stroke="#2a2a2a" strokeWidth={1.5} strokeDasharray="6 4" />
+          <text
+            x={30}
+            y={1294}
+            fill="#444"
+            fontSize={10}
+            fontWeight={700}
+            letterSpacing={1.2}
+            fontFamily="system-ui, -apple-system, sans-serif"
+          >
+            OUTBOUND CONVERSION SIGNALS
+          </text>
+
+          {/* ── outbound conversion arrows ────────────────────────────────── */}
+          <VArrow x={170} y1={1380} y2={1430} c="green" />
+          <VArrow x={170} y1={1510} y2={1565} c="amber" label="Bearer META_TARN_CAPI_SECRET" />
+          <HArrow x1={310} x2={345} y={1600} c="blue" dashed />
+          <HArrow x1={310} x2={345} y={1675} c="red" dashed />
 
           {/* ── all nodes ────────────────────────────────────────────────── */}
           {NODES.map((n) => (
