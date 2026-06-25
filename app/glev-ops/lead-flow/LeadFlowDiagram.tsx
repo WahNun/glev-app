@@ -203,60 +203,65 @@ const NODES: FlowNode[] = [
       "Historischer Bug: /api/meta/leads antwortete mit 404. Meta-Webhooks schlugen fehl. Leads aus diesem Zeitraum wurden nicht erfasst. Behoben durch Route-Fix am 25.06.2026. Tarn-Worker live seit 23.06 auf mealpatterns.app. glev.app Meta-dunkel-Pattern seit PR #76 (22.06).",
   },
   // ── outbound conversion nodes ───────────────────────────────────────────────
+  // Zone ①: glev.app (Meta-dunkel)
   {
     id: "signup-trigger",
-    x: 30, y: 1310, w: 280, h: 70,
+    x: 45, y: 1335, w: 232, h: 55,
     color: C.green, bg: "#0d1a0d",
     title: "User Signup / Onboarding Complete",
     lines: ["Trigger — nach Trial-Aktivierung"],
     detail:
-      "Wird nach erfolgreichem Onboarding / Trial-Aktivierung gefeuert. Startet den Outbound-Conversion-Signal-Layer für Meta CAPI und GA4.",
+      "Wird nach erfolgreichem Onboarding / Trial-Aktivierung gefeuert. Startet den Outbound-Conversion-Signal-Layer.",
   },
   {
     id: "signup-conversion",
-    x: 30, y: 1430, w: 280, h: 80,
-    color: C.amber, bg: "#1a1000",
+    x: 45, y: 1425, w: 232, h: 95,
+    color: C.blue, bg: "#0d0d1a",
     title: "app/api/internal/signup-conversion",
-    lines: ["→ Tarn-Worker (Bearer-Auth)", "→ glev.app Meta-dunkel"],
+    lines: ["Leitet weiter an Tarn-Worker →", "glev.app berührt Meta NIE direkt"],
     detail:
-      "Interner API-Endpoint. Weiterleitung des Conversion-Events an den Tarn-Worker auf mealpatterns.app via Bearer-Token (META_TARN_CAPI_SECRET).",
+      "Interner Relay-Endpunkt auf glev.app. Einzige Aufgabe: Event per Bearer-Auth an mealpatterns.app weiterleiten. glev.app schickt NIEMALS direkt an Meta.",
     codeRef: "app/api/internal/signup-conversion/route.ts",
   },
+  // Zone ②: mealpatterns.app (Tarn-Worker)
   {
     id: "tarn-worker",
-    x: 30, y: 1565, w: 280, h: 105,
+    x: 368, y: 1360, w: 210, h: 110,
     color: C.purple, bg: "#140d1a",
-    title: "Tarn-Worker: mealpatterns.app/api/conversion",
-    lines: ["glev.app Meta-dunkel", "Live seit 23.06.2026"],
+    title: "mealpatterns.app/api/conversion",
+    lines: ["Tarn-Worker · Live seit 23.06.2026", "Kein Bezug zu glev.app"],
     detail:
-      "Externer Proxy-Service auf mealpatterns.app. Sendet Conversion-Events an Meta CAPI und GA4 ohne direkten Bezug zu glev.app (Meta-Darkening-Pattern). Live seit 23.06.2026.",
+      "Externer Proxy-Service auf mealpatterns.app. Dieser Server ist der einzige, der Meta CAPI und GA4 kontaktiert. glev.app ist für Meta vollständig unsichtbar (Meta-Darkening-Pattern).",
   },
+  // Zone ③: Externe APIs
   {
     id: "meta-capi-outbound",
-    x: 345, y: 1570, w: 215, h: 60,
+    x: 660, y: 1335, w: 200, h: 70,
     color: C.blue, bg: "#0d0d1a",
     title: "Meta CAPI",
     lines: ["Signup-Event · Conversion-Attribution"],
     detail:
-      "Facebook Conversion API empfängt das Signup-Event vom Tarn-Worker. Conversion-Attribution ohne Browser-Pixel.",
+      "Facebook Conversion API empfängt das Signup-Event vom Tarn-Worker (mealpatterns.app). Kein Pixel, kein direkter Kontakt zu glev.app.",
   },
   {
     id: "ga4-conversion",
-    x: 345, y: 1645, w: 215, h: 60,
-    color: C.red, bg: "#1a0a0a",
+    x: 660, y: 1430, w: 200, h: 65,
+    color: C.teal, bg: "#0a1a16",
     title: "GA4: ads_conversion_SIGNUP_1",
-    lines: ["Google Analytics — Conversion-Event"],
+    lines: ["Google Analytics · Conversion-Event"],
     detail:
-      "Google Analytics 4 Conversion-Event via Tarn-Worker. Tracking-Event: ads_conversion_SIGNUP_1.",
+      "Google Analytics 4 Conversion-Event, ebenfalls via Tarn-Worker. Tracking-Event: ads_conversion_SIGNUP_1. Live seit 23.06.",
   },
+  // Backfill-Hinweis
   {
     id: "backfill-gap",
-    x: 620, y: 1310, w: 255, h: 100,
+    x: 45, y: 1555, w: 232, h: 70,
     color: C.amber, bg: "#1a1000",
-    title: "⚠️ Backfill Endpoint",
-    lines: ["kein CAPI-Signal", "Fix in PR #92 (pending)"],
+    title: "⚠️ Admin: /api/admin/meta/backfill",
+    lines: ["Einmaliger Backfill via capi-backfill", "Deployed PR #92 · 25.06.2026"],
     detail:
-      "Backfill-Endpoint für Leads aus der 404-Periode (22.06–25.06) sendet kein CAPI-Signal. Diese Leads haben kein Conversion-Tracking. Fix folgt in PR #92.",
+      "One-Time-Backfill-Endpoint für die 11 Leads aus der 404-Ausfall-Periode (22.–25.06). Sendet ebenfalls via META_TARN_CAPI_URL, also kein direkter Meta-Kontakt. curl -Befehl mit Bearer glev-backfill-2026 ausführen.",
+    codeRef: "app/api/admin/meta/capi-backfill/route.ts",
   },
 ];
 
@@ -296,7 +301,7 @@ export default function LeadFlowDiagram() {
           [C.blue, "API Endpoint"],
           [C.teal, "Datenbank"],
           [C.purple, "Service / Funktion"],
-          [C.amber, "UI / App"],
+          [C.amber, "UI / App / Warnung"],
           [C.pink, "Payment"],
           [C.red, "Fehler-Pfad"],
           [C.indigo, "Info"],
@@ -379,7 +384,7 @@ export default function LeadFlowDiagram() {
       <div style={{ overflowX: "auto", overflowY: "visible" }}>
         <svg
           width={900}
-          height={1800}
+          height={1680}
           style={{ display: "block" }}
           aria-label="Glev Lead Flow Diagramm"
         >
@@ -457,11 +462,43 @@ export default function LeadFlowDiagram() {
             OUTBOUND CONVERSION SIGNALS
           </text>
 
+          {/* ── Zone backgrounds ─────────────────────────────────────────── */}
+          {/* Zone ①: glev.app */}
+          <rect x={30} y={1310} width={262} height={330} rx={10}
+            fill="#080d14" stroke={C.blue} strokeWidth={1} strokeOpacity={0.4} />
+          <text x={45} y={1327} fill={C.blue} fontSize={9} fontWeight={700}
+            opacity={0.6} fontFamily="system-ui, -apple-system, sans-serif"
+            letterSpacing={0.8}>
+            ① glev.app · Meta-dunkel
+          </text>
+
+          {/* Zone ②: mealpatterns.app */}
+          <rect x={352} y={1310} width={262} height={330} rx={10}
+            fill="#10091a" stroke={C.purple} strokeWidth={1} strokeOpacity={0.4} />
+          <text x={368} y={1327} fill={C.purple} fontSize={9} fontWeight={700}
+            opacity={0.6} fontFamily="system-ui, -apple-system, sans-serif"
+            letterSpacing={0.8}>
+            ② mealpatterns.app · Tarn-Worker
+          </text>
+
+          {/* Zone ③: Externe APIs */}
+          <rect x={644} y={1310} width={226} height={330} rx={10}
+            fill="#081410" stroke={C.teal} strokeWidth={1} strokeOpacity={0.4} />
+          <text x={660} y={1327} fill={C.teal} fontSize={9} fontWeight={700}
+            opacity={0.6} fontFamily="system-ui, -apple-system, sans-serif"
+            letterSpacing={0.8}>
+            ③ Meta · Google · Externe APIs
+          </text>
+
           {/* ── outbound conversion arrows ────────────────────────────────── */}
-          <VArrow x={170} y1={1380} y2={1430} c="green" />
-          <VArrow x={170} y1={1510} y2={1565} c="amber" label="Bearer META_TARN_CAPI_SECRET" />
-          <HArrow x1={310} x2={345} y={1600} c="blue" dashed />
-          <HArrow x1={310} x2={345} y={1675} c="red" dashed />
+          {/* ① internal: signup-trigger → signup-conversion */}
+          <VArrow x={161} y1={1390} y2={1425} c="green" />
+          {/* ① → ②: signup-conversion → tarn-worker */}
+          <HArrow x1={277} x2={352} y={1462} c="purple" label="Bearer AUTH (CAPI-Secret)" />
+          {/* ② → ③: tarn-worker → Meta CAPI */}
+          <HArrow x1={578} x2={644} y={1385} c="blue" label="CAPI Event" />
+          {/* ② → ③: tarn-worker → GA4 */}
+          <HArrow x1={578} x2={644} y={1462} c="teal" label="GA4 Event" />
 
           {/* ── all nodes ────────────────────────────────────────────────── */}
           {NODES.map((n) => (
