@@ -15,7 +15,14 @@ export type MetaLeadInviteLocale = "de" | "en";
 export function metaLeadInviteSubject(
   first: string | null,
   locale: MetaLeadInviteLocale,
+  isReactivation?: boolean,
 ): string {
+  if (isReactivation) {
+    if (locale === "en") {
+      return first ? `${first}, here's your new Glev activation link` : "Your new Glev activation link";
+    }
+    return first ? `${first}, dein neuer Glev-Aktivierungslink` : "Dein neuer Glev-Aktivierungslink";
+  }
   if (locale === "en") {
     return first
       ? `${first}, set up your Glev access`
@@ -32,24 +39,29 @@ export function metaLeadInviteHtml(
   locale: MetaLeadInviteLocale,
   _appUrl?: string,
   email?: string | null,
+  isReactivation?: boolean,
 ): string {
   const de = locale !== "en";
   const greeting = first
     ? (de ? `Hallo ${first}` : `Hi ${first}`)
     : (de ? "Hallo" : "Hi there");
 
-  const headline = de
-    ? "Dein Glev-Zugang wartet auf dich."
-    : "Your Glev access is waiting for you.";
+  const headline = isReactivation
+    ? (de ? "Hier ist dein neuer Aktivierungslink." : "Here's your new activation link.")
+    : (de ? "Dein Glev-Zugang wartet auf dich." : "Your Glev access is waiting for you.");
 
-  const body = de
-    ? `Du hast dich über unser Lead-Formular registriert — super! Klick auf den Button, um dein Passwort einzurichten und direkt loszulegen. Du bekommst <strong style="color:#fff;">7 Tage alle Pro-Features kostenlos</strong>.`
-    : `You signed up via our lead form — awesome! Click the button below to set your password and get started. You get <strong style="color:#fff;">7 days of all Pro features for free</strong>.`;
+  const body = isReactivation
+    ? (de
+        ? `Dein vorheriger Link ist abgelaufen — kein Problem! Klick einfach unten und richte deinen Account ein. Du bekommst <strong style="color:#fff;">7 Tage alle Pro-Features kostenlos</strong>.`
+        : `Your previous link expired — no worries! Just click below and set up your account. You get <strong style="color:#fff;">7 days of all Pro features for free</strong>.`)
+    : (de
+        ? `Du hast dich über unser Lead-Formular registriert — super! Klick auf den Button, um dein Passwort einzurichten und direkt loszulegen. Du bekommst <strong style="color:#fff;">7 Tage alle Pro-Features kostenlos</strong>.`
+        : `You signed up via our lead form — awesome! Click the button below to set your password and get started. You get <strong style="color:#fff;">7 days of all Pro features for free</strong>.`);
 
   const cta = de ? "Zugang einrichten →" : "Set up your access →";
   const ctaHint = de
-    ? "Der Link ist 24 Stunden gültig."
-    : "This link is valid for 24 hours.";
+    ? "Du hast 7 Tage Zeit, deinen Glev-Zugang einzurichten."
+    : "You have 7 days to set up your Glev access.";
   const signoff = de
     ? `Fragen? Einfach auf diese Mail antworten — ich bin direkt dran.<br /><strong style="color:#A1A1AA;">Lucas</strong> · Glev Team`
     : `Questions? Just reply to this email — I'm right there.<br /><strong style="color:#A1A1AA;">Lucas</strong> · Glev Team`;

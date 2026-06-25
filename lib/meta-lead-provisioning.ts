@@ -122,7 +122,7 @@ export async function provisionMetaLead(
         // that parses the #access_token hash). Routing through /auth/callback
         // (a server route) loses the hash fragment and bounces the user to
         // /auth/auth-error before they can set a password.
-        redirectTo: `${APP_URL}/auth/confirm?lang=${effectiveLocale}`,
+        redirectTo: `${APP_URL}/auth/confirm?lang=${effectiveLocale}&email=${encodeURIComponent(email)}`,
       },
     });
 
@@ -148,7 +148,7 @@ export async function provisionMetaLead(
       const { data: rec } = await sb.auth.admin.generateLink({
         type: "recovery",
         email,
-        options: { redirectTo: `${APP_URL}/auth/confirm?lang=${effectiveLocale}` },
+        options: { redirectTo: `${APP_URL}/auth/confirm?lang=${effectiveLocale}&email=${encodeURIComponent(email)}` },
       });
       inviteUrl = rec?.properties?.action_link ?? null;
       if (!inviteUrl) {
