@@ -13,9 +13,10 @@ import { SettingsSection, SettingsRow, ConnectedDot } from "@/components/Setting
 const ACCENT = "#4F6EF7", BORDER = "var(--border)";
 const iconProps = { width: 16, height: 16, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: 2, strokeLinecap: "round" as const, strokeLinejoin: "round" as const };
 
-type DexcomCardProps = { onConnected: () => void; onDisconnected: () => void; isConnected: boolean };
+type ToastState = { msg: string; kind: "success" | "error" };
+type DexcomCardProps = { onConnected: () => void; onDisconnected: () => void; onError: (msg: string) => void; isConnected: boolean };
 
-function DexcomDirectCard({ onConnected, onDisconnected, isConnected }: DexcomCardProps) {
+function DexcomDirectCard({ onConnected, onDisconnected, onError, isConnected }: DexcomCardProps) {
   const t = useTranslations("cgm");
   const [region, setRegion] = useState<"eu" | "us">("eu");
   const [username, setUsername] = useState("");
@@ -79,12 +80,15 @@ function DexcomDirectCard({ onConnected, onDisconnected, isConnected }: DexcomCa
         onConnected();
       } else {
         const data = await res.json();
+        const errMsg = data?.error ?? "Unbekannter Fehler";
         setTestStatus("error");
-        setTestMsg(data?.error ?? "Fehler beim Speichern");
+        setTestMsg(errMsg);
+        onError(`Verbindung fehlgeschlagen: ${errMsg}`);
       }
     } catch {
       setTestStatus("error");
       setTestMsg("Netzwerkfehler");
+      onError("Verbindung fehlgeschlagen: Netzwerkfehler");
     } finally {
       setSaving(false);
     }
@@ -321,6 +325,11 @@ export default function CgmSettingsPage() {
   const [dexcomConnected, setDexcomConnected] = useState(false);
   const dexcomInit = useDexcomDirectConnected();
   useEffect(() => { setDexcomConnected(dexcomInit); }, [dexcomInit]);
+  const [dexcomToast, setDexcomToast] = useState<ToastState | null>(null);
+  const showDexcomToast = useCallback((msg: string, kind: "success" | "error") => {
+    setDexcomToast({ msg, kind });
+    setTimeout(() => setDexcomToast(null), 3500);
+  }, []);
   const [isNativePlatform, setIsNativePlatform] = useState(false);
   const cgmSetupHandledRef = useRef(false);
 
@@ -372,8 +381,9 @@ export default function CgmSettingsPage() {
       body: (
         <DexcomDirectCard
           isConnected={dexcomConnected}
-          onConnected={() => { setDexcomConnected(true); closeSheet(); }}
+          onConnected={() => { setDexcomConnected(true); closeSheet(); showDexcomToast("Dexcom erfolgreich verbunden", "success"); }}
           onDisconnected={() => { setDexcomConnected(false); closeSheet(); }}
+          onError={(msg) => showDexcomToast(msg, "error")}
         />
       ),
     },
@@ -465,6 +475,33 @@ export default function CgmSettingsPage() {
       <BottomSheet open={openSheet !== null} onClose={closeSheet} title={active?.title} footer={closeFooter}>
         {active?.body}
       </BottomSheet>
+
+      {dexcomToast && (
+        <div
+          role="status"
+          aria-live="polite"
+          style={{
+            position: "fixed",
+            bottom: 80,
+            left: "50%",
+            transform: "translateX(-50%)",
+            zIndex: 9999,
+            padding: "10px 18px",
+            borderRadius: 10,
+            fontSize: 13,
+            fontWeight: 500,
+            maxWidth: "calc(100vw - 32px)",
+            textAlign: "center",
+            whiteSpace: "nowrap",
+            background: dexcomToast.kind === "success" ? "rgba(34,197,94,0.12)" : "rgba(239,68,68,0.12)",
+            border: `1px solid ${dexcomToast.kind === "success" ? "rgba(34,197,94,0.4)" : "rgba(239,68,68,0.4)"}`,
+            color: dexcomToast.kind === "success" ? "rgb(34,197,94)" : "rgb(239,68,68)",
+            boxShadow: "0 4px 16px rgba(0,0,0,0.18)",
+          }}
+        >
+          {dexcomToast.msg}
+        </div>
+      )}
     </div>
   );
 }
