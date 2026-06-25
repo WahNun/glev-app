@@ -15,7 +15,7 @@ export async function POST(req: NextRequest) {
   const { data: leads, error } = await supabase
     .from("meta_leads")
     .select("id, email, leadgen_id, created_at")
-    .gte("created_at", "2026-06-25T00:00:00Z");
+    .gte("received_at", "2026-06-22T00:00:00Z");
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
