@@ -200,6 +200,7 @@ export default async function AdminUserDetailPage({
       <Section title="Stammdaten">
         <Grid>
           <KV label="E-Mail bestätigt" v={authUser.email_confirmed_at ? `ja (${fmtDateTime(authUser.email_confirmed_at)})` : "nein"} />
+          <KV label="Telefon" v={(authUser.phone || (authUser.user_metadata?.phone as string | undefined)) ?? "—"} />
           <KV label="Account angelegt" v={fmtDateTime(authUser.created_at)} />
           <KV label="Letzter Login" v={authUser.last_sign_in_at ? fmtDateTime(authUser.last_sign_in_at) : "nie"} />
           <KV label="Sprache" v={(profile?.language as string) ?? "—"} />
