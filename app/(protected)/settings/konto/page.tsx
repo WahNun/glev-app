@@ -29,6 +29,7 @@ export default function KontoSettingsPage() {
   const bcp47 = localeToBcp47(uiLocale);
   const [accountEmail, setAccountEmail] = useState("");
   const [plan, setPlan] = useState<EffectivePlan>("free");
+  const [isTester, setIsTester] = useState(false);
   const [userProfile, setUserProfile] = useState<UserProfile>(EMPTY_USER_PROFILE);
   const [aboutSexDraft, setAboutSexDraft] = useState<Sex | null>(null);
   const [aboutBirthYearDraft, setAboutBirthYearDraft] = useState("");
@@ -52,6 +53,13 @@ export default function KontoSettingsPage() {
         const user = await getCurrentUser();
         if (cancelled) return;
         setAccountEmail(user?.email ?? "");
+      } catch { /* ignore */ }
+      try {
+        if (!supabase) return;
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!cancelled) {
+          setIsTester(!!(session?.user?.app_metadata as Record<string, unknown> | null | undefined)?.is_tester);
+        }
       } catch { /* ignore */ }
       try {
         if (!supabase) return;
@@ -247,6 +255,28 @@ export default function KontoSettingsPage() {
       </BottomSheet>
 
       <AccountSheet open={accountSheetOpen} onClose={() => setAccountSheetOpen(false)} />
+
+      {isTester && (
+        <div style={{ marginTop: 24 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: "#5865F2", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 8, paddingLeft: 4 }}>
+            Beta-Tester Community
+          </div>
+          <SettingsSection>
+            <SettingsRow
+              iconColor="#5865F2"
+              icon={
+                <svg width={16} height={16} viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057c.004.018.013.034.027.045a19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028c.462-.63.874-1.295 1.226-1.994a.076.076 0 0 0-.041-.106 13.107 13.107 0 0 1-1.872-.892.077.077 0 0 1-.008-.128 10.2 10.2 0 0 0 .372-.292.074.074 0 0 1 .077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127 12.299 12.299 0 0 1-1.873.892.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.839 19.839 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.03z" />
+                </svg>
+              }
+              label="Discord beitreten →"
+              subtitle="Direkter Austausch mit dem Glev-Team"
+              ariaLabel="Discord-Server beitreten"
+              onClick={() => window.open("https://discord.gg/m9QKBJFJg9", "_blank", "noopener,noreferrer")}
+            />
+          </SettingsSection>
+        </div>
+      )}
 
       {/* Danger Zone */}
       <div style={{ marginTop: 32 }}>

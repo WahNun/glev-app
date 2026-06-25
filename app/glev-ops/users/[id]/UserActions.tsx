@@ -18,6 +18,8 @@ import {
   sendPasswordResetAction,
   setAiVoiceFlagAction,
   grantAiConsentAction,
+  setTesterAction,
+  removeTesterAction,
 } from "../actions";
 import type { SetPlanResult } from "../actions";
 
@@ -59,6 +61,7 @@ export default function UserActions({
   smsOptedOut,
   aiVoiceEnabled,
   aiConsentAt,
+  isTester,
 }: {
   userId: string;
   email: string;
@@ -75,6 +78,7 @@ export default function UserActions({
   smsOptedOut: boolean;
   aiVoiceEnabled: boolean;
   aiConsentAt: string | null;
+  isTester: boolean;
 }) {
   const [confirmKind, setConfirmKind] = useState<"soft" | "hard" | "cancel_ban" | null>(null);
   const [confirmEmail, setConfirmEmail] = useState("");
@@ -104,6 +108,11 @@ export default function UserActions({
   const [consentAt, setConsentAt] = useState(aiConsentAt);
   const [consentPending, setConsentPending] = useState(false);
   const [consentResult, setConsentResult] = useState<{ ok: boolean; msg: string } | null>(null);
+
+  // Tester-Status (auth.users.app_metadata.is_tester)
+  const [testerEnabled, setTesterEnabled] = useState(isTester);
+  const [testerPending, setTesterPending] = useState(false);
+  const [testerResult, setTesterResult] = useState<{ ok: boolean; msg: string } | null>(null);
 
   // Plan setzen
   const [planPending, setPlanPending] = useState(false);
@@ -660,6 +669,78 @@ export default function UserActions({
             }}
           >
             {relinkResult.msg}
+          </p>
+        )}
+      </section>
+
+      {/* --- Tester-Status --- */}
+      <section style={section}>
+        <h2 style={h2}>Tester-Status</h2>
+        <p style={{ ...muted, margin: "0 0 14px" }}>
+          Setzt <code>app_metadata.is_tester</code> via Supabase Admin API.
+          Tester sehen in den Konto-Einstellungen den Discord-Beitritts-Button.
+        </p>
+        <div style={{ display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
+          <span
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 8,
+              padding: "6px 14px",
+              borderRadius: 999,
+              background: testerEnabled ? "#dcfce7" : "#f1f5f9",
+              border: `1px solid ${testerEnabled ? "#86efac" : "#cbd5e1"}`,
+              color: testerEnabled ? "#166534" : "#475569",
+              fontWeight: 700,
+              fontSize: 13,
+            }}
+          >
+            {testerEnabled ? "✓ Tester" : "Kein Tester"}
+          </span>
+          <button
+            type="button"
+            disabled={testerPending}
+            onClick={() => {
+              if (testerPending) return;
+              const next = !testerEnabled;
+              setTesterPending(true);
+              setTesterResult(null);
+              const fd = new FormData();
+              fd.set("userId", userId);
+              const action = next ? setTesterAction : removeTesterAction;
+              void action(fd).then((res) => {
+                if (res.ok) {
+                  setTesterEnabled(next);
+                  setTesterResult({
+                    ok: true,
+                    msg: next
+                      ? `✅ ${email} als Tester markiert`
+                      : `✅ Tester-Status von ${email} entfernt`,
+                  });
+                } else {
+                  setTesterResult({ ok: false, msg: `❌ ${res.error}` });
+                }
+                setTesterPending(false);
+              });
+            }}
+            style={{
+              ...btnSecondary,
+              opacity: testerPending ? 0.6 : 1,
+              cursor: testerPending ? "not-allowed" : "pointer",
+              borderColor: testerEnabled ? "#fca5a5" : "#86efac",
+              color: testerEnabled ? "#991b1b" : "#15803d",
+            }}
+          >
+            {testerPending
+              ? "Speichert…"
+              : testerEnabled
+                ? "Tester-Status entfernen"
+                : "Als Tester markieren"}
+          </button>
+        </div>
+        {testerResult && (
+          <p style={{ margin: "10px 0 0", fontSize: 13, color: testerResult.ok ? "#15803d" : "#991b1b" }}>
+            {testerResult.msg}
           </p>
         )}
       </section>

@@ -1843,3 +1843,39 @@ export async function grantAiConsentAction(
   revalidateUserPaths(userId);
   return { ok: true };
 }
+
+export async function setTesterAction(
+  formData: FormData,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const adminToken = await requireAdminToken();
+  const userId = String(formData.get("userId") ?? "").trim();
+  if (!userId) return { ok: false, error: "userId fehlt" };
+
+  const sb = getSupabaseAdmin();
+  const { error } = await sb.auth.admin.updateUserById(userId, {
+    app_metadata: { is_tester: true },
+  });
+  if (error) return { ok: false, error: error.message };
+
+  await writeAuditLog({ action: "set_tester", targetUserId: userId, adminToken });
+  revalidateUserPaths(userId);
+  return { ok: true };
+}
+
+export async function removeTesterAction(
+  formData: FormData,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const adminToken = await requireAdminToken();
+  const userId = String(formData.get("userId") ?? "").trim();
+  if (!userId) return { ok: false, error: "userId fehlt" };
+
+  const sb = getSupabaseAdmin();
+  const { error } = await sb.auth.admin.updateUserById(userId, {
+    app_metadata: { is_tester: false },
+  });
+  if (error) return { ok: false, error: error.message };
+
+  await writeAuditLog({ action: "remove_tester", targetUserId: userId, adminToken });
+  revalidateUserPaths(userId);
+  return { ok: true };
+}
