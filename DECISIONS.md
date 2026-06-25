@@ -607,3 +607,15 @@ Lösung: Trial-Aktivierungsemails sollen zukünftig nicht mehr den `action_link`
 4. Error-Handling: "Link abgelaufen" + Reactivation-Button bei `state.kind === "invalid"`
 
 i18n: `auth.activate_cta` in messages/de.json + messages/en.json hinzugefügt.
+
+## 2026-06-25 Glev AI Consent Gate auf Plan-User erweitert
+
+Bug: `POST /api/ai/consent` gab 403 für alle zahlenden Subscriber (Smart/Pro/Plus/Trial). Die Route prüfte ausschließlich das `ai_voice` Feature-Flag (Admin/Beta-Override). `useGlevAIAccess.ts` erlaubt Zugang via zwei Pfade — Flag ODER `canAccess("glev_ai")` — aber die Server-Route kannte nur Pfad 1. Konsequenz: Toggle in Settings sprang stumm zurück, kein Fehler-Feedback.
+
+Fix: `app/api/ai/consent/route.ts` — Gate prüft jetzt BEIDE Bedingungen:
+1. `flags.ai_voice === true` → sofort erlaubt (wie bisher)
+2. Sonst: Admin-Client liest `profiles.(manual_plan_override, manual_plan_expires_at, plan, subscription_status, trial_end_at)`, berechnet `effectivePlan` via `computeEffectivePlan()` und prüft `canAccess("glev_ai", effectivePlan, trialActive)` — identische Logik zu `useGlevAIAccess` + `usePlan`
+
+Admin-Client (service-role) wird für den Fallback-Pfad verwendet — gleiche Begründung wie in `api/me/plan`: RLS auf `subscription_status` ist nicht garantiert zuverlässig via Anon-Key.
+
+Sekundär: `app/(protected)/settings/ai/page.tsx` — Master-Toggle onClick deaktiviert wenn `aiConsentGranted === null` (Loading-State). Vorher: `toggleAiConsent` wurde aufgerufen und returned stumm. Jetzt: Guard in onClick verhindert den Aufruf, opacity 0.55 + cursor not-allowed signalisieren den Lade-Zustand bereits visuell.

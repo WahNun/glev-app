@@ -333,7 +333,7 @@ export default function AiSettingsPage() {
             aria-checked={!!aiConsentGranted}
             aria-disabled={aiConsentBusy || aiConsentGranted === null}
             aria-label={t("glev_ai_label")}
-            onClick={() => { void toggleAiConsent(!aiConsentGranted); }}
+            onClick={() => { if (aiConsentGranted === null) return; void toggleAiConsent(!aiConsentGranted); }}
             style={{
               width: 44, height: 24, borderRadius: 99,
               cursor: aiConsentBusy || aiConsentGranted === null ? "not-allowed" : "pointer",

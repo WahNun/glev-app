@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { authedClient } from "@/app/api/insulin/_helpers";
+import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
+import { computeEffectivePlan } from "@/lib/admin/effectivePlan";
+import { canAccess } from "@/lib/planFeatures";
 
 /**
  * POST /api/ai/consent
@@ -38,7 +41,7 @@ export async function POST(req: NextRequest) {
   }
   const { sb, user } = auth;
 
-  // Gate: user must have ai_voice flag enabled by an admin.
+  // Gate: user must have ai_voice flag OR a qualifying subscription plan (Smart/Pro/Plus/Trial).
   const { data: settingsRow } = await sb
     .from("user_settings")
     .select("feature_flags")
@@ -46,7 +49,23 @@ export async function POST(req: NextRequest) {
     .maybeSingle();
   const flags = (settingsRow?.feature_flags ?? {}) as Record<string, unknown>;
   if (flags.ai_voice !== true) {
-    return NextResponse.json({ error: "not available" }, { status: 403 });
+    const adminSb = getSupabaseAdmin();
+    const { data: profileRow } = await adminSb
+      .from("profiles")
+      .select("manual_plan_override, manual_plan_expires_at, plan, subscription_status, trial_end_at")
+      .eq("user_id", user.id)
+      .maybeSingle();
+    const trialEndAt = (profileRow as { trial_end_at?: string | null } | null)?.trial_end_at ?? null;
+    const trialActive = trialEndAt ? new Date(trialEndAt) > new Date() : false;
+    const effectivePlan = computeEffectivePlan({
+      manual_plan_override: (profileRow as Record<string, unknown> | null)?.manual_plan_override as string | null ?? null,
+      manual_plan_expires_at: (profileRow as Record<string, unknown> | null)?.manual_plan_expires_at as string | null ?? null,
+      plan: (profileRow as Record<string, unknown> | null)?.plan as string | null ?? null,
+      subscription_status: (profileRow as Record<string, unknown> | null)?.subscription_status as string | null ?? null,
+    });
+    if (!canAccess("glev_ai", effectivePlan, trialActive)) {
+      return NextResponse.json({ error: "not available" }, { status: 403 });
+    }
   }
 
   // Optional sub-scope toggle. Body parse is best-effort: a missing or
