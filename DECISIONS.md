@@ -559,3 +559,10 @@ Neue Tabelle `public.glev_ops_users` (id, email, password_hash, role, name, must
 | 2026-06-23 | Meta Signup-Conversion via Tarn-Worker | [MARKETING] Server-side Meta CAPI Signup-Event über mealpatterns.app/api/conversion. Glev.app bleibt meta-dunkel, Tarn-Layer übernimmt Outbound. Env-Vars: META_TARN_CAPI_URL + META_TARN_CAPI_SECRET. Voraussetzung für Meta-Conversion-Optimization in Marketer-Ads. |
 
 | 2026-06-24 | Dexcom Share Direct als 4. CGM-Quelle | [FEATURE] Dexcom Share API (inoffiziell, reverse-engineered, stabil) als 4. direkter CGM-Source neben LLU/Nightscout/Apple-Health. lib/cgm/dexcom.ts mit baseUrl-Region-Switch (EU shareous1.dexcom.com / US share2.dexcom.com), Login via ApplicationId d89443d2..., Session-Cache L1 Map + L2 Supabase (25min), 5-Min-Polling im cgm-poll Cron. cgm_credentials-Erweiterung: dexcom_username, dexcom_password_encrypted, dexcom_region, dexcom_session_id, dexcom_session_expires Spalten; llu_email nullable gemacht fuer Dexcom-only-User. cgm_source='dexcom' in profiles. Settings-UI DexcomDirectCard mit Region-Picker + Test-Button + Save-Button. API: /api/cgm/dexcom/test + /api/cgm/dexcom/credentials. i18n DE+EN unter cgm.dexcom.*. Privacy: Dexcom Inc als Auftragsverarbeiter gelistet. Pattern 1:1 wie LLU-Integration. |
+
+## 2026-06-25 Dexcom Toast-Feedback
+- Success + Error Toast im Dexcom-Connect-Flow ergänzt
+- Nutzt bestehendes Toast-System (useState + fixed div[role=status], identisch mit LanguageSync.tsx)
+- Success-Toast zeigt "Dexcom erfolgreich verbunden" nach Sheet-Close (State auf Page-Level, überlebt Unmount der Card)
+- Error-Toast zeigt tatsächliche API-Fehlermeldung: "Verbindung fehlgeschlagen: <errMsg>"
+- Kein generischer Fallback — errMsg direkt aus data.error der API-Response
