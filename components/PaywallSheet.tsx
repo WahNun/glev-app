@@ -10,6 +10,8 @@ import {
   type PurchasesPackage,
   type PurchasesOffering,
 } from "@revenuecat/purchases-capacitor";
+import { resolvePaywallState, type PaywallState } from "@/lib/resolvePaywallState";
+import { usePlan } from "@/hooks/usePlan";
 
 const ACCENT = "#4F6EF7";
 const GREEN  = "#22D3A0";
@@ -61,8 +63,11 @@ export default function PaywallSheet({ open, onClose, onPurchaseSuccess, initial
   const locale = useLocale();
   const router = useRouter();
 
+  const { trialActive, trialEndsAt } = usePlan();
+
   const [offering,      setOffering]      = useState<PurchasesOffering | null>(null);
   const [offeringState, setOfferingState] = useState<"loading" | "ready" | "empty">("loading");
+  const [paywallState,  setPaywallState]  = useState<PaywallState | null>(null);
   const [mounted,       setMounted]       = useState(false);
   const [tier,          setTier]          = useState<Tier>(initialTier);
   const [interval,      setInterval]      = useState<Interval>("yearly");
@@ -71,22 +76,31 @@ export default function PaywallSheet({ open, onClose, onPurchaseSuccess, initial
 
   useEffect(() => {
     if (!open || !isNative) return;
-    Purchases.getOfferings()
-      .then((r) => {
-        const o = r.current ?? null;
+    Promise.all([Purchases.getOfferings(), Purchases.getCustomerInfo()])
+      .then(([offeringsResult, customerInfoResult]) => {
+        const o = offeringsResult.current ?? null;
         setOffering(o);
         setOfferingState(o && o.availablePackages.length > 0 ? "ready" : "empty");
+        const productIds = (o?.availablePackages ?? []).map((p) => p.product.identifier);
+        return resolvePaywallState(customerInfoResult.customerInfo, trialActive, productIds);
       })
+      .then(setPaywallState)
       .catch((e) => {
-        console.warn("[PaywallSheet] getOfferings failed:", e);
+        console.warn("[PaywallSheet] init failed:", e);
         setOfferingState("empty");
+        setPaywallState("eligible_for_trial");
       });
-  }, [open, isNative]);
+  }, [open, isNative, trialActive]);
 
   // Reset state each time sheet opens
   useEffect(() => {
-    if (open) { setTier(initialTier); setInterval("yearly"); setOfferingState("loading"); setOffering(null); }
+    if (open) { setTier(initialTier); setInterval("yearly"); setOfferingState("loading"); setOffering(null); setPaywallState(null); }
   }, [open, initialTier]);
+
+  // User already has an active subscription — close immediately
+  useEffect(() => {
+    if (paywallState === "subscribed") onClose();
+  }, [paywallState, onClose]);
 
   useEffect(() => { setMounted(true); }, []);
 
@@ -159,7 +173,7 @@ export default function PaywallSheet({ open, onClose, onPurchaseSuccess, initial
     color: "var(--text)",
   };
 
-  if (offeringState === "loading") {
+  if (offeringState === "loading" || (offeringState === "ready" && paywallState === null)) {
     return createPortal(
       <div role="dialog" aria-modal="true" style={{ ...sharedBg, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 16 }}>
         {closeBtn}
@@ -217,13 +231,21 @@ export default function PaywallSheet({ open, onClose, onPurchaseSuccess, initial
   ];
   const features = tier === "smart" ? smartFeatures : tier === "plus" ? plusFeatures : proFeatures;
 
+  const daysLeft = trialEndsAt
+    ? Math.max(0, Math.ceil((new Date(trialEndsAt).getTime() - Date.now()) / 86_400_000))
+    : 0;
+
   const ctaLabel = purchasing
     ? t("cta_loading")
-    : tier === "smart"
-      ? t("cta_smart")
-      : tier === "plus"
-        ? t("plus.cta")
-        : t("cta_pro");
+    : paywallState === "ineligible"
+      ? t("ineligible_cta")
+      : paywallState === "supabase_trial_active"
+        ? t("trial_active_cta")
+        : tier === "smart"
+          ? t("cta_smart")
+          : tier === "plus"
+            ? t("plus.cta")
+            : t("cta_pro");
 
   return createPortal(
     /* ── A) ROOT CONTAINER ─────────────────────────────────────── */
@@ -440,7 +462,12 @@ export default function PaywallSheet({ open, onClose, onPurchaseSuccess, initial
               {t("yearly_save")} · {t("yearly_monthly_equiv", { price: fmtMonthlyEquivalent(yearly, locale) })}
             </p>
           )}
-          <p style={{ margin: 0, fontSize: 12, color: "var(--text-muted)" }}>{t("trial_label")}</p>
+          {paywallState === "eligible_for_trial" && (
+            <p style={{ margin: 0, fontSize: 12, color: "var(--text-muted)" }}>{t("trial_label")}</p>
+          )}
+          {paywallState === "supabase_trial_active" && (
+            <p style={{ margin: 0, fontSize: 12, color: GREEN }}>{t("trial_active_label", { days: daysLeft })}</p>
+          )}
         </button>
 
         {/* Monthly card */}
@@ -477,7 +504,12 @@ export default function PaywallSheet({ open, onClose, onPurchaseSuccess, initial
               <span style={{ fontSize: 13, color: "var(--text-muted)" }}>/{t("period_month")}</span>
             </span>
           </div>
-          <p style={{ margin: 0, fontSize: 12, color: "var(--text-muted)" }}>{t("trial_label")}</p>
+          {paywallState === "eligible_for_trial" && (
+            <p style={{ margin: 0, fontSize: 12, color: "var(--text-muted)" }}>{t("trial_label")}</p>
+          )}
+          {paywallState === "supabase_trial_active" && (
+            <p style={{ margin: 0, fontSize: 12, color: GREEN }}>{t("trial_active_label", { days: daysLeft })}</p>
+          )}
         </button>
       </>
       </div>
