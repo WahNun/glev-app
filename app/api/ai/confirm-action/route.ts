@@ -3,6 +3,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { authedClient } from "@/app/api/insulin/_helpers";
 import type { ParsedFood } from "@/lib/meals";
 import { classifyMeal } from "@/lib/meals";
+import { insertPostBolusCheckStubs } from "@/lib/mealTimelineChecks";
 import { getHistory } from "@/lib/cgm";
 import { naiveIsoToUtcMs, resolveLoggedAt } from "@/lib/ai/glevTools";
 import { hasAlcoholKeyword } from "@/lib/ai/alcoholFallback";
@@ -279,6 +280,10 @@ async function execLogMealEntry(
     .select("id")
     .single();
   if (error) throw new Error(error.message);
+
+  // Auto-create post-bolus check stubs (fire-and-forget — must not block response).
+  void insertPostBolusCheckStubs(sb, userId, data.id as string, createdAt).catch(() => { /* swallowed */ });
+
   return { insertedId: data?.id as string | undefined };
 }
 

@@ -155,6 +155,51 @@ export async function fetchPostBolusChecksRaw(): Promise<PostBolusCheckRaw[]> {
   return (data ?? []) as PostBolusCheckRaw[];
 }
 
+/**
+ * Auto-create post-bolus check stubs immediately after a meal is saved.
+ * Inserts `post_1h` (+1 h) and `post_2h` (+2 h) rows with `confirmed_at = null`
+ * so `fillNearbyChecks()` can backfill `bg_at_check` on the next CGM sync.
+ *
+ * Fire-and-forget contract: callers must wrap this in `void (async () => { … })()`.
+ * A failure here must never block the meal-save path.
+ *
+ * Duplicate-safe: skips a check type when a row for (meal_id, check_type) already
+ * exists (no DB-level unique constraint — guard is implemented via SELECT-then-INSERT).
+ */
+export async function insertPostBolusCheckStubs(
+  sb: SupabaseClient,
+  userId: string,
+  mealId: string,
+  mealTimeIso: string,
+): Promise<void> {
+  const offsets: Array<{ checkType: string; offsetMs: number }> = [
+    { checkType: "post_1h", offsetMs: 1 * 60 * 60_000 },
+    { checkType: "post_2h", offsetMs: 2 * 60 * 60_000 },
+  ];
+
+  const mealTimeMs = new Date(mealTimeIso).getTime();
+  if (Number.isNaN(mealTimeMs)) return;
+
+  for (const { checkType, offsetMs } of offsets) {
+    const { data: existing } = await sb
+      .from("meal_timeline_checks")
+      .select("id")
+      .eq("meal_id", mealId)
+      .eq("check_type", checkType)
+      .limit(1);
+    if (existing && existing.length > 0) continue;
+
+    const planned_at = new Date(mealTimeMs + offsetMs).toISOString();
+    await sb.from("meal_timeline_checks").insert({
+      user_id: userId,
+      meal_id: mealId,
+      check_type: checkType,
+      planned_at,
+      confirmed_at: null,
+    });
+  }
+}
+
 export async function upsertCheck(input: UpsertCheckInput): Promise<MealTimelineCheck> {
   if (!supabase) throw new Error("Supabase is not configured");
   const { data: { user }, error: authErr } = await supabase.auth.getUser();

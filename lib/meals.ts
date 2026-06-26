@@ -1,6 +1,7 @@
 import { supabase } from "./supabase";
 import { logDebug } from "./debug";
 import { insertInsulinLog } from "./insulin";
+import { insertPostBolusCheckStubs } from "./mealTimelineChecks";
 
 export interface ParsedFood {
   name: string;
@@ -320,6 +321,18 @@ export async function saveMeal(input: SaveMealInput, _deps?: SaveMealDeps): Prom
     throw new Error(error.message);
   }
   logDebug("MEAL_INSERT", { id: data.id, carbs: input.carbsGrams, protein: input.proteinGrams, fat: input.fatGrams, fiber: input.fiberGrams, calories: input.calories, insulin: input.insulinUnits, glucose: input.glucoseBefore, mealType: input.mealType, evaluation: input.evaluation });
+
+  // Auto-create post-bolus check stubs so fillNearbyChecks() can backfill
+  // bg_at_check on the next CGM sync without requiring a manual UI tap.
+  // Fire-and-forget: a stub-creation failure must never block the meal save.
+  void (async () => {
+    try {
+      const anchor = input.mealTime ?? input.createdAt ?? data.created_at;
+      await insertPostBolusCheckStubs(sb!, user.id, data.id, anchor);
+    } catch {
+      // intentionally swallowed
+    }
+  })();
 
   // Audit layer: fire-and-forget insert into meal_estimate_audits so we can
   // track AI estimate vs final macro corrections per source and model.
