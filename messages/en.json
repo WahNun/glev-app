@@ -780,6 +780,7 @@
     "tir_detail_now_title": "Current reading",
     "tir_detail_now_body": "{bg} mg/dL · {zone} · measured {ago} min ago. The marker shows your position on the 7-day bar above.",
     "tir_detail_now_empty": "No recent reading available yet.",
+    "tir_few_data_warning": "Few data points — value may vary widely",
     "page_medical_disclaimer": "This analysis is for personal documentation only and does not replace medical advice.",
     "avg_bg_label": "Avg BG",
     "avg_bg_back_title": "Average Glucose",

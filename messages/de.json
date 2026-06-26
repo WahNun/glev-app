@@ -780,6 +780,7 @@
     "tir_detail_now_title": "Aktueller Wert",
     "tir_detail_now_body": "{bg} mg/dL · {zone} · vor {ago} min gemessen. Der Marker zeigt deine Position auf dem 7-Tage-Balken oben.",
     "tir_detail_now_empty": "Noch keine aktuelle Messung verfügbar.",
+    "tir_few_data_warning": "Wenige Daten — Wert kann stark schwanken",
     "page_medical_disclaimer": "Diese Auswertung dient der persönlichen Dokumentation und ersetzt keine medizinische Beratung.",
     "avg_bg_label": "Ø BG",
     "avg_bg_back_title": "Durchschnittliche Glukose",

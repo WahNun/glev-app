@@ -76,14 +76,14 @@ function readingToRow(userId: string, source: PollSource, r: Reading): SampleRow
 /** Injectable dependencies for `pollOne` — lets unit tests swap out
  *  the real network calls and Supabase writes with fakes. */
 export interface PollOneDeps {
-  getHistory?: (userId: string) => Promise<{ history: Reading[]; current?: Reading | null }>;
+  getHistory?: (userId: string, minAgo: number) => Promise<{ history: Reading[]; current?: Reading | null }>;
   adminInstance?: import("@supabase/supabase-js").SupabaseClient;
   fillFn?: typeof fillNearbyChecks;
 }
 
 function resolveGetHistory(
   source: PollSource
-): (userId: string) => Promise<{ history: Reading[]; current?: Reading | null }> {
+): (userId: string, minAgo: number) => Promise<{ history: Reading[]; current?: Reading | null }> {
   if (source === "nightscout") return nightscout.getHistory;
   if (source === "dexcom")    return dexcom.getHistory;
   return llu.getHistory;
@@ -95,8 +95,27 @@ export async function pollOne(
   deps?: PollOneDeps,
 ): Promise<{ ok: true; inserted: number; source: PollSource } | { ok: false; source: PollSource; error: string }> {
   try {
+    const admin = deps?.adminInstance ?? adminClient();
+    const fillFn = deps?.fillFn ?? fillNearbyChecks;
+
+    // Determine how far back to fetch by checking the last known cgm_samples row.
+    // If the sensor was offline for 2h, minAgo ≈ 120 and adapters extend their
+    // fetch window so backfill readings with historical timestamps land in the DB.
+    const now = new Date();
+    const { data: lastSample } = await admin
+      .from("cgm_samples")
+      .select("timestamp")
+      .eq("user_id", userId)
+      .order("timestamp", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    const rawMinAgo = lastSample
+      ? Math.floor((now.getTime() - new Date(lastSample.timestamp).getTime()) / 60_000)
+      : -1;
+    const minAgo = rawMinAgo > 0 ? Math.min(rawMinAgo, 360) : 360;
+
     const getHistoryFn = deps?.getHistory ?? resolveGetHistory(source);
-    const out = await getHistoryFn(userId);
+    const out = await getHistoryFn(userId, minAgo);
     const history = out?.history || [];
     // LLU and Dexcom expose a distinct "current" reading (live connection data);
     // Nightscout's current == history[0], so we skip it to avoid duplicate rows.
@@ -107,7 +126,7 @@ export async function pollOne(
     // Für LLU zusätzlich den Live-Wert (connection.glucoseMeasurement)
     // mit aufnehmen — der ist ~jede Minute frisch, während graphData nur
     // alle 15 min aktualisiert wird. Duplikate (Live-Wert == Graph-Sample)
-    // fängt der UNIQUE-Index (user_id, timestamp) via ignoreDuplicates ab.
+    // fängt der UNIQUE-INDEX (user_id, timestamp) via ignoreDuplicates ab.
     // Nightscout liefert current = history[0], dort nichts extra zu tun.
     if (current) {
       const row = readingToRow(userId, source, current);
@@ -120,8 +139,6 @@ export async function pollOne(
     }
     if (rows.length === 0) return { ok: true, inserted: 0, source };
 
-    const admin = deps?.adminInstance ?? adminClient();
-    const fillFn = deps?.fillFn ?? fillNearbyChecks;
     const { error } = await admin
       .from("cgm_samples")
       .upsert(rows, { onConflict: "user_id,timestamp", ignoreDuplicates: true });
@@ -133,6 +150,10 @@ export async function pollOne(
     for (const row of rows) {
       fillFn(admin, userId, row.value_mgdl, new Date(row.timestamp)).catch(() => {});
     }
+    // TODO (Bug 2): for backfilled rows with timestamps > 10 min old, check if
+    // meal_logs / bolus_logs in that window have bg_1h / bg_2h = NULL and
+    // enqueue cgm_fetch_jobs (or create missing meal_timeline_checks) so that
+    // post-meal glucose curves are retroactively computed after sensor reconnect.
     return { ok: true, inserted: rows.length, source };
   } catch (e) {
     return { ok: false, source, error: (e as Error)?.message || String(e) };

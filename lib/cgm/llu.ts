@@ -417,7 +417,8 @@ export async function getLatest(userId: string): Promise<{ current: Reading | nu
 }
 
 export async function getHistory(
-  userId: string
+  userId: string,
+  _minAgo?: number, // LLU graphData always covers ~12 h; accepted for interface consistency
 ): Promise<{ current: Reading | null; history: Reading[] }> {
   return callWith401Retry(userId, async (sess) => {
     let patientId = sess.patientId;

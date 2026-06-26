@@ -372,10 +372,12 @@ export async function getLatest(
 }
 
 export async function getHistory(
-  userId: string
+  userId: string,
+  minAgo: number = 1440,
 ): Promise<{ current: Reading | null; history: Reading[] }> {
   return callWithSessionRetry(userId, async (sess) => {
-    const readings = await fetchGlucose(sess.region, sess.sessionId, 1440, 288);
+    const maxCount = Math.min(Math.ceil(minAgo / 5) + 10, 288);
+    const readings = await fetchGlucose(sess.region, sess.sessionId, minAgo, maxCount);
     const mapped = readings
       .map(mapReading)
       .filter((x): x is Reading => x !== null);

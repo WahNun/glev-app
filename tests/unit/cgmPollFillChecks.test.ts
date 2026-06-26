@@ -20,28 +20,35 @@ function makeReading(valueMgdl: number, isoTs: string): Reading {
 }
 
 /** Fake getHistory stub that returns a fixed history array. */
-function makeGetHistory(readings: Reading[]): (userId: string) => Promise<{
+function makeGetHistory(readings: Reading[]): (userId: string, minAgo: number) => Promise<{
   history: Reading[];
   current: Reading | null;
 }> {
-  return async (_userId) => ({ history: readings, current: null });
+  return async (_userId, _minAgo) => ({ history: readings, current: null });
 }
 
-/** Fake Supabase client whose upsert resolves with a controlled error. */
+/** Fake Supabase client whose upsert resolves with a controlled error.
+ *  Also handles the cgm_samples select chain used to compute minAgo. */
 function makeFakeAdmin(upsertError: { message: string } | null): {
   client: SupabaseClient;
   upsertCallCount: () => number;
 } {
   let count = 0;
-  const client = {
-    from(_table: string) {
-      return {
-        upsert(_rows: unknown, _opts: unknown) {
-          count++;
-          return Promise.resolve({ error: upsertError });
-        },
-      };
+  // Single chainable object handles both the SELECT (cgm_samples lookup) and
+  // the UPSERT (row persistence) that pollOne performs on the same table.
+  const chainable: Record<string, unknown> = {
+    select() { return chainable; },
+    eq() { return chainable; },
+    order() { return chainable; },
+    limit() { return chainable; },
+    maybeSingle() { return Promise.resolve({ data: null }); },
+    upsert(_rows: unknown, _opts: unknown) {
+      count++;
+      return Promise.resolve({ error: upsertError });
     },
+  };
+  const client = {
+    from(_table: string) { return chainable; },
   } as unknown as SupabaseClient;
   return { client, upsertCallCount: () => count };
 }

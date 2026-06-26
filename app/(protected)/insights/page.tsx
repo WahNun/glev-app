@@ -657,12 +657,23 @@ export function InsightsClusterView({ clusterId }: { clusterId: InsightsCluster 
   const readingsPrev7 = mergeContinuousReadings(readingsPrev7Events, continuous, wk2Ago, scope.prevEndMs);
 
   // ── Time in Range buckets (consensus 70–180 mg/dL band) ──
-  // Cross-source: every BG reading we have for the period (meal
-  // pre/post, insulin pre/+1h/+2h/..., exercise pre/end/+1h, manual
-  // fingersticks). Prevents "hypo I logged manually doesn't show up
-  // in TIR" gaps.
+  // `last7Bg` / `prev7Bg` = full merged pool (events + CGM), used for
+  // Avg BG and GMI where fingerstick/meal readings are informative.
   const last7Bg = readings7.map(r => r.v);
   const prev7Bg = readingsPrev7.map(r => r.v);
+
+  // TIR uses continuous CGM samples only when available. Event-based
+  // readings (glucose_before, bg_1h, post-bolus, etc.) cluster around
+  // meals and boluses, so days with many logged events have 30-60 extra
+  // data points vs. quiet days — biasing TIR toward "active" days. CGM
+  // samples are uniform 5-min intervals and give a representative
+  // denominator regardless of how many events were logged.
+  const tirBgs = continuous.length > 0
+    ? continuous.filter(r => r.t >= fourteenAgo && r.t < now).map(r => r.v)
+    : last7Bg;
+  const tirBgsPrev = continuous.length > 0
+    ? continuous.filter(r => r.t >= wk2Ago && r.t < scope.prevEndMs).map(r => r.v)
+    : prev7Bg;
 
   // TIR/TBR/TAR rounding rule — Lucas reported a true hypo (manual
   // fingerstick) showing up in the Hypo-Events tile while TIR still
@@ -690,9 +701,14 @@ export function InsightsClusterView({ clusterId }: { clusterId: InsightsCluster 
     const inR  = Math.max(0, 100 - vlow - lo - hi);
     return { vlow, lo, inR, hi, n };
   };
-  const b7  = bucket(last7Bg);
-  const bP7 = bucket(prev7Bg);
+  const b7  = bucket(tirBgs);
+  const bP7 = bucket(tirBgsPrev);
   const tirDelta = b7.inR - bP7.inR;
+
+  // Monthly TIR uncertainty guard: 3 full days of CGM = 3×24×12 = 864 samples.
+  // Below this threshold the percentage swings wildly day-to-day.
+  const MIN_MONTHLY_CGM_N = 864;
+  const isTirUncertain = scopeMode === "month" && continuous.length > 0 && b7.n > 0 && b7.n < MIN_MONTHLY_CGM_N;
 
   // ── Avg BG + GMI (Bergenstal 2018: GMI% = 3.31 + 0.02392·avgBG) ──
   const avg = (arr: number[]) => arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : null;
@@ -1345,17 +1361,22 @@ export function InsightsClusterView({ clusterId }: { clusterId: InsightsCluster 
             </div>
           ) : (
             <>
-              <div style={{ display:"flex", alignItems:"baseline", gap:6, marginBottom:10 }}>
+              <div style={{ display:"flex", alignItems:"baseline", gap:6, marginBottom:isTirUncertain ? 4 : 10 }}>
                 <div style={{ fontSize:36, fontWeight:800, color:GREEN, letterSpacing:"-0.04em", fontFamily:"var(--font-mono)", lineHeight:1 }}>
-                  {b7.inR}
+                  {isTirUncertain ? "~" : ""}{b7.inR}
                 </div>
                 <div style={{ fontSize:14, color:GREEN, fontWeight:700 }}>%</div>
-                {prev7Bg.length > 0 && (
+                {tirBgsPrev.length > 0 && (
                   <div style={{ marginLeft:"auto", fontSize:11, color: tirDelta >= 0 ? GREEN : ORANGE, fontWeight:600 }}>
                     {tirDelta >= 0 ? "+" : ""}{tirDelta} {tInsights("delta_vs_prev_week", { prev: prevRangeLabel })}
                   </div>
                 )}
               </div>
+              {isTirUncertain && (
+                <div style={{ fontSize:11, color:"var(--text-ghost)", marginBottom:6 }}>
+                  {tInsights("tir_few_data_warning")}
+                </div>
+              )}
               {/* 3-color TBR / TIR / TAR bar (clinical consensus,
                   ATTD three-band visual standard). Lucas 2026-05-14:
                   each segment is now tap-explorable — selecting a band

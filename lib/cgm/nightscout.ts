@@ -327,14 +327,18 @@ export async function getLatestLive(
 }
 
 /**
- * Returns the last 12h of readings (~144 entries at 5-min cadence) plus the
- * single most-recent reading as `current`. Cache-first: reads from
- * nightscout_readings if available, falls back to live fetch and writes
- * the result into the cache so subsequent calls are instant even when the
- * Nightscout instance is down.
+ * Returns readings covering `minAgo` minutes of history plus the most-recent
+ * reading as `current`. Cache-first: reads from nightscout_readings when the
+ * cache is fresh (most-recent entry < 6 min old), otherwise does a live fetch
+ * so that backfill readings sent after a sensor offline gap are captured.
+ *
+ * @param minAgo  How many minutes back to cover (default 12 h = 720 min).
+ *                Set dynamically by the cgm-poll cron based on the last known
+ *                cgm_samples row so offline gaps are backfilled automatically.
  */
 export async function getHistory(
-  userId: string
+  userId: string,
+  minAgo: number = 12 * 60,
 ): Promise<{ current: Reading | null; history: Reading[] }> {
   const creds = await getCredentials(userId);
   if (!creds) {
@@ -343,7 +347,7 @@ export async function getHistory(
     throw e;
   }
 
-  const since = new Date(Date.now() - 12 * 60 * 60 * 1000).toISOString();
+  const since = new Date(Date.now() - minAgo * 60 * 1000).toISOString();
   const { data: cached } = await adminClient()
     .from("nightscout_readings")
     .select("value_mgdl, recorded_at, direction")
@@ -351,14 +355,21 @@ export async function getHistory(
     .gte("recorded_at", since)
     .order("recorded_at", { ascending: false });
 
+  // Use the cache only when the most-recent entry is fresh (< 6 min old).
+  // If the sensor was offline, the cache has pre-gap entries but they're stale
+  // — fall through to a live fetch so Nightscout's backfill readings land in DB.
   if (cached && cached.length > 0) {
-    const history = (cached as CacheRow[]).map(cacheRowToReading);
-    return { current: history[0] ?? null, history };
+    const mostRecentMs = new Date((cached[0] as CacheRow).recorded_at).getTime();
+    if (Date.now() - mostRecentMs < 6 * 60 * 1000) {
+      const history = (cached as CacheRow[]).map(cacheRowToReading);
+      return { current: history[0] ?? null, history };
+    }
   }
 
-  // Cache miss — live fetch and populate cache.
-  // 144 ≈ 12h at 5-min cadence.
-  const entries = await fetchEntries(creds.url, creds.token, 144);
+  // Cache miss or stale gap — live fetch and populate cache.
+  // Entry count scales with the window: 1 entry per 5-min slot + 5 buffer.
+  const count = Math.min(Math.ceil(minAgo / 5) + 5, 288);
+  const entries = await fetchEntries(creds.url, creds.token, count);
   await writeCacheEntries(userId, entries);
   const history = entries
     .map(mapEntry)
