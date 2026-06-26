@@ -17,6 +17,10 @@ import {
   metaLeadInviteHtml,
   metaLeadInviteSubject,
 } from "@/lib/emails/meta-lead-invite";
+import {
+  crmSignupHtml,
+  crmSignupSubject,
+} from "@/lib/emails/crm-signup-notification";
 import type { EmailLocale } from "@/lib/emails/beta-welcome";
 import { shortenUrl } from "@/lib/shortLinks";
 import { getTemplate, renderSms } from "@/lib/messageTemplates";
@@ -221,31 +225,40 @@ export async function provisionMetaLead(
     });
   }
 
-  // CRM notify an Beautyflow — awaited so Vercel nicht den pending fetch killt,
-  // aber Fehler dürfen provisionMetaLead nie scheitern lassen.
+  // CRM notify direkt via Resend (kein self-referential HTTP)
   try {
-    await fetch(`${APP_URL}/api/crm/signup-notification`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        name:          name ?? null,
-        email,
-        phone:         phone ?? null,
-        date_of_birth: null,
-        uses_cgm:      null,
-        sensor_type:   null,
-        user_id:       userId,
-        trial_end_at:  null,
-        signed_up_at:  new Date().toISOString(),
-        plan:          "meta_lead",
-        source_url:    "https://www.facebook.com",
-        locale:        effectiveLocale,
-        user_agent:    null,
-      }),
+    const resendForCrm = new Resend(process.env.RESEND_API_KEY ?? "");
+    const crmPayload = {
+      name:          name ?? null,
+      email,
+      phone:         phone ?? null,
+      date_of_birth: null,
+      uses_cgm:      null,
+      sensor_type:   null,
+      user_id:       userId,
+      trial_end_at:  null,
+      signed_up_at:  new Date().toISOString(),
+      plan:          "meta_lead",
+      source_url:    "https://www.facebook.com",
+      locale:        effectiveLocale,
+      user_agent:    null,
+    };
+    const { error: crmErr } = await resendForCrm.emails.send({
+      from: "Glev CRM <crm@glev.app>",
+      to: ["glev@beauty-flow.de", "crm@glev.app"],
+      subject: crmSignupSubject(email, name ?? null),
+      html: crmSignupHtml(crmPayload),
     });
+    if (crmErr) {
+      // eslint-disable-next-line no-console
+      console.error("[meta-lead-provisioning] CRM email error:", crmErr);
+    } else {
+      // eslint-disable-next-line no-console
+      console.log("[meta-lead-provisioning] CRM email sent for", email);
+    }
   } catch (e) {
     // eslint-disable-next-line no-console
-    console.error("[meta-lead-provisioning] CRM notify failed (non-fatal):", e);
+    console.error("[meta-lead-provisioning] CRM email unexpected error:", e);
   }
 
   // Gebrandete Email via Resend — nur wenn ein Link vorhanden ist

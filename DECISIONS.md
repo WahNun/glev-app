@@ -2,6 +2,8 @@
 
 ## Decisions
 
+| 2026-06-26 | CRM Email direkt in provisionMetaLead — kein self-referential HTTP | [BUGFIX] `provisionMetaLead` rief `POST /api/crm/signup-notification` via self-referential `fetch()` auf; Response wurde nie geprüft, Fehler waren komplett silent — Meta Leads triggerten keine CRM-Mails. Fix: fetch-Block durch direkten Resend-Call mit `crmSignupHtml`/`crmSignupSubject` aus `lib/emails/crm-signup-notification.ts` ersetzt. Empfänger: `glev@beauty-flow.de` + `crm@glev.app`. Fehler landen jetzt sichtbar in den Logs. `/api/crm/signup-notification` bleibt (regulärer Signup-Flow nutzt sie weiterhin). |
+
 | 2026-06-25 | iOS STT Freeze-Fix — releaseAudio() | [BUGFIX] Nach Mistral-Audiodecode-Fehler (error 3310) fror die gesamte App ein — iOS WKWebView-AudioSession/MediaStream-Stack blieb hängen, App musste komplett neu gestartet werden. Root Cause: `recorder.onstop` stoppte Tracks nur am Anfang, aber bei mid-stream-Fehler wurde `releaseAudio()` nie explizit nach der Transkription aufgerufen. Fix in `hooks/useVoxtral.ts`: (1) Neue idempotente `releaseAudio()`-Funktion stoppt alle Tracks, setzt `recorderRef`/`streamRef` auf null, setzt `isListening`/`isTranscribing` auf false. (2) `startListening()` ruft `releaseAudio()` vor `getUserMedia` auf (verhindert lingering AudioSession). (3) `transcribeWithFallback.finally()` in `recorder.onstop` ruft `releaseAudio()` explizit auf — auch wenn onstop bereits Tracks gestoppt hat (idempotent, sicher). (4) `useEffect`-Cleanup beim Unmount ruft `releaseAudio()` auf. (5) `stopListening()` stoppt Tracks eager direkt (nicht nur via onstop), da onstop auf iOS verzögert oder gar nicht feuern kann bei Fehler-State. |
 
 | 2026-06-25 | CGM Onboarding — Inline Setup (Stage C) | [FEATURE] `app/onboarding/cgm.tsx` navigiert nach Method-Pick nicht mehr sofort zum Dashboard. Stattdessen setzt `pickMethod()` nur `selectedMethod`-State → Stage C rendert die passende Settings-Komponente inline (`AppleHealthSettingsCard`, `CgmSettingsCard` für LLU, `NightscoutSettingsCard`). Darunter: "Weiter zum Dashboard"-Button (primary, ruft POST /api/onboarding action:complete → onSkip()) und "Einrichtung überspringen"-Link. Back-Reihenfolge: C → B → A → vorheriger Step. `hidePrimary` in Stage C gesetzt. Neue i18n-Keys: `continue_to_dashboard`, `skip_setup` (de + en). |
@@ -653,3 +655,18 @@ Fix: `lib/meta-lead-provisioning.ts` nutzt jetzt `properties.hashed_token` und b
 - Recovery (bestehender User): `…&type=recovery&redirect_to=…`
 
 `action_link` wird nicht mehr gelesen. Fallback-Logging bleibt: wenn `hashed_token` ebenfalls fehlt, wird ein Error geloggt und kein Link versendet.
+
+## 2026-06-25 tester-badge: is_tester via app_metadata
+
+Feature: OPS-Hub erhält "Tester-Status"-Toggle; Konto-Einstellungen zeigen Discord-Button für Tester.
+
+`app_metadata.is_tester` statt `profiles` oder `feature_flags` gewählt, weil:
+- `app_metadata` ist service-role-only (User kann es nicht selbst setzen)
+- Im JWT enthalten → kein extra DB-Query auf dem Client (`supabase.auth.getSession()` reicht)
+- Konsistent mit dem Supabase-Pattern für vertrauenswürdige Flags
+
+OPS-Hub: `setTesterAction` / `removeTesterAction` in `actions.ts` nutzen `sb.auth.admin.updateUserById()` mit `{ app_metadata: { is_tester: true/false } }` — Supabase mergt app_metadata, ersetzt sie nicht.
+
+Client-Seite (konto/page.tsx): `supabase.auth.getSession()` in `useEffect` → `session.user.app_metadata.is_tester`. Kein separater API-Endpunkt nötig.
+
+Discord-Invite: https://discord.gg/m9QKBJFJg9
