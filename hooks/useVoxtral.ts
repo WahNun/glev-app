@@ -36,7 +36,6 @@ import { useRef, useState, useCallback, useEffect } from "react";
 
 import { ERROR_MESSAGES } from "@/lib/ai/errors";
 import { convertToWav } from "@/lib/audio/wavEncoder";
-import { validateAndPrepare } from "@/lib/audio/preUploadValidate";
 
 /**
  * Sentinel returned via onError when the OS microphone permission is denied.
@@ -53,12 +52,14 @@ type RecordingFormat = {
 
 /**
  * Pick the best recording format for the current platform.
- * iOS Safari/WKWebView records audio/mp4 (AAC) natively — Voxtral-supported, no conversion needed.
+ * iOS: always converted to WAV before upload — iOS MediaRecorder produces
+ * inconsistent AAC encoding that Voxtral rejects (error 3310) even when
+ * AudioContext can decode it locally. Same WAV path as non-iOS.
  * Chrome/Firefox/Android record webm/opus which must be converted to WAV before upload.
  */
 function pickRecordingFormat(): RecordingFormat {
   if (typeof MediaRecorder !== "undefined" && MediaRecorder.isTypeSupported("audio/mp4")) {
-    return { mimeType: "audio/mp4", fileExt: "m4a", needsConversion: false };
+    return { mimeType: "audio/mp4", fileExt: "m4a", needsConversion: true };
   }
   if (typeof MediaRecorder !== "undefined" && MediaRecorder.isTypeSupported("audio/webm;codecs=opus")) {
     return { mimeType: "audio/webm;codecs=opus", fileExt: "webm", needsConversion: true };
@@ -434,28 +435,6 @@ export function useVoxtral({ onTranscript, onPartialTranscript, onError }: UseVo
             console.warn("[voice] WAV conversion failed, uploading raw blob:", convErr);
             uploadBlob = recorded;
             uploadMime = fmt.mimeType;
-          }
-        } else {
-          // iOS: validate the m4a container locally before upload.
-          // Corrupt containers get converted to WAV, clean ones pass through.
-          try {
-            const v = await validateAndPrepare(recorded, fmt.mimeType);
-            uploadBlob         = v.uploadBlob;
-            uploadMime         = v.uploadMime;
-            localDecodeValidated = v.validated;
-            fellBackToWav      = v.fellBackToWav;
-            validationMs       = v.validationMs;
-            if (v.fellBackToWav) {
-              // eslint-disable-next-line no-console
-              console.warn(`[voice] corrupt m4a detected, fell back to WAV (${v.validationMs}ms)`);
-            } else {
-              // eslint-disable-next-line no-console
-              console.log(`[voice] m4a validated ok in ${v.validationMs}ms`);
-            }
-          } catch (valErr) {
-            // validateAndPrepare itself failed — upload raw and let server handle it
-            // eslint-disable-next-line no-console
-            console.warn("[voice] validateAndPrepare threw, uploading raw blob:", valErr);
           }
         }
 
