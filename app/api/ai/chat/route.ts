@@ -813,6 +813,7 @@ export async function handleChatPost(
             sb,
             user.id,
             timezone,
+            locale,
           );
 
           // Append synthetic assistant + tool messages so the streaming
@@ -929,6 +930,7 @@ export async function handleChatPost(
                   sb,
                   user.id,
                   timezone,
+                  locale,
                 );
                 const guardId = `fb_guard_${Date.now()}`;
                 messages.push({
@@ -1009,6 +1011,7 @@ export async function handleChatPost(
               sb,
               user.id,
               timezone,
+              locale,
             );
 
             // WRITE-tools return a `pending_action` envelope instead of

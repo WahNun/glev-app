@@ -1018,6 +1018,7 @@ export async function executeGlevTool(
   sb: SupabaseClient,
   userId: string,
   userTimezone: string | null,
+  locale = "de",
 ): Promise<unknown> {
   let args: Record<string, unknown> = {};
   try {
@@ -1059,17 +1060,17 @@ export async function executeGlevTool(
       case "suggest_meal_for_remaining_macros":
         return await toolSuggestMealForRemainingMacros(sb, userId, args, userTimezone);
       case "log_meal_entry":
-        return await toolLogMealEntry(sb, userId, args, userTimezone);
+        return await toolLogMealEntry(sb, userId, args, userTimezone, locale);
       case "log_bolus_entry":
-        return await toolLogBolusEntry(sb, userId, args, userTimezone);
+        return await toolLogBolusEntry(sb, userId, args, userTimezone, locale);
       case "log_basal_entry":
-        return await toolLogBasalEntry(sb, userId, args, userTimezone);
+        return await toolLogBasalEntry(sb, userId, args, userTimezone, locale);
       case "log_insulin":
-        return await toolLogInsulinEntry(sb, userId, args, userTimezone);
+        return await toolLogInsulinEntry(sb, userId, args, userTimezone, locale);
       case "log_fingerstick":
         return await toolLogFingerstick(sb, userId, args);
       case "log_exercise_entry":
-        return await toolLogExerciseEntry(sb, userId, args, userTimezone);
+        return await toolLogExerciseEntry(sb, userId, args, userTimezone, locale);
       case "log_symptom_entry":
         return await toolLogSymptomEntry(sb, userId, args, userTimezone);
       case "log_influence_entry":
@@ -1648,6 +1649,7 @@ async function toolLogMealEntry(
   userId: string,
   args: Record<string, unknown>,
   userTimezone: string | null,
+  locale = "de",
 ): Promise<unknown> {
   const inputText =
     typeof args.input_text === "string" ? args.input_text.trim().slice(0, 200) : "";
@@ -1731,11 +1733,15 @@ async function toolLogMealEntry(
   const enrichedItems = applyAlcoholFallback(rawItems);
 
   const timeLabel = formatInUserTimezone(loggedAtMs, userTimezone);
-  const macroBits = [`${carbs}g KH`];
+  const carbLabel = locale === "en" ? "C" : "KH";
+  const fibLabel  = locale === "en" ? "Fib" : "Bal";
+  const macroBits = [`${carbs}g ${carbLabel}`];
   if (protein != null) macroBits.push(`${protein}g P`);
   if (fat != null) macroBits.push(`${fat}g F`);
-  if (fiber != null) macroBits.push(`${fiber}g Bal`);
-  const summary = `Mahlzeit: ${inputText} (${macroBits.join(", ")}) um ${timeLabel.dateTime}`;
+  if (fiber != null) macroBits.push(`${fiber}g ${fibLabel}`);
+  const mealPrefix = locale === "en" ? "Meal" : "Mahlzeit";
+  const atWord     = locale === "en" ? "at" : "um";
+  const summary = `${mealPrefix}: ${inputText} (${macroBits.join(", ")}) ${atWord} ${timeLabel.dateTime}`;
 
   // Generate a stable ID so the client can subscribe before the aggregator runs.
   const mealPrepId = crypto.randomUUID();
@@ -1989,6 +1995,7 @@ async function toolLogInsulinEntry(
   userId: string,
   args: Record<string, unknown>,
   userTimezone: string | null,
+  locale = "de",
 ): Promise<unknown> {
   const units = Number(args.units);
   if (!Number.isFinite(units) || units <= 0 || units > 100) {
@@ -2005,8 +2012,9 @@ async function toolLogInsulinEntry(
       : null;
 
   const loggedAt = resolveLoggedAt(args.logged_at, userTimezone);
-  const timeLabel = formatLoggedAt(new Date(loggedAt).getTime(), userTimezone);
+  const timeLabel = formatLoggedAt(new Date(loggedAt).getTime(), userTimezone, locale);
   const typeLabel = insulinType === "bolus" ? "Bolus" : "Basal";
+  const unitLabel = locale === "en" ? "U" : "IE";
 
   const params = {
     units,
@@ -2016,7 +2024,7 @@ async function toolLogInsulinEntry(
     logged_at: loggedAt,
     ...(userTimezone ? { _user_timezone: userTimezone } : {}),
   };
-  const summary = `${typeLabel}: ${units} IE ${insulinName}${notes ? ` (${notes})` : ""} — ${timeLabel}`;
+  const summary = `${typeLabel}: ${units} ${unitLabel} ${insulinName}${notes ? ` (${notes})` : ""} — ${timeLabel}`;
 
   return await createPendingAction(sb, userId, "log_insulin", params, summary, params);
 }
@@ -2026,6 +2034,7 @@ async function toolLogBolusEntry(
   userId: string,
   args: Record<string, unknown>,
   userTimezone: string | null,
+  locale = "de",
 ): Promise<unknown> {
   const units = Number(args.units);
   if (!Number.isFinite(units) || units <= 0 || units > 100) {
@@ -2041,7 +2050,8 @@ async function toolLogBolusEntry(
       : null;
 
   const loggedAt = resolveLoggedAt(args.logged_at, userTimezone);
-  const timeLabel = formatLoggedAt(new Date(loggedAt).getTime(), userTimezone);
+  const timeLabel = formatLoggedAt(new Date(loggedAt).getTime(), userTimezone, locale);
+  const unitLabel = locale === "en" ? "U" : "IE";
 
   const params = {
     units,
@@ -2050,7 +2060,7 @@ async function toolLogBolusEntry(
     logged_at: loggedAt,
     ...(userTimezone ? { _user_timezone: userTimezone } : {}),
   };
-  const summary = `Bolus: ${units} IE ${insulinName}${notes ? ` (${notes})` : ""} — ${timeLabel}`;
+  const summary = `Bolus: ${units} ${unitLabel} ${insulinName}${notes ? ` (${notes})` : ""} — ${timeLabel}`;
 
   return await createPendingAction(sb, userId, "log_bolus_entry", params, summary);
 }
@@ -2060,6 +2070,7 @@ async function toolLogBasalEntry(
   userId: string,
   args: Record<string, unknown>,
   userTimezone: string | null,
+  locale = "de",
 ): Promise<unknown> {
   const units = Number(args.units);
   if (!Number.isFinite(units) || units <= 0 || units > 100) {
@@ -2075,7 +2086,8 @@ async function toolLogBasalEntry(
       : null;
 
   const loggedAt = resolveLoggedAt(args.logged_at, userTimezone);
-  const timeLabel = formatLoggedAt(new Date(loggedAt).getTime(), userTimezone);
+  const timeLabel = formatLoggedAt(new Date(loggedAt).getTime(), userTimezone, locale);
+  const unitLabel = locale === "en" ? "U" : "IE";
 
   const params = {
     units,
@@ -2084,7 +2096,7 @@ async function toolLogBasalEntry(
     logged_at: loggedAt,
     ...(userTimezone ? { _user_timezone: userTimezone } : {}),
   };
-  const summary = `Basal: ${units} IE ${insulinName}${notes ? ` (${notes})` : ""} — ${timeLabel}`;
+  const summary = `Basal: ${units} ${unitLabel} ${insulinName}${notes ? ` (${notes})` : ""} — ${timeLabel}`;
 
   return await createPendingAction(sb, userId, "log_basal_entry", params, summary);
 }
@@ -2197,36 +2209,37 @@ export function nowIsoWithOffset(timezone: string | null, now = new Date()): str
  * Returns "heute HH:MM Uhr" when the timestamp falls on today in the
  * user's timezone, or "DD.MM. HH:MM Uhr" for any other day.
  */
-function formatLoggedAt(atMs: number, userTimezone: string | null): string {
+function formatLoggedAt(atMs: number, userTimezone: string | null, locale = "de"): string {
   const tz =
     userTimezone && isValidTimezone(userTimezone) ? userTimezone : "Europe/Berlin";
+  const bcp = locale === "en" ? "en-US" : "de-DE";
   const d = new Date(atMs);
-  const hhmm = d.toLocaleTimeString("de-DE", {
+  const hhmm = d.toLocaleTimeString(bcp, {
     timeZone: tz,
     hour: "2-digit",
     minute: "2-digit",
   });
-  const todayStr = new Date().toLocaleDateString("de-DE", {
+  const todayStr = new Date().toLocaleDateString(bcp, {
     timeZone: tz,
     day: "2-digit",
     month: "2-digit",
     year: "numeric",
   });
-  const entryStr = d.toLocaleDateString("de-DE", {
+  const entryStr = d.toLocaleDateString(bcp, {
     timeZone: tz,
     day: "2-digit",
     month: "2-digit",
     year: "numeric",
   });
   if (todayStr === entryStr) {
-    return `heute ${hhmm} Uhr`;
+    return locale === "en" ? `today at ${hhmm}` : `heute ${hhmm} Uhr`;
   }
-  const datePart = d.toLocaleDateString("de-DE", {
+  const datePart = d.toLocaleDateString(bcp, {
     timeZone: tz,
     day: "2-digit",
     month: "2-digit",
   });
-  return `${datePart} ${hhmm} Uhr`;
+  return locale === "en" ? `${datePart} at ${hhmm}` : `${datePart} ${hhmm} Uhr`;
 }
 
 async function toolLogFingerstick(
@@ -2346,6 +2359,7 @@ async function toolLogExerciseEntry(
   userId: string,
   args: Record<string, unknown>,
   userTimezone: string | null,
+  locale = "de",
 ): Promise<unknown> {
   const exerciseType = typeof args.exercise_type === "string" ? args.exercise_type.trim() : "";
   if (!VALID_EXERCISE_TYPES_SET.has(exerciseType)) {
@@ -2380,7 +2394,9 @@ async function toolLogExerciseEntry(
   };
   const label = typeLabel[exerciseType] ?? exerciseType;
   const intLabel = intensityLabel[intensity] ?? intensity;
-  const summary = `Sport: ${label} ${duration} min (${intLabel}) um ${timeLabel.dateTime}`;
+  const exercisePrefix = locale === "en" ? "Exercise" : "Sport";
+  const atWord = locale === "en" ? "at" : "um";
+  const summary = `${exercisePrefix}: ${label} ${duration} min (${intLabel}) ${atWord} ${timeLabel.dateTime}`;
 
   return await createPendingAction(sb, userId, "log_exercise_entry", {
     exercise_type: exerciseType,
