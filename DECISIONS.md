@@ -689,3 +689,9 @@ Fix: `readLocaleCookie()` imported and called at each error site. `transcribeWit
 Mini-Previews (pending_action labels) appeared in German even when the app was set to English because the locale was never sent to the AI endpoint.
 
 Fix: `readLocaleCookie()` result added to the fetch body in `lib/useGlevAI.ts`. Route `app/api/ai/chat/route.ts` extracts it from `ChatBody`, defaults to `"de"`, and passes it to `contextPreamble()`. When locale ≠ `"de"`, a language instruction is prepended to the context preamble telling the model to respond in the user's language.
+
+## 2026-06-27 contextPreamble localized for EN — German labels were overriding EN instruction
+
+Previously `contextPreamble()` only prepended a language instruction (`UI language: en. IMPORTANT: Respond in English…`) but all context labels remained German (`Heute ist`, `Aktuelle Uhrzeit`, `Kontext-Snapshot des Nutzers`, `Letzte Mahlzeit`). The German body dominated the instruction and the model defaulted to German responses.
+
+Fix: Added `const en = locale === "en"` flag in `contextPreamble()`. All strings (date line, time/logged_at line, snapshot header, Glucose label, Last meal label) now render in English when `en === true`. The EN instruction was also strengthened to `ONLY in English … Never switch to German`. German path unchanged. File: `app/api/ai/chat/route.ts`.
