@@ -36,6 +36,7 @@ import { useRef, useState, useCallback, useEffect } from "react";
 
 import { ERROR_MESSAGES } from "@/lib/ai/errors";
 import { convertToWav } from "@/lib/audio/wavEncoder";
+import { readLocaleCookie } from "@/lib/locale";
 
 /**
  * Sentinel returned via onError when the OS microphone permission is denied.
@@ -146,6 +147,7 @@ export async function transcribeWithFallback(
   signal?: AbortSignal,
   onRateLimit?: (retryAfterSec: number) => void,
   metadata?: TranscribeMetadata,
+  locale?: string,
 ): Promise<void> {
   // If already aborted before we start, exit immediately and silently.
   if (signal?.aborted) return;
@@ -251,9 +253,12 @@ export async function transcribeWithFallback(
     if (e instanceof Error && e.name === "AbortError") return;
     const raw = e instanceof Error ? e.message : "";
     // Show a clean user-facing message instead of raw API error JSON.
-    const msg = raw.toLowerCase().includes("decoded") || raw.includes("400") || raw.includes("3310")
-      ? "Aufnahme konnte nicht verarbeitet werden. Bitte nochmal versuchen."
-      : raw || "Transkription fehlgeschlagen";
+    const isDecodeErr = raw.toLowerCase().includes("decoded") || raw.includes("400") || raw.includes("3310");
+    const msg = isDecodeErr
+      ? (locale === "en"
+          ? "Recording could not be processed. Please try again."
+          : "Aufnahme konnte nicht verarbeitet werden. Bitte nochmal versuchen.")
+      : (raw || (locale === "en" ? "Transcription failed" : "Transkription fehlgeschlagen"));
     onError?.(msg);
   }
 }
@@ -383,7 +388,8 @@ export function useVoxtral({ onTranscript, onPartialTranscript, onError }: UseVo
       try {
         format = pickRecordingFormat();
       } catch {
-        onError?.("Kein unterstütztes Audio-Format gefunden.");
+        const loc = readLocaleCookie() ?? "de";
+        onError?.(loc === "en" ? "No supported audio format found." : "Kein unterstütztes Audio-Format gefunden.");
         mediaStream.getTracks().forEach((t) => t.stop());
         return;
       }
@@ -445,7 +451,8 @@ export function useVoxtral({ onTranscript, onPartialTranscript, onError }: UseVo
           sttTimeoutRef.current = null;
           if (!ac.signal.aborted) {
             ac.abort();
-            onError?.(ERROR_MESSAGES.STT_TIMEOUT.de);
+            const loc = readLocaleCookie() ?? "de";
+            onError?.(loc === "en" ? ERROR_MESSAGES.STT_TIMEOUT.en : ERROR_MESSAGES.STT_TIMEOUT.de);
           }
         }, STT_TIMEOUT_MS);
 
@@ -465,6 +472,7 @@ export function useVoxtral({ onTranscript, onPartialTranscript, onError }: UseVo
             fellBackToWav,
             validationMs,
           },
+          readLocaleCookie() ?? "de",
         ).finally(() => {
           // Clear the timeout on any outcome (success, error, or abort) so
           // it can never fire after the transcription has already settled.
