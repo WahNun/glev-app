@@ -2,6 +2,8 @@
 
 ## Decisions
 
+| 2026-06-27 | fix(i18n): Chip-Labels lokalisiert — formatLoggedAt + glevTools Summaries | [BUGFIX] `formatLoggedAt()` in `lib/ai/glevTools.ts` nutzte hardcoded `"de-DE"` Locale und `"heute … Uhr"` — Chip-Labels waren immer Deutsch egal was locale war. Fix: `locale = "de"` Parameter zu `formatLoggedAt`, allen 5 Log-Tool-Funktionen (`toolLogMealEntry`, `toolLogBolusEntry`, `toolLogBasalEntry`, `toolLogInsulinEntry`, `toolLogExerciseEntry`) und `executeGlevTool` hinzugefügt. `route.ts` reicht `locale` an alle 3 `executeGlevTool`-Call-Sites durch. EN-Strings: "Meal:", "Exercise:", "today at HH:MM", "U" statt "IE", "C" statt "KH", "Fib" statt "Bal". |
+
 | 2026-06-27 | meal_glucose_curve — volle 3h CGM-Kurve pro Mahlzeit via cgm-poll | [FEATURE] `insertMealGlucoseCurve()` in `app/api/cron/cgm-poll/route.ts` schreibt nach jedem erfolgreichen `cgm_samples`-Upsert alle CGM-Werte im 0–180-min-Fenster nach Mahlzeitzeit in `meal_glucose_curve`. Fire-and-forget (gleiche Pattern wie `fillNearbyChecks`). Tabelle am 2026-06-27 via Supabase MCP auf Production deployed. Peak, Time-to-Peak, AUC und Time-in-Range post-meal damit vollständig berechenbar. Migration-Datei `20260627_meal_glucose_curve.sql` dient als Dokumentation. |
 
 | 2026-06-27 | fix(ai): locale überlebt validateBody() — EN-Override feuert jetzt | [BUGFIX] `validateBody()` in `app/api/ai/chat/route.ts` gab `locale` nicht im zurückgegebenen `body`-Objekt zurück → `v.body.locale` war immer `undefined` → `contextPreamble()` bekam immer `locale='de'` → EN-Override-Instruction wurde nie in den System-Prompt eingefügt → KI antwortete immer auf Deutsch. Fix: `locale: typeof o.locale === "string" ? o.locale.trim() || undefined : undefined` im Return-Block. |
