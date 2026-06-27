@@ -239,6 +239,7 @@ type ChatBody = {
   // unten an die Tools durchgereicht. Optional/null → Server-Default
   // Europe/Berlin.
   timezone?: string | null;
+  locale?: string;
   /** Optional file attachments uploaded via /api/ai/upload.
    *  Images → pixtral-12b-2409 (vision) in Phase 1.
    *  PDFs   → text prepended to message, then mistral-large-latest. */
@@ -319,11 +320,15 @@ function contextPreamble(
   ctx: ContextSnapshot,
   scopes: ContextScopes,
   timezone: string | null,
+  locale?: string,
 ): string {
   const todayLocalDate = todayInTimezone(timezone);
   const nowIso = nowIsoWithOffset(timezone);
   const nowTime = nowIso.slice(11, 16);
   const lines: string[] = [
+    ...(locale && locale !== "de"
+      ? [`UI language: ${locale}. IMPORTANT: Respond to the user in ${locale === "en" ? "English" : locale}. Use English for ALL text in pending_action labels, descriptions, and confirmations.`]
+      : []),
     `Heute ist ${todayLocalDate} (Datum in der lokalen Zeitzone des Nutzers; für add_appointment relative Angaben wie „nächste Woche" auf das absolute Datum umrechnen).`,
     `Aktuelle Uhrzeit: ${nowTime} Uhr (Lokalzeit). Jetzt: ${nowIso} — nutze diesen ISO-8601-String mit Offset als Vorlage für logged_at. Beispiele: „vor 20 Minuten" → Uhrzeit − 20 Min, Offset beibehalten. „gegen 16:02 Uhr" oder „um 14:30" → heutiges Datum + genannte Uhrzeit + gleicher Offset (z. B. ${nowIso.slice(0, 11)}16:02:00${nowIso.slice(19)}). Bei explizit genannten Uhrzeiten IMMER logged_at setzen.`,
     "Kontext-Snapshot des Nutzers (kann veraltet oder Platzhalter sein — wenn unklar, vorsichtig formulieren):",
@@ -596,6 +601,9 @@ export async function handleChatPost(
   }
   const { message, history, contextSnapshot } = v.body;
   const timezone: string | null = v.body.timezone ?? null;
+  const locale: string = (typeof v.body.locale === "string" && v.body.locale.trim().length > 0)
+    ? v.body.locale.trim()
+    : "de";
   const attachments: ChatAttachment[] = v.body.attachments ?? [];
 
   // 5. Mistral client (via OpenAI-compat SDK)
@@ -632,6 +640,7 @@ export async function handleChatPost(
         contextSnapshot,
         scopes,
         timezone,
+        locale,
       ),
     },
     ...(history ?? []).map((m) => ({

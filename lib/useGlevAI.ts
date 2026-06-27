@@ -583,6 +583,7 @@ export function useGlevAI(opts?: {
               (typeof Intl !== "undefined" &&
                 Intl.DateTimeFormat().resolvedOptions().timeZone) ||
               null,
+            locale: readLocaleCookie() ?? "de",
           }),
         });
         if (!res.ok || !res.body) {

@@ -2,6 +2,8 @@
 
 ## Decisions
 
+| 2026-06-27 | iOS STT 3310 Fix — needsConversion:true für audio/mp4, validateAndPrepare() entfernt | [BUGFIX] iOS MediaRecorder produziert inkonsistentes AAC-Encoding das Voxtral mit error 3310 ablehnt — auch wenn AudioContext es lokal dekodieren kann. Fix in `hooks/useVoxtral.ts`: `pickRecordingFormat()` gibt jetzt `needsConversion: true` für `audio/mp4` zurück → alle iOS-Aufnahmen laufen durch denselben `convertToWav()`-Pfad wie non-iOS (webm). Der `else`-Branch mit `validateAndPrepare()` (war dead code nach dieser Änderung) und der dazugehörige Import wurden entfernt. `lib/audio/preUploadValidate.ts` selbst bleibt bestehen. |
+
 | 2026-06-26 | Auto Post-Bolus Check Stubs bei Meal-Save | [FEATURE] `meal_timeline_checks` war permanent leer weil Stubs nur per manuellem UI-Tap (handleConfirmCheck) angelegt wurden. Fix: neues `insertPostBolusCheckStubs()` in `lib/mealTimelineChecks.ts` legt `post_1h` (+1h) und `post_2h` (+2h) als fire-and-forget direkt nach jedem erfolgreichen Meal-Insert an. Zwei Call-Sites: (1) `saveMeal()` in `lib/meals.ts` — primärer Pfad aller Engine/Voice-Saves; (2) `execLogMealEntry()` in `app/api/ai/confirm-action/route.ts` — AI-bestätigte Mahlzeiten. `confirmed_at = null` distinguiert Auto-Stubs von User-geplanten Checks. `fillNearbyChecks()` (CGM-Sync-Loop) befüllt `bg_at_check` automatisch sobald ein Glucose-Wert im ±15min-Fenster ankommt. Backfill-SQL hat nachträglich 1526 Stubs für 763 bestehende Mahlzeiten angelegt. |
 
 | 2026-06-26 | CRM Email direkt in provisionMetaLead — kein self-referential HTTP | [BUGFIX] `provisionMetaLead` rief `POST /api/crm/signup-notification` via self-referential `fetch()` auf; Response wurde nie geprüft, Fehler waren komplett silent — Meta Leads triggerten keine CRM-Mails. Fix: fetch-Block durch direkten Resend-Call mit `crmSignupHtml`/`crmSignupSubject` aus `lib/emails/crm-signup-notification.ts` ersetzt. Empfänger: `glev@beauty-flow.de` + `crm@glev.app`. Fehler landen jetzt sichtbar in den Logs. `/api/crm/signup-notification` bleibt (regulärer Signup-Flow nutzt sie weiterhin). |
@@ -672,3 +674,10 @@ OPS-Hub: `setTesterAction` / `removeTesterAction` in `actions.ts` nutzen `sb.aut
 Client-Seite (konto/page.tsx): `supabase.auth.getSession()` in `useEffect` → `session.user.app_metadata.is_tester`. Kein separater API-Endpunkt nötig.
 
 Discord-Invite: https://discord.gg/m9QKBJFJg9
+
+
+## 2026-06-27 AI locale fix — locale cookie passed to /api/ai/chat
+
+Mini-Previews (pending_action labels) appeared in German even when the app was set to English because the locale was never sent to the AI endpoint.
+
+Fix: `readLocaleCookie()` result added to the fetch body in `lib/useGlevAI.ts`. Route `app/api/ai/chat/route.ts` extracts it from `ChatBody`, defaults to `"de"`, and passes it to `contextPreamble()`. When locale ≠ `"de"`, a language instruction is prepended to the context preamble telling the model to respond in the user's language.
