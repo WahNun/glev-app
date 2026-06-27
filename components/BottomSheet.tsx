@@ -172,7 +172,7 @@ export default function BottomSheet({
           animation: dragOffset === 0 ? "glevSheetUp 0.28s cubic-bezier(0.32,0.72,0,1)" : undefined,
           transform: dragOffset > 0 ? `translateY(${dragOffset}px)` : undefined,
           transition: dragOffset === 0 ? "transform 0.18s ease-out" : undefined,
-          maxHeight: "92vh",
+          maxHeight: "min(92vh, calc(100vh - var(--safe-top) - 20px))",
           display: "flex", flexDirection: "column",
           overflow: "hidden",
         }}
