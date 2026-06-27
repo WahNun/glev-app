@@ -325,18 +325,26 @@ function contextPreamble(
   const todayLocalDate = todayInTimezone(timezone);
   const nowIso = nowIsoWithOffset(timezone);
   const nowTime = nowIso.slice(11, 16);
+  const en = locale === "en";
+
   const lines: string[] = [
     ...(locale && locale !== "de"
-      ? [`UI language: ${locale}. IMPORTANT: Respond to the user in ${locale === "en" ? "English" : locale}. Use English for ALL text in pending_action labels, descriptions, and confirmations.`]
+      ? [`UI language: ${locale}. IMPORTANT: Respond to the user ONLY in English. Use English for ALL text in your response, pending_action labels, descriptions, and confirmations. Never switch to German.`]
       : []),
-    `Heute ist ${todayLocalDate} (Datum in der lokalen Zeitzone des Nutzers; für add_appointment relative Angaben wie „nächste Woche" auf das absolute Datum umrechnen).`,
-    `Aktuelle Uhrzeit: ${nowTime} Uhr (Lokalzeit). Jetzt: ${nowIso} — nutze diesen ISO-8601-String mit Offset als Vorlage für logged_at. Beispiele: „vor 20 Minuten" → Uhrzeit − 20 Min, Offset beibehalten. „gegen 16:02 Uhr" oder „um 14:30" → heutiges Datum + genannte Uhrzeit + gleicher Offset (z. B. ${nowIso.slice(0, 11)}16:02:00${nowIso.slice(19)}). Bei explizit genannten Uhrzeiten IMMER logged_at setzen.`,
-    "Kontext-Snapshot des Nutzers (kann veraltet oder Platzhalter sein — wenn unklar, vorsichtig formulieren):",
+    en
+      ? `Today is ${todayLocalDate} (user's local timezone; for add_appointment convert relative terms like "next week" to absolute dates).`
+      : `Heute ist ${todayLocalDate} (Datum in der lokalen Zeitzone des Nutzers; für add_appointment relative Angaben wie „nächste Woche" auf das absolute Datum umrechnen).`,
+    en
+      ? `Current time: ${nowTime} (local). Now: ${nowIso} — use this ISO-8601 string with offset as the template for logged_at. Examples: "20 minutes ago" → time − 20 min, keep offset. "around 4:02 PM" or "at 2:30" → today's date + stated time + same offset (e.g. ${nowIso.slice(0, 11)}16:02:00${nowIso.slice(19)}). ALWAYS set logged_at when a time is explicitly stated.`
+      : `Aktuelle Uhrzeit: ${nowTime} Uhr (Lokalzeit). Jetzt: ${nowIso} — nutze diesen ISO-8601-String mit Offset als Vorlage für logged_at. Beispiele: „vor 20 Minuten" → Uhrzeit − 20 Min, Offset beibehalten. „gegen 16:02 Uhr" oder „um 14:30" → heutiges Datum + genannte Uhrzeit + gleicher Offset (z. B. ${nowIso.slice(0, 11)}16:02:00${nowIso.slice(19)}). Bei explizit genannten Uhrzeiten IMMER logged_at setzen.`,
+    en
+      ? "User context snapshot (may be stale or placeholder — if unclear, phrase cautiously):"
+      : "Kontext-Snapshot des Nutzers (kann veraltet oder Platzhalter sein — wenn unklar, vorsichtig formulieren):",
   ];
   if (ctx.screen) lines.push(`- Screen: ${ctx.screen}`);
-  if (scopes.glucose) lines.push(`- Glukose: ${ctx.glucoseSummary}`);
+  if (scopes.glucose) lines.push(en ? `- Glucose: ${ctx.glucoseSummary}` : `- Glukose: ${ctx.glucoseSummary}`);
   if (scopes.iob)     lines.push(`- IOB:     ${ctx.iobSummary}`);
-  lines.push(`- Letzte Mahlzeit: ${ctx.lastMealDescription}`);
+  lines.push(en ? `- Last meal: ${ctx.lastMealDescription}` : `- Letzte Mahlzeit: ${ctx.lastMealDescription}`);
   return lines.join("\n");
 }
 
