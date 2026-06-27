@@ -29,6 +29,7 @@
 // LLU account never wedges the cron for everybody else.
 
 import { NextRequest, NextResponse } from "next/server";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { adminClient } from "@/lib/cgm/supabase";
 import * as llu from "@/lib/cgm/llu";
 import * as nightscout from "@/lib/cgm/nightscout";
@@ -71,6 +72,55 @@ function readingToRow(userId: string, source: PollSource, r: Reading): SampleRow
     value_mgdl: Math.round(v),
     source,
   };
+}
+
+async function insertMealGlucoseCurve(
+  admin: SupabaseClient,
+  userId: string,
+  rows: SampleRow[],
+): Promise<void> {
+  const nowMs = Date.now();
+  const windowStart = new Date(nowMs - 3 * 60 * 60_000).toISOString();
+
+  const { data: recentMeals } = await admin
+    .from("meals")
+    .select("id, meal_time, created_at")
+    .eq("user_id", userId)
+    .gte("meal_time", windowStart);
+
+  if (!recentMeals?.length) return;
+
+  const curveRows: Array<{
+    user_id: string;
+    meal_id: string;
+    measured_at: string;
+    t_offset_min: number;
+    value_mgdl: number;
+    source: string;
+  }> = [];
+
+  for (const meal of recentMeals) {
+    const mealMs = new Date(meal.meal_time ?? meal.created_at).getTime();
+    for (const row of rows) {
+      const readingMs = new Date(row.timestamp).getTime();
+      const tOffsetMin = Math.round((readingMs - mealMs) / 60_000);
+      if (tOffsetMin < 0 || tOffsetMin > 180) continue;
+      curveRows.push({
+        user_id:      userId,
+        meal_id:      meal.id,
+        measured_at:  row.timestamp,
+        t_offset_min: tOffsetMin,
+        value_mgdl:   row.value_mgdl,
+        source:       row.source,
+      });
+    }
+  }
+
+  if (!curveRows.length) return;
+
+  await admin
+    .from("meal_glucose_curve")
+    .upsert(curveRows, { onConflict: "meal_id,measured_at", ignoreDuplicates: true });
 }
 
 /** Injectable dependencies for `pollOne` — lets unit tests swap out
@@ -150,6 +200,8 @@ export async function pollOne(
     for (const row of rows) {
       fillFn(admin, userId, row.value_mgdl, new Date(row.timestamp)).catch(() => {});
     }
+    // Fire-and-forget: write full 3h post-meal glucose curve for analytics.
+    void insertMealGlucoseCurve(admin, userId, rows).catch(() => {});
     // TODO (Bug 2): for backfilled rows with timestamps > 10 min old, check if
     // meal_logs / bolus_logs in that window have bg_1h / bg_2h = NULL and
     // enqueue cgm_fetch_jobs (or create missing meal_timeline_checks) so that

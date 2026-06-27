@@ -300,6 +300,7 @@ function validateBody(b: unknown): { ok: true; body: ChatBody } | { ok: false; e
         typeof o.timezone === "string" && o.timezone.trim().length > 0
           ? o.timezone.trim()
           : null,
+      locale: typeof o.locale === "string" ? o.locale.trim() || undefined : undefined,
       attachments,
     },
   };

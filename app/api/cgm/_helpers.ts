@@ -62,7 +62,8 @@ export function errResponse(e: unknown): NextResponse {
     console.error('[cgm] LLU upstream error:', err?.message);
     return NextResponse.json({ error: err.message || 'upstream error' }, { status: 502 });
   }
+  const msg = (e as Error)?.message || String(e) || 'internal';
   // eslint-disable-next-line no-console
-  console.error('[cgm] internal:', err?.message || err);
-  return NextResponse.json({ error: 'internal' }, { status: 500 });
+  console.error('[cgm] unhandled error:', msg);
+  return NextResponse.json({ error: msg }, { status: 500 });
 }
