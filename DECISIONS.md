@@ -676,6 +676,14 @@ Client-Seite (konto/page.tsx): `supabase.auth.getSession()` in `useEffect` → `
 Discord-Invite: https://discord.gg/m9QKBJFJg9
 
 
+## 2026-06-27 STT error toasts localized — useVoxtral.ts now uses readLocaleCookie()
+
+Hardcoded German error strings in `hooks/useVoxtral.ts` were shown to English-locale users. Three strings affected: decode/400/3310 error toast, generic transcription failure, and the 20 s STT timeout toast.
+
+Fix: `readLocaleCookie()` imported and called at each error site. `transcribeWithFallback` gained an optional `locale?: string` parameter so the REST-fallback catch block can emit the right language without a cookie read inside the exported function. `ERROR_MESSAGES.STT_TIMEOUT.en` already existed in `lib/ai/errors.ts` — no changes needed there. "Kein unterstütztes Audio-Format gefunden." also localized in the `pickRecordingFormat()` catch block inside `startListening`.
+
+---
+
 ## 2026-06-27 AI locale fix — locale cookie passed to /api/ai/chat
 
 Mini-Previews (pending_action labels) appeared in German even when the app was set to English because the locale was never sent to the AI endpoint.
