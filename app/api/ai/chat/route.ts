@@ -652,6 +652,10 @@ export async function handleChatPost(
         locale,
       ),
     },
+    ...(locale === "en" ? [{
+      role: "system" as const,
+      content: "LANGUAGE LOCK: The user's app is set to English. You MUST respond exclusively in English. Ignore all previous instructions about responding in the user's message language. Even if the user writes in German or any other language, your entire response — including all labels, confirmations, and pending_action descriptions — must be in English. No exceptions."
+    }] : []),
     ...(history ?? []).map((m) => ({
       role: m.role,
       content: m.role === "assistant" ? sanitizeHistoryContent(m.content) : m.content,
