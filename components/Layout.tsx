@@ -330,12 +330,16 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
 
       case "voice-start":
         // Already on /glev-ai — FAB navigates only; mic starts via explicit user tap.
-        router.push("/glev-ai");
+        window.dispatchEvent(new CustomEvent("glev:close-modals"));
+        window.setTimeout(() => router.push("/glev-ai"), 50);
         break;
 
       case "navigate-glev-ai":
         // Consent granted on a non-engine tab — navigate to the fullscreen AI page.
-        router.push("/glev-ai");
+        // Dispatch close-modals first so any open BottomSheet/modal (e.g. the
+        // dashboard bolus sheet) unmounts cleanly before the route transition.
+        window.dispatchEvent(new CustomEvent("glev:close-modals"));
+        window.setTimeout(() => router.push("/glev-ai"), 50);
         break;
 
       case "open-paywall":
@@ -995,15 +999,20 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
                   if (window.confirm(msg)) glevAi.clearMessages();
                 }}
                 aria-label={locale === "en" ? "Clear chat history" : "Chat-Verlauf löschen"}
+                title={locale === "en" ? "Clear chat history" : "Chat-Verlauf löschen"}
                 style={{
                   background: "none", border: "none", cursor: "pointer",
                   padding: 4, display: "flex", alignItems: "center",
                   color: "var(--text-muted)",
                 }}
               >
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
-                  <path d="M3 3v5h5"/>
+                {/* Trash2 icon (lucide-react shape, inline) */}
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <polyline points="3 6 5 6 21 6"/>
+                  <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
+                  <path d="M10 11v6"/>
+                  <path d="M14 11v6"/>
+                  <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
                 </svg>
               </button>
               {/* Speaker 🔊 */}

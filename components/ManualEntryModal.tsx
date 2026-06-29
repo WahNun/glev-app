@@ -102,6 +102,13 @@ export default function ManualEntryModal({
   // proceed before the auto-fill resolves.
   const [cgmLoading, setCgmLoading] = useState(false);
 
+  // Close when FAB dispatches "glev:close-modals" before navigating to /glev-ai.
+  useEffect(() => {
+    const handler = () => onClose?.();
+    window.addEventListener("glev:close-modals", handler);
+    return () => window.removeEventListener("glev:close-modals", handler);
+  }, [onClose]);
+
   // Reset every time the modal opens so historical entries don't leak between sessions.
   useEffect(() => {
     if (!open) return;

@@ -52,6 +52,16 @@ export default function BottomSheet({
     return () => window.removeEventListener("keydown", onKey);
   }, [open, onClose]);
 
+  // Close when the FAB dispatches "glev:close-modals" before navigating to
+  // /glev-ai. Without this, any open BottomSheet (e.g. the dashboard bolus
+  // sheet) stays mounted and flickers through the incoming chat page.
+  useEffect(() => {
+    if (!open) return;
+    const handler = () => onClose();
+    window.addEventListener("glev:close-modals", handler);
+    return () => window.removeEventListener("glev:close-modals", handler);
+  }, [open, onClose]);
+
   // Focus trap. While the sheet is open, keep keyboard focus inside the
   // dialog: cycle Tab/Shift+Tab between the first and last focusable
   // element so users can't accidentally tab back to the underlying page
