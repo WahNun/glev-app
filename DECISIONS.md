@@ -717,3 +717,7 @@ Fix: `readLocaleCookie()` result added to the fetch body in `lib/useGlevAI.ts`. 
 Previously `contextPreamble()` only prepended a language instruction (`UI language: en. IMPORTANT: Respond in English…`) but all context labels remained German (`Heute ist`, `Aktuelle Uhrzeit`, `Kontext-Snapshot des Nutzers`, `Letzte Mahlzeit`). The German body dominated the instruction and the model defaulted to German responses.
 
 Fix: Added `const en = locale === "en"` flag in `contextPreamble()`. All strings (date line, time/logged_at line, snapshot header, Glucose label, Last meal label) now render in English when `en === true`. The EN instruction was also strengthened to `ONLY in English … Never switch to German`. German path unchanged. File: `app/api/ai/chat/route.ts`.
+
+## 2026-06-29 fix(ux): Chat-Reset-Icon → Mülltonne (Trash2), klarer für User
+
+Das Chat-Reset-Icon im Glev AI Header war ein Rotationspfeil (↻ / RotateCcw-SVG) — für User nicht erkennbar als „Verlauf löschen". Ersetzt durch das Trash2-Icon (Mülltonne, lucide-react Shape als inlines SVG, da `lucide-react` nicht installiert ist). Zusätzlich `title`-Attribut gesetzt (`Chat-Verlauf löschen` / `Clear chat history`) für Long-Press-Tooltip auf iOS. Keine Logik-Änderung. Datei: `components/Layout.tsx`.
