@@ -24,7 +24,7 @@ import { SettingsSection, SettingsRow } from "@/components/SettingsRow";
 const ACCENT = "#4F6EF7", PINK = "#FF2D78", PURPLE = "#A78BFA", BORDER = "var(--border)";
 const iconProps = { width: 16, height: 16, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: 2, strokeLinecap: "round" as const, strokeLinejoin: "round" as const };
 
-type SheetKey = "notifications" | "cycleLogging" | "language" | "timeFormat" | "carbUnit" | "onboarding" | "appearance";
+type SheetKey = "notifications" | "cycleLogging" | "language" | "timeFormat" | "carbUnit" | "onboarding" | "appearance" | "fabBehavior";
 
 const PUSH_DEBUG_EMAIL = "lucas@wahnon-connect.com";
 
@@ -283,6 +283,7 @@ export default function AppSettingsPage() {
   const [notifPrefs, setNotifPrefs] = useState<NotificationPrefs>(DEFAULT_NOTIFICATION_PREFS);
   const [cycleLoggingEnabled, setCycleLoggingEnabled] = useState(false);
   const [hapticsEnabled, setHapticsEnabled] = useState(true);
+  const [fabBehavior, setFabBehavior] = useState<"navigate" | "record">("navigate");
   const [userProfile, setUserProfile] = useState<UserProfile>(EMPTY_USER_PROFILE);
   const [currentLocale, setCurrentLocale] = useState<Locale>(DEFAULT_LOCALE);
   const [pendingLocale, setPendingLocale] = useState<Locale | null>(null);
@@ -297,6 +298,8 @@ export default function AppSettingsPage() {
     fetchNotificationPrefs().then((p) => { if (!notifTouchedRef.current) setNotifPrefs(p); }).catch(() => {}).finally(() => { notifTouchedRef.current = false; });
     fetchCycleLoggingEnabled().then(setCycleLoggingEnabled).catch(() => {});
     fetchHapticsEnabled().then(setHapticsEnabled).catch(() => {});
+    const stored = localStorage.getItem("fab_behavior");
+    if (stored === "record") setFabBehavior("record");
     fetchUserProfile().then(setUserProfile).catch(() => {});
   }, []);
 
@@ -367,6 +370,7 @@ export default function AppSettingsPage() {
   const localeSub = currentLocale === "de" ? t("subtitle_language_de") : t("subtitle_language_en");
   const timeFormatSub = timeFormat.pref === "24h" ? t("subtitle_time_format_24h") : timeFormat.pref === "12h" ? t("subtitle_time_format_12h") : t("subtitle_time_format_auto");
   const themeSub = useMemo(() => themeChoice === "dark" ? t("theme_dark") : themeChoice === "light" ? t("theme_light") : t("theme_system"), [themeChoice, t]);
+  const fabBehaviorSub = fabBehavior === "record" ? "Sofort aufnehmen" : "Zu Glev AI navigieren";
 
   const sheetContent: Record<SheetKey, { title: string; body: ReactNode; footer: ReactNode }> = {
     notifications: {
@@ -495,6 +499,40 @@ export default function AppSettingsPage() {
       ),
       footer: closeFooter,
     },
+    fabBehavior: {
+      title: "Mikrofon-Button",
+      body: (
+        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          <div style={{ fontSize: 13, color: "var(--text-dim)", lineHeight: 1.5 }}>
+            Was soll der Mikrofon-Button tun, wenn du ihn auf einer anderen Seite antippst?
+          </div>
+          <div role="radiogroup" aria-label="Mikrofon-Button Verhalten" style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {([
+              { v: "navigate" as const, label: "Zu Glev AI navigieren", desc: "Öffnet die Glev AI-Seite — du tippst dann selbst aufs Mikrofon." },
+              { v: "record" as const, label: "Sofort aufnehmen", desc: "Startet die Aufnahme automatisch, sobald die Seite geladen ist." },
+            ] as const).map((opt) => {
+              const active = fabBehavior === opt.v;
+              return (
+                <button
+                  key={opt.v}
+                  role="radio"
+                  aria-checked={active}
+                  onClick={() => {
+                    setFabBehavior(opt.v);
+                    localStorage.setItem("fab_behavior", opt.v);
+                  }}
+                  style={{ textAlign: "left", padding: "12px 14px", borderRadius: 10, border: `1.5px solid ${active ? ACCENT : BORDER}`, background: active ? `${ACCENT}14` : "var(--surface-soft)", cursor: "pointer", transition: "border-color 120ms, background 120ms" }}
+                >
+                  <div style={{ fontSize: 14, fontWeight: 600, color: active ? ACCENT : "var(--text-strong)" }}>{opt.label}</div>
+                  <div style={{ fontSize: 13, color: "var(--text-faint)", marginTop: 3 }}>{opt.desc}</div>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      ),
+      footer: closeFooter,
+    },
     appearance: {
       title: t("appearance"),
       body: (
@@ -543,6 +581,7 @@ export default function AppSettingsPage() {
             </div>
           }
         />
+        <SettingsRow iconColor={ACCENT} icon={<svg {...iconProps}><path d="M12 2a3 3 0 0 1 3 3v7a3 3 0 0 1-6 0V5a3 3 0 0 1 3-3z" /><path d="M19 10v2a7 7 0 0 1-14 0v-2" /><line x1="12" y1="19" x2="12" y2="22" /></svg>} label="Mikrofon-Button" subtitle={fabBehaviorSub} ariaLabel="Mikrofon-Button Verhalten ändern" onClick={() => openSheetWith("fabBehavior")} />
         {cycleRowVisible && (
           <SettingsRow iconColor={PINK} icon={<svg {...iconProps}><circle cx="12" cy="12" r="9" /><path d="M12 3a9 9 0 0 1 0 18" /></svg>} label={t("cycle_logging_title")} subtitle={cycleLoggingSub} ariaLabel={t("row_open_aria", { label: t("cycle_logging_title") })} onClick={() => openSheetWith("cycleLogging")} />
         )}

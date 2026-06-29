@@ -32,8 +32,11 @@ export default function GlevAIPage() {
   const glevAi = useGlevAIContext();
   const [paywallOpen, setPaywallOpen] = useState(false);
 
-  // Auto-start mic on mount.
+  // Auto-start mic on mount — only when the user has opted into "record" mode.
+  // Default behaviour ("navigate") navigates here without triggering the mic,
+  // so the user can decide themselves when to speak.
   useEffect(() => {
+    if (localStorage.getItem("fab_behavior") !== "record") return;
     const timer = window.setTimeout(() => {
       window.dispatchEvent(new CustomEvent("glev:voice-start"));
     }, 350);
