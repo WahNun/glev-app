@@ -845,14 +845,15 @@ export function useGlevAI(opts?: {
             m.id === assistantId ? { ...m, isStreaming: false } : m,
           ),
         );
-        // Flush collected meal_prep items into the queue state.
-        // The chip becomes visible once streaming has stopped so the
-        // user has time to read the AI's response before tapping.
-        if (pendingMealQueueRef.current.length > 0) {
+        // Flush collected meal_prep items into the queue state only when the
+        // stream ended cleanly. On error/timeout, stale meal_prep SSE frames
+        // that arrived before the abort must NOT carry over — they would appear
+        // as a "ghost" meal from the failed request on the next retry (Bug 3).
+        if (streamEndedNormally && pendingMealQueueRef.current.length > 0) {
           const items = pendingMealQueueRef.current;
-          pendingMealQueueRef.current = [];
           setPendingMealNavQueue((prev) => [...prev, ...items]);
         }
+        pendingMealQueueRef.current = [];
       }
     },
     // opts?.contextSnapshot is read via optsRef.current inside the fn — no dep needed.

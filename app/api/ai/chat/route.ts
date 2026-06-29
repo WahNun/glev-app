@@ -37,7 +37,7 @@ const MAX_TOOL_ROUNDS = 2;
 // If the stream hasn't produced [DONE] within this window the handler
 // emits a CHAT_TIMEOUT SSE error frame and closes the stream.
 // Kept as a named constant so tests can override it via ChatDeps.timeoutMs.
-const DEFAULT_TIMEOUT_MS = 18_000;
+const DEFAULT_TIMEOUT_MS = 25_000;
 
 // ── 429 retry ─────────────────────────────────────────────────────────
 // Server-side retry budget. If Retry-After would require waiting longer
@@ -840,6 +840,20 @@ export async function handleChatPost(
           });
 
           console.log("[chat] feedback direct-save:", JSON.stringify(feedbackResult).slice(0, 120));
+        }
+
+        // ── Image directive (Bug fix: image ignored when text is also present) ──
+        // pixtral with tool_choice:"auto" answers in text when the user provides
+        // both a comment and a photo, skipping log_meal_entry. Inserting this
+        // system message right before the user turn forces it to always call the
+        // tool for food photos regardless of any accompanying text.
+        if (hasImages) {
+          messages.splice(messages.length - 1, 0, {
+            role: "system",
+            content: locale === "en"
+              ? "The user has attached a food photo. You MUST call log_meal_entry to analyse and log the food visible in the image. If the user's message provides additional context (e.g. meal time, portion size, comment), incorporate it into your log_meal_entry arguments."
+              : "Der Nutzer hat ein Essensfoto angehängt. Rufe IMMER log_meal_entry auf, um das Essen im Bild zu analysieren und zu protokollieren. Falls die Nachricht des Nutzers zusätzlichen Kontext enthält (z. B. Uhrzeit, Portionsgröße, Kommentar), integriere ihn in die log_meal_entry-Argumente.",
+          });
         }
 
         // ── Phase 1: resolve any tool calls ─────────────────────────
