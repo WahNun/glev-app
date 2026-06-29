@@ -484,6 +484,7 @@
     "no_link": "— no link —",
     "no_meals_today": "No meals logged today yet.",
     "today_meals_hint": "Meals logged today (max 10, newest first).",
+    "additional_meals_label": "Link additional meals (optional)",
     "log_insulin_btn": "Log Insulin",
     "log_exercise_btn": "Log Exercise",
     "insulin_disclaimer": "Glev doesn't calculate doses — you log what you injected. The CGM value is pulled automatically on submit.",

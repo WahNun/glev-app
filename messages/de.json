@@ -481,6 +481,7 @@
     "no_link": "— keine Verknüpfung —",
     "no_meals_today": "Heute noch keine Mahlzeiten geloggt.",
     "today_meals_hint": "Heute geloggte Mahlzeiten (max. 10, neueste zuerst).",
+    "additional_meals_label": "Weitere Mahlzeiten zuordnen (optional)",
     "link_suggestion_label": "Vorschlag",
     "link_suggestion_body": "Diese Mahlzeit liegt im ±30-Min-Fenster: {meal}. Direkt verknüpfen?",
     "link_suggestion_accept": "Verknüpfen",

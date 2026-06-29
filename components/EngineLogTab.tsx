@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import IosTapButton from "@/components/IosTapButton";
 import { useTranslations } from "next-intl";
-import { insertInsulinLog, fetchRecentInsulinLogs, type InsulinLog } from "@/lib/insulin";
+import { insertInsulinLog, fetchRecentInsulinLogs, linkInsulinToMeals, type InsulinLog } from "@/lib/insulin";
 import { getInsulinSettings, resolveInsulinNamePrefill } from "@/lib/userSettings";
 import { insertExerciseLog, type ExerciseType } from "@/lib/exercise";
 import { exerciseTypeLabelI18n } from "@/lib/exerciseEval";
@@ -279,6 +279,7 @@ export function InsulinForm({ initialType = "bolus" }: { initialType?: "bolus" |
   // another tab/session shows up without a full reload.
   const [todayMeals, setTodayMeals] = useState<Meal[]>([]);
   const [relatedMealId, setRelatedMealId] = useState<string>("");
+  const [additionalMealIds, setAdditionalMealIds] = useState<string[]>([]);
   // Frequent entries: top-3 name+dose combos per type from last 60 days,
   // sorted by frequency. Used as quick-select chips above the name field.
   const [recentSuggestions, setRecentSuggestions] = useState<Array<{ name: string; units: number; type: "bolus" | "basal" }>>([]);
@@ -456,6 +457,10 @@ export function InsulinForm({ initialType = "bolus" }: { initialType?: "bolus" |
         related_entry_id: type === "bolus" && relatedMealId ? relatedMealId : null,
         at: atIso,
       });
+      // Link additional meals (M:N) — fire-and-forget; non-fatal.
+      if (type === "bolus" && additionalMealIds.length > 0) {
+        void linkInsulinToMeals(inserted.id, additionalMealIds).catch(() => {});
+      }
       // Anchor scheduled post-fetches on the chosen injection time so
       // back-dated entries can resolve from CGM history immediately.
       const ref = inserted?.created_at || atIso;
@@ -482,6 +487,7 @@ export function InsulinForm({ initialType = "bolus" }: { initialType?: "bolus" |
       setUnits(type === "bolus" ? "5" : "20");
       setNotes("");
       setRelatedMealId("");
+      setAdditionalMealIds([]);
       // Reset both the chip picker and the custom datetime so the next
       // log doesn't silently inherit the previous back-date.
       setTakenMinAgo(0);
@@ -739,6 +745,54 @@ export function InsulinForm({ initialType = "bolus" }: { initialType?: "bolus" |
                   {t("today_meals_hint")}
                 </div>
               )}
+            </div>
+          );
+        })()}
+        {/* Additional meals multi-select — only shown when there are
+            meals today beyond the primary relatedMealId. Lets the user
+            tag a bolus that covered multiple dishes at once (e.g. a
+            big lunch split across two log entries). Stored in the
+            insulin_meal_links junction table (M:N). */}
+        {type === "bolus" && (() => {
+          const extras = todayMeals
+            .filter(m => m.id !== relatedMealId)
+            .slice(0, 5);
+          if (extras.length === 0) return null;
+          return (
+            <div>
+              <label style={labelStyle}>{t("additional_meals_label")}</label>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                {extras.map(m => {
+                  const on = additionalMealIds.includes(m.id);
+                  return (
+                    <button
+                      key={m.id}
+                      type="button"
+                      onClick={() => {
+                        hapticSelection();
+                        setAdditionalMealIds(prev =>
+                          on ? prev.filter(id => id !== m.id) : [...prev, m.id]
+                        );
+                      }}
+                      style={{
+                        padding: "6px 12px",
+                        borderRadius: 20,
+                        border: `1.5px solid ${on ? ACCENT : "var(--border)"}`,
+                        background: on ? `${ACCENT}18` : "var(--surface-soft)",
+                        color: on ? ACCENT : "var(--text-dim)",
+                        fontSize: 12,
+                        fontWeight: 600,
+                        cursor: "pointer",
+                        WebkitTapHighlightColor: "transparent",
+                        transition: "all 150ms ease",
+                      }}
+                    >
+                      {on && <span style={{ marginRight: 4 }}>✓</span>}
+                      {formatMealOption(m, t("meal_fallback"))}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
           );
         })()}

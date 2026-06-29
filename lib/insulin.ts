@@ -247,6 +247,28 @@ export async function updateInsulinEntry(
   }
 }
 
+/**
+ * Insert rows into `insulin_meal_links` for additional meals linked to a bolus.
+ * Idempotent — uses ON CONFLICT DO NOTHING via ignoreDuplicates.
+ */
+export async function linkInsulinToMeals(
+  insulinLogId: string,
+  mealIds: string[],
+): Promise<void> {
+  if (!supabase || mealIds.length === 0) return;
+  const { data: { user }, error: authErr } = await supabase.auth.getUser();
+  if (authErr || !user) throw new Error(authErr?.message || "Nicht angemeldet");
+  const rows = mealIds.map(meal_id => ({
+    insulin_log_id: insulinLogId,
+    meal_id,
+    user_id: user.id,
+  }));
+  const { error } = await supabase
+    .from("insulin_meal_links")
+    .upsert(rows, { onConflict: "insulin_log_id,meal_id", ignoreDuplicates: true });
+  if (error) throw new Error(error.message);
+}
+
 export async function updateInsulinReadings(
   id: string,
   readings: {
