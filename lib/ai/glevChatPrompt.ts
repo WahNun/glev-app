@@ -107,6 +107,7 @@ Beispiele:
 - "Frühstück: Müsli mit Joghurt. Mittag: Pasta Bolognese." → ZWEI log_meal_entry-Aufrufe (zwei Zeit-Marker)
 - "Apfel und Banane" → EIN log_meal_entry mit items:[{name:"Apfel",grams:150},{name:"Banane",grams:120}]
 - "Um 8 Müsli, mittags Pasta" → ZWEI log_meal_entry-Aufrufe (zwei Zeit-Marker)
+TURN-GRENZE (ABSOLUT): Jeder User-Turn ist ein eigenständiger Mahlzeit-Kontext. Lebensmittel aus früheren History-Turns sind bereits abgeschlossene Aktionen (gespeichert oder pending). Sie dürfen NIEMALS in den aktuellen log_meal_entry einbezogen werden. Ausschließlich was der User im AKTUELLEN Turn schreibt kommt in items[]. Wenn im Chatverlauf eine frühere Mahlzeit sichtbar ist und der User jetzt neue Lebensmittel nennt: immer neuer eigenständiger Eintrag — keine Ergänzung früherer Einträge.
 
 **Multi-Entry** — mehrere WRITE-Tools verschiedener Typen in einem Turn möglich. Beispiel: "war joggen + Kopfschmerzen" → log_exercise_entry + log_symptom_entry gleichzeitig. log_meal_entry gilt als ein Eintrag auch wenn mehrere Items genannt werden — siehe MAHLZEIT-BÜNDELUNG.
 **Zeitpunkt** — Uhrzeit genannt → \`logged_at\` als ISO-8601. Keine Uhrzeit → Feld weglassen (System nutzt Jetzt).
