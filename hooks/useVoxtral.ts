@@ -224,6 +224,7 @@ export async function transcribeWithFallback(
     if (e instanceof Error && e.name === "AbortError") return;
     // Rate limit already handled above — don't call onError or fall through.
     if (ssePropagatedRateLimit) return;
+    console.warn("[voxtral] SSE failed, falling back to REST:", e instanceof Error ? e.message : String(e));
     // Fall through to REST fallback below
   }
 
@@ -244,6 +245,9 @@ export async function transcribeWithFallback(
         onRateLimit?.(body.retry_after_sec);
         return;
       }
+      if (!body.error) {
+        console.warn("[voxtral] REST 400 with empty body.error — full body:", JSON.stringify(body));
+      }
       throw new Error(body.error ?? `HTTP ${res.status}`);
     }
     const { text } = (await res.json()) as { text: string };
@@ -253,7 +257,9 @@ export async function transcribeWithFallback(
     if (e instanceof Error && e.name === "AbortError") return;
     const raw = e instanceof Error ? e.message : "";
     // Show a clean user-facing message instead of raw API error JSON.
-    const isDecodeErr = raw.toLowerCase().includes("decoded") || raw.includes("400") || raw.includes("3310");
+    const isDecodeErr = raw.toLowerCase().includes("decoded") || raw.includes("3310");
+    // raw.includes("400") entfernt — "HTTP 400" alleine ist kein Decode-Fehler.
+    // Ein echter Decode-Fehler hat immer "3310" oder "decoded" im Voxtral-Error-Body.
     const msg = isDecodeErr
       ? (locale === "en"
           ? "Recording could not be processed. Please try again."
