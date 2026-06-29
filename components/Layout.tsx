@@ -321,12 +321,6 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
     switch (action.type) {
       case "toggle-fullscreen":
         setGlevAiFullscreenOpen(action.willOpen);
-        // Auto-start voice when opening so the user can speak immediately.
-        if (action.willOpen) {
-          window.setTimeout(() => {
-            window.dispatchEvent(new CustomEvent("glev:voice-start"));
-          }, 350);
-        }
         break;
 
       case "consent-modal":
@@ -335,8 +329,8 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
         break;
 
       case "voice-start":
-        // Already on /glev-ai — start a new voice take in the fullscreen page.
-        window.dispatchEvent(new CustomEvent("glev:voice-start"));
+        // Already on /glev-ai — FAB navigates only; mic starts via explicit user tap.
+        router.push("/glev-ai");
         break;
 
       case "navigate-glev-ai":
