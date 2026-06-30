@@ -309,28 +309,15 @@ export async function setCredentials(
   const reg = (region || "eu").toLowerCase() as Region;
   const now = new Date().toISOString();
 
-  // Update existing row first; if no row exists, fall back to insert.
-  // Keeps LLU columns untouched for users who have both credentials.
-  const { data: updated, error: upErr } = await adminClient()
+  // Atomic upsert: insert-or-update on user_id conflict.
+  // Only Dexcom columns are in the payload → llu_* columns are never
+  // touched on UPDATE (PostgREST only SETs columns present in the payload).
+  // For a brand-new row the DB default llu_region='eu' is applied.
+  console.log("[dexcom] setCredentials upsert start — userId:", userId, "region:", reg);
+  const { error } = await adminClient()
     .from("cgm_credentials")
-    .update({
-      dexcom_username: username,
-      dexcom_password_encrypted: enc,
-      dexcom_region: reg,
-      dexcom_session_id: null,
-      dexcom_session_expires: null,
-      updated_at: now,
-    })
-    .eq("user_id", userId)
-    .select("user_id");
-
-  if (upErr) throw new Error("supabase: " + upErr.message);
-
-  if (!updated || updated.length === 0) {
-    // No existing row — create one (llu_* columns stay null)
-    const { error: insErr } = await adminClient()
-      .from("cgm_credentials")
-      .insert({
+    .upsert(
+      {
         user_id: userId,
         dexcom_username: username,
         dexcom_password_encrypted: enc,
@@ -338,9 +325,15 @@ export async function setCredentials(
         dexcom_session_id: null,
         dexcom_session_expires: null,
         updated_at: now,
-      });
-    if (insErr) throw new Error("supabase: " + insErr.message);
+      },
+      { onConflict: "user_id" }
+    );
+
+  if (error) {
+    console.error("[dexcom] setCredentials upsert FAILED — code:", error.code, "msg:", error.message, "details:", error.details);
+    throw new Error("supabase: " + error.message);
   }
+  console.log("[dexcom] setCredentials upsert OK — userId:", userId);
 
   l1Clear(userId);
 }
