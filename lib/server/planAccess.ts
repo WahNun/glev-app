@@ -13,13 +13,15 @@ export async function checkPlanAccess(userId: string, feature: string): Promise<
     const admin = makeAdmin();
     const { data } = await admin
       .from("profiles")
-      .select("plan, manual_plan_override, manual_plan_expires_at, trial_end_at")
+      .select("plan, manual_plan_override, manual_plan_expires_at, trial_start_at, trial_end_at")
       .eq("user_id", userId)
       .maybeSingle();
     const effectivePlan = computeEffectivePlan({
       plan: data?.plan ?? null,
       manual_plan_override: data?.manual_plan_override ?? null,
       manual_plan_expires_at: data?.manual_plan_expires_at ?? null,
+      trial_start_at: (data as { trial_start_at?: string | null } | null)?.trial_start_at ?? null,
+      trial_end_at: data?.trial_end_at ?? null,
     });
     const trialActive =
       effectivePlan === "free" &&

@@ -212,6 +212,8 @@ export default async function AdminUsersPage({
       manual_plan_expires_at: opt?.manual_plan_expires_at,
       plan: derivedPlan,
       subscription_status: opt?.subscription_status,
+      trial_start_at: p?.trial_start_at,
+      trial_end_at: p?.trial_end_at,
     });
     let cgmKind: "none" | "llu" | "nightscout" | "applehealth" | "junction" = "none";
     if (lluByUser.has(u.id)) cgmKind = "llu";

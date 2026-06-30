@@ -80,7 +80,7 @@ export async function GET(req: NextRequest) {
   // do their job.
   const { data: row, error } = await admin
     .from("profiles")
-    .select("manual_plan_override, manual_plan_expires_at, plan, trial_end_at")
+    .select("manual_plan_override, manual_plan_expires_at, plan, trial_start_at, trial_end_at")
     .eq("user_id", a.user.id)
     .maybeSingle();
   if (error) {
@@ -118,6 +118,8 @@ export async function GET(req: NextRequest) {
     manual_plan_expires_at: row?.manual_plan_expires_at ?? null,
     plan: row?.plan ?? null,
     subscription_status: subscriptionStatus,
+    trial_start_at: (row as { trial_start_at?: string | null } | null)?.trial_start_at ?? null,
+    trial_end_at: (row as { trial_end_at?: string | null } | null)?.trial_end_at ?? null,
   });
 
   // Trial status — used by usePlan() / canAccess() for feature gating.

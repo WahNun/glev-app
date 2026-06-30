@@ -5,6 +5,8 @@ export type PlanInputs = {
   manual_plan_expires_at?: string | null;
   plan?: string | null;
   subscription_status?: string | null;
+  trial_start_at?: string | null;
+  trial_end_at?: string | null;
 };
 
 /**
@@ -47,6 +49,11 @@ export function computeEffectivePlan(p: PlanInputs): EffectivePlan {
   // (/api/pro/webhook). It was not previously mapped here, causing plus
   // users to fall through to "free". Fixed.
   if (sub === "plus") return "plus";
+
+  // Trial-Check: aktiver Trial → volle Pro-Erfahrung
+  const now = Date.now();
+  const trialEnd = p.trial_end_at ? Date.parse(p.trial_end_at) : 0;
+  if (p.trial_start_at && trialEnd > now) return "pro";
 
   return "free";
 }

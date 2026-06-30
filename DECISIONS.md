@@ -744,3 +744,8 @@ Das Chat-Reset-Icon im Glev AI Header war ein Rotationspfeil (↻ / RotateCcw-SV
 ## 2026-06-30 fix(webhook): statusFromEntitlements korrigiert — glev_smart → "beta" (nicht "plus")
 
 Smart-Tier Käufer haben fälschlicherweise Glev+ Zugang bekommen statt Smart, weil `statusFromEntitlements` `glev_smart` auf `"plus"` gemappt hat statt auf `"beta"`. Fix: Rückgabetyp auf `"pro" | "plus" | "beta"` erweitert; explizites `glev_plus`-Guard hinzugefügt; Fallback ist jetzt `"beta"` (deckt `glev_smart`). File-Header-Kommentar und Profiles-Column-Dokumentation (`"beta"` als gültiger Wert) ebenfalls korrigiert. Datei: `supabase/functions/revenuecat-webhook/index.ts`.
+
+## 2026-06-30 Trial → Pro-Erfahrung
+- **Was:** computeEffectivePlan() prüft jetzt trial_start_at/trial_end_at; aktive Trial-User bekommen "pro" statt "free"
+- **Warum:** Free-Plan gated CGM Live — Trial-User sahen "No readings yet today" statt Glucose
+- **Impact:** Alle aktiven Trial-User (trial_end_at > now()) haben sofort Pro-Zugang; keine DB-Migration nötig

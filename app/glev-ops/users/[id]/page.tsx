@@ -93,6 +93,8 @@ export default async function AdminUserDetailPage({
     manual_plan_expires_at: profile?.manual_plan_expires_at as string | null | undefined,
     plan: profile?.plan as string | null | undefined,
     subscription_status: profile?.subscription_status as string | null | undefined,
+    trial_start_at: profile?.trial_start_at as string | null | undefined,
+    trial_end_at: profile?.trial_end_at as string | null | undefined,
   });
   const c = planColor(effective);
 

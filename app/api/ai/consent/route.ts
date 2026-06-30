@@ -52,7 +52,7 @@ export async function POST(req: NextRequest) {
     const adminSb = getSupabaseAdmin();
     const { data: profileRow } = await adminSb
       .from("profiles")
-      .select("manual_plan_override, manual_plan_expires_at, plan, subscription_status, trial_end_at")
+      .select("manual_plan_override, manual_plan_expires_at, plan, subscription_status, trial_start_at, trial_end_at")
       .eq("user_id", user.id)
       .maybeSingle();
     const trialEndAt = (profileRow as { trial_end_at?: string | null } | null)?.trial_end_at ?? null;
@@ -62,6 +62,8 @@ export async function POST(req: NextRequest) {
       manual_plan_expires_at: (profileRow as Record<string, unknown> | null)?.manual_plan_expires_at as string | null ?? null,
       plan: (profileRow as Record<string, unknown> | null)?.plan as string | null ?? null,
       subscription_status: (profileRow as Record<string, unknown> | null)?.subscription_status as string | null ?? null,
+      trial_start_at: (profileRow as Record<string, unknown> | null)?.trial_start_at as string | null ?? null,
+      trial_end_at: (profileRow as Record<string, unknown> | null)?.trial_end_at as string | null ?? null,
     });
     if (!canAccess("glev_ai", effectivePlan, trialActive)) {
       return NextResponse.json({ error: "not available" }, { status: 403 });

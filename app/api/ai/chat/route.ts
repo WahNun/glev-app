@@ -507,7 +507,7 @@ export async function checkChatFlag(
   // Parallel: feature-flag + profile plan check
   const [settingsResult, profileResult] = await Promise.all([
     sb.from("user_settings").select("feature_flags").eq("user_id", userId).maybeSingle(),
-    sb.from("profiles").select("manual_plan_override, manual_plan_expires_at, plan, trial_end_at").eq("user_id", userId).maybeSingle(),
+    sb.from("profiles").select("manual_plan_override, manual_plan_expires_at, plan, trial_start_at, trial_end_at").eq("user_id", userId).maybeSingle(),
   ]);
 
   const featureFlags = (settingsResult.data?.feature_flags ?? {}) as Record<string, unknown>;
@@ -519,6 +519,8 @@ export async function checkChatFlag(
     manual_plan_override: p?.manual_plan_override ?? null,
     manual_plan_expires_at: p?.manual_plan_expires_at ?? null,
     plan: p?.plan ?? null,
+    trial_start_at: (p as { trial_start_at?: string | null } | null)?.trial_start_at ?? null,
+    trial_end_at: p?.trial_end_at ?? null,
   });
 
   if (canAccess("glev_ai", effectivePlan, trialActive)) return null;
