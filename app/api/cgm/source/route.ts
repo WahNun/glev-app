@@ -40,25 +40,40 @@ export async function GET(req: NextRequest) {
     );
   }
   try {
-    const { data, error } = await adminClient()
-      .from("profiles")
-      .select("cgm_source")
-      .eq("user_id", user.id)
-      .maybeSingle();
-    if (error) throw new Error("supabase: " + error.message);
-    const source = data?.cgm_source ?? null;
-    let dexcom_credentials_present = false;
-    if (source === "dexcom") {
-      const { data: creds, error: credsErr } = await adminClient()
-        .from("cgm_credentials")
-        .select("dexcom_username")
+    const client = adminClient();
+    const [profileRes, credsRes] = await Promise.all([
+      client
+        .from("profiles")
+        .select("cgm_source, nightscout_url")
         .eq("user_id", user.id)
-        .not("dexcom_username", "is", null)
-        .maybeSingle();
-      if (credsErr) throw new Error("supabase: " + credsErr.message);
-      dexcom_credentials_present = creds !== null;
-    }
-    return NextResponse.json({ source, dexcom_credentials_present });
+        .maybeSingle(),
+      client
+        .from("cgm_credentials")
+        .select("llu_email, dexcom_username")
+        .eq("user_id", user.id)
+        .maybeSingle(),
+    ]);
+    if (profileRes.error) throw new Error("supabase: " + profileRes.error.message);
+    if (credsRes.error) throw new Error("supabase: " + credsRes.error.message);
+
+    const source = profileRes.data?.cgm_source ?? null;
+    const nightscout_url = profileRes.data?.nightscout_url ?? null;
+    const llu_email = credsRes.data?.llu_email ?? null;
+    const dexcom_username = credsRes.data?.dexcom_username ?? null;
+
+    const llu_connected = source === "llu" && llu_email !== null;
+    const nightscout_connected = source === "nightscout" && nightscout_url !== null;
+    const dexcom_connected = source === "dexcom" && dexcom_username !== null;
+    const apple_health_connected = source === "apple_health";
+
+    return NextResponse.json({
+      source,
+      dexcom_credentials_present: dexcom_connected,
+      llu_connected,
+      nightscout_connected,
+      dexcom_connected,
+      apple_health_connected,
+    });
   } catch (e) {
     return errResponse(e);
   }

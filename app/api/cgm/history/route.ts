@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { authenticate, errResponse } from "../_helpers";
+import { authenticate } from "../_helpers";
 import { getHistory, getHistoryWithTrace } from "@/lib/cgm";
 import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
 
@@ -24,6 +24,15 @@ export async function GET(req: NextRequest) {
     const out = await getHistory(user.id);
     return NextResponse.json(out);
   } catch (e) {
-    return errResponse(e);
+    const err = e as { status?: number; code?: string; response?: { status?: number }; upstream?: boolean; message?: string };
+    let error_code = "internal";
+    let httpStatus = 500;
+    if (err?.status === 404) { error_code = "no_credentials"; httpStatus = 404; }
+    else if (err?.code === "ECONNABORTED" || err?.code === "ETIMEDOUT") { error_code = "timeout"; httpStatus = 504; }
+    else if (err?.response?.status === 401) { error_code = "login_failed"; httpStatus = 502; }
+    else if (err?.response?.status) { error_code = "network_error"; httpStatus = 502; }
+    else if (err?.upstream) { error_code = "network_error"; httpStatus = 502; }
+    const msg = err?.message || "error";
+    return NextResponse.json({ error: msg, error_code }, { status: httpStatus });
   }
 }

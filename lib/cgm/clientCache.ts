@@ -16,6 +16,11 @@ type HistoryData = {
 let cachedData: HistoryData | null = null;
 let cachedAt: number | null = null;
 let inFlight: Promise<HistoryData | null> | null = null;
+let lastErrorCode: string | null = null;
+
+export function getLastCgmErrorCode(): string | null {
+  return lastErrorCode;
+}
 
 export async function fetchCgmHistory(): Promise<HistoryData | null> {
   // Return fresh cache
@@ -29,12 +34,20 @@ export async function fetchCgmHistory(): Promise<HistoryData | null> {
   inFlight = (async () => {
     try {
       const res = await fetch("/api/cgm/history", { cache: "no-store" });
-      if (!res.ok) return null;
+      if (!res.ok) {
+        try {
+          const body = await res.json() as { error_code?: string };
+          lastErrorCode = body.error_code ?? null;
+        } catch { lastErrorCode = null; }
+        return null;
+      }
       const data = (await res.json()) as HistoryData;
+      lastErrorCode = null;
       cachedData = data;
       cachedAt = Date.now();
       return data;
     } catch {
+      lastErrorCode = "network_error";
       return null;
     } finally {
       inFlight = null;

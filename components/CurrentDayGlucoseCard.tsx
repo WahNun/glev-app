@@ -1,5 +1,6 @@
 "use client";
-import { fetchCgmHistory, invalidateCgmCache } from "@/lib/cgm/clientCache";
+import { Capacitor } from "@capacitor/core";
+import { fetchCgmHistory, invalidateCgmCache, getLastCgmErrorCode } from "@/lib/cgm/clientCache";
 import { pickCgmCurrentBase, injectCurrentPoint, guardCgmCurrentForward, type CgmPoint } from "@/lib/cgm/cgmDotHelpers";
 import { useTranslations, useLocale } from "next-intl";
 
@@ -69,7 +70,7 @@ export type ChartPoint = { t: number; v: number; source: "cgm" | "fingerstick" }
 type State =
   | { kind: "loading" }
   | { kind: "no-cgm" }
-  | { kind: "error"; msg: string }
+  | { kind: "error"; msg: string; code: string }
   | {
       kind: "ok";
       cgm: Array<{ t: number; v: number }>;
@@ -207,7 +208,11 @@ export default function CurrentDayGlucoseCard({ showMealNodes = false }: { showM
 
       if (!signal?.cancelled) setS({ kind: "ok", cgm: cgmWithCurrent, fingersticks, cgmCurrent });
     } catch (e) {
-      if (!signal?.cancelled) setS({ kind: "error", msg: e instanceof Error ? e.message : "fetch failed" });
+      if (!signal?.cancelled) {
+        const code = getLastCgmErrorCode() ?? "internal";
+        const msg = e instanceof Error ? e.message : "fetch failed";
+        setS({ kind: "error", msg, code });
+      }
     }
   }, [hasCgmAccess]);
 
@@ -353,6 +358,78 @@ export default function CurrentDayGlucoseCard({ showMealNodes = false }: { showM
         </div>
       </div>
 
+    </div>
+  );
+}
+
+function cgmErrorLabel(code: string): { text: string; isAction: boolean } {
+  switch (code) {
+    case "no_credentials": return { text: "Keine CGM-Verbindung. Öffne Einstellungen → CGM.", isAction: true };
+    case "login_failed":   return { text: "CGM-Login fehlgeschlagen. Zugangsdaten prüfen.", isAction: true };
+    case "token_expired":  return { text: "CGM-Verbindung abgelaufen. Bitte neu verbinden.", isAction: true };
+    case "timeout":        return { text: "CGM-Server nicht erreichbar. Bitte erneut versuchen.", isAction: false };
+    case "network_error":  return { text: "CGM-Server nicht erreichbar. Bitte erneut versuchen.", isAction: false };
+    default:               return { text: "CGM-Fehler. Bitte erneut versuchen.", isAction: false };
+  }
+}
+
+function CgmErrorDisplay({ code, msg }: { code: string; msg: string }) {
+  const [sent, setSent] = useState(false);
+  const [sending, setSending] = useState(false);
+  const { text, isAction } = cgmErrorLabel(code);
+
+  const handleReport = async () => {
+    if (sending || sent) return;
+    setSending(true);
+    try {
+      await fetch("/api/cgm/report-error", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          error_code: code,
+          error_message: msg,
+          platform: Capacitor.getPlatform(),
+          context: { reported_at: new Date().toISOString() },
+        }),
+      });
+      setSent(true);
+    } catch {
+      setSent(true); // still show "Danke" — don't alarm the user
+    } finally {
+      setSending(false);
+    }
+  };
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+      <span style={{ color: "var(--text-dim)", fontSize: 13 }}>
+        {text}
+        {isAction && (
+          <>
+            {" "}
+            <a href="/settings/cgm" style={{ color: ACCENT, textDecoration: "underline" }}>
+              Einstellungen
+            </a>
+          </>
+        )}
+      </span>
+      <button
+        onClick={handleReport}
+        disabled={sending || sent}
+        style={{
+          alignSelf: "flex-start",
+          background: "none",
+          border: "none",
+          color: sent ? "var(--text-ghost)" : "var(--text-dim)",
+          fontSize: 11,
+          cursor: sent ? "default" : "pointer",
+          padding: 0,
+          fontFamily: "inherit",
+          textDecoration: sent ? "none" : "underline",
+        }}
+      >
+        {sent ? "Bericht gesendet. Danke!" : sending ? "Sende…" : "Problem melden →"}
+      </button>
     </div>
   );
 }
@@ -503,14 +580,19 @@ function HeroFront({
           )}
         </div>
       ) : (
-        <div style={{
-          minHeight: 48, display: "flex", alignItems: "center",
-          color: "var(--text-dim)", fontSize: 13,
-        }}>
-          {state.kind === "loading" ? "Loading CGM data…"
-            : state.kind === "no-cgm" ? "Connect a CGM in Settings to see live glucose."
-            : state.kind === "error" ? `CGM error: ${state.msg}`
-            : "No readings yet today"}
+        <div style={{ minHeight: 48, display: "flex", flexDirection: "column", justifyContent: "center" }}>
+          {state.kind === "loading" ? (
+            <span style={{ color: "var(--text-dim)", fontSize: 13 }}>Lade CGM-Daten…</span>
+          ) : state.kind === "no-cgm" ? (
+            <span style={{ color: "var(--text-dim)", fontSize: 13 }}>
+              Keine CGM-Verbindung.{" "}
+              <a href="/settings/cgm" style={{ color: ACCENT }}>Einstellungen → CGM</a>
+            </span>
+          ) : state.kind === "error" ? (
+            <CgmErrorDisplay code={state.code} msg={state.msg} />
+          ) : (
+            <span style={{ color: "var(--text-dim)", fontSize: 13 }}>Noch keine Messwerte. Sensor aktiv?</span>
+          )}
         </div>
       )}
 

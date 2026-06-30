@@ -24,6 +24,7 @@ const ALL_GROUPS: ReadonlyArray<NavGroup> = [
       { href: "/glev-ops/buyers", label: "Käufer" },
       { href: "/glev-ops/faelle", label: "Fälle" },
       { href: "/glev-ops/setup-requests", label: "CGM-Anfragen" },
+      { href: "/glev-ops/cgm-errors", label: "CGM-Fehler" },
       { href: "/glev-ops/praxis", label: "Praxen" },
       { href: "/glev-ops/sms", label: "SMS Test" },
       { href: "/glev-ops/settings", label: "Einstellungen" },
@@ -52,6 +53,7 @@ const ALL_GROUPS: ReadonlyArray<NavGroup> = [
       { href: "/glev-ops/trial-ui", label: "Trial-UI" },
       { href: "/glev-ops/journey", label: "Journey" },
       { href: "/glev-ops/sound-assets", label: "Sounds" },
+      { href: "/glev-ops/community", label: "Community" },
     ],
   },
   {
@@ -59,6 +61,12 @@ const ALL_GROUPS: ReadonlyArray<NavGroup> = [
     items: [
       { href: "/glev-ops/dev-cockpit", label: "Dev Cockpit" },
       { href: "/glev-ops/lead-flow", label: "Lead Flow" },
+    ],
+  },
+  {
+    label: "Marketing",
+    items: [
+      { href: "/glev-ops/hub", label: "OPS Hub" },
     ],
   },
 ];
