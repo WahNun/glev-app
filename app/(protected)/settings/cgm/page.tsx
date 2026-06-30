@@ -292,7 +292,7 @@ function useDexcomDirectConnected(): boolean {
     let cancelled = false;
     fetch("/api/cgm/source", { cache: "no-store" })
       .then((r) => (r.ok ? r.json() : Promise.reject()))
-      .then((data) => { if (!cancelled) setConnected(data?.source === "dexcom"); })
+      .then((data) => { if (!cancelled) setConnected(data?.source === "dexcom" && data?.dexcom_credentials_present === true); })
       .catch(() => {});
     return () => { cancelled = true; };
   }, []);

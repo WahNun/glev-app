@@ -749,3 +749,8 @@ Smart-Tier Käufer haben fälschlicherweise Glev+ Zugang bekommen statt Smart, w
 - **Was:** computeEffectivePlan() prüft jetzt trial_start_at/trial_end_at; aktive Trial-User bekommen "pro" statt "free"
 - **Warum:** Free-Plan gated CGM Live — Trial-User sahen "No readings yet today" statt Glucose
 - **Impact:** Alle aktiven Trial-User (trial_end_at > now()) haben sofort Pro-Zugang; keine DB-Migration nötig
+
+## 2026-06-30 fix(cgm): useDexcomDirectConnected prüft Credentials
+- **Was:** UI zeigte "verbunden" wenn cgm_source='dexcom' gesetzt aber kein dexcom_username in cgm_credentials — User mit unvollständigem Setup sahen falschen Connected-Status.
+- **Fix:** /api/cgm/source gibt jetzt dexcom_credentials_present zurück; Hook prüft beide Felder.
+- **Impact:** Kein falsches "verbunden"-Signal mehr für User die cgm_source gesetzt aber keine Credentials gespeichert haben.

@@ -46,7 +46,19 @@ export async function GET(req: NextRequest) {
       .eq("user_id", user.id)
       .maybeSingle();
     if (error) throw new Error("supabase: " + error.message);
-    return NextResponse.json({ source: data?.cgm_source ?? null });
+    const source = data?.cgm_source ?? null;
+    let dexcom_credentials_present = false;
+    if (source === "dexcom") {
+      const { data: creds, error: credsErr } = await adminClient()
+        .from("cgm_credentials")
+        .select("dexcom_username")
+        .eq("user_id", user.id)
+        .not("dexcom_username", "is", null)
+        .maybeSingle();
+      if (credsErr) throw new Error("supabase: " + credsErr.message);
+      dexcom_credentials_present = creds !== null;
+    }
+    return NextResponse.json({ source, dexcom_credentials_present });
   } catch (e) {
     return errResponse(e);
   }
