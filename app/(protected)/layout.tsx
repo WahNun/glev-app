@@ -8,6 +8,7 @@ import LowGlucoseAlarmTicker from "@/components/LowGlucoseAlarmTicker";
 import TrialExpiredModal from "@/components/TrialExpiredModal";
 import LanguageSync from "@/components/LanguageSync";
 import SWRProvider from "@/components/SWRProvider";
+import CommunityVotePopup from "@/components/CommunityVotePopupLoader";
 
 /**
  * Protected layout — server component.
@@ -39,6 +40,7 @@ export default async function ProtectedLayout({ children }: { children: React.Re
         <CgmJobsTicker />
         <LowGlucoseAlarmTicker />
         <TrialExpiredModal />
+        <CommunityVotePopup />
         {children}
       </Layout>
     </SWRProvider>

@@ -759,7 +759,14 @@ Smart-Tier Käufer haben fälschlicherweise Glev+ Zugang bekommen statt Smart, w
 - **Fix:** /api/cgm/source gibt jetzt dexcom_credentials_present zurück; Hook prüft beide Felder.
 - **Impact:** Kein falsches "verbunden"-Signal mehr für User die cgm_source gesetzt aber keine Credentials gespeichert haben.
 
+## 2026-07-01 feat(ops): OPS Hub als Tab in glev-ops
+
+`glev-marketing-hub.html` wird via `<iframe>` unter `/glev-ops/hub` eingebettet und ist über das neue "Marketing"-Tab in der AdminNav erreichbar. Die HTML-Datei liegt als statisches Asset in `public/ops-hub.html`. Gleichzeitig wurden zwei pre-existente Build-Fehler behoben: `lib/stripe.ts` nutzte module-level `createClient` (→ `getStripe()` lazy factory); `app/api/asana/webhook/route.ts` desgleichen (→ `getSupabase()` factory); `app/(protected)/layout.tsx` nutzte `ssr: false` in einem Server Component (→ `CommunityVotePopupLoader` als Client-Wrapper).
+
 ## 2026-06-30 feat(community): Community Voting Phase 1
 
 | 2026-06-30 | feat(community): Community Voting Phase 1 | Demokratische Roadmap-Feature: 4 neue Tabellen (community_feature_clusters, community_feature_requests, community_vote_sessions, community_votes) + 2 neue profiles-Spalten (community_voting_visible, community_voting_enabled). Settings-Toggle (nur wenn voting_visible=true), Vote-Popup-Overlay, Admin-UI für Session-Management + Ergebnisse. Phase 2 (AI-Clustering, Priority Score) folgt. |
 | 2026-07-01 | feat(cgm): Dexcom Verbindung-testen Button | GET /api/cgm/dexcom/test liest gespeicherte Credentials und testet Verbindung ohne erneute Eingabe. Button in Dexcom-Settings neben "Trennen". Parität mit Libre LinkUp Test-Button. |
+
+## 2026-07-01 feat(cgm): CGM Diagnose-Reporting System
+| 2026-07-01 | feat(cgm): CGM Diagnose-Reporting System | Maschinenlesbare Fehlercodes in CGM-API (/api/cgm/history gibt jetzt error_code zurück: no_credentials, login_failed, timeout, network_error, internal), aussagekräftige deutsche Fehlermeldungen im Glucose-Card nach Kategorie, neue Tabelle cgm_error_logs (RLS: user_insert_own_log), POST /api/cgm/report-error Endpoint (auth-gesichert), "Problem melden →"-Button im Glucose-Card Fehlerzustand (POSTet Metadaten ohne Credentials), Admin-View /glev-ops/cgm-errors mit Filter nach error_code. |

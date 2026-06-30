@@ -1,0 +1,2302 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Glev – Marketing Hub</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0f1117; color: #e1e4e8; min-height: 100vh; }
+  header { background: linear-gradient(135deg, #4F6EF7, #22D3A0); padding: 20px 24px; display: flex; align-items: center; gap: 12px; }
+  header h1 { font-size: 20px; font-weight: 700; color: #fff; letter-spacing: -0.3px; }
+  header span { font-size: 13px; color: rgba(255,255,255,0.75); margin-left: auto; }
+  .tab-nav { display: flex; background: #161b22; border-bottom: 2px solid #30363d; padding: 0 16px; overflow-x: auto; }
+  .tab-btn { padding: 12px 20px; font-size: 13px; font-weight: 600; color: #6e7681; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -2px; user-select: none; transition: color .15s; white-space: nowrap; }
+  .tab-btn.on { color: #4F6EF7; border-bottom-color: #4F6EF7; }
+  .tab-btn:hover:not(.on) { color: #e1e4e8; }
+  .tab-content { display: none; }
+  .tab-content.on { display: block; }
+  .toolbar { display: flex; gap: 10px; padding: 14px 16px; background: #161b22; border-bottom: 1px solid #30363d; flex-wrap: wrap; align-items: center; }
+  .toolbar select, .toolbar input { background: #21262d; border: 1px solid #30363d; color: #e1e4e8; padding: 6px 10px; border-radius: 6px; font-size: 13px; }
+  .toolbar select:focus, .toolbar input:focus { outline: none; border-color: #4F6EF7; }
+  .btn { padding: 6px 14px; border-radius: 6px; border: none; cursor: pointer; font-size: 13px; font-weight: 500; }
+  .btn-primary { background: #4F6EF7; color: #fff; }
+  .btn-primary:hover { background: #3d5ce0; }
+  .btn-success { background: #22D3A0; color: #0f1117; }
+  .btn-success:hover { background: #1ab88b; }
+  .btn-danger { background: transparent; color: #f85149; border: 1px solid #f85149; padding: 4px 8px; font-size: 11px; }
+  .btn-danger:hover { background: #f85149; color: #fff; }
+  .btn-sm { padding: 3px 9px; font-size: 11px; border-radius: 5px; border: none; cursor: pointer; font-weight: 600; background: #4F6EF7; color: #fff; }
+  .btn-sm:hover { background: #3d5ce0; }
+  .btn-sm.ok { background: #22D3A0; color: #0f1117; }
+  .stats { display: flex; gap: 12px; padding: 12px 16px; background: #0d1117; border-bottom: 1px solid #30363d; flex-wrap: wrap; }
+  .stat { background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 10px 16px; text-align: center; min-width: 90px; }
+  .stat .num { font-size: 22px; font-weight: 700; color: #4F6EF7; }
+  .stat .label { font-size: 11px; color: #8b949e; margin-top: 2px; }
+  .table-wrap { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 12px; min-width: 1100px; }
+  thead tr { background: #161b22; position: sticky; top: 0; z-index: 10; }
+  thead th { padding: 10px; text-align: left; font-size: 11px; font-weight: 600; color: #8b949e; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 1px solid #30363d; white-space: nowrap; }
+  tbody tr { border-bottom: 1px solid #21262d; transition: background 0.15s; }
+  tbody tr:hover { background: #161b22; }
+  td { padding: 8px 10px; vertical-align: middle; }
+  td[contenteditable="true"] { cursor: text; outline: none; border-radius: 4px; }
+  td[contenteditable="true"]:focus { background: #21262d; box-shadow: 0 0 0 2px #4F6EF7; }
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 10px; font-weight: 600; }
+  .badge-praxis { background: #1a3a5e; color: #58a6ff; }
+  .badge-klinik { background: #3d1a5e; color: #c084fc; }
+  .badge-mvz { background: #1a4a2e; color: #4ade80; }
+  .badge-a { background: #1a4a2e; color: #4ade80; }
+  .badge-b { background: #3a2e1a; color: #FF9500; }
+  .badge-tiktok { background: #1a1a3e; color: #c084fc; }
+  .badge-ig { background: #3a1a2e; color: #f472b6; }
+  .badge-yt { background: #3a1a1a; color: #f87171; }
+  .badge-podcast { background: #1a2a3a; color: #60a5fa; }
+  .badge-blog { background: #1a3a2a; color: #4ade80; }
+  .action-select { background: #21262d; border: 1px solid #30363d; color: #e1e4e8; padding: 4px 6px; border-radius: 5px; font-size: 11px; width: 100%; }
+  .action-anrufen { border-color: #FF9500; color: #FF9500; }
+  .action-email { border-color: #4F6EF7; color: #4F6EF7; }
+  .action-zusenden { border-color: #22D3A0; color: #22D3A0; }
+  .action-bringen { border-color: #22D3A0; color: #22D3A0; }
+  .action-nachfassen { border-color: #FF9500; color: #FF9500; }
+  .action-zusage { border-color: #22D3A0; color: #22D3A0; }
+  .action-kein { border-color: #6e7681; color: #6e7681; }
+  .action-none { border-color: #30363d; color: #6e7681; }
+  .action-dm { border-color: #c084fc; color: #c084fc; }
+  .action-geantwortet { border-color: #4ade80; color: #4ade80; }
+  .action-gesprach { border-color: #22D3A0; color: #22D3A0; }
+  .action-zugegeben { border-color: #22D3A0; color: #22D3A0; }
+  .action-posted { border-color: #4ade80; color: #4ade80; }
+  .email-cell a { color: #58a6ff; text-decoration: none; font-size: 11px; }
+  .email-cell a:hover { text-decoration: underline; }
+  .notes-cell { max-width: 140px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: #8b949e; font-size: 11px; }
+  .col-letzte { background: rgba(79,110,247,0.04); }
+  .col-naechste { background: rgba(34,211,160,0.04); }
+  thead th.col-letzte { color: #6e7baa; }
+  thead th.col-naechste { color: #22D3A0; }
+  .template-panel { background: #161b22; border-top: 1px solid #30363d; padding: 16px; display: none; }
+  .template-panel.active { display: block; }
+  .template-panel h3 { font-size: 13px; font-weight: 600; color: #e1e4e8; margin-bottom: 10px; }
+  .template-box { background: #21262d; border: 1px solid #30363d; border-radius: 8px; padding: 14px; font-size: 12px; line-height: 1.6; color: #c9d1d9; white-space: pre-wrap; font-family: inherit; }
+  .copy-row { display: flex; gap: 8px; margin-top: 10px; align-items: center; }
+  .copy-status { font-size: 11px; color: #22D3A0; display: none; }
+  .city-berlin td:first-child { border-left: 3px solid #4F6EF7; }
+  .city-hannover td:first-child { border-left: 3px solid #22D3A0; }
+  .prio-a td:first-child { border-left: 3px solid #22D3A0; }
+  .prio-b td:first-child { border-left: 3px solid #FF9500; }
+  .dm-panel { background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 12px; margin: 8px 16px; display: none; }
+  .dm-panel.active { display: block; }
+  .dm-text { background: #21262d; border-radius: 6px; padding: 12px; font-size: 11.5px; line-height: 1.7; color: #c9d1d9; white-space: pre-wrap; font-family: inherit; margin-bottom: 8px; }
+  footer { padding: 12px 16px; background: #0d1117; border-top: 1px solid #30363d; font-size: 11px; color: #6e7681; display: flex; gap: 16px; }
+  .formate-wrap, .kampagnen-wrap { padding: 20px; max-width: 880px; }
+  .tab-page-title { font-size: 18px; font-weight: 700; color: #e1e4e8; margin-bottom: 4px; }
+  .tab-page-sub { font-size: 12px; color: #8b949e; margin-bottom: 20px; padding-bottom: 16px; border-bottom: 1px solid #30363d; }
+  .acc-card { background: #161b22; border: 1px solid #30363d; border-radius: 10px; margin-bottom: 12px; overflow: hidden; }
+  .acc-header { display: flex; align-items: center; gap: 10px; padding: 13px 16px; cursor: pointer; user-select: none; transition: background .15s; }
+  .acc-header:hover { background: rgba(79,110,247,0.06); }
+  .acc-num { background: #4F6EF7; color: #fff; font-size: 11px; font-weight: 700; border-radius: 5px; padding: 2px 8px; white-space: nowrap; flex-shrink: 0; }
+  .acc-num.pink { background: #FF2D78; }
+  .acc-title { font-size: 14px; font-weight: 600; color: #e1e4e8; flex: 1; }
+  .acc-meta { font-size: 11px; color: #8b949e; background: #21262d; border-radius: 4px; padding: 2px 7px; white-space: nowrap; }
+  .acc-chevron { color: #6e7681; font-size: 14px; transition: transform .2s; flex-shrink: 0; }
+  .acc-card.open .acc-chevron { transform: rotate(90deg); }
+  .acc-body { display: none; border-top: 1px solid #30363d; padding: 16px; }
+  .acc-card.open .acc-body { display: block; }
+  .sec-label { font-size: 10px; font-weight: 700; color: #8b949e; text-transform: uppercase; letter-spacing: 0.7px; margin: 14px 0 6px; }
+  .sec-label:first-child { margin-top: 0; }
+  .ul-bullets { list-style: none; padding: 0; margin: 0 0 4px; }
+  .ul-bullets li { padding: 3px 0 3px 14px; position: relative; font-size: 12px; color: #c9d1d9; line-height: 1.5; }
+  .ul-bullets li::before { content: '›'; position: absolute; left: 0; color: #4F6EF7; font-weight: 700; }
+  .script-wrap { position: relative; }
+  .script-block { background: #0d1117; border: 1px solid #30363d; border-radius: 8px; padding: 14px; padding-right: 96px; font-size: 12px; line-height: 1.75; color: #c9d1d9; white-space: pre-wrap; font-family: inherit; }
+  .copy-btn { position: absolute; top: 8px; right: 8px; background: #4F6EF7; color: #fff; border: none; border-radius: 5px; padding: 4px 10px; font-size: 11px; cursor: pointer; font-weight: 600; }
+  .copy-btn:hover { background: #3d5ce0; }
+  .copy-btn.ok { background: #22D3A0; color: #0f1117; }
+  .regie-box { background: rgba(255,45,120,0.06); border-left: 3px solid #FF2D78; border-radius: 0 6px 6px 0; padding: 10px 14px; font-size: 12px; color: #c9d1d9; line-height: 1.6; }
+  .kp-text { font-size: 12px; color: #c9d1d9; line-height: 1.7; margin-bottom: 10px; }
+  .kp-note { background: rgba(79,110,247,0.08); border-left: 3px solid #4F6EF7; padding: 10px 14px; border-radius: 0 6px 6px 0; font-size: 12px; color: #c9d1d9; line-height: 1.6; margin-bottom: 12px; }
+  .kp-warn { background: rgba(255,45,120,0.08); border-left: 3px solid #FF2D78; padding: 10px 14px; border-radius: 0 6px 6px 0; font-size: 12px; color: #c9d1d9; line-height: 1.6; margin-bottom: 12px; }
+  .kp-table { width: 100%; border-collapse: collapse; font-size: 12px; margin: 6px 0 14px; }
+  .kp-table th { background: #21262d; padding: 7px 12px; text-align: left; font-size: 11px; font-weight: 600; color: #8b949e; text-transform: uppercase; letter-spacing: 0.4px; border-bottom: 1px solid #30363d; }
+  .kp-table td { padding: 7px 12px; border-bottom: 1px solid #21262d; color: #c9d1d9; vertical-align: top; font-size: 12px; }
+  .kp-table tr:last-child td { border-bottom: none; }
+  .kp-table tr:hover td { background: rgba(79,110,247,0.04); }
+  .checklist { list-style: none; padding: 0; margin: 0; }
+  .checklist li { display: flex; align-items: flex-start; gap: 8px; padding: 6px 0; font-size: 12px; color: #c9d1d9; line-height: 1.5; border-bottom: 1px solid #21262d; }
+  .checklist li:last-child { border-bottom: none; }
+  .checklist li input[type="checkbox"] { margin-top: 2px; accent-color: #4F6EF7; width: 14px; height: 14px; cursor: pointer; flex-shrink: 0; }
+  .checklist li.done span { text-decoration: line-through; color: #6e7681; }
+  .step-block { border: 1px solid #30363d; border-radius: 8px; padding: 12px 14px; margin-bottom: 10px; background: #0d1117; }
+  .step-block h4 { font-size: 13px; font-weight: 700; color: #e1e4e8; margin-bottom: 8px; }
+  .step-block .ul-bullets li::before { color: #22D3A0; }
+  .ad-card { background: #0d1117; border: 1px solid #30363d; border-radius: 8px; padding: 14px; margin-bottom: 12px; }
+  .ad-card-title { font-size: 13px; font-weight: 700; color: #e1e4e8; margin-bottom: 10px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .badge-beta { background: rgba(79,110,247,0.2); color: #4F6EF7; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; }
+  .badge-pro { background: rgba(255,45,120,0.2); color: #FF2D78; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; }
+  .badge-fa { background: rgba(34,211,160,0.2); color: #22D3A0; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; }
+  .badge-fb { background: rgba(255,149,0,0.2); color: #FF9500; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; }
+  .field-label { font-size: 10px; font-weight: 700; color: #8b949e; text-transform: uppercase; letter-spacing: 0.5px; margin: 10px 0 4px; }
+  .code-block { font-family: monospace; font-size: 11px; color: #22D3A0; background: #0d1117; border: 1px solid #30363d; border-radius: 4px; padding: 6px 10px; word-break: break-all; white-space: pre-wrap; }
+  .ad-text-block { background: #161b22; border: 1px solid #30363d; border-radius: 6px; padding: 10px 12px; font-size: 12px; color: #c9d1d9; line-height: 1.7; white-space: pre-wrap; font-family: inherit; }
+  .tag-ok { color: #22D3A0; font-weight: 700; }
+  .tag-no { color: #f85149; font-weight: 700; }
+  .subsec { font-size: 13px; font-weight: 700; color: #e1e4e8; margin: 16px 0 8px; padding-bottom: 6px; border-bottom: 1px solid #30363d; }
+  /* ── DAILY CONTENT SUB-TABS ── */
+  .dc-subtab { padding: 9px 22px; border-radius: 8px; border: none; cursor: pointer; font-size: 13px; font-weight: 600; color: #8b949e; background: transparent; transition: all .15s; white-space: nowrap; }
+  .dc-subtab.on { background: #4F6EF7; color: #fff; }
+  .dc-subtab:hover:not(.on) { color: #e1e4e8; background: rgba(79,110,247,0.08); }
+  .dc-hook-card { background: #161b22; border: 1px solid #30363d; border-radius: 10px; padding: 14px 16px; margin-bottom: 10px; }
+  .dc-hook-num { display: inline-block; background: #4F6EF7; color: #fff; font-size: 10px; font-weight: 700; border-radius: 4px; padding: 2px 7px; margin-right: 8px; }
+  .dc-hook-text { font-size: 13px; color: #c9d1d9; line-height: 1.6; font-style: italic; }
+  .dc-info-row { display: flex; gap: 10px; margin-bottom: 8px; align-items: flex-start; }
+  .dc-info-icon { font-size: 14px; flex-shrink: 0; margin-top: 1px; }
+  .dc-info-text { font-size: 12px; color: #c9d1d9; line-height: 1.6; }
+</style>
+</head>
+<body>
+
+<header>
+  <svg width="28" height="28" viewBox="0 0 28 28" fill="none"><circle cx="14" cy="14" r="14" fill="rgba(255,255,255,0.15)"/><path d="M8 14c0-3.3 2.7-6 6-6s6 2.7 6 6-2.7 6-6 6-6-2.7-6-6z" fill="white" opacity="0.8"/><circle cx="14" cy="14" r="2.5" fill="white"/></svg>
+  <h1>Glev – Marketing Hub</h1>
+  <span id="headerCount">Diabetologen &amp; Influencer</span>
+</header>
+
+<div class="tab-nav">
+  <div class="tab-btn on" data-tab="diabetologen">🏥 Diabetologen</div>
+  <div class="tab-btn" data-tab="influencer">⭐ Influencer</div>
+  <div class="tab-btn" data-tab="formate">🎬 Founder Formate</div>
+  <div class="tab-btn" data-tab="kampagne">📊 Kampagnen-Plan</div>
+  <div class="tab-btn" data-tab="emailflows">✉️ Email Flows</div>
+  <div class="tab-btn" data-tab="icp">🎯 ICP</div>
+  <div class="tab-btn" data-tab="mockups">📱 Mockups</div>
+  <div class="tab-btn" data-tab="dailycontent">📅 Daily Content</div>
+  <div class="tab-btn" data-tab="marke">⚖️ Marke</div>
+  <div class="tab-btn" data-tab="pricing">💰 Pricing-Strategie</div>
+  <div class="tab-btn" data-tab="kompetitor">🔍 Kompetitor-Analyse</div>
+</div>
+
+<!-- DIABETOLOGEN TAB -->
+<div class="tab-content on" id="tab-diabetologen">
+  <div class="toolbar">
+    <select id="cityFilter" onchange="filterLeads()">
+      <option value="">🌍 Alle Städte</option>
+      <option value="Berlin">🟦 Berlin</option>
+      <option value="Hannover">🟩 Hannover</option>
+    </select>
+    <select id="actionFilter" onchange="filterLeads()">
+      <option value="">Alle Aktionen</option>
+      <option value="anrufen">📞 anrufen</option>
+      <option value="email">📧 email</option>
+      <option value="zusenden">📬 zusenden</option>
+      <option value="bringen">🚗 bringen</option>
+      <option value="nachfassen">🔄 nachfassen</option>
+      <option value="zusage">✅ zusage</option>
+      <option value="kein">❌ kein</option>
+    </select>
+    <input type="text" id="searchInput" placeholder="🔍 Suchen..." oninput="filterLeads()" style="width:180px;">
+    <button class="btn btn-primary" onclick="addRow()">+ Lead hinzufügen</button>
+    <button class="btn btn-success" onclick="exportCSV()">⬇ CSV Export</button>
+    <button class="btn" style="background:#21262d;color:#e1e4e8;" onclick="toggleTemplate()">📧 E-Mail Vorlage</button>
+  </div>
+  <div class="stats">
+    <div class="stat"><div class="num" id="statTotal">18</div><div class="label">Total</div></div>
+    <div class="stat"><div class="num" id="statBerlin">13</div><div class="label">Berlin</div></div>
+    <div class="stat"><div class="num" id="statHannover">5</div><div class="label">Hannover</div></div>
+    <div class="stat"><div class="num" id="statMitEmail">17</div><div class="label">Mit Email</div></div>
+    <div class="stat"><div class="num" id="statAnrufen">18</div><div class="label">Zu Anrufen</div></div>
+  </div>
+  <div class="table-wrap">
+    <table id="crmTable">
+      <thead><tr>
+        <th>#</th><th>Name / Praxis</th><th>Typ</th><th>Stadt</th><th>Adresse</th><th>Telefon</th><th>Email</th>
+        <th class="col-letzte">Letzte Aktion</th><th class="col-naechste">Nächste Aktion</th>
+        <th>Letzter Kontakt</th><th>Nächster Kontakt</th><th>Notizen</th><th></th>
+      </tr></thead>
+      <tbody id="tableBody"></tbody>
+    </table>
+  </div>
+  <div class="template-panel" id="templatePanel">
+    <h3>📧 E-Mail Vorlage – Flyer-Anfrage</h3>
+    <div class="template-box" id="templateText">Betreff: Kostenlose Glev-Flyer für Ihre Warteräume – Typ-1-Diabetes App
+
+Sehr geehrtes Praxisteam,
+
+mein Name ist Lucas Wahnon, ich bin Gründer von Glev – einer sprachgesteuerten App für Menschen mit Typ-1-Diabetes, entwickelt aus eigener Betroffenheit.
+
+Glev ermöglicht Patienten, Mahlzeiten, Blutzucker und Insulindosen einfach per Sprache zu dokumentieren – ohne tippen, ohne Aufwand.
+
+Wir starten im Juli 2026 unseren Beta-Launch in der DACH-Region und würden Ihrer Praxis gerne kostenlose Flyer für Ihren Warteraum zukommen lassen – als Information für Ihre Typ-1-Patienten.
+
+Darf ich Ihnen einige Exemplare zusenden?
+
+Mit freundlichen Grüßen,
+Lucas Wahnon
+Gründer, Glev
+lucas@wahnon-connect.com
+https://glev.app/beta</div>
+    <div class="copy-row">
+      <button class="btn btn-primary" onclick="copyTemplate()">📋 Kopieren</button>
+      <span class="copy-status" id="copyStatus">✓ Kopiert!</span>
+    </div>
+  </div>
+</div>
+
+<!-- INFLUENCER TAB -->
+<div class="tab-content" id="tab-influencer">
+  <div class="toolbar">
+    <select id="prioFilter" onchange="filterInfluencer()">
+      <option value="">Alle Prioritäten</option>
+      <option value="A">⭐ Prio A</option>
+      <option value="B">🟡 Prio B</option>
+    </select>
+    <select id="statusFilter" onchange="filterInfluencer()">
+      <option value="">Alle Status</option>
+      <option value="kontaktieren">📤 kontaktieren</option>
+      <option value="dm">📨 DM gesendet</option>
+      <option value="geantwortet">💬 geantwortet</option>
+      <option value="gesprach">🤝 Gespräch läuft</option>
+      <option value="zugegeben">🎁 Beta-Zugang gegeben</option>
+      <option value="posted">✅ posted</option>
+      <option value="kein">❌ kein Interesse</option>
+    </select>
+    <input type="text" id="infSearchInput" placeholder="🔍 Suchen..." oninput="filterInfluencer()" style="width:180px;">
+    <button class="btn btn-primary" onclick="addInfluencer()">+ Influencer hinzufügen</button>
+  </div>
+  <div class="stats">
+    <div class="stat"><div class="num" id="iStatTotal">6</div><div class="label">Total</div></div>
+    <div class="stat"><div class="num" id="iStatPrioA">4</div><div class="label">Prio A</div></div>
+    <div class="stat"><div class="num" id="iStatKontakt">0</div><div class="label">Kontaktiert</div></div>
+    <div class="stat"><div class="num" id="iStatPosted">0</div><div class="label">Gepostet</div></div>
+  </div>
+  <div class="table-wrap">
+    <table id="infTable">
+      <thead><tr>
+        <th>#</th><th>Name</th><th>Handle</th><th>Plattform</th><th>Reichweite</th><th>Prio</th>
+        <th class="col-letzte">Status</th><th class="col-naechste">Nächste Aktion</th>
+        <th>Letzter Kontakt</th><th>DM</th><th>Notizen</th><th></th>
+      </tr></thead>
+      <tbody id="infTableBody"></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- FOUNDER FORMATE TAB -->
+<div class="tab-content" id="tab-formate">
+  <div class="formate-wrap">
+    <div class="tab-page-title">🎬 Founder Formate</div>
+    <div class="tab-page-sub">10 Video-Skripte · Founder-Perspektive · DACH · Launch 1. Juli 2026 — Alle Skripte compliance-geprüft · Kein medizinischer Claim</div>
+
+    <div class="acc-card" id="fc-1">
+      <div class="acc-header" onclick="toggleAcc('fc-1')">
+        <span class="acc-num">#01</span><span class="acc-title">Die Diagnose: Tokio, 514, Notaufnahme</span>
+        <span class="acc-meta">Reel · 30–45s · Founder · IG/TikTok</span><span class="acc-chevron">›</span>
+      </div>
+      <div class="acc-body">
+        <div class="sec-label">Bullet Points</div>
+        <ul class="ul-bullets">
+          <li>Hook: „514. Das war mein Blutzucker. Ich war in Tokio. Und ich hatte keine Ahnung."</li>
+          <li>Reise nach Japan. Komische Symptome. Ignoriert.</li>
+          <li>Notaufnahme. Blutzucker 514. Ketone im Urin.</li>
+          <li>Erste Reaktion: ruhig. Dann kam die Traurigkeit — aber nicht sofort.</li>
+          <li>CTA: „Ich hab Glev gebaut weil ich keine App gefunden hab die mir wirklich hilft. Link in Bio."</li>
+        </ul>
+        <div class="sec-label">Volles Textskript</div>
+        <div class="script-wrap">
+          <div class="script-block" id="s1">514. Das war mein Blutzucker. Ich war in Tokio, mitten im Urlaub — und ich hatte ehrlich gesagt keine Ahnung was das bedeutet.
+
+Ein paar Tage davor: merkwürdige Symptome. Ich hab sie ignoriert. Wir alle ignorieren sowas erstmal.
+
+Dann die Notaufnahme. Blutzucker 514, Ketone im Urin. Die Ärztin sagt: Typ-1-Diabetes. Ich war ruhig. Seltsam ruhig.
+
+Drei Tage später — zuhause, allein — ist es wirklich angekommen. Dass das jetzt mein Leben ist. Für immer.
+
+Ich hab dann nach einer App gesucht die mir wirklich hilft. Ich hab nichts gefunden das mich überzeugt hat.
+
+Also hab ich Glev gebaut. Link in Bio.</div>
+          <button class="copy-btn" onclick="copyScript('s1',this)">📋 Kopieren</button>
+        </div>
+        <div class="sec-label">🎬 Regie-Hinweise</div>
+        <div class="regie-box">Sitz ruhig, leicht nach vorne gelehnt — nah an der Kamera. Sprich langsam, keine Dramatik. Beim Satz „Drei Tage später" kurze Pause. Direkt in die Kamera.</div>
+      </div>
+    </div>
+
+    <div class="acc-card" id="fc-2">
+      <div class="acc-header" onclick="toggleAcc('fc-2')">
+        <span class="acc-num">#02</span><span class="acc-title">Der Spreadsheet-Moment</span>
+        <span class="acc-meta">Reel · 20–30s · Casual · IG/TikTok</span><span class="acc-chevron">›</span>
+      </div>
+      <div class="acc-body">
+        <div class="sec-label">Bullet Points</div>
+        <ul class="ul-bullets">
+          <li>Hook: „Mein Arzt hat mir nach der Diagnose eine Excel-Tabelle gegeben."</li>
+          <li>Manuell tippen. Timer stellen. ChatGPT fragen. Alles zusammenkopieren.</li>
+          <li>Nach zwei Tagen: aufgehört.</li>
+          <li>Ich wollte alles in einem Hub. Keine App hatte das.</li>
+          <li>CTA: „Beta. Link in Bio. 19 Euro."</li>
+        </ul>
+        <div class="sec-label">Volles Textskript</div>
+        <div class="script-wrap">
+          <div class="script-block" id="s2">Mein Arzt hat mir nach der Diagnose eine Excel-Tabelle gegeben.
+
+Kein Witz. Eine Excel-Tabelle. „Füll das jeden Tag aus", hat er gesagt.
+
+Also hab ich angefangen: manuell tippen, Timer stellen, ChatGPT fragen was wieviel Carbs hat, alles irgendwie zusammenkopieren.
+
+Nach zwei Tagen hab ich aufgehört. Weil das nicht funktioniert. Nicht im echten Alltag.
+
+Ich wollte einen Ort wo alles drin ist. Keine App hatte das. Also hab ich Glev gebaut. Beta ist offen, 19 Euro, Link in Bio.</div>
+          <button class="copy-btn" onclick="copyScript('s2',this)">📋 Kopieren</button>
+        </div>
+        <div class="sec-label">🎬 Regie-Hinweise</div>
+        <div class="regie-box">Locker, fast belustigt. Beim Satz „eine Excel-Tabelle" leicht schmunzeln. Tempo zügiger als Skript #01.</div>
+      </div>
+    </div>
+
+    <div class="acc-card" id="fc-3">
+      <div class="acc-header" onclick="toggleAcc('fc-3')">
+        <span class="acc-num">#03</span><span class="acc-title">Portugal-Problem: Libre 3 gibt's hier nicht</span>
+        <span class="acc-meta">Reel · 20–30s · IG/TikTok</span><span class="acc-chevron">›</span>
+      </div>
+      <div class="acc-body">
+        <div class="sec-label">Volles Textskript</div>
+        <div class="script-wrap">
+          <div class="script-block" id="s3">Ich lebe in Portugal. Und nach meiner Diagnose hab ich relativ schnell gemerkt: Libre 3? Hier nicht erhältlich. Libre 2 — wenn gerade Vorräte da sind.
+
+Ich hab den Accu-Chek Sensor ausprobiert. Hat bei mir einfach nicht funktioniert. Libre 2 war okay, aber immer wieder Lieferprobleme.
+
+Libre 3 wollte ich eigentlich — aber der ist im Moment nur wirklich verfügbar wenn man in Deutschland lebt.
+
+Und da hab ich verstanden: eine App darf nicht an einem bestimmten Sensor hängen. Weil das Leben das nicht tut.
+
+Glev soll langfristig mit jedem CGM funktionieren. Wir fangen mit Libre 2 an. Link in Bio.</div>
+          <button class="copy-btn" onclick="copyScript('s3',this)">📋 Kopieren</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="acc-card" id="fc-4">
+      <div class="acc-header" onclick="toggleAcc('fc-4')">
+        <span class="acc-num">#04</span><span class="acc-title">Warum existierende Apps mich nerven</span>
+        <span class="acc-meta">Reel · 20–25s · Direkt in Kamera · IG/TikTok</span><span class="acc-chevron">›</span>
+      </div>
+      <div class="acc-body">
+        <div class="sec-label">Volles Textskript</div>
+        <div class="script-wrap">
+          <div class="script-block" id="s4">Die Apps die es für T1D gibt sehen aus wie 2009. Und fühlen sich auch so an.
+
+Klobig. Unübersichtlich. Und vor allem: kein Voice Input. Ich muss tippen. Scrollen. Suchen.
+
+Ich will das nicht. Ich will sagen: „Pasta mit Pesto, 250 Gramm" — und fertig. Die App macht den Rest.
+
+Das klingt nicht nach Raketenwissenschaft. Aber keine bestehende App macht das wirklich gut.
+
+Glev macht das. In Sekunden. Beta ist offen — glev.app/beta.</div>
+          <button class="copy-btn" onclick="copyScript('s4',this)">📋 Kopieren</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="acc-card" id="fc-5">
+      <div class="acc-header" onclick="toggleAcc('fc-5')">
+        <span class="acc-num">#05</span><span class="acc-title">Die Lernkurve als Neuling</span>
+        <span class="acc-meta">Reel · 30s · Ehrlich, verletzlich · IG/TikTok</span><span class="acc-chevron">›</span>
+      </div>
+      <div class="acc-body">
+        <div class="sec-label">Volles Textskript</div>
+        <div class="script-wrap">
+          <div class="script-block" id="s5">Als Neuling mit T1D ist jeder Tag eine Frage: Hab ich das richtig gemacht?
+
+Ich bin seit wenigen Wochen diagnostiziert. Alles ist neu — die Spritzen, Carbs zählen, CGM ablesen, verstehen was die Werte bedeuten.
+
+Und keine der Apps die ich ausprobiert hab hat mir wirklich geholfen zu verstehen was bei mir funktioniert und was nicht.
+
+Glev dokumentiert das. Nicht damit ein Algorithmus für mich entscheidet — sondern damit ich selbst lerne.
+
+Wenn du gerade am Anfang bist: das hier ist für dich. Beta, Link in Bio.</div>
+          <button class="copy-btn" onclick="copyScript('s5',this)">📋 Kopieren</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="acc-card" id="fc-6">
+      <div class="acc-header" onclick="toggleAcc('fc-6')">
+        <span class="acc-num">#06</span><span class="acc-title">Warum ich das so schnell gebaut habe</span>
+        <span class="acc-meta">Reel · 20s · Energetisch · IG/TikTok</span><span class="acc-chevron">›</span>
+      </div>
+      <div class="acc-body">
+        <div class="sec-label">Volles Textskript</div>
+        <div class="script-wrap">
+          <div class="script-block" id="s6">Ich wurde im April 2026 diagnostiziert. Die App läuft seit Wochen.
+
+Direkt nach der Diagnose hab ich geguckt: welche App hilft mir jetzt wirklich? Ich hab gesucht, ausprobiert, verglichen.
+
+Nichts hat mich überzeugt.
+
+Also hab ich angefangen zu bauen. Weil ich einen IT-Background hab, weil ich Gründer bin — und weil wenn du ein echtes Problem hast, das dein Leben betrifft, dann wartest du nicht.
+
+Glev Beta. 19 Euro. Jetzt verfügbar. Link in Bio.</div>
+          <button class="copy-btn" onclick="copyScript('s6',this)">📋 Kopieren</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="acc-card" id="fc-7">
+      <div class="acc-header" onclick="toggleAcc('fc-7')">
+        <span class="acc-num">#07</span><span class="acc-title">Die Traurigkeit nach der Diagnose</span>
+        <span class="acc-meta">Reel · 30–40s · Ruhig, nah an der Kamera · IG/TikTok</span><span class="acc-chevron">›</span>
+      </div>
+      <div class="acc-body">
+        <div class="sec-label">Volles Textskript</div>
+        <div class="script-wrap">
+          <div class="script-block" id="s7">In der Notaufnahme in Tokio war ich ruhig. Erstaunlich ruhig. Diagnose. Okay. Was jetzt?
+
+Drei Tage später hat mich die Emotion eingeholt.
+
+Zuhause, abends — und auf einmal war es da. Das Gewicht davon. Dass sich das nicht wieder auflöst. Dass der Alltag sich ändert. Jeden Tag. Für den Rest meines Lebens.
+
+Ich hab das nicht verdrängt. Aber ich hab auch nicht aufgehört. Ich hab angefangen zu bauen.
+
+Glev. Für mich gebaut. Und für jeden der das hier kennt.
+
+Weil T1D kein Sprint ist.</div>
+          <button class="copy-btn" onclick="copyScript('s7',this)">📋 Kopieren</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="acc-card" id="fc-8">
+      <div class="acc-header" onclick="toggleAcc('fc-8')">
+        <span class="acc-num">#08</span><span class="acc-title">Was „Voice-first" wirklich bedeutet</span>
+        <span class="acc-meta">Screen-Recording + Voiceover · 20s · IG/TikTok/YT Shorts</span><span class="acc-chevron">›</span>
+      </div>
+      <div class="acc-body">
+        <div class="sec-label">Volles Textskript (Voiceover)</div>
+        <div class="script-wrap">
+          <div class="script-block" id="s8">Ich sage: „Pasta mit Pesto, 250 Gramm." Das war's.
+
+[Screen zeigt: Mikrofon-Icon wird angetippt — Lucas spricht die Mahlzeit ein — Makros erscheinen automatisch]
+
+Keine Datenbank durchsuchen. Nicht tippen. Nicht schätzen.
+
+Carbs, Protein, Fett — direkt berechnet. Und der aktuelle CGM-Wert direkt daneben.
+
+Das ist Glev. So einfach soll Tracking sein.
+
+Beta ist offen. 19 Euro. Link in Bio.</div>
+          <button class="copy-btn" onclick="copyScript('s8',this)">📋 Kopieren</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="acc-card" id="fc-9">
+      <div class="acc-header" onclick="toggleAcc('fc-9')">
+        <span class="acc-num">#09</span><span class="acc-title">An alle frisch Diagnostizierten</span>
+        <span class="acc-meta">Reel · 30s · Direkt, empathisch · IG/TikTok</span><span class="acc-chevron">›</span>
+      </div>
+      <div class="acc-body">
+        <div class="sec-label">Volles Textskript</div>
+        <div class="script-wrap">
+          <div class="script-block" id="s9">Wenn du gerade frisch diagnostiziert wurdest — das hier ist für dich.
+
+Ich war vor wenigen Wochen genau da wo du gerade bist. Verwirrt. Überwältigt von Informationen. Und gleichzeitig das Gefühl: da draußen gibt's keine App die mir wirklich weiterhilft.
+
+Ich hab dann Glev gebaut. Weil ich das Tool wollte das mir selbst gefehlt hat.
+
+Kein Arzt-Ersatz. Kein Wundermittel. Nur ein besseres Tagebuch — das mitdenkt.
+
+Wenn du gerade anfängst: Beta ist offen. Link in Bio.</div>
+          <button class="copy-btn" onclick="copyScript('s9',this)">📋 Kopieren</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="acc-card" id="fc-10">
+      <div class="acc-header" onclick="toggleAcc('fc-10')">
+        <span class="acc-num">#10</span><span class="acc-title">Das Ziel: sensoragnostisch</span>
+        <span class="acc-meta">Reel · 25s · Visionär aber geerdet · IG/TikTok</span><span class="acc-chevron">›</span>
+      </div>
+      <div class="acc-body">
+        <div class="sec-label">Volles Textskript</div>
+        <div class="script-wrap">
+          <div class="script-block" id="s10">Kein CGM-Hersteller gibt mir alles was ich brauche. Also baue ich was das mit allen funktioniert.
+
+Libre 2, Libre 3, Dexcom — was auch immer du gerade nutzt. Warum soll die App davon abhängen welchen Sensor du bekommst oder leisten kannst?
+
+Das ist das langfristige Ziel von Glev: sensoragnostisch. Unabhängig.
+
+Heute starten wir mit Libre 2 im DACH-Raum. Aber das Ziel ist größer.
+
+Wenn du von Anfang an dabei sein willst: Beta, Link in Bio.</div>
+          <button class="copy-btn" onclick="copyScript('s10',this)">📋 Kopieren</button>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div><!-- /tab-formate -->
+
+<!-- KAMPAGNEN-PLAN TAB -->
+<div class="tab-content" id="tab-kampagne">
+  <div class="kampagnen-wrap">
+    <div class="tab-page-title">📊 Instagram/Meta Ads Kampagnen-Plan</div>
+    <div class="tab-page-sub">Stand: April 2026 · 4 Ads (2 Formate × /beta + /pro) · Solo-Founder Setup ohne Agentur</div>
+
+    <div class="acc-card open" id="kp-1">
+      <div class="acc-header" onclick="toggleAcc('kp-1')">
+        <span class="acc-num pink">1</span><span class="acc-title">Vor der Kampagne — Checkliste</span>
+        <span class="acc-meta">5 Punkte · alles grün bevor du startest</span><span class="acc-chevron">›</span>
+      </div>
+      <div class="acc-body">
+        <div class="kp-warn">Bevor du den Meta Ads Manager aufmachst: Diese 5 Dinge müssen grün sein.</div>
+        <div class="subsec">✅ Landing Pages</div>
+        <ul class="checklist">
+          <li><input type="checkbox" onchange="toggleDone(this)"><span>glev.app/beta erreichbar und Stripe-Checkout funktioniert (€19 einmalig testweise durchklicken)</span></li>
+          <li><input type="checkbox" onchange="toggleDone(this)"><span>glev.app/pro erreichbar und Pro-Subscription-Checkout funktioniert</span></li>
+          <li><input type="checkbox" onchange="toggleDone(this)"><span>Pflicht-Disclaimer sichtbar: „Glev ist ein Dokumentations- und Organisations-Tool, kein Medizinprodukt."</span></li>
+          <li><input type="checkbox" onchange="toggleDone(this)"><span>Mobile-Ansicht beider Seiten getestet</span></li>
+        </ul>
+        <div class="subsec">✅ Meta Pixel &amp; UTM</div>
+        <div class="kp-note">Meta Pixel ID: 984291337254954 — PageView + ViewContent auf /beta und /pro tracken.</div>
+        <table class="kp-table">
+          <thead><tr><th>Ad</th><th>UTM-Link</th></tr></thead>
+          <tbody>
+            <tr><td>Format A → /beta</td><td><span class="code-block">https://glev.app/beta?utm_source=instagram&amp;utm_medium=paid&amp;utm_campaign=launch&amp;utm_content=format-a-beta</span></td></tr>
+            <tr><td>Format A → /pro</td><td><span class="code-block">https://glev.app/pro?utm_source=instagram&amp;utm_medium=paid&amp;utm_campaign=launch&amp;utm_content=format-a-pro</span></td></tr>
+            <tr><td>Format B → /beta</td><td><span class="code-block">https://glev.app/beta?utm_source=instagram&amp;utm_medium=paid&amp;utm_campaign=launch&amp;utm_content=format-b-beta</span></td></tr>
+            <tr><td>Format B → /pro</td><td><span class="code-block">https://glev.app/pro?utm_source=instagram&amp;utm_medium=paid&amp;utm_campaign=launch&amp;utm_content=format-b-pro</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="acc-card" id="kp-2">
+      <div class="acc-header" onclick="toggleAcc('kp-2')">
+        <span class="acc-num pink">2</span><span class="acc-title">Zielgruppe — Empfehlung mit Begründung</span>
+        <span class="acc-meta">DACH · 25–45 · Produkt-Interesse-Targeting</span><span class="acc-chevron">›</span>
+      </div>
+      <div class="acc-body">
+        <div class="kp-note">Demografisch: Alter 25–45 · Geschlecht: alle · Standorte: DE/AT/CH · Sprache: Deutsch</div>
+        <table class="kp-table">
+          <thead><tr><th>Targeting-Option</th><th>Warum es funktioniert</th></tr></thead>
+          <tbody>
+            <tr><td><strong>FreeStyle Libre</strong></td><td>90%+ der Nutzer sind T1D</td></tr>
+            <tr><td><strong>Dexcom</strong></td><td>Identisch wie Libre</td></tr>
+            <tr><td><strong>mySugr</strong></td><td>Wer mySugr kennt, ist deine Zielgruppe</td></tr>
+            <tr><td><strong>JDRF</strong></td><td>Internationale T1D-Community</td></tr>
+          </tbody>
+        </table>
+        <div class="kp-warn">Füge NICHT „Diabetes" als breites Interesse hinzu — zieht auch T2D und verwässert die Audience.</div>
+      </div>
+    </div>
+
+    <div class="acc-card" id="kp-3">
+      <div class="acc-header" onclick="toggleAcc('kp-3')">
+        <span class="acc-num pink">3</span><span class="acc-title">Kampagnen-Setup — Schritt für Schritt</span>
+        <span class="acc-meta">ca. 30–40 Min · Ziel: Traffic</span><span class="acc-chevron">›</span>
+      </div>
+      <div class="acc-body">
+        <div class="kp-note"><strong>Kampagnenziel: TRAFFIC</strong> — Meta stuft Glev als Health &amp; Wellness App ein. Traffic → Landing Page Views ist der performanteste Ansatz.</div>
+        <div class="step-block"><h4>Budget-Verteilung</h4>
+          <table class="kp-table">
+            <thead><tr><th>Phase</th><th>Budget</th><th>Aktion</th></tr></thead>
+            <tbody>
+              <tr><td>Tag 1–3</td><td>€72 (€24/Tag)</td><td>Alle 4 Ads laufen, kein Eingriff</td></tr>
+              <tr><td>Tag 4</td><td>—</td><td>Analyse: welches Format hat niedrigere Kosten/LPV?</td></tr>
+              <tr><td>Tag 4–7</td><td>€24–36/Tag</td><td>Verlierendes Format Budget halbieren</td></tr>
+              <tr><td>Ab Tag 8</td><td>Nur Winner</td><td>Mit €20–30/Tag skalieren</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <div class="acc-card" id="kp-45">
+      <div class="acc-header" onclick="toggleAcc('kp-45')">
+        <span class="acc-num pink">4+5</span><span class="acc-title">Reel-Konzepte — Format A &amp; B</span>
+        <span class="acc-meta">Skripte · Hooks · Regie-Hinweise</span><span class="acc-chevron">›</span>
+      </div>
+      <div class="acc-body">
+        <div class="subsec">Format A — Founder Story</div>
+        <div class="script-wrap">
+          <div class="script-block" id="s-a">„Ich wurde vor drei Wochen mit Typ-1 diagnostiziert. Mit 33. In Japan. Blutzucker 514. Ich hab dann gesucht was mir hilft — und nichts hat gepasst. Also hab ich Glev gebaut. Nicht weil ich Arzt bin. Weil ich weiß was es bedeutet auf eine Mahlzeit zu warten während du bolust."
+
+[App-Screen: Voice-Input Szene]
+
+„Du sprichst rein. Makros erscheinen. CGM-Wert wird automatisch verknüpft. 8 Sekunden."
+
+„500 Beta-Plätze. €19 einmalig. glev.app/beta."</div>
+          <button class="copy-btn" onclick="copyScript('s-a',this)">📋 Kopieren</button>
+        </div>
+        <div class="subsec" style="margin-top:16px;">Format B — Pain-Point Hook</div>
+        <div class="script-wrap">
+          <div class="script-block" id="s-b">[Schwarzes Bild, Alarm-Sound]
+„3:14 Uhr. Alarm."
+
+„Du weißt nicht warum."
+
+„Was wenn dein Abendessen von gestern dir das jetzt erklärt?"
+
+[App-Screen: Mahlzeit 22:30 Uhr — CGM-Kurve die um 3 Uhr ansteigt]
+„Glev verknüpft dein Essen mit deinem CGM. Automatisch."
+
+„500 Beta-Plätze. glev.app/beta."</div>
+          <button class="copy-btn" onclick="copyScript('s-b',this)">📋 Kopieren</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="acc-card" id="kp-6">
+      <div class="acc-header" onclick="toggleAcc('kp-6')">
+        <span class="acc-num pink">6</span><span class="acc-title">Ad-Texte — Alle 4 Ads</span>
+        <span class="acc-meta">Primary Text · Headline · CTA · Destination URL</span><span class="acc-chevron">›</span>
+      </div>
+      <div class="acc-body">
+        <div class="ad-card">
+          <div class="ad-card-title">Ad A1 <span class="badge-fa">Format A</span> <span class="badge-beta">/beta</span></div>
+          <div class="field-label">Primary Text</div>
+          <div class="ad-text-block">Ich wurde vor 3 Wochen mit Typ-1 diagnostiziert. In Japan. Blutzucker 514.
+
+Also habe ich Glev gebaut — ein Mahlzeiten-Tagebuch für T1D das zuhört statt zu fordern.
+
+Voice-Input → Makros berechnet → CGM automatisch verknüpft. 8 Sekunden pro Mahlzeit.
+
+500 Beta-Plätze. €19 einmalig — wird auf erstes Monatsabo angerechnet.
+
+Glev ist ein Dokumentations-Tool, kein Medizinprodukt.</div>
+          <div class="field-label">Headline</div><div class="code-block">Glev — Typ 1. Neu gedacht.</div>
+          <div class="field-label">Destination URL</div>
+          <div class="code-block">https://glev.app/beta?utm_source=instagram&amp;utm_medium=paid&amp;utm_campaign=launch&amp;utm_content=format-a-beta</div>
+        </div>
+        <div class="ad-card">
+          <div class="ad-card-title">Ad A2 <span class="badge-fa">Format A</span> <span class="badge-pro">/pro</span></div>
+          <div class="field-label">Primary Text</div>
+          <div class="ad-text-block">Ich wurde vor 3 Wochen mit Typ-1 diagnostiziert. Also habe ich Glev gebaut.
+
+Voice-Input → Makros berechnet → CGM automatisch verknüpft. Adaptive ICR-Engine die aus deinen Daten lernt.
+
+Pro Founder-Tier: €24,90/Monat — mit Lifetime-Preislock.
+
+Glev ist ein Dokumentations-Tool, kein Medizinprodukt.</div>
+          <div class="field-label">Headline</div><div class="code-block">Glev Pro — Lifetime-Preis sichern</div>
+          <div class="field-label">Destination URL</div>
+          <div class="code-block">https://glev.app/pro?utm_source=instagram&amp;utm_medium=paid&amp;utm_campaign=launch&amp;utm_content=format-a-pro</div>
+        </div>
+        <div class="ad-card">
+          <div class="ad-card-title">Ad B1 <span class="badge-fb">Format B</span> <span class="badge-beta">/beta</span></div>
+          <div class="field-label">Primary Text</div>
+          <div class="ad-text-block">3 Uhr nachts. CGM-Alarm. Kein Grund sichtbar.
+
+Glev verknüpft dein Essen automatisch mit deinem CGM-Verlauf. Muster die du vorher nicht gesehen hast.
+
+500 Beta-Plätze. €19 einmalig.
+
+Glev ist ein Dokumentations-Tool, kein Medizinprodukt.</div>
+          <div class="field-label">Headline</div><div class="code-block">Glev — Versteh deinen Körper</div>
+          <div class="field-label">Destination URL</div>
+          <div class="code-block">https://glev.app/beta?utm_source=instagram&amp;utm_medium=paid&amp;utm_campaign=launch&amp;utm_content=format-b-beta</div>
+        </div>
+        <div class="ad-card">
+          <div class="ad-card-title">Ad B2 <span class="badge-fb">Format B</span> <span class="badge-pro">/pro</span></div>
+          <div class="field-label">Primary Text</div>
+          <div class="ad-text-block">3 Uhr nachts. CGM-Alarm. Kein Grund sichtbar.
+
+Glev verknüpft dein Essen automatisch mit deinem CGM-Verlauf. Dazu: Adaptive ICR-Engine die deinen persönlichen Kohlenhydrat-Faktor über Zeit lernt.
+
+Pro Founder-Tier: €24,90/Monat. Lifetime-Preis.
+
+Glev ist ein Dokumentations-Tool, kein Medizinprodukt.</div>
+          <div class="field-label">Headline</div><div class="code-block">Glev Pro — Adaptive Engine für T1D</div>
+          <div class="field-label">Destination URL</div>
+          <div class="code-block">https://glev.app/pro?utm_source=instagram&amp;utm_medium=paid&amp;utm_campaign=launch&amp;utm_content=format-b-pro</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="acc-card" id="kp-7">
+      <div class="acc-header" onclick="toggleAcc('kp-7')">
+        <span class="acc-num pink">7</span><span class="acc-title">Timing — Wann laufen die Ads?</span>
+        <span class="acc-meta">Beste Tageszeiten · Lernphase</span><span class="acc-chevron">›</span>
+      </div>
+      <div class="acc-body">
+        <table class="kp-table">
+          <thead><tr><th>Zeitfenster</th><th>Prio</th><th>Begründung</th></tr></thead>
+          <tbody>
+            <tr><td>06:00–09:00 Uhr</td><td><span class="tag-ok">Prio A</span></td><td>Frühstücks-Bolus-Phase — höchste thematische Relevanz</td></tr>
+            <tr><td>19:00–22:00 Uhr</td><td><span class="tag-ok">Prio A</span></td><td>Abendessen + Post-Meal-Tracking, höchste Instagram-Nutzung</td></tr>
+            <tr><td>22:00–06:00 Uhr</td><td><span class="tag-no">AUSSCHALTEN</span></td><td>Kaufentscheidungen werden nachts nicht getroffen</td></tr>
+          </tbody>
+        </table>
+        <div class="kp-warn"><strong>Minimum: 3 volle Tage ohne Eingriff.</strong> Meta's Algorithmus braucht 24–72h Lernphase.</div>
+      </div>
+    </div>
+
+    <div class="acc-card" id="kp-8">
+      <div class="acc-header" onclick="toggleAcc('kp-8')">
+        <span class="acc-num pink">8</span><span class="acc-title">Messung — Was ist Erfolg?</span>
+        <span class="acc-meta">KPIs · Entscheidungsbaum</span><span class="acc-chevron">›</span>
+      </div>
+      <div class="acc-body">
+        <table class="kp-table">
+          <thead><tr><th>KPI</th><th>Zielwert</th><th>Was es bedeutet</th></tr></thead>
+          <tbody>
+            <tr><td><strong>Cost per LPV</strong></td><td><span class="tag-ok">&lt; €0,80</span></td><td>Wie viel kostet es jemanden auf die Seite zu bringen</td></tr>
+            <tr><td><strong>CTR</strong></td><td><span class="tag-ok">&gt; 1,5% für Reels</span></td><td>Wie gut funktioniert der Hook</td></tr>
+            <tr><td><strong>Video-Retention (3s)</strong></td><td><span class="tag-ok">&gt; 40%</span></td><td>Stoppt das Video den Scroll?</td></tr>
+            <tr><td><strong>/beta Conversions</strong></td><td><span class="tag-ok">&gt; 1% der LPVs</span></td><td>Zahlt jemand €19?</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="acc-card" id="kp-9">
+      <div class="acc-header" onclick="toggleAcc('kp-9')">
+        <span class="acc-num pink">9</span><span class="acc-title">Compliance-Checkliste</span>
+        <span class="acc-meta">Vor Einreichung · Guardrails</span><span class="acc-chevron">›</span>
+      </div>
+      <div class="acc-body">
+        <div class="kp-warn">NIE: „Verbessert deinen HbA1c" · „Hilft dir, deine Insulindosis zu bestimmen" · „Medizinisch validiert"</div>
+        <div class="kp-note">PFLICHT: „Glev ist ein Dokumentations-Tool, kein Medizinprodukt. Therapieentscheidungen triffst du mit deinem Arzt."</div>
+      </div>
+    </div>
+
+    <div class="acc-card" id="kp-10">
+      <div class="acc-header" onclick="toggleAcc('kp-10')">
+        <span class="acc-num" style="background:#22D3A0;color:#0f1117;">10</span>
+        <span class="acc-title">Abbott Partnerschaft — B2B Outreach Strategie</span>
+        <span class="acc-meta">DDG Kongress · LibreView API · Thryve · Aktionsplan 2026</span>
+        <span class="acc-chevron">›</span>
+      </div>
+      <div class="acc-body">
+        <div class="kp-note"><strong>⚡ Heute (16. Mai) letzter Tag DDG Kongress Berlin.</strong> Abbott ist mit Sicherheit vertreten. Abbott-Stand aufsuchen — direktester möglicher Erstkontakt vor dem Early Access Launch.</div>
+
+        <div class="sec-label">Warum Abbott — der Kern-Pitch</div>
+        <div class="kp-text">
+          Glev-Nutzer brauchen FreeStyle Libre — jeder Glev-Nutzer ist ein Hardware-Pull-Effekt für Abbott. Wir ersetzen LibreLink nicht, wir reichern es an. Im DACH-Markt braucht Abbott einen T1D-nativen DiGA-App-Partner.
+        </div>
+        <table class="kp-table">
+          <thead><tr><th>Abbotts Interesse</th><th>Was Glev liefert</th></tr></thead>
+          <tbody>
+            <tr><td><strong>T1D-Differenzierung</strong></td><td>Dexcom dominiert T1D-Apps — Glev stärkt Abbotts Position im T1D-Segment</td></tr>
+            <tr><td><strong>Sensor-Retention</strong></td><td>Nutzer mit Dexcom-only App wechseln den Sensor — Glev reduziert Churn</td></tr>
+            <tr><td><strong>DACH-Footprint</strong></td><td>Deutschland = Abbotts wichtigster EU-Markt — DiGA-fähige Partner gesucht</td></tr>
+            <tr><td><strong>Komplementarität</strong></td><td>Glev ersetzt LibreLink nicht — jeder Glev-Nutzer braucht FreeStyle Libre</td></tr>
+          </tbody>
+        </table>
+
+        <div class="sec-label">LLU-Risiko — Sofortmaßnahme</div>
+        <div class="kp-warn"><strong>⚠️ LLU-Grauzone:</strong> Glev nutzt aktuell die inoffizielle LibreLinkUp API — jederzeit abschaltbar. <strong>Thryve.health</strong> bietet sofortigen offiziellen LibreView-API-Zugang (OAuth2, DSGVO-konform). Thryve-Migration vor Abbott-Kontakt ist strategisch zwingend.</div>
+
+        <div class="sec-label">Kontaktstrategie — Wer, Wie, Wann</div>
+        <ul class="checklist">
+          <li><input type="checkbox"><span><strong>DDG Kongress Berlin — Heute letzter Tag:</strong> Abbott-Stand aufsuchen, Visitenkarte sichern</span></li>
+          <li><input type="checkbox"><span><strong>Partnerformular:</strong> diabetescare.abbott/partnerships/integrations — offizieller Einstieg</span></li>
+          <li><input type="checkbox"><span><strong>E-Mail:</strong> Libre.Epic@abbott.com als Einstiegspunkt (offiziell öffentlich)</span></li>
+          <li><input type="checkbox"><span><strong>LinkedIn:</strong> „Abbott Diabetes Care" + „Digital Health Partnerships" + DACH/EMEA</span></li>
+          <li><input type="checkbox"><span><strong>Thryve Demo anfragen</strong> (thryve.health) — Warm Introduction zu Abbott</span></li>
+        </ul>
+
+        <div class="sec-label">Aktionsplan 2026</div>
+        <table class="kp-table">
+          <thead><tr><th>Zeitraum</th><th>Aktion</th></tr></thead>
+          <tbody>
+            <tr><td><strong>16. Mai (heute)</strong></td><td>DDG Kongress Abbott-Stand aufsuchen · LinkedIn: 5 Manager identifizieren</td></tr>
+            <tr><td><strong>Mai–Jun 2026</strong></td><td>Abbott Partnerformular ausfüllen · Thryve Demo anfragen · LLU ablösen</td></tr>
+            <tr><td><strong>Jun 2026</strong></td><td>Abbott Pitch Deck: 5 Slides (Problem → Lösung → Warum Libre → Zahlen → Ask)</td></tr>
+            <tr><td><strong>Sep 2026</strong></td><td>EASD 2026 — Abbott-Follow-up nach Early Access Launch mit Nutzerdaten</td></tr>
+            <tr><td><strong>Feb 2027</strong></td><td>ATTD 2027 — Hauptbühne für offizielle Partnerschaftsgespräche</td></tr>
+          </tbody>
+        </table>
+
+        <div class="sec-label">Was Abbott wirklich überzeugt — Meilensteine</div>
+        <table class="kp-table">
+          <thead><tr><th>Priorität</th><th>Milestone</th></tr></thead>
+          <tbody>
+            <tr><td>★</td><td>100–500 aktive Early-Access-Nutzer — zeigt Produkt-Markt-Fit</td></tr>
+            <tr><td>★★</td><td>2–3 Diabetologen die Glev öffentlich empfehlen (HCP-Endorsement)</td></tr>
+            <tr><td>★★★</td><td>DiaDigital-Siegel (DDG) — offizieller Qualitätsnachweis</td></tr>
+            <tr><td>★★★★</td><td>Outcome-Daten — N=30 TIR-Verbesserungsdaten</td></tr>
+            <tr><td>★★★★★</td><td>DiGA-Status — stärkster Hebel, Co-Marketing mit GKV möglich</td></tr>
+          </tbody>
+        </table>
+
+        <div class="kp-note">Vollständige Abbott-Analyse (LLU vs. LibreView API, Risiken, Backup-Plan) → <strong>glev-kompetitor-analyse.html</strong> Tab „Abbott Partnerschaft"</div>
+      </div>
+    </div>
+
+  </div>
+</div><!-- /tab-kampagne -->
+
+<!-- EMAIL FLOWS TAB -->
+<div class="tab-content" id="tab-emailflows">
+  <div class="kampagnen-wrap" style="max-width:920px;">
+    <div class="tab-page-title">✉️ Email Flows</div>
+    <div class="tab-page-sub">Onboarding · Trustpilot · Re-Engagement · Provider: Resend → Klaviyo ab ~50 User · Ton: persönlich, von Lucas direkt</div>
+    <div class="subsec">🚀 Onboarding-Sequenz</div>
+    <div class="acc-card" id="ef-1">
+      <div class="acc-header" onclick="toggleAcc('ef-1')">
+        <span class="acc-num">#1</span><span class="acc-title">Welcome — Du bist dabei</span>
+        <span class="acc-meta">Sofort nach Kauf · Trigger: Stripe Webhook</span><span class="acc-chevron">›</span>
+      </div>
+      <div class="acc-body">
+        <div class="field-label">Betreff</div><div class="code-block">Du bist dabei — dein Glev-Zugang ist aktiv ✓</div>
+        <div class="field-label" style="margin-top:12px;">Vollständiger Entwurf</div>
+        <div class="script-wrap">
+          <div class="script-block" id="ef1-body">Hey [Vorname],
+
+willkommen bei Glev — ich freu mich, dass du dabei bist.
+
+Dein Zugang ist aktiv. Du kannst die App ab sofort unter glev.app/app öffnen.
+
+Was ich dir für die ersten Minuten empfehle:
+
+1. App öffnen und Account einrichten (dauert 2 Minuten)
+2. Deinen CGM-Sensor verbinden (FreeStyle Libre 2 oder Dexcom — Anleitung ist direkt in der App)
+3. Deine erste Mahlzeit einloggen — einfach per Sprache, dauert 8 Sekunden
+
+Falls irgendwas nicht klappt: reply direkt auf diese Email. Ich les das selbst.
+
+Lucas
+Gründer, Glev
+
+– –
+P.S. Du hast dir einen der 500 Beta-Plätze gesichert. Das bedeutet: dein Preis bleibt, und du hilfst mir Glev wirklich gut zu machen.</div>
+          <button class="copy-btn" onclick="copyScript('ef1-body',this)">📋 Kopieren</button>
+        </div>
+      </div>
+    </div>
+    <div class="acc-card" id="ef-2">
+      <div class="acc-header" onclick="toggleAcc('ef-2')">
+        <span class="acc-num">#2</span><span class="acc-title">Tag 3 — CGM verbunden?</span>
+        <span class="acc-meta">Tag 3 nach Kauf</span><span class="acc-chevron">›</span>
+      </div>
+      <div class="acc-body">
+        <div class="field-label">Betreff</div><div class="code-block">Hast du dein CGM schon verbunden?</div>
+        <div class="script-wrap">
+          <div class="script-block" id="ef2-body">Hey [Vorname],
+
+kurze Frage: hast du Glev schon ausprobiert?
+
+Falls du noch nicht so weit bist, kein Problem — hier sind die zwei Dinge die den größten Unterschied machen:
+
+1. CGM verbinden
+   Geh in die App → Einstellungen → Sensor verbinden. Libre 2 und Dexcom G6/G7 funktionieren direkt.
+
+2. Erste Mahlzeit einloggen
+   Drück einfach das Mikrofon und sag was du gegessen hast. Glev berechnet die Makros und verknüpft deinen aktuellen CGM-Wert automatisch.
+
+Falls du Fragen hast: reply hier direkt.
+
+Lucas</div>
+          <button class="copy-btn" onclick="copyScript('ef2-body',this)">📋 Kopieren</button>
+        </div>
+      </div>
+    </div>
+    <div class="acc-card" id="ef-3">
+      <div class="acc-header" onclick="toggleAcc('ef-3')">
+        <span class="acc-num">#3</span><span class="acc-title">Tag 7 — Wochenbericht + Insights-Tab</span>
+        <span class="acc-meta">Tag 7 · Feature-Highlight</span><span class="acc-chevron">›</span>
+      </div>
+      <div class="acc-body">
+        <div class="field-label">Betreff</div><div class="code-block">Dein erster Wochenbericht wartet</div>
+        <div class="script-wrap">
+          <div class="script-block" id="ef3-body">Hey [Vorname],
+
+du nutzt Glev jetzt seit einer Woche — das ist der Moment wo es anfängt, interessant zu werden.
+
+Ein Tipp für heute: öffne den Insights-Tab.
+
+Dort siehst du wie dein Blutzucker auf verschiedene Mahlzeiten reagiert hat. Welche Mahlzeit hat bei dir zuverlässig zu einem flachen Verlauf geführt? Und wo gab's Ausreißer?
+
+Das ist kein Bericht der dir sagt was du tun sollst — es ist eine Übersicht damit du selbst Zusammenhänge erkennst. Therapieentscheidungen triffst du weiterhin mit deinem Arzt.
+
+Lucas</div>
+          <button class="copy-btn" onclick="copyScript('ef3-body',this)">📋 Kopieren</button>
+        </div>
+      </div>
+    </div>
+    <div class="acc-card" id="ef-4">
+      <div class="acc-header" onclick="toggleAcc('ef-4')">
+        <span class="acc-num">#4</span><span class="acc-title">Tag 14 — Persönliche Nachricht von Lucas</span>
+        <span class="acc-meta">Tag 14 · Feedback, direkter Reply</span><span class="acc-chevron">›</span>
+      </div>
+      <div class="acc-body">
+        <div class="field-label">Betreff</div><div class="code-block">Kurze Frage — Lucas hier</div>
+        <div class="script-wrap">
+          <div class="script-block" id="ef4-body">Hey [Vorname],
+
+du nutzt Glev jetzt zwei Wochen — ich wollte kurz fragen wie's läuft.
+
+Nicht als automatische Survey. Ich frag wirklich.
+
+Was funktioniert für dich gut? Und was nervt dich oder fehlt noch?
+
+Ich lese jeden Reply selbst und dein Feedback fließt direkt in die Entwicklung ein. Wir sind in der Beta — was du mir jetzt sagst hat eine echte Chance, in den nächsten Wochen gebaut zu werden.
+
+Einfach auf diese Email antworten reicht. Kann ein Satz sein.
+
+Lucas
+Gründer, Glev — selbst T1D seit April 2026</div>
+          <button class="copy-btn" onclick="copyScript('ef4-body',this)">📋 Kopieren</button>
+        </div>
+      </div>
+    </div>
+    <div class="acc-card" id="ef-5">
+      <div class="acc-header" onclick="toggleAcc('ef-5')">
+        <span class="acc-num">#5</span><span class="acc-title">Tag 30 — Dankeschön + Trustpilot</span>
+        <span class="acc-meta">Tag 30</span><span class="acc-chevron">›</span>
+      </div>
+      <div class="acc-body">
+        <div class="field-label">Betreff</div><div class="code-block">30 Tage Glev — danke. Und eine Bitte.</div>
+        <div class="script-wrap">
+          <div class="script-block" id="ef5-body">Hey [Vorname],
+
+du nutzt Glev jetzt seit einem Monat. Das bedeutet mir wirklich etwas — danke.
+
+Eine ehrliche Bitte: wenn du 2 Minuten hast und Glev dir geholfen hat, würde ich mich sehr über eine kurze Bewertung auf Trustpilot freuen.
+
+→ glev.app/bewertung
+
+Keine langen Texte nötig — ein Satz reicht.
+
+Falls du gemischte Erfahrungen gemacht hast: reply direkt auf diese Email.
+
+Danke,
+Lucas</div>
+          <button class="copy-btn" onclick="copyScript('ef5-body',this)">📋 Kopieren</button>
+        </div>
+      </div>
+    </div>
+    <div class="subsec" style="margin-top:28px;">⭐ Trustpilot / Re-Engagement</div>
+    <div class="acc-card" id="ef-t1">
+      <div class="acc-header" onclick="toggleAcc('ef-t1')">
+        <span class="acc-num" style="background:#FF9500;">T1</span><span class="acc-title">Trustpilot — Direkt &amp; klar</span>
+        <span class="acc-meta">Trigger: 30 Tage oder 10. Mahlzeit</span><span class="acc-chevron">›</span>
+      </div>
+      <div class="acc-body">
+        <div class="field-label">Betreff</div><div class="code-block">2 Minuten, die anderen T1Ds helfen</div>
+        <div class="script-wrap">
+          <div class="script-block" id="eft1-body">Hey [Vorname],
+
+ich hab eine direkte Bitte.
+
+Wenn Glev dir in den letzten Wochen geholfen hat — auch nur ein bisschen — wäre eine kurze Bewertung auf Trustpilot unfassbar wertvoll.
+
+→ https://trustpilot.com/review/glev.app
+
+Du musst kein Essay schreiben. Ein ehrlicher Satz reicht.
+
+Danke im Voraus. Wirklich.
+Lucas</div>
+          <button class="copy-btn" onclick="copyScript('eft1-body',this)">📋 Kopieren</button>
+        </div>
+      </div>
+    </div>
+    <div class="acc-card" id="ef-r1">
+      <div class="acc-header" onclick="toggleAcc('ef-r1')">
+        <span class="acc-num" style="background:#6e7681;">R1</span><span class="acc-title">Re-Engagement — 14 Tage Inaktivität</span>
+        <span class="acc-meta">Sanfter Reminder</span><span class="acc-chevron">›</span>
+      </div>
+      <div class="acc-body">
+        <div class="field-label">Betreff</div><div class="code-block">Alles ok bei dir?</div>
+        <div class="script-wrap">
+          <div class="script-block" id="efr1-body">Hey [Vorname],
+
+du warst eine Weile nicht in Glev — kein Druck, aber ich wollte kurz fragen ob alles ok ist.
+
+Falls es technische Probleme gab: reply einfach hier.
+
+Falls du nur vergessen hast oder viel los war: kein Problem. Dein Zugang ist noch aktiv.
+
+Und falls Glev gerade nicht das Richtige für dich ist: das ist auch ok — sag mir einfach warum.
+
+Lucas</div>
+          <button class="copy-btn" onclick="copyScript('efr1-body',this)">📋 Kopieren</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div><!-- /tab-emailflows -->
+
+<!-- ICP TAB -->
+<div class="tab-content" id="tab-icp">
+  <div class="kampagnen-wrap">
+    <div class="tab-page-title">🎯 Ideal Customer Profile (ICP)</div>
+    <div class="tab-page-sub">Stand: April 2026 · DACH · T1D · CGM-Nutzer · Alter 25–45 · Launch 1. Juli 2026</div>
+    <div class="acc-card open" id="icp-1">
+      <div class="acc-header" onclick="toggleAcc('icp-1')">
+        <span class="acc-num" style="background:#4F6EF7;">1</span><span class="acc-title">Primärer Client Avatar — „Der kompetente Alltags-T1D"</span>
+        <span class="acc-meta">Alter 28–42 · Berufstätig · DACH · CGM-Nutzer</span><span class="acc-chevron">›</span>
+      </div>
+      <div class="acc-body">
+        <table class="kp-table">
+          <thead><tr><th>Attribut</th><th>Profil</th></tr></thead>
+          <tbody>
+            <tr><td>🧑 Name (Persona)</td><td>Markus / Julia</td></tr>
+            <tr><td>📅 Alter</td><td>28–42 Jahre</td></tr>
+            <tr><td>💼 Beruf</td><td>Büroangestellte/r, IT, Marketing, Student — Alltag mit Meetings und wenig Muße</td></tr>
+            <tr><td>🩺 Diagnose-Dauer</td><td>5–20 Jahre T1D — weiß wie's geht, sucht weniger Aufwand</td></tr>
+            <tr><td>📡 CGM-Gerät</td><td>FreeStyle Libre 2 oder Dexcom G6/G7</td></tr>
+          </tbody>
+        </table>
+        <div class="subsec">😤 Frustrationspunkte</div>
+        <ul class="ul-bullets">
+          <li>Carb-Counting per Hand kostet täglich 5–10 Minuten</li>
+          <li>Der ICR ändert sich mit Stress, Hormonen, Sport — App-Rechner sind statisch</li>
+          <li>Zwischen CGM-App, Bolus-Rechner und Ernährungs-App springt man zwischen 3–4 Tools</li>
+          <li>Bestehende DACH-Apps (MySugr, WETID) wirken wie 2009 — kein Voice, kein Lernen</li>
+        </ul>
+        <div class="subsec">🎯 Sweet Spot Satz</div>
+        <div class="kp-note" style="font-size:13px;line-height:1.8;border-left-color:#22D3A0;">
+          <strong>Glev hilft technikaffinen T1D-Erwachsenen im DACH-Raum dabei, Mahlzeiten blitzschnell zu erfassen und die richtige Insulindosis zu finden — ohne zeitaufwändiges manuelles Logging — und gibt ihnen das Gefühl, endlich einen Copiloten zu haben der mit ihnen lernt.</strong>
+        </div>
+      </div>
+    </div>
+  </div>
+</div><!-- /tab-icp -->
+
+<!-- MOCKUPS TAB -->
+<div class="tab-content" id="tab-mockups">
+  <div style="padding:24px 20px; max-width:900px; margin:0 auto;">
+    <h2 style="color:#e1e4e8; font-size:18px; font-weight:700; margin-bottom:6px;">📱 UI Mockups</h2>
+    <p style="color:#8b949e; font-size:13px; margin-bottom:28px;">Settings Redesign: Tab-Toggle → Sektionsliste · Account Sheet vom Avatar-Icon</p>
+    <div style="display:flex; gap:24px; flex-wrap:wrap; margin-bottom:24px;">
+      <!-- Phone 1: Settings -->
+      <div style="display:flex; flex-direction:column; align-items:center; gap:8px;">
+        <div style="background:#0d0d0d; border-radius:32px; width:240px; height:500px; overflow:hidden; border:2px solid #2a2a2a; position:relative; display:flex; flex-direction:column; font-family:-apple-system,BlinkMacSystemFont,sans-serif;">
+          <div style="display:flex; align-items:center; justify-content:space-between; padding:14px 16px 8px; flex-shrink:0;">
+            <span style="color:#fff; font-weight:700; font-size:16px;">glev<span style="color:#8b5cf6;">.</span></span>
+            <div style="display:flex; align-items:center; gap:8px;">
+              <span style="background:#0d2b1a; color:#4ade80; font-size:9px; padding:2px 8px; border-radius:20px;">Live</span>
+              <div style="width:28px; height:28px; border-radius:50%; background:#7c3aed; display:flex; align-items:center; justify-content:center; color:#fff; font-size:12px; font-weight:600;">L</div>
+            </div>
+          </div>
+          <div style="padding:0 14px; overflow-y:auto; flex:1;">
+            <div style="color:#fff; font-size:19px; font-weight:700; margin:4px 0 14px;">Einstellungen</div>
+            <div style="color:#555; font-size:9px; text-transform:uppercase; letter-spacing:0.8px; margin:0 0 5px;">Glukose</div>
+            <div style="border-radius:10px; overflow:hidden; margin-bottom:14px;">
+              <div style="background:#1c1c1e; padding:11px 13px; display:flex; align-items:center; justify-content:space-between; border-bottom:0.5px solid #111;">
+                <div style="display:flex; align-items:center; gap:9px;">
+                  <div style="width:26px; height:26px; border-radius:6px; background:#1e1040; display:flex; align-items:center; justify-content:center; font-size:12px;">🎯</div>
+                  <div><div style="color:#e5e5e5; font-size:13px;">Zielbereich</div><div style="color:#555; font-size:10px;">70–180 mg/dL</div></div>
+                </div>
+                <span style="color:#333; font-size:15px;">›</span>
+              </div>
+              <div style="background:#1c1c1e; padding:11px 13px; display:flex; align-items:center; justify-content:space-between;">
+                <div style="display:flex; align-items:center; gap:9px;">
+                  <div style="width:26px; height:26px; border-radius:6px; background:#1a1a1a; display:flex; align-items:center; justify-content:center; font-size:12px;">📏</div>
+                  <div style="color:#e5e5e5; font-size:13px;">Einheiten (mg/dL)</div>
+                </div>
+                <span style="color:#333; font-size:15px;">›</span>
+              </div>
+            </div>
+            <div style="color:#555; font-size:9px; text-transform:uppercase; letter-spacing:0.8px; margin:0 0 5px;">CGM-Verbindung</div>
+            <div style="border-radius:10px; overflow:hidden; margin-bottom:14px;">
+              <div style="background:#1c1c1e; padding:11px 13px; display:flex; align-items:center; justify-content:space-between; border-bottom:0.5px solid #111;">
+                <div style="display:flex; align-items:center; gap:9px;">
+                  <div style="width:26px; height:26px; border-radius:6px; background:#0d2b1a; display:flex; align-items:center; justify-content:center; font-size:12px;">📡</div>
+                  <div><div style="color:#e5e5e5; font-size:13px;">Libre 2</div><div style="color:#4ade80; font-size:10px;">Verbunden</div></div>
+                </div>
+                <span style="color:#333; font-size:15px;">›</span>
+              </div>
+              <div style="background:#1c1c1e; padding:11px 13px; display:flex; align-items:center; justify-content:space-between;">
+                <div style="display:flex; align-items:center; gap:9px;">
+                  <div style="width:26px; height:26px; border-radius:6px; background:#1a1a2a; display:flex; align-items:center; justify-content:center; font-size:12px;">📲</div>
+                  <div><div style="color:#e5e5e5; font-size:13px;">Dexcom</div><div style="color:#555; font-size:10px;">In Bearbeitung</div></div>
+                </div>
+                <span style="color:#333; font-size:15px;">›</span>
+              </div>
+            </div>
+          </div>
+          <div style="background:#111; border-top:0.5px solid #222; display:flex; padding:8px 0 16px; flex-shrink:0;">
+            <div style="flex:1; display:flex; flex-direction:column; align-items:center; gap:3px;"><div style="width:20px;height:20px;border-radius:5px;background:#2a2a2a;"></div><div style="font-size:8px;color:#444;">Dashboard</div></div>
+            <div style="flex:1; display:flex; flex-direction:column; align-items:center; gap:3px;"><div style="width:20px;height:20px;border-radius:5px;background:#2a2a2a;"></div><div style="font-size:8px;color:#444;">Glev</div></div>
+            <div style="flex:1; display:flex; flex-direction:column; align-items:center; gap:3px;"><div style="width:20px;height:20px;border-radius:5px;background:#2a2a2a;"></div><div style="font-size:8px;color:#444;">Verlauf</div></div>
+            <div style="flex:1; display:flex; flex-direction:column; align-items:center; gap:3px;"><div style="width:20px;height:20px;border-radius:5px;background:#7c3aed;"></div><div style="font-size:8px;color:#8b5cf6;">Einstellungen</div></div>
+          </div>
+        </div>
+        <div style="color:#8b949e; font-size:11px; text-align:center;">Neue Settings (Sektionsliste)</div>
+      </div>
+      <!-- Phone 2: Account Sheet -->
+      <div style="display:flex; flex-direction:column; align-items:center; gap:8px;">
+        <div style="background:#0d0d0d; border-radius:32px; width:240px; height:500px; overflow:hidden; border:2px solid #2a2a2a; position:relative; font-family:-apple-system,BlinkMacSystemFont,sans-serif;">
+          <div style="padding:14px 16px 8px; opacity:0.25; display:flex; align-items:center; justify-content:space-between;">
+            <span style="color:#fff; font-weight:700; font-size:16px;">glev<span style="color:#8b5cf6;">.</span></span>
+            <div style="width:28px; height:28px; border-radius:50%; background:#7c3aed;"></div>
+          </div>
+          <div style="height:160px; background:#0d0d0d; opacity:0.2;"></div>
+          <div style="position:absolute; bottom:0; left:0; right:0; background:#161616; border-radius:20px 20px 0 0; padding:10px 18px 28px;">
+            <div style="width:34px; height:4px; background:#333; border-radius:2px; margin:0 auto 14px;"></div>
+            <div style="display:flex; align-items:center; gap:12px; padding-bottom:14px; border-bottom:0.5px solid #2a2a2a; margin-bottom:12px;">
+              <div style="width:46px; height:46px; border-radius:50%; background:#7c3aed; display:flex; align-items:center; justify-content:center; color:#fff; font-size:18px; font-weight:600; flex-shrink:0;">L</div>
+              <div>
+                <div style="color:#fff; font-size:15px; font-weight:600;">lucas</div>
+                <div style="color:#555; font-size:10px;">lucas@wahnon-connect.com</div>
+                <div style="display:inline-flex; background:#1e1040; color:#a78bfa; font-size:9px; padding:2px 8px; border-radius:20px; margin-top:4px;">Glev Beta</div>
+              </div>
+            </div>
+            <div style="background:#3b1d8a; border-radius:9px; padding:11px 13px; display:flex; align-items:center; justify-content:space-between; margin-bottom:10px;">
+              <div><div style="color:#e9d5ff; font-size:13px; font-weight:600;">Auf Pro upgraden</div><div style="color:#c4b5fd; font-size:10px; margin-top:1px;">€24,90/Monat</div></div>
+              <span style="color:#c4b5fd; font-size:18px;">→</span>
+            </div>
+            <div style="display:flex; justify-content:space-between; padding:10px 0; border-bottom:0.5px solid #1e1e1e;"><span style="color:#e5e5e5; font-size:13px;">Passwort ändern</span><span style="color:#333; font-size:14px;">›</span></div>
+            <div style="display:flex; justify-content:space-between; padding:10px 0;"><span style="color:#f87171; font-size:13px;">Abmelden</span></div>
+          </div>
+        </div>
+        <div style="color:#8b949e; font-size:11px; text-align:center;">Account Sheet (Avatar → öffnet sich)</div>
+      </div>
+    </div>
+    <div style="background:#161b22; border:1px solid #30363d; border-radius:8px; padding:14px 18px;">
+      <div style="color:#8b949e; font-size:12px; line-height:1.7;">
+        <strong style="color:#e1e4e8;">Änderungsstrategie:</strong> 2 Replit-Prompts.<br>
+        Prompt 1: Account Sheet — Avatar-Icon öffnet Bottom Sheet mit Profil, Stats, Upgrade-CTA, Abmelden.<br>
+        Prompt 2: Settings-Seite — Tab-Toggle entfernen, scrollbare Sektionsliste (Glukose / Insulin / CGM / App).
+      </div>
+    </div>
+  </div>
+</div><!-- /tab-mockups -->
+
+<!-- DAILY CONTENT TAB -->
+<div class="tab-content" id="tab-dailycontent">
+  <div style="padding:24px 20px; max-width:860px; margin:0 auto;">
+
+    <!-- Sub-tab navigation -->
+    <div style="display:flex; gap:5px; margin-bottom:26px; background:#161b22; border:1px solid #30363d; border-radius:10px; padding:5px; width:fit-content;">
+      <button class="dc-subtab on" id="dc-btn-journal" onclick="dcSwitch('journal')">📅 Tages-Update</button>
+      <button class="dc-subtab" id="dc-btn-video" onclick="dcSwitch('video')">🎬 Video drehen</button>
+    </div>
+
+    <!-- PANEL: Tages-Update (Journal) -->
+    <div id="dc-panel-journal">
+      <div style="display:flex; align-items:flex-start; justify-content:space-between; flex-wrap:wrap; gap:12px; margin-bottom:24px;">
+        <div>
+          <h2 style="color:#e1e4e8; font-size:18px; font-weight:700; margin-bottom:4px;">📅 Daily Founder Updates</h2>
+          <p style="color:#8b949e; font-size:13px;">Tägliches Journal · Insights · Status · was läuft, was nicht</p>
+        </div>
+        <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+          <select id="daySelector" onchange="showDay(this.value)" style="background:#21262d; border:1px solid #4F6EF7; color:#e1e4e8; padding:8px 14px; border-radius:8px; font-size:13px; font-weight:600; cursor:pointer;"></select>
+          <button onclick="addNewDay()" style="background:#4F6EF7; color:#fff; border:none; border-radius:8px; padding:8px 16px; font-size:13px; font-weight:600; cursor:pointer;">+ Neuer Tag</button>
+        </div>
+      </div>
+      <div id="dayContainer"></div>
+    </div>
+
+    <!-- PANEL: Video drehen -->
+    <div id="dc-panel-video" style="display:none;">
+      <h2 style="color:#e1e4e8; font-size:18px; font-weight:700; margin-bottom:4px;">🎬 Daily App Progress Video</h2>
+      <p style="color:#8b949e; font-size:13px; margin-bottom:24px;">Hooks · Was zeigen · Regie · Checkliste — für tägliche 15–30s App-Updates</p>
+
+      <!-- Hook-Optionen -->
+      <div class="acc-card open" id="dv-1">
+        <div class="acc-header" onclick="toggleAcc('dv-1')">
+          <span class="acc-num" style="background:#FF2D78;">🪝</span>
+          <span class="acc-title">Hook-Optionen — täglich eine wählen</span>
+          <span class="acc-meta">4 Varianten · rotieren</span><span class="acc-chevron">›</span>
+        </div>
+        <div class="acc-body">
+          <div class="kp-note">Wähle jeden Tag einen anderen Hook — so wird jedes Video eigenständig und der Feed bleibt abwechslungsreich.</div>
+          <div class="dc-hook-card">
+            <span class="dc-hook-num">A</span>
+            <span class="dc-hook-text">„Heute hab ich [Feature] gebaut. Das ist warum das für T1D so wichtig ist."</span>
+          </div>
+          <div class="dc-hook-card">
+            <span class="dc-hook-num">B</span>
+            <span class="dc-hook-text">„52 Commits diese Woche. Zeig ich dir in 30 Sekunden was sich verändert hat."</span>
+          </div>
+          <div class="dc-hook-card">
+            <span class="dc-hook-num">C</span>
+            <span class="dc-hook-text">„Mein Blutzucker heute morgen: [X]. Genau deswegen hab ich [Feature] gebaut."</span>
+          </div>
+          <div class="dc-hook-card">
+            <span class="dc-hook-num">D</span>
+            <span class="dc-hook-text">„Drei Dinge die heute live in Glev gegangen sind — in 20 Sekunden."</span>
+          </div>
+          <div class="dc-hook-card">
+            <span class="dc-hook-num">E</span>
+            <span class="dc-hook-text">„Ich baue Glev live — hier ist was sich seit gestern verändert hat."</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Was zeigen -->
+      <div class="acc-card open" id="dv-2">
+        <div class="acc-header" onclick="toggleAcc('dv-2')">
+          <span class="acc-num" style="background:#22D3A0; color:#0f1117;">📱</span>
+          <span class="acc-title">Was zeigen — Screen-Content Guide</span>
+          <span class="acc-meta">Kein Staging · echter Use Case</span><span class="acc-chevron">›</span>
+        </div>
+        <div class="acc-body">
+          <table class="kp-table">
+            <thead><tr><th>Situation</th><th>Was zeigen</th></tr></thead>
+            <tbody>
+              <tr><td>Neues Feature gebaut</td><td>Live-Demo in der App: klick dich genau durch das neue Feature, zeig Input und Output</td></tr>
+              <tr><td>UI-Änderung</td><td>Vorher/Nachher — erst alten Screenshot, dann neue Version side-by-side oder Wipe</td></tr>
+              <tr><td>Voice Input</td><td>Mikrofon antippen → Mahlzeit einsprechen → Makros erscheinen. Echter CGM-Wert sichtbar lassen</td></tr>
+              <tr><td>Engine / Insights</td><td>Realer Datenpunkt: zeig einen echten Glukoseverlauf + die zugehörige Mahlzeit darunter</td></tr>
+              <tr><td>Progress-Update</td><td>Commit-Log oder GitHub-Diff kurz einblenden, dann App zeigen — zeigt Pace</td></tr>
+            </tbody>
+          </table>
+          <div class="kp-warn">Kein Staging. Echter CGM-Wert, echte Mahlzeit — das ist der Unterschied zwischen Content und Werbung.</div>
+        </div>
+      </div>
+
+      <!-- Regie-Hinweise -->
+      <div class="acc-card open" id="dv-3">
+        <div class="acc-header" onclick="toggleAcc('dv-3')">
+          <span class="acc-num pink">🎥</span>
+          <span class="acc-title">Regie-Hinweise</span>
+          <span class="acc-meta">Setup · Licht · Ton · Energie</span><span class="acc-chevron">›</span>
+        </div>
+        <div class="acc-body">
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:12px;">
+            <div style="background:#161b22; border:1px solid #30363d; border-radius:8px; padding:12px 14px;">
+              <div style="color:#4F6EF7; font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:6px;">📷 Kamera</div>
+              <div class="dc-info-text">iPhone Selfie-Modus, auf stabilem Untergrund (Stack Bücher / Tasse). Kein Stativ nötig. Hochformat für Reels/TikTok.</div>
+            </div>
+            <div style="background:#161b22; border:1px solid #30363d; border-radius:8px; padding:12px 14px;">
+              <div style="color:#22D3A0; font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:6px;">💡 Licht</div>
+              <div class="dc-info-text">Natürliches Fensterlicht von der Seite — NICHT von hinten (Silhouette). Keine Deckenbeleuchtung. Morgens am besten.</div>
+            </div>
+            <div style="background:#161b22; border:1px solid #30363d; border-radius:8px; padding:12px 14px;">
+              <div style="color:#FF9500; font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:6px;">🎙 Ton</div>
+              <div class="dc-info-text">Ruhige Umgebung, kein Hall. Küche oder Schlafzimmer besser als Flur oder Bad. Mikrofon nicht verdecken.</div>
+            </div>
+            <div style="background:#161b22; border:1px solid #30363d; border-radius:8px; padding:12px 14px;">
+              <div style="color:#c084fc; font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:6px;">⚡ Energie</div>
+              <div class="dc-info-text">Ruhig, fokussiert, direkt in die Kamera. Kein Over-Acting. Gründer-Modus, nicht Influencer-Modus.</div>
+            </div>
+          </div>
+          <div class="kp-note">
+            <strong>Länge:</strong> 15–25s für TikTok/Reels · bis 45s für Story oder LinkedIn · Screen-Recording kann separat als B-Roll laufen
+          </div>
+          <div class="regie-box">
+            <strong>Die goldene Regel:</strong> Authentizität schlägt Produktion. Lieber täglich einfach als wöchentlich aufwendig. Das Pace ist der Inhalt.
+          </div>
+        </div>
+      </div>
+
+      <!-- Pre-Shoot Checklist -->
+      <div class="acc-card open" id="dv-4">
+        <div class="acc-header" onclick="toggleAcc('dv-4')">
+          <span class="acc-num" style="background:#4F6EF7;">✅</span>
+          <span class="acc-title">Pre-Shoot Checklist</span>
+          <span class="acc-meta">Vor jedem Take abhaken</span><span class="acc-chevron">›</span>
+        </div>
+        <div class="acc-body">
+          <ul class="checklist">
+            <li><input type="checkbox" onchange="toggleDone(this)"><span>Hook formuliert — einen Satz, gesprochen in Kopf geprobt</span></li>
+            <li><input type="checkbox" onchange="toggleDone(this)"><span>CGM-App sichtbar und Wert ist real (kein Screenshot von gestern)</span></li>
+            <li><input type="checkbox" onchange="toggleDone(this)"><span>Glev-App auf dem richtigen Screen geöffnet (kein Setup-Screen)</span></li>
+            <li><input type="checkbox" onchange="toggleDone(this)"><span>Benachrichtigungen stummgeschaltet (Flugzeugmodus oder DND)</span></li>
+            <li><input type="checkbox" onchange="toggleDone(this)"><span>Hintergrund aufgeräumt — nichts Ablenkendes im Bild</span></li>
+            <li><input type="checkbox" onchange="toggleDone(this)"><span>Natürliches Licht vorhanden oder Lampe seitlich positioniert</span></li>
+            <li><input type="checkbox" onchange="toggleDone(this)"><span>Screen-Recording bereit (falls Feature-Demo geplant)</span></li>
+            <li><input type="checkbox" onchange="toggleDone(this)"><span>CTA klar: „glev.app/beta" oder „Link in Bio" — einmal geübt</span></li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- Wochen-Rotation -->
+      <div class="acc-card" id="dv-5">
+        <div class="acc-header" onclick="toggleAcc('dv-5')">
+          <span class="acc-num" style="background:#6e7681;">📆</span>
+          <span class="acc-title">Wochen-Rotation — was täglich posten</span>
+          <span class="acc-meta">Mo–So · Varianz erzeugen</span><span class="acc-chevron">›</span>
+        </div>
+        <div class="acc-body">
+          <table class="kp-table">
+            <thead><tr><th>Tag</th><th>Fokus</th><th>Hook-Typ</th></tr></thead>
+            <tbody>
+              <tr><td>Montag</td><td>Feature der Woche vorstellen</td><td>Hook A oder D</td></tr>
+              <tr><td>Dienstag</td><td>Founder-Moment / persönliche T1D-Erfahrung</td><td>Hook C</td></tr>
+              <tr><td>Mittwoch</td><td>Screen-Recording Demo</td><td>Hook E</td></tr>
+              <tr><td>Donnerstag</td><td>Progress-Update / Commit-Pace zeigen</td><td>Hook B</td></tr>
+              <tr><td>Freitag</td><td>Wochenrückblick · Was gebaut, was gelernt</td><td>Hook D</td></tr>
+              <tr><td>Wochenende</td><td>Optional: Behind the scenes oder Community-Reply</td><td>frei</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal: Neuer Tag -->
+    <div id="addEntryModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.75); z-index:200; align-items:center; justify-content:center;">
+      <div style="background:#161b22; border:1px solid #30363d; border-radius:14px; padding:24px; width:90%; max-width:540px;">
+        <h3 style="color:#e1e4e8; font-size:16px; font-weight:700; margin-bottom:16px;">Neuen Tag hinzufügen</h3>
+        <div style="margin-bottom:12px;">
+          <label style="color:#8b949e; font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:0.5px; display:block; margin-bottom:5px;">Tag-Nummer</label>
+          <input id="newDayNum" type="number" placeholder="z.B. 9" style="width:100%; background:#21262d; border:1px solid #30363d; color:#e1e4e8; padding:10px 12px; border-radius:8px; font-size:14px; outline:none;">
+        </div>
+        <div style="margin-bottom:12px;">
+          <label style="color:#8b949e; font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:0.5px; display:block; margin-bottom:5px;">Datum</label>
+          <input id="newDayDate" type="text" placeholder="z.B. 2. Mai 2026" style="width:100%; background:#21262d; border:1px solid #30363d; color:#e1e4e8; padding:10px 12px; border-radius:8px; font-size:14px; outline:none;">
+        </div>
+        <div style="margin-bottom:18px;">
+          <label style="color:#8b949e; font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:0.5px; display:block; margin-bottom:5px;">Updates (eine Zeile = ein Bullet)</label>
+          <textarea id="newDayContent" rows="9" placeholder="Neue Funktion gebaut: ...&#10;Beta-User Feedback: ...&#10;Problem entdeckt: ..." style="width:100%; background:#21262d; border:1px solid #30363d; color:#e1e4e8; padding:10px 12px; border-radius:8px; font-size:13px; line-height:1.6; resize:vertical; font-family:inherit; outline:none;"></textarea>
+        </div>
+        <div style="display:flex; gap:10px; justify-content:flex-end;">
+          <button onclick="closeModal()" style="background:#21262d; color:#8b949e; border:1px solid #30363d; border-radius:8px; padding:8px 16px; font-size:13px; cursor:pointer;">Abbrechen</button>
+          <button onclick="saveNewDay()" style="background:#22D3A0; color:#0f1117; border:none; border-radius:8px; padding:8px 16px; font-size:13px; font-weight:700; cursor:pointer;">Speichern</button>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div><!-- /tab-dailycontent -->
+
+<!-- PRICING-STRATEGIE TAB -->
+<div class="tab-content" id="tab-pricing">
+  <div style="padding: 24px 20px; max-width: 860px;">
+    <h2 style="font-size:17px; font-weight:700; color:#e1e4e8; margin-bottom:20px;">💰 Pricing-Strategie</h2>
+
+    <!-- Modell -->
+    <div style="background:#161b22; border:1px solid #30363d; border-radius:10px; padding:18px; margin-bottom:16px;">
+      <div style="font-size:13px; font-weight:700; color:#4F6EF7; margin-bottom:10px;">🏗 Grundmodell (orientiert an Whoop)</div>
+      <ul style="font-size:13px; color:#c9d1d9; line-height:1.8; padding-left:16px;">
+        <li>Kein Free Tier beim Launch — ausschließlich Paid Memberships</li>
+        <li>Subscription-only, kein Einmalkauf</li>
+        <li>Monatlich oder jährlich (Jahresabo mit Rabatt)</li>
+        <li>Konkrete Tier-Struktur noch offen — wird mit Agentur erarbeitet</li>
+      </ul>
+    </div>
+
+    <!-- Tier-Planung -->
+    <div style="background:#161b22; border:1px solid #30363d; border-radius:10px; padding:18px; margin-bottom:16px;">
+      <div style="font-size:13px; font-weight:700; color:#22D3A0; margin-bottom:10px;">🎯 Tier-Planung (vorläufig)</div>
+      <div style="display:flex; flex-direction:column; gap:10px; font-size:13px; color:#c9d1d9;">
+        <div style="background:#0d1117; border-radius:8px; padding:12px 14px; border-left:3px solid #8b949e;">
+          <strong style="color:#8b949e;">Free (später · T2D)</strong><br>
+          Nur Voice Food Logging — kein CGM, kein Bolus-Kalkulator<br>
+          <span style="color:#6e7681; font-size:11px;">Dient als Akquisitionskanal → Upgrade wenn CGM dazu kommt</span>
+        </div>
+        <div style="background:#0d1117; border-radius:8px; padding:12px 14px; border-left:3px solid #4F6EF7;">
+          <strong style="color:#4F6EF7;">Core / Early Access (jetzt · T1D)</strong><br>
+          CGM-Integration, Bolus-Kalkulator, Adaptive Engine, Voice Logging<br>
+          <span style="color:#6e7681; font-size:11px;">Hauptprodukt zum Launch — Preis noch offen</span>
+        </div>
+        <div style="background:#0d1117; border-radius:8px; padding:12px 14px; border-left:3px solid #22D3A0;">
+          <strong style="color:#22D3A0;">Pro / Peak (später · T1D)</strong><br>
+          Alles aus Core + erweiterte Analysen, Arztberichte, Export<br>
+          <span style="color:#6e7681; font-size:11px;">Roadmap — kein Launch-Scope</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Naming -->
+    <div style="background:#161b22; border:1px solid #30363d; border-radius:10px; padding:18px; margin-bottom:16px;">
+      <div style="font-size:13px; font-weight:700; color:#FF9500; margin-bottom:10px;">🏷 Naming-Regel</div>
+      <ul style="font-size:13px; color:#c9d1d9; line-height:1.8; padding-left:16px;">
+        <li><strong style="color:#f85149;">NIEMALS</strong> "Beta" extern kommunizieren — Reddit-Backlash: "Zahlen für eine Beta" ist für User inakzeptabel</li>
+        <li>Extern: <strong style="color:#22D3A0;">"Early Access"</strong> oder Gründerpreis-Framing</li>
+        <li>Intern darf "Beta" als Tier-Label genutzt werden bis Naming steht</li>
+        <li>Delayed Billing als Argument: "Jetzt kostenlos starten, Zahlung erst ab Juli"</li>
+      </ul>
+    </div>
+
+    <!-- Offene Todos -->
+    <div style="background:#161b22; border:1px solid #30363d; border-radius:10px; padding:18px;">
+      <div style="font-size:13px; font-weight:700; color:#8b949e; margin-bottom:10px;">📋 Offen · mit Agentur klären</div>
+      <ul style="font-size:13px; color:#c9d1d9; line-height:1.8; padding-left:16px;">
+        <li>Konkrete Preispunkte Core / Pro</li>
+        <li>Jährlicher Rabatt (% Discount)</li>
+        <li>Feature-Differenzierung zwischen Tiers</li>
+        <li>Landing Page Copy anpassen: "Beta" raus, "Early Access" rein</li>
+        <li>Apple IAP vs. Stripe-Web-Flow für iOS entscheiden</li>
+        <li>T2D Free Tier: Zeitpunkt und Feature-Scope</li>
+      </ul>
+    </div>
+  </div>
+</div><!-- /tab-pricing -->
+
+<footer>
+  <span>💾 Änderungen werden automatisch gespeichert</span>
+  <span>🗓 Stand: Mai 2026</span>
+  <span id="footerNote">Strategie: Anruf → Flyer anbieten → zusenden/bringen</span>
+</footer>
+
+<script>
+// ── TAB SWITCHING ──
+const TAB_NOTES = {
+  diabetologen: 'Strategie: Anruf → Flyer anbieten → zusenden/bringen',
+  influencer:   'Strategie: DM → Beta-Zugang anbieten → kein Druck, kein Script',
+  formate:      '10 Video-Skripte · Founder-Perspektive · DACH Launch Juli 2026',
+  kampagne:     'Instagram A/B Test · 4 Ads · 2 Formate × /beta + /pro · ~€168 Testwoche',
+  emailflows:   '5 Onboarding-Emails · Trustpilot · Re-Engagement · Provider: Resend → Klaviyo Q3',
+  icp:          'ICP: T1D · 28–42 · CGM-Nutzer · DACH · Sweet Spot: KH→Insulin-Loop schließen',
+  mockups:      'Settings Redesign: Tab-Toggle → Sektionsliste · Account Sheet vom Avatar-Icon',
+  dailycontent: 'Daily Journal · Video-Guide · Founder-Updates · Day 7+ · per Dropdown navigierbar',
+  marke: 'EUIPO EU-Marke · DPMA DE-Marke · Klasse 42 & 10 · Glev + Ravepickles · Kosten & Timeline',
+  pricing: 'Whoop-Modell · Kein Free-Tier zum Launch · T2D Free später · "Early Access" statt "Beta"',
+  kompetitor: '13 Wettbewerber · mySugr · SNAQ · Carbetic · glucura · Abbott Partnerschaft · DACH-Positionierung'
+};
+document.querySelector('.tab-nav').addEventListener('click', function(e) {
+  const btn = e.target.closest('.tab-btn'); if (!btn) return;
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('on'));
+  document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('on'));
+  btn.classList.add('on');
+  document.getElementById('tab-' + btn.dataset.tab).classList.add('on');
+  document.getElementById('footerNote').textContent = TAB_NOTES[btn.dataset.tab] || '';
+  if (btn.dataset.tab === 'dailycontent') initDaySelector();
+});
+
+// ── DAILY CONTENT SUB-TAB SWITCH ──
+function dcSwitch(panel) {
+  ['journal', 'video'].forEach(function(p) {
+    document.getElementById('dc-panel-' + p).style.display = (p === panel) ? 'block' : 'none';
+    document.getElementById('dc-btn-' + p).classList.toggle('on', p === panel);
+  });
+  if (panel === 'journal') initDaySelector();
+}
+
+// ── ACCORDION ──
+function toggleAcc(id) { document.getElementById(id).classList.toggle('open'); }
+
+// ── COPY SCRIPT ──
+function copyScript(id, btn) {
+  const text = document.getElementById(id).textContent;
+  navigator.clipboard.writeText(text).then(() => {
+    btn.textContent = '✓ Kopiert!'; btn.classList.add('ok');
+    setTimeout(() => { btn.textContent = '📋 Kopieren'; btn.classList.remove('ok'); }, 2000);
+  });
+}
+
+// ── CHECKLIST TOGGLE ──
+function toggleDone(cb) { cb.closest('li').classList.toggle('done', cb.checked); }
+
+// ── DIABETOLOGEN CRM ──
+const LEADS = [
+  { id:1, name:"Diabetes-Zentrum Hannover-Nord", typ:"Praxis", stadt:"Hannover", adresse:"Haltenhoffstr. 44, 30167 Hannover", tel:"0511 168-46270", email:"mail@diabeteszentrum-hannover.de", letzteAktion:"", aktion:"anrufen", letzterKontakt:"", naechsterKontakt:"", notizen:"Öffentliches Zentrum, gute Reichweite" },
+  { id:2, name:"DIABETES KRÖPCKE", typ:"Praxis", stadt:"Hannover", adresse:"Körtingsdorfer Weg 10, 30459 Hannover", tel:"0511 443388", email:"praxis@diabetes-kroepcke.de", letzteAktion:"", aktion:"anrufen", letzterKontakt:"", naechsterKontakt:"", notizen:"Schwerpunktpraxis Hannover-Mitte" },
+  { id:3, name:"DZHS – Diabetes-Zentrum Hannover Süd", typ:"Praxis", stadt:"Hannover", adresse:"Hildesheimer Str. 265, 30519 Hannover", tel:"0511 8497740", email:"info@dzhs.de", letzteAktion:"", aktion:"anrufen", letzterKontakt:"", naechsterKontakt:"", notizen:"" },
+  { id:4, name:"Praxis E-Damm", typ:"Praxis", stadt:"Hannover", adresse:"Entenfangweg 55, 30419 Hannover", tel:"0511 784040", email:"praxis@praxis-e-damm.de", letzteAktion:"", aktion:"anrufen", letzterKontakt:"", naechsterKontakt:"", notizen:"" },
+  { id:5, name:"Schwerpunktpraxis Kleefeld", typ:"Praxis", stadt:"Hannover", adresse:"Waldstraße 8, 30625 Hannover", tel:"0511 554433", email:"praxis@diabetes-kleefeld.de", letzteAktion:"", aktion:"anrufen", letzterKontakt:"", naechsterKontakt:"", notizen:"" },
+  { id:6, name:"Schwerpunktpraxis Kurfürstendamm (Dr. Dötsch)", typ:"Praxis", stadt:"Berlin", adresse:"Kurfürstendamm 199, 10719 Berlin", tel:"030 8833070", email:"praxis@internisten-wilmersdorf.de", letzteAktion:"", aktion:"anrufen", letzterKontakt:"", naechsterKontakt:"", notizen:"Wilmersdorf, viele T1D-Patienten" },
+  { id:7, name:"Diabetespraxis Tiergarten", typ:"Praxis", stadt:"Berlin", adresse:"Lübecker Str. 21, 10559 Berlin", tel:"030 3941540", email:"diabetespraxis@diabetologe-berlin.de", letzteAktion:"", aktion:"anrufen", letzterKontakt:"", naechsterKontakt:"", notizen:"" },
+  { id:8, name:"Diabetespraxis Prenzlauer Berg", typ:"Praxis", stadt:"Berlin", adresse:"Prenzlauer Allee 90, 10405 Berlin", tel:"030 44352990", email:"kontakt@diabetespraxis-prenzlauerberg.de", letzteAktion:"", aktion:"anrufen", letzterKontakt:"", naechsterKontakt:"", notizen:"Junges Einzugsgebiet, tech-affin" },
+  { id:9, name:"Medicover Berlin Mitte", typ:"MVZ", stadt:"Berlin", adresse:"Hausvogteiplatz 10, 10117 Berlin", tel:"030 206409100", email:"berlin-mitte@medicover.de", letzteAktion:"", aktion:"anrufen", letzterKontakt:"", naechsterKontakt:"", notizen:"Großes MVZ, mehrere Diabetologen" },
+  { id:10, name:"DRK Kliniken Berlin Mitte – Diabetologie", typ:"Klinik", stadt:"Berlin", adresse:"Drontheimer Str. 39, 13359 Berlin", tel:"030 3002-0", email:"angiodia-mitte@drk-kliniken-berlin.de", letzteAktion:"", aktion:"anrufen", letzterKontakt:"", naechsterKontakt:"", notizen:"Stationär + ambulant" },
+  { id:11, name:"KEH Berlin – Diabeteszentrum", typ:"Klinik", stadt:"Berlin", adresse:"Lentzeallee 31-33, 14195 Berlin", tel:"030 81002-0", email:"keh@keh-berlin.de", letzteAktion:"", aktion:"anrufen", letzterKontakt:"", naechsterKontakt:"", notizen:"Evangelisches Krankenhaus" },
+  { id:12, name:"Praxis Schloßstraße Steglitz", typ:"Praxis", stadt:"Berlin", adresse:"Schloßstraße 95, 12163 Berlin", tel:"030 7921060", email:"service@praxisschlossstrasse.de", letzteAktion:"", aktion:"anrufen", letzterKontakt:"", naechsterKontakt:"", notizen:"Zentrallage Steglitz" },
+  { id:13, name:"Schwerpunktpraxis Berlin-Tegel", typ:"Praxis", stadt:"Berlin", adresse:"Alt-Tegel 6, 13507 Berlin", tel:"030 43200488", email:"praxis@diabetes-mit-herz.de", letzteAktion:"", aktion:"anrufen", letzterKontakt:"", naechsterKontakt:"", notizen:"diabetes-mit-herz.de" },
+  { id:14, name:"Diabetes-Team Berlin Weißensee", typ:"Praxis", stadt:"Berlin", adresse:"Berliner Allee 52, 13088 Berlin", tel:"030 9259050", email:"info@diabetes-team-berlin.de", letzteAktion:"", aktion:"anrufen", letzterKontakt:"", naechsterKontakt:"", notizen:"" },
+  { id:15, name:"Diabetologie Köpenick (Dr. Hagen)", typ:"Praxis", stadt:"Berlin", adresse:"Joachimstraße 1, 12555 Berlin", tel:"030 28666241", email:"info@diabetologie-koepenick.de", letzteAktion:"", aktion:"anrufen", letzterKontakt:"", naechsterKontakt:"", notizen:"Barrierefrei, nur nach Termin" },
+  { id:16, name:"Diabetologie Steglitz", typ:"Praxis", stadt:"Berlin", adresse:"Gutsmuthsstraße 24, 12163 Berlin", tel:"030 700 96 23 30", email:"praxis@diabetologie-steglitz.de", letzteAktion:"", aktion:"anrufen", letzterKontakt:"", naechsterKontakt:"", notizen:"Alle Diabetesformen" },
+  { id:17, name:"Charité – Endokrinologie & Diabetologie", typ:"Klinik", stadt:"Berlin", adresse:"Charitéplatz 1, 10117 Berlin", tel:"030 450 514 122", email:"", letzteAktion:"", aktion:"anrufen", letzterKontakt:"", naechsterKontakt:"", notizen:"Kein direkter Email-Kontakt – per Telefon" },
+  { id:18, name:"Diabetologie am Rathaus Steglitz (Dr. Kaltenbach)", typ:"Praxis", stadt:"Berlin", adresse:"Schloßstraße 45, 12165 Berlin", tel:"030 79406080", email:"praxis@diabetologie-rathaus-steglitz.de", letzteAktion:"", aktion:"anrufen", letzterKontakt:"", naechsterKontakt:"", notizen:"Schwerpunkt Typ 1" },
+];
+
+let leads = JSON.parse(localStorage.getItem('glevCrmLeads2') || 'null') || LEADS.map(l => ({...l}));
+
+function actionOptions(selected) {
+  const opts = [{v:'',label:'–'},{v:'anrufen',label:'📞 anrufen'},{v:'email',label:'📧 email'},
+    {v:'zusenden',label:'📬 zusenden'},{v:'bringen',label:'🚗 bringen'},
+    {v:'nachfassen',label:'🔄 nachfassen'},{v:'zusage',label:'✅ zusage'},{v:'kein',label:'❌ kein'}];
+  return opts.map(o => `<option value="${o.v}" ${selected===o.v?'selected':''}>${o.label}</option>`).join('');
+}
+
+function saveLeads() { localStorage.setItem('glevCrmLeads2', JSON.stringify(leads)); updateStats(); }
+
+function updateStats() {
+  document.getElementById('statTotal').textContent = leads.length;
+  document.getElementById('statBerlin').textContent = leads.filter(l => l.stadt==='Berlin').length;
+  document.getElementById('statHannover').textContent = leads.filter(l => l.stadt==='Hannover').length;
+  document.getElementById('statMitEmail').textContent = leads.filter(l => l.email && l.email.trim()).length;
+  document.getElementById('statAnrufen').textContent = leads.filter(l => l.aktion==='anrufen').length;
+}
+
+function getFiltered() {
+  const city = document.getElementById('cityFilter').value;
+  const action = document.getElementById('actionFilter').value;
+  const search = document.getElementById('searchInput').value.toLowerCase();
+  return leads.filter(l => {
+    if (city && l.stadt !== city) return false;
+    if (action && l.aktion !== action) return false;
+    if (search && !JSON.stringify(l).toLowerCase().includes(search)) return false;
+    return true;
+  });
+}
+
+function filterLeads() { renderTable(getFiltered()); updateStats(); }
+
+function renderTable(data) {
+  if (!data) data = getFiltered();
+  document.getElementById('tableBody').innerHTML = data.map((lead, idx) => `
+    <tr class="city-${lead.stadt.toLowerCase()}" data-id="${lead.id}">
+      <td style="color:#6e7681;font-size:11px;">${idx+1}</td>
+      <td><strong style="font-size:12px;">${lead.name}</strong></td>
+      <td><span class="badge badge-${lead.typ.toLowerCase()}">${lead.typ}</span></td>
+      <td style="font-size:11px;color:${lead.stadt==='Berlin'?'#58a6ff':'#4ade80'};">${lead.stadt}</td>
+      <td contenteditable="true" style="font-size:11px;color:#8b949e;max-width:140px;" onblur="updateField(${lead.id},'adresse',this.textContent)">${lead.adresse}</td>
+      <td><a href="tel:${lead.tel}" style="color:#FF9500;text-decoration:none;font-size:11px;">${lead.tel}</a></td>
+      <td class="email-cell">${lead.email?`<a href="mailto:${lead.email}">${lead.email}</a>`:'<span style="color:#6e7681;font-style:italic;font-size:11px;">–</span>'}</td>
+      <td class="col-letzte">
+        <select class="action-select action-${lead.letzteAktion||'none'}" onchange="updateField(${lead.id},'letzteAktion',this.value);this.className='action-select action-'+(this.value||'none');">
+          ${actionOptions(lead.letzteAktion||'')}
+        </select>
+      </td>
+      <td class="col-naechste">
+        <select class="action-select action-${lead.aktion||'none'}" onchange="updateField(${lead.id},'aktion',this.value);this.className='action-select action-'+(this.value||'none');">
+          ${actionOptions(lead.aktion||'')}
+        </select>
+      </td>
+      <td><input type="date" value="${lead.letzterKontakt||''}" onchange="updateField(${lead.id},'letzterKontakt',this.value)" style="background:#21262d;border:1px solid #30363d;color:#e1e4e8;padding:4px;border-radius:4px;font-size:11px;width:120px;"></td>
+      <td><input type="date" value="${lead.naechsterKontakt||''}" onchange="updateField(${lead.id},'naechsterKontakt',this.value)" style="background:#21262d;border:1px solid #30363d;color:#e1e4e8;padding:4px;border-radius:4px;font-size:11px;width:120px;"></td>
+      <td class="notes-cell" contenteditable="true" title="${lead.notizen}" onblur="updateField(${lead.id},'notizen',this.textContent)">${lead.notizen}</td>
+      <td><button class="btn btn-danger" onclick="deleteRow(${lead.id})">✕</button></td>
+    </tr>`).join('');
+}
+
+function updateField(id, field, value) { const l = leads.find(l => l.id===id); if(l){l[field]=value;saveLeads();} }
+function addRow() {
+  const newId = Math.max(...leads.map(l => l.id)) + 1;
+  leads.push({id:newId,name:"Neue Praxis",typ:"Praxis",stadt:"Berlin",adresse:"",tel:"",email:"",letzteAktion:"",aktion:"anrufen",letzterKontakt:"",naechsterKontakt:"",notizen:""});
+  saveLeads(); filterLeads();
+}
+function deleteRow(id) { if(!confirm('Lead löschen?'))return; leads=leads.filter(l=>l.id!==id); saveLeads(); filterLeads(); }
+function exportCSV() {
+  const headers=['Name','Typ','Stadt','Adresse','Telefon','Email','Letzte Aktion','Nächste Aktion','Letzter Kontakt','Nächster Kontakt','Notizen'];
+  const rows=leads.map(l=>[l.name,l.typ,l.stadt,l.adresse,l.tel,l.email,l.letzteAktion,l.aktion,l.letzterKontakt,l.naechsterKontakt,l.notizen].map(v=>`"${(v||'').replace(/"/g,'""')}"`));
+  const csv=[headers.join(','),...rows.map(r=>r.join(','))].join('\n');
+  const a=document.createElement('a');a.href='data:text/csv;charset=utf-8,﻿'+encodeURIComponent(csv);a.download='glev-diabetologen-crm.csv';a.click();
+}
+function toggleTemplate() { document.getElementById('templatePanel').classList.toggle('active'); }
+function copyTemplate() {
+  navigator.clipboard.writeText(document.getElementById('templateText').textContent);
+  const s=document.getElementById('copyStatus');s.style.display='inline';setTimeout(()=>s.style.display='none',2000);
+}
+
+// ── INFLUENCER CRM ──
+const INF_DEFAULT = [
+  {id:1,name:"Fiorella Eickhoff",handle:"@fiorella_t1d",plattform:"TikTok + IG",reichweite:"170K TikTok · 8K IG",prio:"A",status:"kontaktieren",naechste:"dm",letzterKontakt:"",notizen:"Stärkster Quick Win",dm:"Hey Fiorella, ich bin Lucas — Gründer von Glev, einer neuen App bei der du dein Mahlzeit-Tracking einfach einsprechen kannst. Ich würde dir gerne vorab Beta-Zugang geben. Kein Druck, kein Script — nur deine ehrliche Meinung. Wärst du dabei? 🎙️"},
+  {id:2,name:"Lea Raak (Insulea)",handle:"@insulea.de",plattform:"IG + Blog",reichweite:"7K IG + Blog",prio:"A",status:"kontaktieren",naechste:"dm",letzterKontakt:"",notizen:"Starke mentale Perspektive",dm:"Hey Lea, dein Blickwinkel auf die mentale Seite des Diabetesmanagements hat mich beim Entwickeln von Glev inspiriert. Glev ist eine Voice-App: du sagst was du gegessen hast — keine Tipp-Arbeit. Würde mir wünschen dass du sie früh testest."},
+  {id:3,name:"TYPE-ONE-DER-FUL",handle:"@typeonederful_podcast",plattform:"Podcast + IG",reichweite:"2–4K IG · Podcast",prio:"A",status:"kontaktieren",naechste:"dm",letzterKontakt:"",notizen:"Podcast-Episode als Gründer wäre ideal",dm:"Hey Eva, hey Tina! Ich baue Glev, eine App bei der man Mahlzeiten einfach einsprechen kann. Wäre das ein Thema für eine Folge?"},
+  {id:4,name:"Team Typ1 (Nils)",handle:"@teamtyp1",plattform:"YouTube",reichweite:"3–8K YT",prio:"A",status:"kontaktieren",naechste:"dm",letzterKontakt:"",notizen:"YouTube-Testbericht '4 Wochen Glev' wäre ideal",dm:"Hey Nils, ich bin Lucas, Gründer von Glev. Eine App bei der du sagst was du gegessen hast — kein Tippen. Würde mich über deinen YouTube-Test freuen."},
+  {id:5,name:"Sascha Schworm (Zuckerjunkies)",handle:"@zuckerjunkies",plattform:"Podcast + IG",reichweite:"3.5K IG · Podcast",prio:"B",status:"kontaktieren",naechste:"dm",letzterKontakt:"",notizen:"Interview-Anfrage als Gründer",dm:"Hey Sascha! Lucas hier, Gründer von Glev — Voice-App für T1D. Lust mich für eine Folge einzuladen?"},
+  {id:6,name:"Anna",handle:"@miss__aga",plattform:"IG",reichweite:"11K IG",prio:"B",status:"kontaktieren",naechste:"dm",letzterKontakt:"",notizen:"Fitness + T1D Nische",dm:"Hey Anna! Lucas hier, Gründer von Glev. Für Gym-Nutzer super: einfach kurz einsprechen. Beta-Zugang?"},
+];
+
+let influencers = JSON.parse(localStorage.getItem('glevInfCrm1') || 'null') || INF_DEFAULT.map(i => ({...i}));
+
+function saveInfluencers() { localStorage.setItem('glevInfCrm1', JSON.stringify(influencers)); updateInfStats(); }
+
+function infStatusOptions(selected) {
+  const opts=[{v:'kontaktieren',label:'📤 kontaktieren'},{v:'dm',label:'📨 DM gesendet'},{v:'geantwortet',label:'💬 geantwortet'},{v:'gesprach',label:'🤝 Gespräch läuft'},{v:'zugegeben',label:'🎁 Beta-Zugang gegeben'},{v:'posted',label:'✅ posted'},{v:'kein',label:'❌ kein Interesse'}];
+  return opts.map(o=>`<option value="${o.v}" ${selected===o.v?'selected':''}>${o.label}</option>`).join('');
+}
+function infNextOptions(selected) {
+  const opts=[{v:'dm',label:'📨 DM senden'},{v:'nachfassen',label:'🔄 nachfassen'},{v:'beta',label:'🎁 Beta anbieten'},{v:'warten',label:'⏳ warten'},{v:'kein',label:'❌ done'}];
+  return opts.map(o=>`<option value="${o.v}" ${selected===o.v?'selected':''}>${o.label}</option>`).join('');
+}
+
+function updateInfStats() {
+  document.getElementById('iStatTotal').textContent = influencers.length;
+  document.getElementById('iStatPrioA').textContent = influencers.filter(i=>i.prio==='A').length;
+  document.getElementById('iStatKontakt').textContent = influencers.filter(i=>i.status!=='kontaktieren').length;
+  document.getElementById('iStatPosted').textContent = influencers.filter(i=>i.status==='posted').length;
+}
+
+function getFilteredInf() {
+  const prio=document.getElementById('prioFilter').value;
+  const status=document.getElementById('statusFilter').value;
+  const search=document.getElementById('infSearchInput').value.toLowerCase();
+  return influencers.filter(i=>{
+    if(prio&&i.prio!==prio)return false;
+    if(status&&i.status!==status)return false;
+    if(search&&!JSON.stringify(i).toLowerCase().includes(search))return false;
+    return true;
+  });
+}
+
+function filterInfluencer() { renderInfTable(getFilteredInf()); updateInfStats(); }
+
+function renderInfTable(data) {
+  if(!data)data=getFilteredInf();
+  document.getElementById('infTableBody').innerHTML = data.map((inf,idx)=>`
+    <tr class="prio-${inf.prio.toLowerCase()}" data-iid="${inf.id}">
+      <td style="color:#6e7681;font-size:11px;">${idx+1}</td>
+      <td><strong style="font-size:12px;">${inf.name}</strong></td>
+      <td style="font-size:11px;color:#8b949e;">${inf.handle}</td>
+      <td style="font-size:11px;">${inf.plattform}</td>
+      <td style="font-size:11px;color:#8b949e;">${inf.reichweite}</td>
+      <td><span class="badge badge-${inf.prio.toLowerCase()}">Prio ${inf.prio}</span></td>
+      <td class="col-letzte">
+        <select class="action-select action-${inf.status||'none'}" onchange="updateInfField(${inf.id},'status',this.value);this.className='action-select action-'+(this.value||'none');">
+          ${infStatusOptions(inf.status||'kontaktieren')}
+        </select>
+      </td>
+      <td class="col-naechste">
+        <select class="action-select action-${inf.naechste||'none'}" onchange="updateInfField(${inf.id},'naechste',this.value);this.className='action-select action-'+(this.value||'none');">
+          ${infNextOptions(inf.naechste||'dm')}
+        </select>
+      </td>
+      <td><input type="date" value="${inf.letzterKontakt||''}" onchange="updateInfField(${inf.id},'letzterKontakt',this.value)" style="background:#21262d;border:1px solid #30363d;color:#e1e4e8;padding:4px;border-radius:4px;font-size:11px;width:120px;"></td>
+      <td><button class="btn-sm" onclick="showDm(${inf.id},this)">DM kopieren</button></td>
+      <td class="notes-cell" contenteditable="true" title="${inf.notizen}" onblur="updateInfField(${inf.id},'notizen',this.textContent)">${inf.notizen}</td>
+      <td><button class="btn btn-danger" onclick="deleteInf(${inf.id})">✕</button></td>
+    </tr>`).join('');
+}
+
+function showDm(id,btn) {
+  const inf=influencers.find(i=>i.id===id); if(!inf)return;
+  navigator.clipboard.writeText(inf.dm).then(()=>{
+    btn.textContent='✓ Kopiert!';btn.classList.add('ok');
+    setTimeout(()=>{btn.textContent='DM kopieren';btn.classList.remove('ok');},2000);
+  });
+}
+function updateInfField(id,field,value){const i=influencers.find(i=>i.id===id);if(i){i[field]=value;saveInfluencers();}}
+function addInfluencer(){
+  const newId=Math.max(...influencers.map(i=>i.id))+1;
+  influencers.push({id:newId,name:"Neuer Influencer",handle:"@handle",plattform:"IG",reichweite:"",prio:"B",status:"kontaktieren",naechste:"dm",letzterKontakt:"",notizen:"",dm:""});
+  saveInfluencers();filterInfluencer();
+}
+function deleteInf(id){if(!confirm('Influencer löschen?'))return;influencers=influencers.filter(i=>i.id!==id);saveInfluencers();filterInfluencer();}
+
+// ── DAILY CONTENT JOURNAL ──
+const DEFAULT_DAYS = [
+  {
+    num: 7,
+    date: 'Anfang April 2026',
+    sections: [
+      {
+        title: '🧠 Diagnose-Moment',
+        bullets: [
+          '3–4 Tage extrem schlapp: Unterarmschmerzen, starker Harndrang, Mundtrockenheit, unstillbarer Durst',
+          'Arzt: BZ 514 mg/dL, Ketone +3 → sofortige Krankenhauseinweisung',
+          'Versicherungsstress: 2 Reiseversicherungen, keiner wollte zahlen',
+          'Diagnose Anfang April 2026 in Japan/Tokio — zurück nach Hause geflogen'
+        ]
+      },
+      {
+        title: '⚡ Erste Reaktion',
+        bullets: [
+          'Kein klarer Gedanke — Überforderungs-Modus + Funktionieren-Modus',
+          'Im Krankenhaus: Fokus auf Organisation und Versicherung — emotional nicht wirklich verarbeitet',
+          'Die Traurigkeit kam erst Tage später, zu Hause'
+        ]
+      },
+      {
+        title: '🚀 Warum Glev',
+        bullets: [
+          'Erster Tracking-Versuch: ChatGPT-Fotos + Makros + Spreadsheet = zu umständlich',
+          'Arzt fand das Format gut — aber: Tool-Wechsel nötig, kein Insulin-Log, komplizierte Formeln',
+          'Ziel: einen einzigen Ort für alles — Logging, Auswertung, Lernen',
+          'Kernmission: frisch Diagnostizierten schneller Sicherheit geben'
+        ]
+      },
+      {
+        title: '🧩 Alltag heute',
+        bullets: [
+          'Nervigste Sache: daran denken Insulin mitzunehmen + Mahlzeiten loggen',
+          'Prozess ist zu langsam, zu kompliziert, nicht zentralisiert',
+          'Genau diese Lücke soll Glev schließen'
+        ]
+      },
+      {
+        title: '📡 CGM-Setup',
+        bullets: [
+          'FreeStyle Libre 2 seit ein paar Wochen (davor Accu-Chek)',
+          'Grundsätzlich gut — aber immer wieder Verbindungsprobleme',
+          'Plant als nächstes FreeStyle Libre 3 zu testen'
+        ]
+      },
+      {
+        title: '🍽️ Ernährungs-Entdeckung',
+        bullets: [
+          'Chia + griechischer Joghurt + Beeren + Nüsse + Zimt = sehr stabiler Glukoseverlauf, kaum Peaks',
+          'Hoher Fett- und Protein-Anteil morgens macht den Unterschied',
+          'Dieses Frühstück ist jetzt Fixpunkt im Alltag'
+        ]
+      }
+    ]
+  },
+  {
+    num: 8,
+    date: '30. April 2026',
+    sections: [
+      {
+        title: '💳 Stripe-Checkout live',
+        bullets: [
+          'Beta-Checkout (€19 einmalig) und Pro-Subscription (€24,90/Monat) vollständig integriert',
+          'Stripe Webhook aktiv: Kauf → Account-Aktivierung → Welcome-Email in unter 10 Sekunden',
+          'Getestet mit echten Testkarten, alle Edge Cases (failed payment, 3DS) abgedeckt'
+        ]
+      },
+      {
+        title: '🌤 Light Mode fertig',
+        bullets: [
+          'Vollständiger Light Mode implementiert — Toggle in Settings',
+          'Alle Screens angepasst: Dashboard, Log, Engine, Insights, Settings',
+          'System-Default wird respektiert (folgt iPhone-Einstellung automatisch)'
+        ]
+      },
+      {
+        title: '🧪 BE/KE-Einheit — 40 Tests grün',
+        bullets: [
+          'Broteinheit (BE) und Kohlenhydrateinheit (KE) korrekt berechnet und angezeigt',
+          '40 automatisierte Unit-Tests geschrieben und alle grün',
+          'Einheit wählbar in Settings: mg/dL, mmol/L, BE, KE — persistiert korrekt'
+        ]
+      },
+      {
+        title: '📱 Apple Health CGM-Integration (#69)',
+        bullets: [
+          'CGM-Daten fließen jetzt direkt aus Apple Health — kein separater Reader mehr nötig',
+          'Libre 2 via Apple Health Permissions verbunden, Dexcom G7 vorbereitet',
+          'Issue #69 geschlossen: größter offener Block der letzten zwei Wochen'
+        ]
+      },
+      {
+        title: '🔔 Smart Notifications Phase 1',
+        bullets: [
+          'Post-Meal-Reminder: 90 Minuten nach geloggter Mahlzeit → CGM-Check-Reminder',
+          'Bolus-Erinnerung: konfigurierbar in Settings (0–30 Min vor Mahlzeit)',
+          'Phase 2 (Pattern-basierte Alerts) für Mai geplant'
+        ]
+      },
+      {
+        title: '⚙️ Settings iOS-Refactor',
+        bullets: [
+          'Tab-Toggle entfernt → scrollbare Sektionsliste (Glukose / Insulin / CGM / App)',
+          'Account Sheet: Avatar-Icon öffnet Bottom Sheet mit Profil, Upgrade-CTA, Abmelden',
+          'Mockup aus Marketing Hub 1:1 umgesetzt'
+        ]
+      },
+      {
+        title: '🌍 i18n — Lücken geschlossen',
+        bullets: [
+          'Alle fehlenden deutschen Übersetzungskeys ergänzt',
+          'Englisch als Fallback überall sauber implementiert',
+          'Datums- und Zahlenformate lokalisiert (DE: Komma als Dezimaltrennzeichen)'
+        ]
+      },
+      {
+        title: '🔬 Engine-Route /engine',
+        bullets: [
+          'Dedizierte Route /engine live: Glukose + KH eingeben → Insulin-Dosis-Suggestion',
+          'Confidenz-Score sichtbar (0–100%) basierend auf historischen ICR-Daten',
+          'Disclaimer prominent: Tool-Suggestion, kein medizinischer Rat'
+        ]
+      },
+      {
+        title: '📤 Export — Date-Range-Picker + ICR/CF',
+        bullets: [
+          'Export jetzt mit Date-Range-Picker: beliebiger Zeitraum wählbar statt fest 7/30 Tage',
+          'ICR (Insulin-Kohlenhydrat-Ratio) und CF (Korrekturfaktor) im Export enthalten',
+          'CSV-Export kompatibel mit LibreView-Format für Arztgespräch'
+        ]
+      }
+    ]
+  }
+];
+
+let journalDays = JSON.parse(localStorage.getItem('glevJournal1') || 'null') || DEFAULT_DAYS.map(d => ({...d, sections: d.sections ? d.sections.map(s => ({...s, bullets: [...s.bullets]})) : []}));
+
+function saveJournal() { localStorage.setItem('glevJournal1', JSON.stringify(journalDays)); }
+
+function initDaySelector() {
+  const sel = document.getElementById('daySelector');
+  if (!sel) return;
+  sel.innerHTML = '';
+  const sorted = [...journalDays].sort((a, b) => b.num - a.num);
+  sorted.forEach(d => {
+    const opt = document.createElement('option');
+    opt.value = d.num;
+    opt.textContent = 'Day ' + d.num + (d.date ? '  ·  ' + d.date : '');
+    sel.appendChild(opt);
+  });
+  if (sorted.length > 0) showDay(sorted[0].num);
+}
+
+function showDay(num) {
+  const day = journalDays.find(d => d.num == num);
+  const container = document.getElementById('dayContainer');
+  if (!day || !container) return;
+  const renderBullets = (bullets) => bullets.map((b, i, arr) => `
+    <div style="display:flex;gap:12px;padding:10px 14px;${i < arr.length-1 ? 'border-bottom:1px solid #21262d;' : ''}">
+      <div style="color:#4F6EF7;font-weight:700;flex-shrink:0;margin-top:1px;">›</div>
+      <div style="color:#c9d1d9;font-size:13px;line-height:1.6;">${b}</div>
+    </div>`).join('');
+  const sectionsHtml = (day.sections || []).map(s => `
+    <div style="margin-bottom:18px;">
+      <div style="color:#8b949e;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;margin-bottom:8px;">${s.title}</div>
+      <div style="background:#161b22;border:1px solid #30363d;border-radius:10px;overflow:hidden;">${renderBullets(s.bullets)}</div>
+    </div>`).join('');
+  const rawHtml = (day.raw && day.raw.length) ? `
+    <div style="margin-bottom:18px;">
+      <div style="background:#161b22;border:1px solid #30363d;border-radius:10px;overflow:hidden;">${renderBullets(day.raw)}</div>
+    </div>` : '';
+  container.innerHTML = `
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px;padding-bottom:16px;border-bottom:1px solid #30363d;">
+      <div style="background:#4F6EF7;color:#fff;font-size:13px;font-weight:700;padding:4px 14px;border-radius:20px;">Day ${day.num}</div>
+      ${day.date ? `<div style="color:#8b949e;font-size:12px;">${day.date}</div>` : ''}
+    </div>
+    ${sectionsHtml}${rawHtml}`;
+}
+
+function addNewDay() {
+  const modal = document.getElementById('addEntryModal');
+  if (modal) { modal.style.display = 'flex'; }
+}
+
+function closeModal() {
+  const modal = document.getElementById('addEntryModal');
+  if (modal) modal.style.display = 'none';
+  ['newDayNum','newDayDate','newDayContent'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+}
+
+function saveNewDay() {
+  const num = parseInt(document.getElementById('newDayNum').value);
+  const date = document.getElementById('newDayDate').value.trim();
+  const content = document.getElementById('newDayContent').value.trim();
+  if (!num || !content) { alert('Tag-Nummer und Inhalt sind Pflichtfelder.'); return; }
+  const bullets = content.split('\n').map(l => l.trim()).filter(Boolean);
+  journalDays = journalDays.filter(d => d.num !== num);
+  journalDays.push({ num, date, raw: bullets });
+  saveJournal();
+  initDaySelector();
+  document.getElementById('daySelector').value = num;
+  showDay(num);
+  closeModal();
+}
+
+// ── INIT ──
+renderTable();
+updateStats();
+renderInfTable();
+updateInfStats();
+
+function mkSwitch(panel) {
+  ['glev', 'rp'].forEach(function(p) {
+    document.getElementById('mk-panel-' + p).style.display = (p === panel) ? 'block' : 'none';
+    document.getElementById('mk-btn-' + p).classList.toggle('on', p === panel);
+  });
+}
+</script>
+
+<!-- MARKE TAB -->
+<div class="tab-content" id="tab-marke">
+  <div class="kampagnen-wrap" style="max-width:920px;">
+    <div class="tab-page-title">⚖️ Markenrecherche &amp; Registrierung</div>
+    <div class="tab-page-sub">Zwei Marken · Zwei Produkte · EUIPO EU + DPMA DE · Stand: Mai 2026</div>
+
+    <!-- Sub-tab navigation -->
+    <div style="display:flex; gap:5px; margin-bottom:26px; background:#161b22; border:1px solid #30363d; border-radius:10px; padding:5px; width:fit-content;">
+      <button class="dc-subtab on" id="mk-btn-glev" onclick="mkSwitch('glev')">🔵 Glev</button>
+      <button class="dc-subtab" id="mk-btn-rp" onclick="mkSwitch('rp')">🥒 Ravepickles</button>
+    </div>
+
+    <!-- ══════════════════ GLEV PANEL ══════════════════ -->
+    <div id="mk-panel-glev">
+
+      <!-- Status -->
+      <div style="display:flex; gap:12px; flex-wrap:wrap; margin-bottom:20px;">
+        <div style="background:#161b22; border:1px solid #22D3A0; border-radius:10px; padding:14px 20px; flex:1; min-width:160px;">
+          <div style="color:#22D3A0; font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:4px;">EUIPO (EU · 27 Länder)</div>
+          <div style="color:#e1e4e8; font-size:16px; font-weight:700;">✓ Kein Konflikt</div>
+          <div style="color:#8b949e; font-size:11px; margin-top:2px;">„Glev" nicht eingetragen in Kl. 42 &amp; 10</div>
+        </div>
+        <div style="background:#161b22; border:1px solid #22D3A0; border-radius:10px; padding:14px 20px; flex:1; min-width:160px;">
+          <div style="color:#22D3A0; font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:4px;">DPMA (DE)</div>
+          <div style="color:#e1e4e8; font-size:16px; font-weight:700;">✓ Kein Konflikt</div>
+          <div style="color:#8b949e; font-size:11px; margin-top:2px;">„Glev" nicht eingetragen in DE</div>
+        </div>
+        <div style="background:#161b22; border:1px solid #4F6EF7; border-radius:10px; padding:14px 20px; flex:1; min-width:160px;">
+          <div style="color:#4F6EF7; font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:4px;">Empfehlung</div>
+          <div style="color:#e1e4e8; font-size:16px; font-weight:700;">EUIPO · €900</div>
+          <div style="color:#8b949e; font-size:11px; margin-top:2px;">Kl. 42 + 10 · vor Juli-Launch anmelden</div>
+        </div>
+      </div>
+
+      <div class="acc-card open" id="gv-1">
+        <div class="acc-header" onclick="toggleAcc('gv-1')">
+          <span class="acc-num">1</span>
+          <span class="acc-title">Warenklassen — Was anmelden?</span>
+          <span class="acc-meta">Nice-Klassifikation · Klasse 10 &amp; 42</span><span class="acc-chevron">›</span>
+        </div>
+        <div class="acc-body">
+          <table class="kp-table">
+            <thead><tr><th>Klasse</th><th>Was sie abdeckt</th><th>Warum für Glev</th><th>Prio</th></tr></thead>
+            <tbody>
+              <tr><td><strong>Klasse 42</strong></td><td>SaaS, App-Entwicklung, KI-Dienste, Datenanalyse, Cloud-Software</td><td>Die eigentliche App + Backend + Engine — dein Kernprodukt</td><td><span class="tag-ok">Pflicht</span></td></tr>
+              <tr><td><strong>Klasse 10</strong></td><td>Software für medizinische Zwecke, Gesundheits-Apps, medizinische Geräte</td><td>Schützt Glev im Health-Tech-Umfeld — verhindert Übernahme durch Medizintechnik-Anbieter</td><td><span class="tag-ok">Empfohlen</span></td></tr>
+              <tr><td>Klasse 44</td><td>Medizinische Informationsdienste, Telemedizin</td><td>Nur wenn Arzt-Kooperationen oder Telemedizin direkt geplant sind</td><td><span style="color:#6e7681;font-weight:700;">Optional</span></td></tr>
+            </tbody>
+          </table>
+          <div class="kp-warn"><strong>Hinweis:</strong> Glev ist laut Compliance ein „Dokumentations-Tool, kein Medizinprodukt" → Klasse 42 ist die primäre Klasse. Klasse 10 als Schutz-Layer gegen zukünftige Angreifer.</div>
+        </div>
+      </div>
+
+      <div class="acc-card open" id="gv-2">
+        <div class="acc-header" onclick="toggleAcc('gv-2')">
+          <span class="acc-num">2</span>
+          <span class="acc-title">Marken-Konflikt-Check</span>
+          <span class="acc-meta">Ähnlichkeitsrisiken · phonetisch · visuell</span><span class="acc-chevron">›</span>
+        </div>
+        <div class="acc-body">
+          <div class="kp-note">„Glev" ist ein kurzes Kunstwort ohne Bedeutung im Deutschen, Englischen oder anderen EU-Sprachen. Das ist ein starkes Zeichen für hohe Eintragungsfähigkeit — EUIPO bevorzugt unterscheidungskräftige Fantasiewörter.</div>
+          <table class="kp-table">
+            <thead><tr><th>Vergleichszeichen</th><th>Konflikt-Risiko</th><th>Bewertung</th></tr></thead>
+            <tbody>
+              <tr><td>„Glev" identisch (Kl. 42/10)</td><td>Keine bekannte EU- oder DE-Eintragung gefunden</td><td><span class="tag-ok">✓ Frei</span></td></tr>
+              <tr><td>„Glev" in anderen Klassen</td><td>Kein Konflikt wenn Waren/DL klar unterschiedlich</td><td><span class="tag-ok">✓ Kein Problem</span></td></tr>
+              <tr><td>„Glew", „Glef", „Glov"</td><td>Phonetisch ähnlich, aber ausreichend verschieden + unähnliche Waren → kein echter Konflikt zu erwarten</td><td><span style="color:#FF9500;font-weight:700;">⚠ Selbst prüfen</span></td></tr>
+              <tr><td>„GL" als Abkürzung / Kürzel</td><td>Kürzel allein nicht schutzfähig — kein Risiko für Wortmarke „Glev"</td><td><span class="tag-ok">✓ Kein Problem</span></td></tr>
+            </tbody>
+          </table>
+          <div class="field-label">Selbst-Check (5 Min)</div>
+          <div class="code-block">https://euipo.europa.eu/eSearch/#basic → „Glev" suchen → Klassen 10, 42 filtern</div>
+        </div>
+      </div>
+
+      <div class="acc-card open" id="gv-3">
+        <div class="acc-header" onclick="toggleAcc('gv-3')">
+          <span class="acc-num">3</span>
+          <span class="acc-title">EUIPO — Anmeldeprozess &amp; Kosten</span>
+          <span class="acc-meta">€900 · ~5 Monate · 27 EU-Länder</span><span class="acc-chevron">›</span>
+        </div>
+        <div class="acc-body">
+          <table class="kp-table">
+            <thead><tr><th>Position</th><th>Betrag</th></tr></thead>
+            <tbody>
+              <tr><td>Anmeldegebühr online — 1. Klasse</td><td>€850</td></tr>
+              <tr><td>2. Klasse (Klasse 10 dazu)</td><td>+€50</td></tr>
+              <tr><td><strong>Gesamt Klasse 42 + 10</strong></td><td><strong>€900</strong></td></tr>
+              <tr><td>Ab 3. Klasse je weitere</td><td>+€150</td></tr>
+              <tr><td>Verlängerung nach 10 Jahren</td><td>€850</td></tr>
+              <tr><td>Anwalt (optional, für Warenbeschreibung)</td><td>€500–1.500</td></tr>
+            </tbody>
+          </table>
+          <div class="subsec">Zeitplan</div>
+          <table class="kp-table">
+            <thead><tr><th>Phase</th><th>Dauer</th><th>Was passiert</th></tr></thead>
+            <tbody>
+              <tr><td>Einreichung</td><td>Tag 0</td><td>Prioritätsdatum greift sofort — du bist ab jetzt geschützt</td></tr>
+              <tr><td>Formprüfung EUIPO</td><td>~2 Wochen</td><td>Formale Vollständigkeit wird geprüft</td></tr>
+              <tr><td>Inhaltliche Prüfung</td><td>~2 Monate</td><td>Absolute Eintragungshindernisse geprüft</td></tr>
+              <tr><td>Veröffentlichung + Widerspruchsfrist</td><td>3 Monate</td><td>Dritte können Widerspruch einlegen</td></tr>
+              <tr><td><strong>Eintragung</strong></td><td><strong>~5–6 Monate</strong></td><td>Marke eingetragen wenn kein Widerspruch</td></tr>
+            </tbody>
+          </table>
+          <div class="regie-box"><strong>Prioritätsdatum:</strong> Ab Tag der Einreichung bist du geschützt — auch wenn die Eintragung noch Monate dauert. Vor dem Juli-Launch anmelden.</div>
+          <div class="field-label" style="margin-top:12px;">Anmeldung</div>
+          <div class="code-block">https://euipo.europa.eu/eFiling/</div>
+          <ul class="checklist" style="margin-top:12px;">
+            <li><input type="checkbox" onchange="toggleDone(this)"><span>eSearch: „Glev" in Klasse 42 + 10 selbst prüfen</span></li>
+            <li><input type="checkbox" onchange="toggleDone(this)"><span>EUIPO-Account erstellen (kostenlos)</span></li>
+            <li><input type="checkbox" onchange="toggleDone(this)"><span>eFiling starten → Wortmarke „Glev" → Klasse 42 + 10</span></li>
+            <li><input type="checkbox" onchange="toggleDone(this)"><span>Warenbeschreibung eintragen: „Software as a service (SaaS); mobile Anwendungen für die Gesundheitsüberwachung; Datenverarbeitungsdienste"</span></li>
+            <li><input type="checkbox" onchange="toggleDone(this)"><span>€900 zahlen → Einreichungsbestätigung erhalten</span></li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="acc-card" id="gv-4">
+        <div class="acc-header" onclick="toggleAcc('gv-4')">
+          <span class="acc-num" style="background:#6e7681;">4</span>
+          <span class="acc-title">DPMA (DE) — Alternative / Backup</span>
+          <span class="acc-meta">€290 · nur Deutschland · ~3 Monate</span><span class="acc-chevron">›</span>
+        </div>
+        <div class="acc-body">
+          <table class="kp-table">
+            <thead><tr><th>Position</th><th>Betrag</th></tr></thead>
+            <tbody>
+              <tr><td>Anmeldegebühr online — bis 3 Klassen</td><td>€290</td></tr>
+              <tr><td>Verlängerung nach 10 Jahren</td><td>€750</td></tr>
+              <tr><td>Dauer bis Eintragung</td><td>~3 Monate</td></tr>
+            </tbody>
+          </table>
+          <div class="kp-warn">Empfehlung: Direkt EUIPO — die EU-Marke schließt Deutschland ein. DPMA nur sinnvoll wenn Budget gerade knapp ist und du erst DE absichern willst.</div>
+          <div class="code-block">https://www.dpma.de/marken/anmeldung/index.html</div>
+        </div>
+      </div>
+
+    </div><!-- /mk-panel-glev -->
+
+    <!-- ══════════════════ RAVEPICKLES PANEL ══════════════════ -->
+    <div id="mk-panel-rp" style="display:none;">
+
+      <!-- Status -->
+      <div style="display:flex; gap:12px; flex-wrap:wrap; margin-bottom:20px;">
+        <div style="background:#161b22; border:1px solid #22D3A0; border-radius:10px; padding:14px 20px; flex:1; min-width:160px;">
+          <div style="color:#22D3A0; font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:4px;">EUIPO (EU)</div>
+          <div style="color:#e1e4e8; font-size:16px; font-weight:700;">✓ Kein Konflikt</div>
+          <div style="color:#8b949e; font-size:11px; margin-top:2px;">„Ravepickles" als Kombination einzigartig</div>
+        </div>
+        <div style="background:#161b22; border:1px solid #FF9500; border-radius:10px; padding:14px 20px; flex:1; min-width:160px;">
+          <div style="color:#FF9500; font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:4px;">Teilrisiko: „Rave"</div>
+          <div style="color:#e1e4e8; font-size:16px; font-weight:700;">Prüfen</div>
+          <div style="color:#8b949e; font-size:11px; margin-top:2px;">„Rave" existiert in Kl. 25 — „Ravepickles" aber frei</div>
+        </div>
+        <div style="background:#161b22; border:1px solid #4F6EF7; border-radius:10px; padding:14px 20px; flex:1; min-width:160px;">
+          <div style="color:#4F6EF7; font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:4px;">Empfehlung</div>
+          <div style="color:#e1e4e8; font-size:16px; font-weight:700;">EUIPO · €900</div>
+          <div style="color:#8b949e; font-size:11px; margin-top:2px;">Kl. 25 + 35 · T-Shirts + Webshop</div>
+        </div>
+      </div>
+
+      <div class="acc-card open" id="rp-1">
+        <div class="acc-header" onclick="toggleAcc('rp-1')">
+          <span class="acc-num" style="background:#22D3A0; color:#0f1117;">1</span>
+          <span class="acc-title">Was ist Ravepickles?</span>
+          <span class="acc-meta">T-Shirts · Rave-Ästhetik · Webshop</span><span class="acc-chevron">›</span>
+        </div>
+        <div class="acc-body">
+          <div class="kp-note">Ravepickles ist ein Webshop (ravepickles.com) der T-Shirts mit Rave-Gurken-Prints verkauft — Streetwear/Merch im Rave-Kontext. Das hat mit Lebensmitteln nichts zu tun → <strong>Klasse 25 (Bekleidung), nicht Klasse 29 (Lebensmittel).</strong></div>
+          <table class="kp-table">
+            <thead><tr><th>Aspekt</th><th>Detail</th></tr></thead>
+            <tbody>
+              <tr><td>Produkt</td><td>T-Shirts mit Gürkchen/Pickle-Prints im Rave-Style</td></tr>
+              <tr><td>Vertrieb</td><td>Webshop (ravepickles.com) → Online-Retail</td></tr>
+              <tr><td>Zielgruppe</td><td>Rave/Club/Festival-Publikum, Streetwear-Affine</td></tr>
+              <tr><td>Markencharakter</td><td>Humorvoll, nischig, subkulturell — starke Brand-Identität</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="acc-card open" id="rp-2">
+        <div class="acc-header" onclick="toggleAcc('rp-2')">
+          <span class="acc-num" style="background:#22D3A0; color:#0f1117;">2</span>
+          <span class="acc-title">Warenklassen — Was anmelden?</span>
+          <span class="acc-meta">Klasse 25 &amp; 35 · Pflicht · Klasse 41 optional</span><span class="acc-chevron">›</span>
+        </div>
+        <div class="acc-body">
+          <table class="kp-table">
+            <thead><tr><th>Klasse</th><th>Was sie abdeckt</th><th>Warum für Ravepickles</th><th>Prio</th></tr></thead>
+            <tbody>
+              <tr><td><strong>Klasse 25</strong></td><td>Bekleidung, T-Shirts, Hoodies, Mützen, Schuhe</td><td>Das Kernprodukt — T-Shirts mit Print. Ohne diese Klasse kein Schutz für das eigentliche Produkt</td><td><span class="tag-ok">Pflicht</span></td></tr>
+              <tr><td><strong>Klasse 35</strong></td><td>Einzelhandel (online &amp; stationär), E-Commerce, Webshop-Betrieb</td><td>Schützt den Webshop ravepickles.com als Handelsform</td><td><span class="tag-ok">Empfohlen</span></td></tr>
+              <tr><td>Klasse 41</td><td>Unterhaltung, Events, Kulturveranstaltungen, Musikfestivals</td><td>Wenn Ravepickles Rave-Events veranstaltet oder sponsert</td><td><span style="color:#6e7681;font-weight:700;">Optional</span></td></tr>
+              <tr><td>Klasse 24</td><td>Textilwaren, Bettwäsche, Stoffe</td><td>Nur wenn Produkte über T-Shirts hinausgehen (Tote Bags, Patches, etc.)</td><td><span style="color:#6e7681;font-weight:700;">Optional</span></td></tr>
+            </tbody>
+          </table>
+          <div class="kp-warn"><strong>Nicht Klasse 29:</strong> Das wäre Lebensmittel/Pickles als Nahrungsmittel. Ravepickles ist Mode — also Klasse 25, nicht 29.</div>
+        </div>
+      </div>
+
+      <div class="acc-card open" id="rp-3">
+        <div class="acc-header" onclick="toggleAcc('rp-3')">
+          <span class="acc-num" style="background:#FF9500; color:#0f1117;">3</span>
+          <span class="acc-title">Marken-Konflikt-Check</span>
+          <span class="acc-meta">„Rave" + „Pickles" · kombiniert · Risiken</span><span class="acc-chevron">›</span>
+        </div>
+        <div class="acc-body">
+          <div class="kp-note">Als Kombination ist „Ravepickles" höchstwahrscheinlich einzigartig. Das Risiko liegt im Bestandteil „Rave" — dort gibt es in Klasse 25 tatsächlich eingetragene Marken.</div>
+          <table class="kp-table">
+            <thead><tr><th>Zeichen</th><th>Status</th><th>Konfliktrisiko für Ravepickles</th><th>Bewertung</th></tr></thead>
+            <tbody>
+              <tr><td>„Ravepickles" (komplett)</td><td>Keine bekannte EU/DE-Eintragung</td><td>Keins — Kombination ist einzigartig</td><td><span class="tag-ok">✓ Frei</span></td></tr>
+              <tr><td>„Rave" (allein, Kl. 25)</td><td>Marken mit „Rave" in Kl. 25 existieren vereinzelt (z.B. Rave-Wear, Rave-Brands)</td><td>Gering — „Ravepickles" ist visuell und phonetisch klar verschieden von „Rave" allein</td><td><span style="color:#FF9500;font-weight:700;">⚠ Selbst prüfen</span></td></tr>
+              <tr><td>„Pickles" (allein, Kl. 25)</td><td>Kaum eingetragen in Bekleidung</td><td>Sehr gering</td><td><span class="tag-ok">✓ Kein Problem</span></td></tr>
+              <tr><td>„Rave Pickles" (zwei Wörter)</td><td>Nicht bekannt</td><td>Keins</td><td><span class="tag-ok">✓ Frei</span></td></tr>
+              <tr><td>Gurken/Pickles als Bildmarke</td><td>Verschiedene Lebensmittelmarken — keine in Kl. 25</td><td>Keins für Bekleidung</td><td><span class="tag-ok">✓ Kein Problem</span></td></tr>
+            </tbody>
+          </table>
+          <div class="kp-note"><strong>Fazit:</strong> „Ravepickles" als Einwort ist stark und einzigartig. Das Risiko durch einzelne „Rave"-Marken in Klasse 25 ist gering, aber sollte vor Einreichung einmal kurz in eSearch geprüft werden.</div>
+          <div class="field-label">Selbst-Check</div>
+          <div class="code-block">https://euipo.europa.eu/eSearch/#basic → „Rave" + Klasse 25 → ähnliche Marken sichten → dann „Ravepickles" prüfen</div>
+        </div>
+      </div>
+
+      <div class="acc-card open" id="rp-4">
+        <div class="acc-header" onclick="toggleAcc('rp-4')">
+          <span class="acc-num" style="background:#22D3A0; color:#0f1117;">4</span>
+          <span class="acc-title">EUIPO — Anmeldeprozess &amp; Kosten</span>
+          <span class="acc-meta">€900 · Kl. 25 + 35 · ~5 Monate</span><span class="acc-chevron">›</span>
+        </div>
+        <div class="acc-body">
+          <table class="kp-table">
+            <thead><tr><th>Position</th><th>Betrag</th></tr></thead>
+            <tbody>
+              <tr><td>Anmeldegebühr online — 1. Klasse (Kl. 25)</td><td>€850</td></tr>
+              <tr><td>2. Klasse (Kl. 35 dazu)</td><td>+€50</td></tr>
+              <tr><td><strong>Gesamt Klasse 25 + 35</strong></td><td><strong>€900</strong></td></tr>
+              <tr><td>3. Klasse (Kl. 41, optional)</td><td>+€150</td></tr>
+              <tr><td>Verlängerung nach 10 Jahren</td><td>€850</td></tr>
+            </tbody>
+          </table>
+          <div class="subsec">Zeitplan</div>
+          <table class="kp-table">
+            <thead><tr><th>Phase</th><th>Dauer</th></tr></thead>
+            <tbody>
+              <tr><td>Einreichung → Prioritätsdatum greift</td><td>Tag 0</td></tr>
+              <tr><td>Formprüfung + inhaltliche Prüfung</td><td>~2 Monate</td></tr>
+              <tr><td>Widerspruchsfrist</td><td>3 Monate</td></tr>
+              <tr><td><strong>Eintragung (wenn kein Widerspruch)</strong></td><td><strong>~5–6 Monate</strong></td></tr>
+            </tbody>
+          </table>
+          <div class="regie-box"><strong>Markencharakter:</strong> „Ravepickles" ist ein Kunstwort mit hoher Unterscheidungskraft — gute Chancen auf problemlose Eintragung. Die Kombination aus Rave-Kultur + Gurke ist originell und nicht beschreibend für Bekleidung.</div>
+          <ul class="checklist" style="margin-top:12px;">
+            <li><input type="checkbox" onchange="toggleDone(this)"><span>eSearch: „Rave" in Kl. 25 prüfen — existierende Marken sichten</span></li>
+            <li><input type="checkbox" onchange="toggleDone(this)"><span>eSearch: „Ravepickles" prüfen — bestätigen dass frei</span></li>
+            <li><input type="checkbox" onchange="toggleDone(this)"><span>EUIPO-Account (gleicher Account wie für Glev nutzbar)</span></li>
+            <li><input type="checkbox" onchange="toggleDone(this)"><span>eFiling: Wortmarke „Ravepickles" → Klasse 25 + 35</span></li>
+            <li><input type="checkbox" onchange="toggleDone(this)"><span>Warenbeschreibung: „T-Shirts, Bekleidung" (Kl. 25) + „Einzelhandelsdienstleistungen über das Internet" (Kl. 35)</span></li>
+            <li><input type="checkbox" onchange="toggleDone(this)"><span>€900 zahlen → Einreichungsbestätigung</span></li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="acc-card" id="rp-5">
+        <div class="acc-header" onclick="toggleAcc('rp-5')">
+          <span class="acc-num" style="background:#6e7681;">5</span>
+          <span class="acc-title">DPMA (DE) — Alternative</span>
+          <span class="acc-meta">€290 · nur Deutschland · ~3 Monate</span><span class="acc-chevron">›</span>
+        </div>
+        <div class="acc-body">
+          <div class="kp-note">Gleiche Logik wie bei Glev: DPMA ist günstiger und schneller, aber deckt nur Deutschland ab. Wenn ravepickles.com primär DACH oder international ausgerichtet ist → lieber direkt EUIPO.</div>
+          <table class="kp-table">
+            <thead><tr><th>Position</th><th>Betrag</th></tr></thead>
+            <tbody>
+              <tr><td>DPMA online — bis 3 Klassen</td><td>€290</td></tr>
+              <tr><td>Dauer bis Eintragung</td><td>~3 Monate</td></tr>
+            </tbody>
+          </table>
+          <div class="code-block">https://www.dpma.de/marken/anmeldung/index.html</div>
+        </div>
+      </div>
+
+    </div><!-- /mk-panel-rp -->
+
+  </div>
+</div><!-- /tab-marke -->
+
+<!-- KOMPETITOR-ANALYSE TAB -->
+<div class="tab-content" id="tab-kompetitor">
+  <div class="kampagnen-wrap" style="max-width:980px;">
+    <div class="tab-page-title">🔍 Kompetitor-Analyse DACH</div>
+    <div class="tab-page-sub">13 Wettbewerber · T1D-Positionierung · DACH-Marktlücken · Stand: 16. Mai 2026 — TestFlight Live</div>
+
+    <div style="background:rgba(34,211,160,0.08);border:1px solid rgba(34,211,160,0.25);border-radius:8px;padding:14px 16px;display:flex;gap:12px;margin-bottom:20px;">
+      <span style="font-size:18px;">🚀</span>
+      <div style="font-size:13px;color:#c9d1d9;line-height:1.6;"><strong style="color:#22D3A0;">Stand 16. Mai 2026:</strong> Glev ist jetzt auf TestFlight verfügbar (iOS Build 1.0(1)). Android morgen. App Store Submit ~24. Juni. Launch Juli 2026. Pricing: Whoop-Modell, Early Access €19/Mo, kein Free Tier zum Launch.</div>
+    </div>
+
+    <div class="subsec">Kernaussage — Die unbesetzte Nische</div>
+    <div style="background:rgba(79,110,247,0.08);border-left:3px solid #4F6EF7;padding:12px 16px;border-radius:0 8px 8px 0;font-size:14px;color:#c9d1d9;font-weight:600;line-height:1.5;margin-bottom:20px;">
+      🎯 Im DACH-T1D-Markt kombiniert kein einziger Anbieter: <strong style="color:#4F6EF7;">Voice-Input + CGM-Agnostik + Adaptives Lernen + Insulin-Loop-Closing.</strong> Das ist Glevs Marktlücke.
+    </div>
+
+    <div class="subsec">Wettbewerbsübersicht — 13 Konkurrenten</div>
+    <div style="overflow-x:auto;margin-bottom:20px;">
+      <table style="border-collapse:collapse;font-size:12px;min-width:900px;width:100%;">
+        <thead>
+          <tr style="background:#161b22;">
+            <th style="padding:9px 12px;text-align:left;font-size:11px;font-weight:600;color:#8b949e;text-transform:uppercase;letter-spacing:0.5px;border-bottom:1px solid #30363d;white-space:nowrap;">App</th>
+            <th style="padding:9px 12px;text-align:left;font-size:11px;font-weight:600;color:#8b949e;text-transform:uppercase;letter-spacing:0.5px;border-bottom:1px solid #30363d;white-space:nowrap;">Segment</th>
+            <th style="padding:9px 12px;text-align:left;font-size:11px;font-weight:600;color:#8b949e;text-transform:uppercase;letter-spacing:0.5px;border-bottom:1px solid #30363d;white-space:nowrap;">Pricing</th>
+            <th style="padding:9px 12px;text-align:left;font-size:11px;font-weight:600;color:#8b949e;text-transform:uppercase;letter-spacing:0.5px;border-bottom:1px solid #30363d;white-space:nowrap;">Voice</th>
+            <th style="padding:9px 12px;text-align:left;font-size:11px;font-weight:600;color:#8b949e;text-transform:uppercase;letter-spacing:0.5px;border-bottom:1px solid #30363d;white-space:nowrap;">CGM-agn.</th>
+            <th style="padding:9px 12px;text-align:left;font-size:11px;font-weight:600;color:#8b949e;text-transform:uppercase;letter-spacing:0.5px;border-bottom:1px solid #30363d;white-space:nowrap;">Insulin-Loop</th>
+            <th style="padding:9px 12px;text-align:left;font-size:11px;font-weight:600;color:#8b949e;text-transform:uppercase;letter-spacing:0.5px;border-bottom:1px solid #30363d;white-space:nowrap;">DACH</th>
+            <th style="padding:9px 12px;text-align:left;font-size:11px;font-weight:600;color:#8b949e;text-transform:uppercase;letter-spacing:0.5px;border-bottom:1px solid #30363d;white-space:nowrap;">Glev-Differenz</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr style="border-bottom:1px solid #21262d;background:rgba(248,81,73,0.05)">
+            <td style="padding:8px 12px;font-weight:700;color:#f85149;font-size:12px;">Carbetic ⚠️</td><td style="padding:8px 12px;font-size:12px;color:#8b949e;">Consumer</td><td style="padding:8px 12px;font-size:12px;">€4,50/Mo</td><td style="padding:8px 12px;color:#22D3A0;font-weight:700;">✓</td><td style="padding:8px 12px;color:#f85149;">✗</td><td style="padding:8px 12px;color:#f85149;">✗</td><td style="padding:8px 12px;font-size:11px;color:#8b949e;">★★★</td><td style="padding:8px 12px;font-size:11px;color:#c9d1d9;">Carbetic zeigt KH — Glev sagt wie viel Insulin</td>
+          </tr>
+          <tr style="border-bottom:1px solid #21262d;background:rgba(248,81,73,0.05)">
+            <td style="padding:8px 12px;font-weight:700;color:#f85149;font-size:12px;">SNAQ 🔴</td><td style="padding:8px 12px;font-size:12px;color:#8b949e;">Consumer</td><td style="padding:8px 12px;font-size:12px;">~$10/Mo</td><td style="padding:8px 12px;color:#f85149;">✗</td><td style="padding:8px 12px;color:#22D3A0;font-weight:700;">✓ (5 CGM)</td><td style="padding:8px 12px;color:#f85149;">✗</td><td style="padding:8px 12px;font-size:11px;color:#8b949e;">★★★★</td><td style="padding:8px 12px;font-size:11px;color:#c9d1d9;">SNAQ gibt KH — Glev schließt den Loop</td>
+          </tr>
+          <tr style="border-bottom:1px solid #21262d;">
+            <td style="padding:8px 12px;font-weight:600;color:#c9d1d9;font-size:12px;">mySugr (Roche)</td><td style="padding:8px 12px;font-size:12px;color:#8b949e;">Consumer</td><td style="padding:8px 12px;font-size:12px;">Free + €3/Mo</td><td style="padding:8px 12px;color:#f85149;">✗</td><td style="padding:8px 12px;color:#f85149;">✗</td><td style="padding:8px 12px;color:#d29922;">Statisch</td><td style="padding:8px 12px;font-size:11px;color:#8b949e;">★★★★★</td><td style="padding:8px 12px;font-size:11px;color:#c9d1d9;">mySugr = Tagebuch — Glev = Copilot</td>
+          </tr>
+          <tr style="border-bottom:1px solid #21262d;background:#161b22;">
+            <td style="padding:8px 12px;font-weight:600;color:#c9d1d9;font-size:12px;">diabetes:m</td><td style="padding:8px 12px;font-size:12px;color:#8b949e;">Consumer</td><td style="padding:8px 12px;font-size:12px;">Free + €5/Mo</td><td style="padding:8px 12px;color:#f85149;">✗</td><td style="padding:8px 12px;color:#d29922;">Teilw.</td><td style="padding:8px 12px;color:#d29922;">Statisch</td><td style="padding:8px 12px;font-size:11px;color:#8b949e;">★★★</td><td style="padding:8px 12px;font-size:11px;color:#c9d1d9;">Kein Voice, kein adaptives Lernen</td>
+          </tr>
+          <tr style="border-bottom:1px solid #21262d;">
+            <td style="padding:8px 12px;font-weight:600;color:#c9d1d9;font-size:12px;">SiDiary (SINOVO)</td><td style="padding:8px 12px;font-size:12px;color:#8b949e;">Klinisch</td><td style="padding:8px 12px;font-size:12px;">Free / Abo</td><td style="padding:8px 12px;color:#f85149;">✗</td><td style="padding:8px 12px;color:#22D3A0;font-weight:700;">✓</td><td style="padding:8px 12px;color:#f85149;">✗</td><td style="padding:8px 12px;font-size:11px;color:#8b949e;">★★★★</td><td style="padding:8px 12px;font-size:11px;color:#c9d1d9;">PC-Legacy, kein Voice, kein KI</td>
+          </tr>
+          <tr style="border-bottom:1px solid #21262d;background:#161b22;">
+            <td style="padding:8px 12px;font-weight:600;color:#c9d1d9;font-size:12px;">Diabass</td><td style="padding:8px 12px;font-size:12px;color:#8b949e;">Klinisch</td><td style="padding:8px 12px;font-size:12px;">Kostenlos</td><td style="padding:8px 12px;color:#f85149;">✗</td><td style="padding:8px 12px;color:#22D3A0;font-weight:700;">✓</td><td style="padding:8px 12px;color:#f85149;">✗</td><td style="padding:8px 12px;font-size:11px;color:#8b949e;">★★★★★</td><td style="padding:8px 12px;font-size:11px;color:#c9d1d9;">Windows-only, keine mobile App</td>
+          </tr>
+          <tr style="border-bottom:1px solid #21262d;">
+            <td style="padding:8px 12px;font-weight:600;color:#22D3A0;font-size:12px;">glucura</td><td style="padding:8px 12px;font-size:12px;color:#8b949e;">DiGA</td><td style="padding:8px 12px;font-size:12px;">GKV (frei)</td><td style="padding:8px 12px;color:#f85149;">✗</td><td style="padding:8px 12px;color:#d29922;">GKV-Dev</td><td style="padding:8px 12px;color:#f85149;">✗</td><td style="padding:8px 12px;font-size:11px;color:#8b949e;">★★★★</td><td style="padding:8px 12px;font-size:11px;color:#c9d1d9;">T2D only — zeigt DiGA-Weg für Glev</td>
+          </tr>
+          <tr style="border-bottom:1px solid #21262d;background:#161b22;">
+            <td style="padding:8px 12px;font-weight:600;color:#c9d1d9;font-size:12px;">LibreView (Abbott)</td><td style="padding:8px 12px;font-size:12px;color:#8b949e;">CGM</td><td style="padding:8px 12px;font-size:12px;">Kostenlos</td><td style="padding:8px 12px;color:#f85149;">✗</td><td style="padding:8px 12px;color:#f85149;">✗ (Abbott)</td><td style="padding:8px 12px;color:#f85149;">✗</td><td style="padding:8px 12px;font-size:11px;color:#8b949e;">★★★★</td><td style="padding:8px 12px;font-size:11px;color:#c9d1d9;">Ergänzend — Glev reichert Libre-Daten an</td>
+          </tr>
+          <tr style="border-bottom:1px solid #21262d;">
+            <td style="padding:8px 12px;font-weight:600;color:#c9d1d9;font-size:12px;">Dexcom Clarity</td><td style="padding:8px 12px;font-size:12px;color:#8b949e;">CGM</td><td style="padding:8px 12px;font-size:12px;">Kostenlos</td><td style="padding:8px 12px;color:#f85149;">✗</td><td style="padding:8px 12px;color:#f85149;">✗ (Dexcom)</td><td style="padding:8px 12px;color:#f85149;">✗</td><td style="padding:8px 12px;font-size:11px;color:#8b949e;">★★★★</td><td style="padding:8px 12px;font-size:11px;color:#c9d1d9;">Ergänzend — Glev aggregiert Dexcom-Daten</td>
+          </tr>
+          <tr style="border-bottom:1px solid #21262d;background:#161b22;">
+            <td style="padding:8px 12px;font-weight:600;color:#c9d1d9;font-size:12px;">Accu-Chek SG</td><td style="padding:8px 12px;font-size:12px;color:#8b949e;">CGM</td><td style="padding:8px 12px;font-size:12px;">Kostenlos</td><td style="padding:8px 12px;color:#f85149;">✗</td><td style="padding:8px 12px;color:#f85149;">✗ (Roche)</td><td style="padding:8px 12px;color:#f85149;">✗</td><td style="padding:8px 12px;font-size:11px;color:#8b949e;">★★★★</td><td style="padding:8px 12px;font-size:11px;color:#c9d1d9;">Glev ist sensoragnostisch</td>
+          </tr>
+          <tr style="border-bottom:1px solid #21262d;">
+            <td style="padding:8px 12px;font-weight:600;color:#c9d1d9;font-size:12px;">OneTouch Reveal</td><td style="padding:8px 12px;font-size:12px;color:#8b949e;">Consumer</td><td style="padding:8px 12px;font-size:12px;">Kostenlos</td><td style="padding:8px 12px;color:#f85149;">✗</td><td style="padding:8px 12px;color:#f85149;">✗</td><td style="padding:8px 12px;color:#f85149;">✗</td><td style="padding:8px 12px;font-size:11px;color:#8b949e;">★★</td><td style="padding:8px 12px;font-size:11px;color:#c9d1d9;">T2D BGM-only — kein Wettbewerb</td>
+          </tr>
+          <tr style="border-bottom:1px solid #21262d;background:#161b22;">
+            <td style="padding:8px 12px;font-weight:600;color:#6e7681;font-size:12px;">Glucosio / Diaguard</td><td style="padding:8px 12px;font-size:12px;color:#8b949e;">Open Source</td><td style="padding:8px 12px;font-size:12px;">Kostenlos</td><td style="padding:8px 12px;color:#f85149;">✗</td><td style="padding:8px 12px;color:#22D3A0;font-weight:700;">✓</td><td style="padding:8px 12px;color:#f85149;">✗</td><td style="padding:8px 12px;font-size:11px;color:#8b949e;">★–★★</td><td style="padding:8px 12px;font-size:11px;color:#c9d1d9;">Kein CGM, inaktiv — kein Wettbewerb</td>
+          </tr>
+          <tr style="background:rgba(79,110,247,0.12);font-weight:700;">
+            <td style="padding:8px 12px;color:#4F6EF7;font-size:13px;">✦ Glev</td><td style="padding:8px 12px;font-size:12px;color:#4F6EF7;">T1D-first</td><td style="padding:8px 12px;font-size:12px;color:#4F6EF7;">€19/Mo Early Access</td><td style="padding:8px 12px;color:#22D3A0;font-weight:700;">✓ NLP</td><td style="padding:8px 12px;color:#22D3A0;font-weight:700;">✓</td><td style="padding:8px 12px;color:#22D3A0;font-weight:700;">✓ Adaptiv</td><td style="padding:8px 12px;font-size:11px;color:#4F6EF7;">Early Access</td><td style="padding:8px 12px;font-size:11px;color:#4F6EF7;">—</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="subsec">Marktlücken &amp; Messaging</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:20px;">
+      <div class="acc-card" style="padding:16px 18px;">
+        <div class="sec-label" style="margin-top:0;">Glevsks 4 Alleinstellungsmerkmale</div>
+        <ul class="ul-bullets">
+          <li><strong>Voice-first + Insulin-Loop:</strong> Kein anderer Anbieter kombiniert das</li>
+          <li><strong>Adaptives Lernen:</strong> ICR lernt mit jeder Mahlzeit — alle anderen sind statisch</li>
+          <li><strong>CGM-agnostisch:</strong> Kein Hardware-Lock-in, Multi-Sensor-kompatibel</li>
+          <li><strong>Founder-Story:</strong> Lucas ist selbst T1D — authentisch, community-nah</li>
+        </ul>
+      </div>
+      <div class="acc-card" style="padding:16px 18px;">
+        <div class="sec-label" style="margin-top:0;">DACH-Strukturvorteile</div>
+        <ul class="ul-bullets">
+          <li><strong>DiGA-Pathway:</strong> glucura zeigt den Weg — für T1D gibt es noch keine DiGA</li>
+          <li><strong>Broteinheiten (BE):</strong> Fehlt allen internationalen Apps</li>
+          <li><strong>DiaDigital-Siegel:</strong> HCP-Credibility-Signal in Deutschland</li>
+          <li><strong>DSGVO-Kultur:</strong> Lokaler Datenschutz als Kaufentscheidung</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="subsec">Wettbewerbs-Messaging</div>
+    <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:20px;">
+      <div class="kp-note" style="margin:0;"><strong>vs. Carbetic:</strong> „Carbetic zeigt dir die Zahl. Glev sagt dir, was du damit machst."</div>
+      <div class="kp-note" style="margin:0;"><strong>vs. mySugr:</strong> „mySugr merkt sich deine Werte. Glev lernt daraus."</div>
+      <div class="kp-note" style="margin:0;"><strong>vs. SNAQ:</strong> „SNAQ gibt KH-Zahlen. Glev schließt den Loop: KH → Insulin → BG → Lernen."</div>
+      <div class="kp-note" style="margin:0;"><strong>vs. Alle:</strong> „Dein ICR ist nicht statisch. Warum ist deine App es?"</div>
+    </div>
+
+    <div class="subsec">DACH Launch Roadmap</div>
+    <div style="display:flex;gap:0;border-radius:8px;overflow:hidden;margin-bottom:24px;">
+      <div style="flex:1;text-align:center;padding:12px 8px;background:#21262d;border-top:3px solid #22D3A0;border-right:1px solid #30363d;">
+        <div style="font-size:10px;font-weight:700;color:#22D3A0;margin-bottom:4px;">16. MAI ✓</div>
+        <div style="font-size:12px;color:#c9d1d9;font-weight:600;">TestFlight Live</div>
+        <div style="font-size:11px;color:#8b949e;margin-top:3px;">iOS Build 1.0(1)</div>
+      </div>
+      <div style="flex:1;text-align:center;padding:12px 8px;background:#21262d;border-top:3px solid #4F6EF7;border-right:1px solid #30363d;">
+        <div style="font-size:10px;font-weight:700;color:#4F6EF7;margin-bottom:4px;">17. MAI</div>
+        <div style="font-size:12px;color:#c9d1d9;font-weight:600;">Android Live</div>
+        <div style="font-size:11px;color:#8b949e;margin-top:3px;">Build deployen</div>
+      </div>
+      <div style="flex:1;text-align:center;padding:12px 8px;background:#21262d;border-top:3px solid #4F6EF7;border-right:1px solid #30363d;">
+        <div style="font-size:10px;font-weight:700;color:#4F6EF7;margin-bottom:4px;">~24. JUNI</div>
+        <div style="font-size:12px;color:#c9d1d9;font-weight:600;">App Store Submit</div>
+        <div style="font-size:11px;color:#8b949e;margin-top:3px;">Apple Review</div>
+      </div>
+      <div style="flex:1;text-align:center;padding:12px 8px;background:#21262d;border-top:3px solid #4F6EF7;">
+        <div style="font-size:10px;font-weight:700;color:#4F6EF7;margin-bottom:4px;">JULI 2026</div>
+        <div style="font-size:12px;color:#c9d1d9;font-weight:600;">🚀 Early Access</div>
+        <div style="font-size:11px;color:#8b949e;margin-top:3px;">€19/Mo, kein Free Tier</div>
+      </div>
+    </div>
+
+    <div style="background:rgba(79,110,247,0.06);border:1px solid rgba(79,110,247,0.2);border-radius:8px;padding:12px 16px;font-size:12px;color:#7c9bf5;">
+      <strong style="color:#4F6EF7;">Vollständige interaktive Analyse</strong> mit 13 Wettbewerber-Profilen, Abbott-Partnerschaftsstrategie, CGM-Roadmap und Anträge & Lizenzen → <strong>glev-kompetitor-analyse.html</strong>
+    </div>
+
+  </div>
+</div><!-- /tab-kompetitor -->
+
+
+</body>
+</html>

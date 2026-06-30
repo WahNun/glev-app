@@ -5,10 +5,12 @@ import { createHmac, timingSafeEqual } from 'crypto';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
+function getSupabase() {
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  );
+}
 
 function getReplitQueueSectionIds(): Set<string> {
   const raw = process.env.ASANA_REPLIT_QUEUE_SECTION_IDS ?? '';
@@ -80,7 +82,7 @@ export async function POST(req: NextRequest) {
       console.error(`[Asana Webhook] Failed to fetch task ${taskGid}:`, err);
     }
 
-    const { error } = await supabase.from('replit_queue').upsert(
+    const { error } = await getSupabase().from('replit_queue').upsert(
       {
         asana_task_id: taskGid,
         task_name:     taskName,
