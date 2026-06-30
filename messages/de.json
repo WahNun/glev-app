@@ -2715,7 +2715,9 @@
       "test_invalid_credentials": "Benutzername oder Passwort falsch. Bitte prüfe deine Dexcom-Zugangsdaten.",
       "test_invalid_region": "Falsche Region. Bitte EU oder USA prüfen.",
       "info_eu_servers": "Glev verbindet sich direkt mit dem Dexcom Share API. EU-Nutzer verwenden automatisch den EU-Server (shareous1.dexcom.com).",
-      "disclaimer_inofficial_api": "Dexcom Share ist eine inoffizielle Schnittstelle — von der Community reverse-engineered, seit Jahren stabil und von vielen Apps genutzt (xDrip, Nightscout, Sugarmate). Nicht offiziell von Dexcom unterstützt."
+      "disclaimer_inofficial_api": "Dexcom Share ist eine inoffizielle Schnittstelle — von der Community reverse-engineered, seit Jahren stabil und von vielen Apps genutzt (xDrip, Nightscout, Sugarmate). Nicht offiziell von Dexcom unterstützt.",
+      "test_active": "Verbindung aktiv ✓",
+      "no_credentials": "Keine Zugangsdaten gespeichert"
     }
   },
   "previewBeta": {

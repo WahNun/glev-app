@@ -754,3 +754,8 @@ Smart-Tier Käufer haben fälschlicherweise Glev+ Zugang bekommen statt Smart, w
 - **Was:** UI zeigte "verbunden" wenn cgm_source='dexcom' gesetzt aber kein dexcom_username in cgm_credentials — User mit unvollständigem Setup sahen falschen Connected-Status.
 - **Fix:** /api/cgm/source gibt jetzt dexcom_credentials_present zurück; Hook prüft beide Felder.
 - **Impact:** Kein falsches "verbunden"-Signal mehr für User die cgm_source gesetzt aber keine Credentials gespeichert haben.
+
+## 2026-06-30 feat(community): Community Voting Phase 1
+
+| 2026-06-30 | feat(community): Community Voting Phase 1 | Demokratische Roadmap-Feature: 4 neue Tabellen (community_feature_clusters, community_feature_requests, community_vote_sessions, community_votes) + 2 neue profiles-Spalten (community_voting_visible, community_voting_enabled). Settings-Toggle (nur wenn voting_visible=true), Vote-Popup-Overlay, Admin-UI für Session-Management + Ergebnisse. Phase 2 (AI-Clustering, Priority Score) folgt. |
+| 2026-07-01 | feat(cgm): Dexcom Verbindung-testen Button | GET /api/cgm/dexcom/test liest gespeicherte Credentials und testet Verbindung ohne erneute Eingabe. Button in Dexcom-Settings neben "Trennen". Parität mit Libre LinkUp Test-Button. |

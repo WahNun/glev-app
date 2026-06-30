@@ -14,9 +14,9 @@ const ACCENT = "#4F6EF7", BORDER = "var(--border)";
 const iconProps = { width: 16, height: 16, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: 2, strokeLinecap: "round" as const, strokeLinejoin: "round" as const };
 
 type ToastState = { msg: string; kind: "success" | "error" };
-type DexcomCardProps = { onConnected: () => void; onDisconnected: () => void; onError: (msg: string) => void; isConnected: boolean };
+type DexcomCardProps = { onConnected: () => void; onDisconnected: () => void; onError: (msg: string) => void; onTestSuccess: (msg: string) => void; isConnected: boolean };
 
-function DexcomDirectCard({ onConnected, onDisconnected, onError, isConnected }: DexcomCardProps) {
+function DexcomDirectCard({ onConnected, onDisconnected, onError, onTestSuccess, isConnected }: DexcomCardProps) {
   const t = useTranslations("cgm");
   const [region, setRegion] = useState<"eu" | "us">("eu");
   const [username, setUsername] = useState("");
@@ -94,6 +94,34 @@ function DexcomDirectCard({ onConnected, onDisconnected, onError, isConnected }:
     }
   }
 
+  async function handleTestStored() {
+    setTestStatus("testing");
+    setTestMsg("");
+    try {
+      const res = await fetch("/api/cgm/dexcom/test");
+      const data = await res.json();
+      if (res.ok) {
+        setTestStatus("ok");
+        onTestSuccess(t("dexcom.test_active"));
+      } else {
+        setTestStatus("error");
+        const code = data?.error as string | undefined;
+        if (code === "no_credentials") {
+          onError(t("dexcom.no_credentials"));
+        } else if (code === "test_invalid_credentials") {
+          onError(t("dexcom.test_invalid_credentials"));
+        } else if (code === "test_invalid_region") {
+          onError(t("dexcom.test_invalid_region"));
+        } else {
+          onError(code ?? t("dexcom.test_invalid_credentials"));
+        }
+      }
+    } catch {
+      setTestStatus("error");
+      onError(t("dexcom.test_invalid_credentials"));
+    }
+  }
+
   async function handleDisconnect() {
     setDisconnecting(true);
     try {
@@ -117,6 +145,23 @@ function DexcomDirectCard({ onConnected, onDisconnected, onError, isConnected }:
         <p style={{ fontSize: 12, color: "var(--text-dim)", margin: 0 }}>
           {t("dexcom.disclaimer_inofficial_api")}
         </p>
+        <button
+          type="button"
+          onClick={handleTestStored}
+          disabled={testStatus === "testing"}
+          style={{
+            padding: "11px 16px",
+            borderRadius: 10,
+            border: `1px solid ${ACCENT}`,
+            background: "transparent",
+            color: ACCENT,
+            fontSize: 14,
+            fontWeight: 600,
+            cursor: testStatus === "testing" ? "not-allowed" : "pointer",
+          }}
+        >
+          {testStatus === "testing" ? "…" : t("dexcom.test_btn")}
+        </button>
         <button
           type="button"
           onClick={handleDisconnect}
@@ -247,56 +292,36 @@ function DexcomDirectCard({ onConnected, onDisconnected, onError, isConnected }:
   );
 }
 
-function useCgmConnected(): boolean {
-  const [connected, setConnected] = useState(false);
-  useEffect(() => {
-    let cancelled = false;
-    fetch("/api/cgm/status", { cache: "no-store" })
-      .then((r) => (r.ok ? r.json() : Promise.reject()))
-      .then((data) => { if (!cancelled) setConnected(Boolean(data?.connected)); })
-      .catch(() => {});
-    return () => { cancelled = true; };
-  }, []);
-  return connected;
-}
+type CgmSourceStatus = {
+  lluConnected: boolean;
+  nightscoutConnected: boolean;
+  dexcomConnected: boolean;
+  appleHealthConnected: boolean;
+};
 
-function useNightscoutConnected(): boolean {
-  const [connected, setConnected] = useState(false);
-  useEffect(() => {
-    let cancelled = false;
-    fetch("/api/cgm/nightscout/sync", { cache: "no-store" })
-      .then((r) => (r.ok ? r.json() : Promise.reject()))
-      .then((data) => { if (!cancelled) setConnected(Boolean(data?.connected)); })
-      .catch(() => {});
-    return () => { cancelled = true; };
-  }, []);
-  return connected;
-}
-
-function useAppleHealthConnected(): boolean {
-  const [connected, setConnected] = useState(false);
+function useCgmSourceStatus(): CgmSourceStatus {
+  const [status, setStatus] = useState<CgmSourceStatus>({
+    lluConnected: false,
+    nightscoutConnected: false,
+    dexcomConnected: false,
+    appleHealthConnected: false,
+  });
   useEffect(() => {
     let cancelled = false;
     fetch("/api/cgm/source", { cache: "no-store" })
       .then((r) => (r.ok ? r.json() : Promise.reject()))
-      .then((data) => { if (!cancelled) setConnected(data?.source === "apple_health"); })
+      .then((data) => {
+        if (!cancelled) setStatus({
+          lluConnected: Boolean(data?.llu_connected),
+          nightscoutConnected: Boolean(data?.nightscout_connected),
+          dexcomConnected: Boolean(data?.dexcom_connected),
+          appleHealthConnected: Boolean(data?.apple_health_connected),
+        });
+      })
       .catch(() => {});
     return () => { cancelled = true; };
   }, []);
-  return connected;
-}
-
-function useDexcomDirectConnected(): boolean {
-  const [connected, setConnected] = useState(false);
-  useEffect(() => {
-    let cancelled = false;
-    fetch("/api/cgm/source", { cache: "no-store" })
-      .then((r) => (r.ok ? r.json() : Promise.reject()))
-      .then((data) => { if (!cancelled) setConnected(data?.source === "dexcom" && data?.dexcom_credentials_present === true); })
-      .catch(() => {});
-    return () => { cancelled = true; };
-  }, []);
-  return connected;
+  return status;
 }
 
 function useAppleHealthActivityConnected(): boolean {
@@ -318,12 +343,9 @@ export default function CgmSettingsPage() {
   const t = useTranslations("settings");
   const tReq = useTranslations("cgmSetupRequest");
   const [openSheet, setOpenSheet] = useState<SheetKey | null>(null);
-  const cgmConnected = useCgmConnected();
-  const nightscoutConnected = useNightscoutConnected();
-  const appleHealthConnected = useAppleHealthConnected();
+  const { lluConnected: cgmConnected, nightscoutConnected, appleHealthConnected, dexcomConnected: dexcomInit } = useCgmSourceStatus();
   const appleHealthActivityConnected = useAppleHealthActivityConnected();
   const [dexcomConnected, setDexcomConnected] = useState(false);
-  const dexcomInit = useDexcomDirectConnected();
   useEffect(() => { setDexcomConnected(dexcomInit); }, [dexcomInit]);
   const [dexcomToast, setDexcomToast] = useState<ToastState | null>(null);
   const showDexcomToast = useCallback((msg: string, kind: "success" | "error") => {
@@ -384,6 +406,7 @@ export default function CgmSettingsPage() {
           onConnected={() => { setDexcomConnected(true); closeSheet(); showDexcomToast("Dexcom erfolgreich verbunden", "success"); }}
           onDisconnected={() => { setDexcomConnected(false); closeSheet(); }}
           onError={(msg) => showDexcomToast(msg, "error")}
+          onTestSuccess={(msg) => showDexcomToast(msg, "success")}
         />
       ),
     },
