@@ -36,6 +36,25 @@ export async function GET(req: NextRequest) {
   if (!user) return NextResponse.json({ error: error || "unauthorized" }, { status: 401 });
   try {
     const admin = adminClient();
+    const { data: profile, error: profileErr } = await admin
+      .from("profiles")
+      .select("cgm_source")
+      .eq("user_id", user.id)
+      .maybeSingle();
+    if (profileErr) throw new Error("supabase: " + profileErr.message);
+    const cgmSource = profile?.cgm_source ?? null;
+    if (cgmSource !== null && cgmSource !== "llu") {
+      return NextResponse.json({
+        connected: false,
+        email: null,
+        region: null,
+        tokenExpiresAt: null,
+        lastConnectedAt: null,
+        sessionHealth: "never_tested",
+        lastReading: null,
+      });
+    }
+
     const { data, error: dbErr } = await admin
       .from("cgm_credentials")
       .select("llu_email, llu_region, cached_token_expires, updated_at")
