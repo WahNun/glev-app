@@ -61,7 +61,7 @@ function fmtMonthlyEquivalent(pkg: PurchasesPackage, locale: string): string {
 
 const PLUS_PURPLE = "#7c3aed";
 
-export default function PaywallSheet({ open, onClose, onPurchaseSuccess, initialTier = "pro" }: Props) {
+export default function PaywallSheet({ open, onClose, onPurchaseSuccess, initialTier = "pro", source }: Props) {
   const t      = useTranslations("paywall");
   const locale = useLocale();
   const router = useRouter();
@@ -95,10 +95,13 @@ export default function PaywallSheet({ open, onClose, onPurchaseSuccess, initial
       });
   }, [open, isNative, trialActive]);
 
-  // Reset state each time sheet opens
+  // Reset state each time sheet opens; fire posthog event on open
   useEffect(() => {
-    if (open) { setTier(initialTier); setInterval("yearly"); setOfferingState("loading"); setOffering(null); setPaywallState(null); }
-  }, [open, initialTier]);
+    if (open) {
+      setTier(initialTier); setInterval("yearly"); setOfferingState("loading"); setOffering(null); setPaywallState(null);
+      posthog.capture('paywall_shown', { source: source ?? 'unknown' });
+    }
+  }, [open, initialTier, source]);
 
   // User already has an active subscription — close immediately
   useEffect(() => {
@@ -117,6 +120,11 @@ export default function PaywallSheet({ open, onClose, onPurchaseSuccess, initial
   const buy = useCallback(
     async (pkg: PurchasesPackage) => {
       if (purchasing) return;
+      posthog.capture('paywall_plan_selected', {
+        plan: pkg.identifier,
+        price: pkg.product.price,
+        currency: pkg.product.currencyCode,
+      });
       setPurchasing(true);
       try {
         const result = await Purchases.purchasePackage({ aPackage: pkg });

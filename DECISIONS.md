@@ -7,6 +7,8 @@
 
 ## Decisions
 
+| 2026-07-01 | feat(analytics): PostHog EU Cloud integration | posthog-js 1.396.4 installiert. Provider in `components/PostHogProvider.tsx` (EU endpoint https://eu.i.posthog.com, DSGVO-konform). In `app/layout.tsx` als äußerster Client-Provider eingebaut. `lib/analytics/onboarding.ts` feuert zusätzlich `posthog.capture('onboarding_step')`. `components/PaywallSheet.tsx` feuert `paywall_shown` (mit `source`-Prop) bei Sheet-Open und `paywall_plan_selected` (plan/price/currency) bei Kauf-Intent. Dashboard: posthog.com → Funnels → onboarding_step → paywall_shown → paywall_plan_selected. |
+
 | 2026-07-01 | debug(cgm): Dexcom raw response logging | fetchGlucose loggt Headers + Body wenn Response kein Array — Diagnose des Session-Limit-Verhaltens |
 
 | 2026-07-01 | fix(fab): FAB auf Glev AI Screen startet Sprachaufnahme | Problem: `voice-start` case in `Layout.tsx` rief `router.push("/glev-ai")` statt `glev:voice-start` zu dispatchen — FAB auf dem Glev AI Screen navigierte ins Leere. Fix: `window.dispatchEvent(new CustomEvent("glev:voice-start"))`. `GlevAIChatSheet` hört dieses Event (open={true}), ruft `startListening()` auf; Tap-anywhere-to-stop (250 ms Grace) war bereits fertig verdrahtet. |
