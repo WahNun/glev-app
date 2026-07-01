@@ -11,6 +11,7 @@ import {
 import { fetchCycleLoggingEnabled, saveCycleLoggingEnabled } from "@/lib/cyclePrefs";
 import { fetchHapticsEnabled, saveHapticsEnabled } from "@/lib/hapticsPrefs";
 import { fetchUserProfile, cycleSurfacesAvailable, EMPTY_USER_PROFILE, type UserProfile } from "@/lib/userProfile";
+import { fetchCommunityPrefs } from "@/lib/communityPrefs";
 import { setLocale, readLocaleCookie, DEFAULT_LOCALE, type Locale } from "@/lib/locale";
 import { useTheme } from "@/components/ThemeProvider";
 import type { ThemeChoice } from "@/lib/theme";
@@ -285,6 +286,9 @@ export default function AppSettingsPage() {
   const [hapticsEnabled, setHapticsEnabled] = useState(true);
   const [fabBehavior, setFabBehavior] = useState<"navigate" | "record">("navigate");
   const [userProfile, setUserProfile] = useState<UserProfile>(EMPTY_USER_PROFILE);
+  const [communityVotingVisible, setCommunityVotingVisible] = useState(false);
+  const [communityVotingEnabled, setCommunityVotingEnabled] = useState(false);
+  const [savingCommunityVoting, setSavingCommunityVoting] = useState(false);
   const [currentLocale, setCurrentLocale] = useState<Locale>(DEFAULT_LOCALE);
   const [pendingLocale, setPendingLocale] = useState<Locale | null>(null);
   const [saving, setSaving] = useState(false);
@@ -301,6 +305,10 @@ export default function AppSettingsPage() {
     const stored = localStorage.getItem("fab_behavior");
     if (stored === "record") setFabBehavior("record");
     fetchUserProfile().then(setUserProfile).catch(() => {});
+    fetchCommunityPrefs().then((p) => {
+      setCommunityVotingVisible(p.votingVisible);
+      setCommunityVotingEnabled(p.votingEnabled);
+    }).catch(() => {});
   }, []);
 
   const openSheetWith = useCallback((id: SheetKey) => {
@@ -335,6 +343,25 @@ export default function AppSettingsPage() {
     try { await saveCycleLoggingEnabled(next); setSaved(true); setTimeout(() => setSaved(false), 1500); }
     catch { setCycleLoggingEnabled(prev); }
   }, [cycleLoggingEnabled]);
+
+  const toggleCommunityVoting = useCallback(async (next: boolean) => {
+    const prev = communityVotingEnabled;
+    setCommunityVotingEnabled(next);
+    setSavingCommunityVoting(true);
+    try {
+      const res = await fetch("/api/me/community-voting", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ enabled: next }),
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error("api_error");
+    } catch {
+      setCommunityVotingEnabled(prev);
+    } finally {
+      setSavingCommunityVoting(false);
+    }
+  }, [communityVotingEnabled]);
 
   async function saveNotifPrefsAction(): Promise<boolean> {
     setSaving(true); setSaveError("");
@@ -591,6 +618,58 @@ export default function AppSettingsPage() {
         <SettingsRow iconColor={ACCENT} icon={<svg {...iconProps}><rect x="3" y="3" width="18" height="18" rx="2" /><line x1="3" y1="9" x2="21" y2="9" /><line x1="3" y1="15" x2="21" y2="15" /><line x1="9" y1="3" x2="9" y2="21" /><line x1="15" y1="3" x2="15" y2="21" /></svg>} label={t("onboarding_replay_title")} subtitle={t("onboarding_replay_desc")} ariaLabel={t("row_open_aria", { label: t("onboarding_replay_title") })} onClick={() => openSheetWith("onboarding")} />
         <SettingsRow iconColor={PURPLE} icon={<svg {...iconProps}><circle cx="12" cy="12" r="4" /><path d="M12 2v2M12 20v2M2 12h2M20 12h2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41" /></svg>} label={t("appearance")} subtitle={themeSub} ariaLabel={t("row_open_aria", { label: t("appearance") })} onClick={() => openSheetWith("appearance")} />
       </SettingsSection>
+
+      {communityVotingVisible && (
+        <SettingsSection title="Beta & Community">
+          <button
+            type="button"
+            onClick={() => void toggleCommunityVoting(!communityVotingEnabled)}
+            disabled={savingCommunityVoting}
+            style={{
+              width: "100%", display: "flex", alignItems: "flex-start", gap: 14,
+              padding: "12px 14px", border: "none", background: "transparent",
+              color: "var(--text)", cursor: savingCommunityVoting ? "wait" : "pointer",
+              textAlign: "left", font: "inherit",
+            }}
+          >
+            <span aria-hidden style={{ width: 32, height: 32, borderRadius: 8, flexShrink: 0, background: `${PURPLE}18`, color: PURPLE, display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+                <circle cx="9" cy="7" r="4" />
+                <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+                <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+              </svg>
+            </span>
+            <span style={{ flex: 1, minWidth: 0 }}>
+              <span style={{ display: "block", fontSize: 14, fontWeight: 500, color: "var(--text-strong)", lineHeight: 1.25 }}>
+                Community Feature Voting
+              </span>
+              <span style={{ display: "block", fontSize: 13, color: "var(--text-dim)", marginTop: 2, lineHeight: 1.4 }}>
+                Erhalte gelegentlich kurze Abstimmungen zu zukünftigen Features und hilf dabei, die Entwicklungsprioritäten von Glev mitzugestalten.
+              </span>
+            </span>
+            <div
+              role="switch"
+              aria-checked={communityVotingEnabled}
+              aria-label="Community Feature Voting"
+              style={{
+                width: 44, height: 26, borderRadius: 13, flexShrink: 0, marginTop: 3,
+                background: communityVotingEnabled ? ACCENT : "var(--border)",
+                position: "relative", transition: "background 0.2s ease",
+                cursor: savingCommunityVoting ? "wait" : "pointer",
+              }}
+            >
+              <div style={{
+                position: "absolute", top: 3,
+                left: communityVotingEnabled ? 21 : 3,
+                width: 20, height: 20, borderRadius: "50%",
+                background: "white", transition: "left 0.2s ease",
+                boxShadow: "0 1px 3px rgba(0,0,0,0.2)",
+              }} />
+            </div>
+          </button>
+        </SettingsSection>
+      )}
 
       <PushDebugSection />
 

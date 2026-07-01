@@ -3,6 +3,18 @@ import { useEffect } from "react";
 import { supabase } from "@/lib/supabase";
 import { initPurchases, setUserId, clearUser } from "@/lib/purchases";
 
+async function identifyToRevenueCat(userId: string, email: string | undefined): Promise<void> {
+  try {
+    await fetch("/api/revenuecat/identify", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ userId, email }),
+    });
+  } catch {
+    // Non-critical — attributes are cosmetic only
+  }
+}
+
 /**
  * Initializes the RevenueCat SDK on native iOS when the user session is known.
  * Web no-ops. Mirrors the PushNotificationsProvider pattern:
@@ -20,6 +32,7 @@ export default function RevenueCatProvider() {
         if (event === "SIGNED_IN" && session?.user) {
           await initPurchases(session.user.id);
           await setUserId(session.user.id);
+          void identifyToRevenueCat(session.user.id, session.user.email);
         } else if (event === "SIGNED_OUT") {
           await clearUser();
         }
@@ -30,7 +43,10 @@ export default function RevenueCatProvider() {
     supabase.auth.getUser().then(({ data }) => {
       if (data.user) {
         void initPurchases(data.user.id).then(() => {
-          if (data.user) void setUserId(data.user.id);
+          if (data.user) {
+            void setUserId(data.user.id);
+            void identifyToRevenueCat(data.user.id, data.user.email);
+          }
         });
       }
     });
