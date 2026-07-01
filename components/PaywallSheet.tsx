@@ -26,6 +26,8 @@ type Props = {
   onPurchaseSuccess?: () => void;
   /** Which tier tab is pre-selected when the sheet opens. Defaults to "pro". */
   initialTier?: Tier;
+  /** Analytics source identifier for paywall_shown event. */
+  source?: string;
 };
 
 // Match RevenueCat package identifiers: smart_monthly, smart_yearly, pro_monthly, pro_yearly
