@@ -2,6 +2,8 @@
 
 ## Decisions
 
+| 2026-07-01 | Build-Fix — CommunityVotePopup.tsx war in lokalem Worktree-Branch, nie zu main gemergt | CommunityVotePopupLoader.tsx war auf main committed und importierte dynamisch @/components/CommunityVotePopup — die Datei selbst (samt lib/community/, lib/communityPrefs.ts, allen API-Routes und der Admin-Page) war nie gestaged worden. Vercel-Build schlug mit "Module not found" fehl. Fix: alle 13 Community-Voting-Dateien (CommunityVotePopup.tsx, communityPrefs.ts, lib/community/types.ts, app/api/community/*, app/api/admin/community/*, app/api/me/community-voting/route.ts, app/api/revenuecat/identify/route.ts, app/glev-ops/community/page.tsx, settings/app/page.tsx Erweiterung, RevenueCatProvider.tsx Erweiterung, supabase revenuecat-webhook) in einem Commit auf main committed und gepusht. TypeScript-Check grün. |
+
 | 2026-07-01 | feat(pro): Pro Preis €19 + Discord Welcome | Alle hardcodierten €14.90 Pro-Preise auf €19 aktualisiert. Discord-Invite https://discord.gg/DRhquAhxP in Pro-Welcome-Mail ergänzt (Founder-Kreis-Framing). |
 
 | 2026-07-01 | fix(cgm): Verbunden nur für aktive CGM-Quelle | Nightscout und Libre zeigten Verbunden-Badge auch wenn cgm_source auf eine andere Quelle gesetzt war. /api/cgm/source gibt jetzt llu_connected/nightscout_connected/dexcom_connected/apple_health_connected zurück — jeder Badge prüft source === aktive Quelle UND Credentials vorhanden. Alle vier CGM-Hooks in page.tsx durch einen einzigen useCgmSourceStatus()-Hook ersetzt der nur noch /api/cgm/source aufruft. |
