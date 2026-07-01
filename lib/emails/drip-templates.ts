@@ -361,7 +361,7 @@ function trial6BodyDe(firstName: string | null, scheduleId?: string): string {
           <span style="font-size:14px;font-weight:700;color:#ffffff;">Pro</span>
           <span style="margin-left:8px;font-size:11px;font-weight:600;color:#c7d2fe;background:rgba(255,255,255,0.15);border-radius:4px;padding:2px 7px;">Was du getestet hast</span>
         </td>
-        <td style="padding:12px 18px;font-size:14px;color:#e0e7ff;text-align:right;font-weight:600;">14,90&nbsp;€/Monat</td>
+        <td style="padding:12px 18px;font-size:14px;color:#e0e7ff;text-align:right;font-weight:600;">19&nbsp;€/Monat</td>
       </tr>
       <tr style="background:#f0f4ff;">
         <td colspan="2" style="padding:12px 18px;font-size:13px;color:#374151;line-height:1.6;">
@@ -413,7 +413,7 @@ function trial6BodyEn(firstName: string | null, scheduleId?: string): string {
           <span style="font-size:14px;font-weight:700;color:#ffffff;">Pro</span>
           <span style="margin-left:8px;font-size:11px;font-weight:600;color:#c7d2fe;background:rgba(255,255,255,0.15);border-radius:4px;padding:2px 7px;">What you tested</span>
         </td>
-        <td style="padding:12px 18px;font-size:14px;color:#e0e7ff;text-align:right;font-weight:600;">€14.90/month</td>
+        <td style="padding:12px 18px;font-size:14px;color:#e0e7ff;text-align:right;font-weight:600;">€19/month</td>
       </tr>
       <tr style="background:#f0f4ff;">
         <td colspan="2" style="padding:12px 18px;font-size:13px;color:#374151;line-height:1.6;">
@@ -483,7 +483,7 @@ function trialExpiredBodyDe(firstName: string | null, scheduleId?: string): stri
           <span style="font-size:14px;font-weight:700;color:#ffffff;">Pro</span>
           <span style="margin-left:8px;font-size:11px;font-weight:600;color:#c7d2fe;background:rgba(255,255,255,0.15);border-radius:4px;padding:2px 7px;">Was du getestet hast</span>
         </td>
-        <td style="padding:12px 18px;font-size:14px;color:#e0e7ff;text-align:right;font-weight:600;">14,90&nbsp;€/Monat</td>
+        <td style="padding:12px 18px;font-size:14px;color:#e0e7ff;text-align:right;font-weight:600;">19&nbsp;€/Monat</td>
       </tr>
       <tr style="background:#f0f4ff;">
         <td colspan="2" style="padding:12px 18px;font-size:13px;color:#374151;line-height:1.6;">
@@ -533,7 +533,7 @@ function trialExpiredBodyEn(firstName: string | null, scheduleId?: string): stri
           <span style="font-size:14px;font-weight:700;color:#ffffff;">Pro</span>
           <span style="margin-left:8px;font-size:11px;font-weight:600;color:#c7d2fe;background:rgba(255,255,255,0.15);border-radius:4px;padding:2px 7px;">What you tested</span>
         </td>
-        <td style="padding:12px 18px;font-size:14px;color:#e0e7ff;text-align:right;font-weight:600;">€14.90/month</td>
+        <td style="padding:12px 18px;font-size:14px;color:#e0e7ff;text-align:right;font-weight:600;">€19/month</td>
       </tr>
       <tr style="background:#f0f4ff;">
         <td colspan="2" style="padding:12px 18px;font-size:13px;color:#374151;line-height:1.6;">

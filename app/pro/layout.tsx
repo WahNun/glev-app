@@ -5,9 +5,9 @@ import type { Metadata } from "next";
 // via the root title.template) and its own canonical so it stops sharing the
 // homepage title.
 export const metadata: Metadata = {
-  title: "Glev Pro – €14,90/Monat",
+  title: "Glev Pro – €19/Monat",
   description:
-    "Glev Pro: €14,90/Monat ab 1. Juli 2026. Karte heute hinterlegt, erste Abbuchung am Launch-Tag, jederzeit kündbar.",
+    "Glev Pro: €19/Monat ab 1. Juli 2026. Karte heute hinterlegt, erste Abbuchung am Launch-Tag, jederzeit kündbar.",
   alternates: { canonical: "https://glev.app/pro" },
 };
 

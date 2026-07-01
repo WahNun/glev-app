@@ -87,7 +87,7 @@ function proWelcomeHtmlDe(
 
               <p style="margin:0 0 24px;font-size:15px;line-height:1.7;color:#374151;">
                 Ab dem <strong>${trialEndDisplay}</strong> startet dann deine
-                reguläre Mitgliedschaft für <strong>14,90&nbsp;€/Monat</strong>,
+                reguläre Mitgliedschaft für <strong>19&nbsp;€/Monat</strong>,
                 automatisch über die hinterlegte Karte. Bis dahin: keine
                 Abbuchung. Kurz vor Ende deiner Testphase erinnern wir dich
                 einmalig.
@@ -113,6 +113,16 @@ function proWelcomeHtmlDe(
                 erste Mahlzeit loggen, und Glev rechnet deine Insulindosis.
                 Wenn etwas hakt oder du ein Feature vermisst, antworte
                 einfach direkt auf diese Mail — sie geht an mich persönlich.
+              </p>
+
+              <p style="margin:0 0 8px;font-size:15px;line-height:1.7;color:#374151;">
+                🎉 <strong>Willkommen im Glev Pro Founder-Kreis</strong>
+              </p>
+              <p style="margin:0 0 16px;font-size:15px;line-height:1.7;color:#374151;">
+                Als Pro-Mitglied hast du exklusiven Zugang zu unserem privaten
+                Founder-Discord-Kanal. Hier tauschst du dich direkt mit Lucas
+                und dem Team aus, gibst Feedback und beeinflusst die Roadmap.<br />
+                → <a href="https://discord.gg/DRhquAhxP" style="color:#4F6EF7;text-decoration:underline;">Discord beitreten</a>
               </p>
 
               <p style="margin:0 0 16px;font-size:15px;line-height:1.7;color:#374151;">
@@ -199,7 +209,7 @@ function proWelcomeHtmlEn(
 
               <p style="margin:0 0 24px;font-size:15px;line-height:1.7;color:#374151;">
                 On <strong>${trialEndDisplay}</strong> your regular membership
-                kicks in at <strong>$14.90/month</strong>, billed automatically
+                kicks in at <strong>€19/month</strong>, billed automatically
                 to the card on file. Until then: no charges. We'll send you
                 one reminder just before your trial ends.
               </p>
@@ -224,6 +234,16 @@ function proWelcomeHtmlEn(
                 CGM, log your first meal, and Glev calculates your insulin
                 dose. If anything feels off or you're missing a feature, just
                 reply to this email — it goes to me personally.
+              </p>
+
+              <p style="margin:0 0 8px;font-size:15px;line-height:1.7;color:#374151;">
+                🎉 <strong>Welcome to the Glev Pro Founder Circle</strong>
+              </p>
+              <p style="margin:0 0 16px;font-size:15px;line-height:1.7;color:#374151;">
+                As a Pro member, you have exclusive access to our private
+                Founder Discord channel. Connect directly with Lucas and the
+                team, share feedback, and shape the roadmap.<br />
+                → <a href="https://discord.gg/DRhquAhxP" style="color:#4F6EF7;text-decoration:underline;">Join Discord</a>
               </p>
 
               <p style="margin:0 0 16px;font-size:15px;line-height:1.7;color:#374151;">

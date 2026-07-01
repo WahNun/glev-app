@@ -2,6 +2,8 @@
 
 ## Decisions
 
+| 2026-07-01 | feat(pro): Pro Preis €19 + Discord Welcome | Alle hardcodierten €14.90 Pro-Preise auf €19 aktualisiert. Discord-Invite https://discord.gg/DRhquAhxP in Pro-Welcome-Mail ergänzt (Founder-Kreis-Framing). |
+
 | 2026-07-01 | fix(cgm): Verbunden nur für aktive CGM-Quelle | Nightscout und Libre zeigten Verbunden-Badge auch wenn cgm_source auf eine andere Quelle gesetzt war. /api/cgm/source gibt jetzt llu_connected/nightscout_connected/dexcom_connected/apple_health_connected zurück — jeder Badge prüft source === aktive Quelle UND Credentials vorhanden. Alle vier CGM-Hooks in page.tsx durch einen einzigen useCgmSourceStatus()-Hook ersetzt der nur noch /api/cgm/source aufruft. |
 
 | 2026-07-01 | fix(cgm): Dexcom Credentials Save Bug | POST /api/cgm/dexcom/credentials zeigte "Verbindung erfolgreich!" (ok: true) aber speicherte keine Credentials in cgm_credentials. Diagnose: `setCredentials()` in `lib/cgm/dexcom.ts` nutzte UPDATE + SELECT + INSERT Pattern — Supabase JS v2 kann nach `.update().eq().select()` unter service_role `data: null` statt `[]` zurückgeben, wenn kein Row updated wurde (z.B. weil alle bestehenden User LLU-Rows hatten und der UPDATE scheinbar keinen Match zurückgab). Der anschließende INSERT schlug am PK-Constraint fehl. Fix: UPDATE+INSERT durch atomares `.upsert({ onConflict: 'user_id' })` ersetzt — PostgREST generiert `INSERT ... ON CONFLICT (user_id) DO UPDATE SET` nur für Payload-Spalten; llu_* Spalten bleiben bei bestehenden Rows unberührt. Logging (`console.log/error`) in setCredentials() für Production-Diagnose hinzugefügt. |

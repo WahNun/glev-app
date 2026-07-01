@@ -61,7 +61,7 @@ function buildClarifyMailto(group: Entry[]): string {
   const types = new Set(group.map((g) => g.source));
   const variants: string[] = [];
   if (types.has("beta")) variants.push("Beta-Zugang (€19 einmalig)");
-  if (types.has("pro")) variants.push("Pro-Abo (€14,90/Monat nach Probezeit)");
+  if (types.has("pro")) variants.push("Pro-Abo (€19/Monat nach Probezeit)");
 
   const subject = "Glev — kurze Rückfrage zu deiner Anmeldung";
 
@@ -71,7 +71,7 @@ function buildClarifyMailto(group: Entry[]): string {
     .map((v) =>
       v.startsWith("Beta")
         ? "  • Beta access (€19 one-time)"
-        : "  • Pro subscription (€14.90/month after trial)",
+        : "  • Pro subscription (€19/month after trial)",
     )
     .join("\n");
 

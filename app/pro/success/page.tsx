@@ -540,7 +540,7 @@ function ValidCard({
   // landen auf dieser Seite, weil /api/checkout/plus auf das gleiche
   // success_url zeigt wie /api/checkout/pro.
   const isPlus = feature === "plus_subscription";
-  const firstChargeAmount = isPlus ? "€29" : "€14,90";
+  const firstChargeAmount = isPlus ? "€29" : "€19";
   const tierName = isPlus ? "Glev+" : "Glev Pro";
   const router = useRouter();
   const [authState, setAuthState] = useState<AuthState>("checking");

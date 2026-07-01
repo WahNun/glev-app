@@ -393,7 +393,7 @@ function LegalPageInner() {
               </div>
               <div className="price-card">
                 <div className="plan-name">Glev Pro — Lifetime Lock</div>
-                <div className="price">€ 14,90</div>
+                <div className="price">€ 19</div>
                 <div className="price-sub">pro Monat · dauerhaft</div>
                 <p>Adaptive Engine, CGM-Sync, TIR/GMI, 90 Tage Verlauf. Lifetime-Lock-Preis bis zum 1. Juli 2026 buchbar — danach regulärer Preis.</p>
               </div>

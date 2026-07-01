@@ -67,7 +67,7 @@ function cancelledHtmlDe(
   const planNote =
     plan === "plus"
       ? "deine <strong>Glev+-Mitgliedschaft</strong> (€&nbsp;29/Monat mit Lifetime-Lock)"
-      : "deine <strong>Glev-Pro-Mitgliedschaft</strong> (€&nbsp;14,90/Monat)";
+      : "deine <strong>Glev-Pro-Mitgliedschaft</strong> (€&nbsp;19/Monat)";
 
   const accessLine = accessEndsAt
     ? `Dein Zugang läuft noch bis zum <strong>${formatGermanDate(accessEndsAt)}</strong> weiter — danach wechselt das Konto automatisch auf den kostenlosen Plan.`
@@ -171,7 +171,7 @@ function cancelledHtmlEn(
   const planNote =
     plan === "plus"
       ? "your <strong>Glev+ membership</strong> ($29/month, lifetime-locked price)"
-      : "your <strong>Glev Pro membership</strong> ($14.90/month)";
+      : "your <strong>Glev Pro membership</strong> (€19/month)";
 
   const accessLine = accessEndsAt
     ? `Your access continues until <strong>${formatEnglishDate(accessEndsAt)}</strong> — after that, your account will switch to the free plan automatically.`
