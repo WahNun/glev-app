@@ -1353,6 +1353,7 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
         onPointerLeave={fabHandlePointerCancel}
         onClick={fabHandleClick}
         data-glev-fab-hit="true"
+        data-glev-fab="true"
         aria-haspopup="dialog"
         aria-expanded={quickAddOpen}
         aria-label="Glev"
