@@ -1,5 +1,12 @@
 # Decisions and Changes (DECISIONS.md)
 
+## [2026-07-01] Onboarding Name-Step
+- Optionaler Step nach about-you (Step 2 von 9): User gibt display_name ein
+- Saves zu profiles → sichtbar im CRM unter "Name"
+- Skip immer möglich (Top-Right-Button + Link im Body)
+- Primary "Weiter" disabled solange Input leer
+- Apple Sign-In Name-Capture beim ersten Sign-In noch offen (app/api/auth/** protected)
+
 ## [2026-07-01] Onboarding Funnel Tracking
 - onboarding_events Tabelle, RLS aktiv
 - Tracking: entered/completed/skipped/back pro Step

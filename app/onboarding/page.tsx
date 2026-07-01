@@ -23,6 +23,7 @@ import { trackSignupConversion } from "@/lib/analytics/signupConversion";
 import { trackOnboardingStep } from "@/lib/analytics/onboarding";
 import WelcomeStep from "./welcome";
 import AboutYouStep from "./about-you";
+import NameStep from "./name";
 import LogMealStep from "./log-meal";
 import EngineStep from "./engine";
 import InsightsStep from "./insights";
@@ -51,9 +52,9 @@ function OnboardingFlow() {
     });
   }, []);
   const raw = parseInt(params.get("step") ?? "0", 10);
-  const step = (Number.isFinite(raw) ? Math.min(7, Math.max(0, raw)) : 0) as Step;
+  const step = (Number.isFinite(raw) ? Math.min(8, Math.max(0, raw)) : 0) as Step;
 
-  const STEP_NAMES = ['welcome', 'about-you', 'log-meal', 'engine', 'insights', 'glev-button', 'cgm', 'critical-alerts'] as const;
+  const STEP_NAMES = ['welcome', 'about-you', 'name', 'log-meal', 'engine', 'insights', 'glev-button', 'cgm', 'critical-alerts'] as const;
 
   function goTo(n: number) {
     router.push(`/onboarding?step=${n}`);
@@ -93,7 +94,7 @@ function OnboardingFlow() {
   }
 
   function next() {
-    if (step >= 7) {
+    if (step >= 8) {
       void trackOnboardingStep(STEP_NAMES[step], 'completed');
       void complete();
       return;
@@ -115,10 +116,11 @@ function OnboardingFlow() {
 
   if (step === 0) return <WelcomeStep onNext={next} onSkip={skip} />;
   if (step === 1) return <AboutYouStep onNext={next} onBack={back} onSkip={skip} />;
-  if (step === 2) return <LogMealStep onNext={next} onBack={back} onSkip={skip} />;
-  if (step === 3) return <EngineStep onNext={next} onBack={back} onSkip={skip} />;
-  if (step === 4) return <InsightsStep onNext={next} onBack={back} />;
-  if (step === 5) return <GlevButtonStep onNext={next} onBack={back} />;
-  if (step === 6) return <CgmStep onSkip={() => goTo(7)} onBack={back} />;
+  if (step === 2) return <NameStep onNext={next} onBack={back} onSkip={skip} />;
+  if (step === 3) return <LogMealStep onNext={next} onBack={back} onSkip={skip} />;
+  if (step === 4) return <EngineStep onNext={next} onBack={back} onSkip={skip} />;
+  if (step === 5) return <InsightsStep onNext={next} onBack={back} />;
+  if (step === 6) return <GlevButtonStep onNext={next} onBack={back} />;
+  if (step === 7) return <CgmStep onSkip={() => goTo(8)} onBack={back} />;
   return <CriticalAlertsStep onNext={next} onBack={back} />;
 }

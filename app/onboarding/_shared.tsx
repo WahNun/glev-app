@@ -31,13 +31,13 @@ export const TEXT_DIM   = "rgba(255,255,255,0.55)";
 export const TEXT_FAINT = "rgba(255,255,255,0.32)";
 
 // ─── Progress dots ──────────────────────────────────────────────
-// Onboarding is an 8-step flow:
-//   welcome (0) → about-you (1) → log-meal (2) → engine (3) → insights (4)
-//   → glev-button (5) → cgm (6) → critical-alerts (7).
+// Onboarding is a 9-step flow:
+//   welcome (0) → about-you (1) → name (2) → log-meal (3) → engine (4)
+//   → insights (5) → glev-button (6) → cgm (7) → critical-alerts (8).
 // If we ever add or drop a step, change this single literal to keep the
 // dot count in sync everywhere automatically.
-export type Step = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7;
-export const STEP_COUNT = 8;
+export type Step = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8;
+export const STEP_COUNT = 9;
 export function ProgressDots({ active }: { active: Step }) {
   return (
     <div style={{ display: "flex", gap: 8, justifyContent: "center" }}>
