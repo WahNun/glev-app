@@ -81,7 +81,9 @@ export default function GlevAIPage() {
       onQuickSaveAction={glevAi.quickSaveAction}
       onDetailOpen={glevAi.navigateToLogScreen}
       onClearChat={glevAi.clearMessages}
-      onListeningChange={() => {}}
+      onListeningChange={(active) => {
+        window.dispatchEvent(new CustomEvent("glev:ai-listening", { detail: { active } }));
+      }}
       voiceIntentEnabled={voiceIntentEnabled}
       pendingMealNavQueue={glevAi.pendingMealNavQueue}
       onMealNavTap={glevAi.fireMealNav}

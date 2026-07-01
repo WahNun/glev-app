@@ -196,6 +196,17 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // /glev-ai page renders its own GlevAIChatSheet (Layout renders null there),
+  // so onListeningChange never calls setAiThinking directly. The page dispatches
+  // this event instead so the FAB shows the correct spinning state during recording.
+  useEffect(() => {
+    const handler = (e: Event) => {
+      setAiThinking((e as CustomEvent<{ active: boolean }>).detail.active);
+    };
+    window.addEventListener("glev:ai-listening", handler);
+    return () => window.removeEventListener("glev:ai-listening", handler);
+  }, []);
+
   // Voice-intent navigation: glev:intent-navigate is dispatched by
   // useVoiceIntents when the classifier returns a "navigate" intent.
   // Handled here because Layout owns the router instance.
@@ -295,7 +306,10 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
   const fabHandlePointerCancel = () => {
     fabClearTimer();
     fabLongFiredRef.current = false;
-    fabPointerHandledRef.current = false;
+    // fabPointerHandledRef intentionally NOT reset here: if pointerUp already set it true
+    // and called runFabShortTap(), the subsequent click must be deduped. Resetting here
+    // causes a second glev:voice-start dispatch via fabHandleClick which calls
+    // releaseAudio() inside startListening(), aborting the just-started recording.
   };
   const fabHandleClick = () => {
     if (fabPointerHandledRef.current) {
