@@ -1,4 +1,5 @@
 "use client";
+import posthog from "posthog-js";
 import { useEffect, useState, useCallback } from "react";
 import { createPortal } from "react-dom";
 import Image from "next/image";

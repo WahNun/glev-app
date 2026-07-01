@@ -1,5 +1,10 @@
 # Decisions and Changes (DECISIONS.md)
 
+## [2026-07-01] Onboarding Funnel Tracking
+- onboarding_events Tabelle, RLS aktiv
+- Tracking: entered/completed/skipped/back pro Step
+- Query für Dropoff: SELECT step, action, COUNT(*) FROM onboarding_events GROUP BY step, action ORDER BY step
+
 ## Decisions
 
 | 2026-07-01 | debug(cgm): Dexcom raw response logging | fetchGlucose loggt Headers + Body wenn Response kein Array — Diagnose des Session-Limit-Verhaltens |

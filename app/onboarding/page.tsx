@@ -20,6 +20,7 @@ import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { trackSignupConversion } from "@/lib/analytics/signupConversion";
+import { trackOnboardingStep } from "@/lib/analytics/onboarding";
 import WelcomeStep from "./welcome";
 import AboutYouStep from "./about-you";
 import LogMealStep from "./log-meal";
@@ -51,6 +52,8 @@ function OnboardingFlow() {
   }, []);
   const raw = parseInt(params.get("step") ?? "0", 10);
   const step = (Number.isFinite(raw) ? Math.min(7, Math.max(0, raw)) : 0) as Step;
+
+  const STEP_NAMES = ['welcome', 'about-you', 'log-meal', 'engine', 'insights', 'glev-button', 'cgm', 'critical-alerts'] as const;
 
   function goTo(n: number) {
     router.push(`/onboarding?step=${n}`);
@@ -91,18 +94,22 @@ function OnboardingFlow() {
 
   function next() {
     if (step >= 7) {
-      // Step 7 (CriticalAlerts) is the final step. Hitting Continue
-      // completes onboarding and lands the user on /dashboard.
+      void trackOnboardingStep(STEP_NAMES[step], 'completed');
       void complete();
       return;
     }
+    void trackOnboardingStep(STEP_NAMES[step], 'completed');
+    void trackOnboardingStep(STEP_NAMES[step + 1], 'entered');
     goTo(step + 1);
   }
   function back() {
-    if (step > 0) goTo(step - 1);
+    if (step > 0) {
+      void trackOnboardingStep(STEP_NAMES[step], 'back');
+      goTo(step - 1);
+    }
   }
   function skip() {
-    // Decision 2a: Skip = endgültig durch (counted as completed).
+    void trackOnboardingStep(STEP_NAMES[step], 'skipped');
     void complete();
   }
 

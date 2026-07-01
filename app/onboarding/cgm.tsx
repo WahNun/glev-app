@@ -28,6 +28,7 @@
 
 import { useState } from "react";
 import { useTranslations } from "next-intl";
+import { trackOnboardingStep } from "@/lib/analytics/onboarding";
 import {
   Shell,
   ACCENT,
@@ -289,7 +290,7 @@ export default function CgmStep({
       )}
 
       {vendor == null ? (
-        <VendorList onPick={setVendor} onHelp={() => setShowHelp(true)} t={t} />
+        <VendorList onPick={(v) => { void trackOnboardingStep('cgm', 'completed', { vendor: v }); setVendor(v); }} onHelp={() => setShowHelp(true)} t={t} />
       ) : (
         <MethodList
           vendor={vendor}
