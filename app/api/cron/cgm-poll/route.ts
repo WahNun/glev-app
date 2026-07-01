@@ -123,6 +123,101 @@ async function insertMealGlucoseCurve(
     .upsert(curveRows, { onConflict: "meal_id,measured_at", ignoreDuplicates: true });
 }
 
+/** After upserting a fresh batch of CGM readings, check whether any
+ *  backfilled rows (timestamp > 10 min old — sensor gap / reconnect)
+ *  cover post-meal or post-bolus windows that were missed while the
+ *  sensor was offline.  Writes bg_1h / bg_2h and glucose_after_1h / 2h
+ *  directly when the column is still NULL and a matching sample exists. */
+async function retroactivelyFillSensorGap(
+  admin: SupabaseClient,
+  userId: string,
+  rows: SampleRow[],
+): Promise<void> {
+  const nowMs = Date.now();
+  const BACKFILL_THRESHOLD_MS = 10 * 60_000;
+  const MATCH_WINDOW_MS       = 10 * 60_000;
+  const MIN                   = 60_000;
+
+  const backfilled = rows.filter(
+    r => nowMs - new Date(r.timestamp).getTime() > BACKFILL_THRESHOLD_MS,
+  );
+  if (backfilled.length === 0) return;
+
+  const backfillTimes = backfilled.map(r => new Date(r.timestamp).getTime());
+  const gapMinMs = Math.min(...backfillTimes);
+  const gapMaxMs = Math.max(...backfillTimes);
+
+  function pickNear(targetMs: number): { value: number; ts: string } | null {
+    let best: { value: number; ts: string; dt: number } | null = null;
+    for (const r of rows) {
+      const rMs = new Date(r.timestamp).getTime();
+      const dt  = Math.abs(rMs - targetMs);
+      if (dt > MATCH_WINDOW_MS) continue;
+      if (!best || dt < best.dt) best = { value: r.value_mgdl, ts: r.timestamp, dt };
+    }
+    return best ? { value: best.value, ts: best.ts } : null;
+  }
+
+  // Meals whose bg_1h target (+60 min) or bg_2h target (+120 min) falls
+  // within the backfilled time range.
+  const windowStartIso = new Date(gapMinMs - 130 * MIN).toISOString();
+  const windowEndIso   = new Date(gapMaxMs -  50 * MIN).toISOString();
+
+  const { data: meals } = await admin
+    .from("meals")
+    .select("id, meal_time, created_at, bg_1h, bg_2h")
+    .eq("user_id", userId)
+    .gte("meal_time", windowStartIso)
+    .lte("meal_time", windowEndIso)
+    .or("bg_1h.is.null,bg_2h.is.null");
+
+  for (const meal of (meals ?? []) as Record<string, unknown>[]) {
+    const mealMs = new Date(((meal.meal_time ?? meal.created_at) as string)).getTime();
+    const updates: Record<string, unknown> = {};
+
+    if (meal.bg_1h == null) {
+      const hit = pickNear(mealMs + 60 * MIN);
+      if (hit) { updates.bg_1h = hit.value; updates.bg_1h_at = hit.ts; }
+    }
+    if (meal.bg_2h == null) {
+      const hit = pickNear(mealMs + 120 * MIN);
+      if (hit) { updates.bg_2h = hit.value; updates.bg_2h_at = hit.ts; }
+    }
+
+    if (Object.keys(updates).length > 0) {
+      await admin.from("meals").update(updates).eq("id", meal.id as string);
+    }
+  }
+
+  // Bolus logs — glucose_after_1h / glucose_after_2h (no _at columns).
+  const { data: boluslogs } = await admin
+    .from("insulin_logs")
+    .select("id, created_at, glucose_after_1h, glucose_after_2h")
+    .eq("user_id", userId)
+    .eq("insulin_type", "bolus")
+    .gte("created_at", windowStartIso)
+    .lte("created_at", windowEndIso)
+    .or("glucose_after_1h.is.null,glucose_after_2h.is.null");
+
+  for (const log of (boluslogs ?? []) as Record<string, unknown>[]) {
+    const logMs = new Date(log.created_at as string).getTime();
+    const updates: Record<string, unknown> = {};
+
+    if (log.glucose_after_1h == null) {
+      const hit = pickNear(logMs + 60 * MIN);
+      if (hit) updates.glucose_after_1h = hit.value;
+    }
+    if (log.glucose_after_2h == null) {
+      const hit = pickNear(logMs + 120 * MIN);
+      if (hit) updates.glucose_after_2h = hit.value;
+    }
+
+    if (Object.keys(updates).length > 0) {
+      await admin.from("insulin_logs").update(updates).eq("id", log.id as string);
+    }
+  }
+}
+
 /** Injectable dependencies for `pollOne` — lets unit tests swap out
  *  the real network calls and Supabase writes with fakes. */
 export interface PollOneDeps {
@@ -202,10 +297,9 @@ export async function pollOne(
     }
     // Fire-and-forget: write full 3h post-meal glucose curve for analytics.
     void insertMealGlucoseCurve(admin, userId, rows).catch(() => {});
-    // TODO (Bug 2): for backfilled rows with timestamps > 10 min old, check if
-    // meal_logs / bolus_logs in that window have bg_1h / bg_2h = NULL and
-    // enqueue cgm_fetch_jobs (or create missing meal_timeline_checks) so that
-    // post-meal glucose curves are retroactively computed after sensor reconnect.
+    // Fire-and-forget: retroactively fill bg_1h/bg_2h that were NULL due to
+    // sensor gap. Only acts on backfilled rows (timestamp > 10 min old).
+    void retroactivelyFillSensorGap(admin, userId, rows).catch(() => {});
     return { ok: true, inserted: rows.length, source };
   } catch (e) {
     return { ok: false, source, error: (e as Error)?.message || String(e) };
