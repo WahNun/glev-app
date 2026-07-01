@@ -28,6 +28,9 @@ type Props = {
   initialTier?: Tier;
   /** Analytics source identifier for paywall_shown event. */
   source?: string;
+  /** Force paywallState to "ineligible" even if Apple IAP says eligible_for_trial.
+   *  Use when the user already consumed a Supabase trial — we don't want a second free trial. */
+  suppressTrial?: boolean;
 };
 
 // Match RevenueCat package identifiers: smart_monthly, smart_yearly, pro_monthly, pro_yearly
@@ -61,7 +64,7 @@ function fmtMonthlyEquivalent(pkg: PurchasesPackage, locale: string): string {
 
 const PLUS_PURPLE = "#7c3aed";
 
-export default function PaywallSheet({ open, onClose, onPurchaseSuccess, initialTier = "pro", source }: Props) {
+export default function PaywallSheet({ open, onClose, onPurchaseSuccess, initialTier = "pro", source, suppressTrial = false }: Props) {
   const t      = useTranslations("paywall");
   const locale = useLocale();
   const router = useRouter();
@@ -87,7 +90,7 @@ export default function PaywallSheet({ open, onClose, onPurchaseSuccess, initial
         const productIds = (o?.availablePackages ?? []).map((p) => p.product.identifier);
         return resolvePaywallState(customerInfoResult.customerInfo, trialActive, productIds);
       })
-      .then(setPaywallState)
+      .then((state) => setPaywallState(suppressTrial && state === "eligible_for_trial" ? "ineligible" : state))
       .catch((e) => {
         console.warn("[PaywallSheet] init failed:", e);
         setOfferingState("empty");

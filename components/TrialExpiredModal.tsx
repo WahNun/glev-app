@@ -255,7 +255,7 @@ export default function TrialExpiredModal({ forceOpen = false }: { forceOpen?: b
               {C.signOut}
             </button>
 
-            <PaywallSheet open={paywallOpen} onClose={() => { setPaywallOpen(false); setExpired(false); }} onPurchaseSuccess={() => setExpired(false)} />
+            <PaywallSheet open={paywallOpen} onClose={() => { setPaywallOpen(false); setExpired(false); }} onPurchaseSuccess={() => setExpired(false)} suppressTrial={true} />
           </>
         ) : (
           <>
