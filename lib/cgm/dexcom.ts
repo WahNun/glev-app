@@ -154,33 +154,61 @@ async function dexcomLogin(
   username: string,
   password: string
 ): Promise<string> {
-  const url = `${baseUrl(region)}/ShareWebServices/Services/General/LoginPublisherAccountByName`;
-  const res = await withRetry(() =>
-    http_.post<string>(url, {
+  const base = baseUrl(region);
+
+  // Step 1: AuthenticatePublisherAccount → accountId
+  const authUrl = `${base}/ShareWebServices/Services/General/AuthenticatePublisherAccount`;
+  const authRes = await withRetry(() =>
+    http_.post<string>(authUrl, {
       accountName: username,
       password,
       applicationId: DEXCOM_APP_ID,
     })
   );
-
-  if (res.status === 401 || res.status === 400) {
+  if (authRes.status === 401 || authRes.status === 400) {
     const e: Error & { upstream?: boolean } = new Error("AccountPasswordInvalid");
     e.upstream = true;
     throw e;
   }
-
-  // Response is a JSON-encoded string (UUID with surrounding quotes)
-  const raw = typeof res.data === "string" ? res.data : JSON.stringify(res.data);
-  const sessionId = raw.replace(/^"|"$/g, "").trim();
-
-  if (!sessionId || sessionId.length < 10 || sessionId === "null") {
+  const rawAccountId = typeof authRes.data === "string"
+    ? authRes.data
+    : JSON.stringify(authRes.data);
+  const accountId = rawAccountId.replace(/^"|"$/g, "").trim();
+  if (!accountId || accountId.length < 10 || accountId === "null") {
     const e: Error & { upstream?: boolean } = new Error(
-      "Dexcom login returned no session ID"
+      "Dexcom AuthenticatePublisherAccount returned no accountId"
     );
     e.upstream = true;
     throw e;
   }
+  console.log("[dexcom] AuthenticatePublisherAccount ok — accountId:", accountId.slice(0, 8) + "...");
 
+  // Step 2: LoginPublisherAccountById → real sessionId for glucose reads
+  const loginUrl = `${base}/ShareWebServices/Services/General/LoginPublisherAccountById`;
+  const loginRes = await withRetry(() =>
+    http_.post<string>(loginUrl, {
+      accountId,
+      password,
+      applicationId: DEXCOM_APP_ID,
+    })
+  );
+  if (loginRes.status === 401 || loginRes.status === 400) {
+    const e: Error & { upstream?: boolean } = new Error("AccountPasswordInvalid");
+    e.upstream = true;
+    throw e;
+  }
+  const rawSessionId = typeof loginRes.data === "string"
+    ? loginRes.data
+    : JSON.stringify(loginRes.data);
+  const sessionId = rawSessionId.replace(/^"|"$/g, "").trim();
+  if (!sessionId || sessionId.length < 10 || sessionId === "null") {
+    const e: Error & { upstream?: boolean } = new Error(
+      "Dexcom LoginPublisherAccountById returned no session ID"
+    );
+    e.upstream = true;
+    throw e;
+  }
+  console.log("[dexcom] LoginPublisherAccountById ok — sessionId:", sessionId.slice(0, 8) + "...");
   return sessionId;
 }
 
@@ -203,7 +231,7 @@ async function fetchGlucose(
     })
   );
 
-  console.log("[dexcom] fetchGlucose status:", res.status, "data:", JSON.stringify(res.data).slice(0, 500));
+  console.log("[dexcom] fetchGlucose status:", res.status, "isArray:", Array.isArray(res.data), "len:", Array.isArray(res.data) ? res.data.length : String(res.data).slice(0, 50));
 
   if (res.status === 401) {
     const e: Error & { status401?: boolean } = new Error("SessionIdNotFound");
