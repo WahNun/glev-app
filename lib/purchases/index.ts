@@ -21,9 +21,25 @@ export async function initPurchases(userId: string | null): Promise<void> {
   initialized = true;
 }
 
-export async function setUserId(userId: string): Promise<void> {
+export interface PurchasesUserAttrs {
+  email?: string;
+  displayName?: string;
+  signupSource?: string;
+}
+
+export async function setUserId(userId: string, attrs?: PurchasesUserAttrs): Promise<void> {
   if (!Capacitor.isNativePlatform() || !initialized) return;
   await Purchases.logIn({ appUserID: userId });
+  if (attrs?.email) {
+    await Purchases.setEmail({ email: attrs.email });
+  }
+  const displayName = attrs?.displayName || attrs?.email;
+  if (displayName) {
+    await Purchases.setDisplayName({ displayName });
+  }
+  await Purchases.setAttributes({
+    attributes: { signup_source: attrs?.signupSource ?? "app_store_organic" },
+  });
 }
 
 export async function clearUser(): Promise<void> {

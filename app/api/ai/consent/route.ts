@@ -151,6 +151,7 @@ export async function POST(req: NextRequest) {
         ai_consent_at: now,
         ai_consent_version: CONSENT_VERSION,
         ai_feedback_consent_at: now,
+        signup_source: "app_store_organic",
       })
       .select("ai_consent_at, ai_consent_version")
       .maybeSingle();

@@ -1,7 +1,25 @@
 "use client";
 import { useEffect } from "react";
 import { supabase } from "@/lib/supabase";
-import { initPurchases, setUserId, clearUser } from "@/lib/purchases";
+import { initPurchases, setUserId, clearUser, type PurchasesUserAttrs } from "@/lib/purchases";
+
+async function fetchPurchasesAttrs(
+  userId: string,
+  email: string | undefined,
+): Promise<PurchasesUserAttrs> {
+  if (!supabase) return { email, signupSource: "app_store_organic" };
+  const { data } = await supabase
+    .from("profiles")
+    .select("display_name, signup_source")
+    .eq("user_id", userId)
+    .maybeSingle();
+  const profile = data as { display_name?: string | null; signup_source?: string | null } | null;
+  return {
+    email,
+    displayName: profile?.display_name ?? undefined,
+    signupSource: profile?.signup_source ?? undefined,
+  };
+}
 
 async function identifyToRevenueCat(userId: string, email: string | undefined): Promise<void> {
   try {
@@ -31,7 +49,8 @@ export default function RevenueCatProvider() {
       async (event, session) => {
         if (event === "SIGNED_IN" && session?.user) {
           await initPurchases(session.user.id);
-          await setUserId(session.user.id);
+          const attrs = await fetchPurchasesAttrs(session.user.id, session.user.email);
+          await setUserId(session.user.id, attrs);
           void identifyToRevenueCat(session.user.id, session.user.email);
         } else if (event === "SIGNED_OUT") {
           await clearUser();
@@ -42,9 +61,10 @@ export default function RevenueCatProvider() {
     // Also init immediately for already-logged-in sessions (app reopen)
     supabase.auth.getUser().then(({ data }) => {
       if (data.user) {
-        void initPurchases(data.user.id).then(() => {
+        void initPurchases(data.user.id).then(async () => {
           if (data.user) {
-            void setUserId(data.user.id);
+            const attrs = await fetchPurchasesAttrs(data.user.id, data.user.email);
+            void setUserId(data.user.id, attrs);
             void identifyToRevenueCat(data.user.id, data.user.email);
           }
         });
