@@ -16,6 +16,7 @@ import CookieBanner from "@/components/CookieBanner";
 import WebOnlyTracking from "@/components/WebOnlyTracking";
 import ServiceWorkerRegistration from "@/components/ServiceWorkerRegistration";
 import SplashScreenHider from "@/components/SplashScreenHider";
+import { PostHogProvider } from "@/components/PostHogProvider";
 
 
 // Single inline bootstrap script that runs BEFORE React hydrates.
@@ -285,6 +286,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
       </head>
       <body>
         <WebOnlyTracking gaId={process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID} />
+        <PostHogProvider>
         <NextIntlClientProvider locale={locale} messages={messages}>
           <ThemeProvider>
             <PreventZoom />
@@ -299,6 +301,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
             <SplashScreenHider />
           </ThemeProvider>
         </NextIntlClientProvider>
+        </PostHogProvider>
       </body>
     </html>
   );
