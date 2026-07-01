@@ -329,9 +329,9 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
         break;
 
       case "voice-start":
-        // Already on /glev-ai — FAB navigates only; mic starts via explicit user tap.
-        window.dispatchEvent(new CustomEvent("glev:close-modals"));
-        window.setTimeout(() => router.push("/glev-ai"), 50);
+        // Already on /glev-ai — fire the event; GlevAIChatSheet (open={true}) calls startListening().
+        // Tap-anywhere-to-stop (250 ms grace) is already wired in GlevAIChatSheet.
+        window.dispatchEvent(new CustomEvent("glev:voice-start"));
         break;
 
       case "navigate-glev-ai":
