@@ -203,10 +203,16 @@ async function fetchGlucose(
     })
   );
 
+  console.log("[dexcom] fetchGlucose status:", res.status, "data:", JSON.stringify(res.data).slice(0, 500));
+
   if (res.status === 401) {
     const e: Error & { status401?: boolean } = new Error("SessionIdNotFound");
     e.status401 = true;
     throw e;
+  }
+
+  if (res.status !== 200) {
+    throw new Error(`Dexcom API ${res.status}: ${JSON.stringify(res.data).slice(0, 200)}`);
   }
 
   return Array.isArray(res.data) ? res.data : [];

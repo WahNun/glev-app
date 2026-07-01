@@ -102,7 +102,10 @@ function DexcomDirectCard({ onConnected, onDisconnected, onError, onTestSuccess,
       const data = await res.json();
       if (res.ok) {
         setTestStatus("ok");
-        onTestSuccess(t("dexcom.test_active"));
+        const glucoseMsg = data?.current?.value != null
+          ? `${t("dexcom.test_active")} — ${data.current.value} mg/dL`
+          : t("dexcom.test_active");
+        onTestSuccess(glucoseMsg);
       } else {
         setTestStatus("error");
         const code = data?.error as string | undefined;

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { authenticate } from "../../_helpers";
-import { verifyCredentials } from "@/lib/cgm/dexcom";
+import { verifyCredentials, getHistory } from "@/lib/cgm/dexcom";
 import { adminClient } from "@/lib/cgm/supabase";
 import { decrypt } from "@/lib/cgm/crypto";
 
@@ -94,7 +94,8 @@ export async function GET(req: NextRequest) {
       password,
       (row.dexcom_region as string | null) ?? "eu"
     );
-    return NextResponse.json({ ok: true });
+    const hist = await getHistory(user.id);
+    return NextResponse.json({ ok: true, current: hist.current, count: hist.history.length });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     const lower = msg.toLowerCase();
