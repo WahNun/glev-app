@@ -2967,6 +2967,8 @@
       "sub": "The Glev button at the center of the navigation has two gestures — learn them once, use them every day.",
       "short_title": "Short tap — open AI chat · start recording",
       "short_body": "On any other screen, a short tap opens Glev AI. Already in the chat? Tap again to start recording immediately — tap anywhere on screen to stop.",
+      "swipe_title": "Swipe up — AI as overlay",
+      "swipe_body": "On Dashboard, Entries or Insights: swipe up quickly from the bottom — Glev AI opens as a floating panel without leaving your current screen.",
       "long_title": "Long press — quick-add menu",
       "long_body": "Hold the button down to open the quick-add menu: log insulin, a fingerstick, exercise or symptoms — without switching tabs.",
       "done": "Let's go"

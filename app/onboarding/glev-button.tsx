@@ -68,6 +68,12 @@ export default function GlevButtonStep({
           accentColor={ACCENT}
         />
         <GestureCard
+          icon="👆"
+          title={t("swipe_title")}
+          body={t("swipe_body")}
+          accentColor="rgba(120,180,255,0.55)"
+        />
+        <GestureCard
           icon="☰"
           title={t("long_title")}
           body={t("long_body")}

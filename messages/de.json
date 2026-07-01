@@ -2967,6 +2967,8 @@
       "sub": "Der Glev-Button in der Mitte der Navigation hat zwei Gesten — lern sie einmal, nutze sie täglich.",
       "short_title": "Kurz tippen — KI-Chat öffnen · Aufnahme starten",
       "short_body": "Auf allen anderen Screens öffnet ein kurzer Tipp den Glev AI Chat. Bist du bereits im Chat, startet der gleiche Tipp sofort die Aufnahme — tippe irgendwo auf den Bildschirm zum Beenden.",
+      "swipe_title": "Von unten hochschieben — KI als Fenster",
+      "swipe_body": "Auf Dashboard, Einträge oder Insights: schnell von unten nach oben wischen — Glev AI öffnet sich als schwebendes Fenster, ohne den Screen zu verlassen.",
       "long_title": "Lang drücken — Schnell-Menü",
       "long_body": "Halte den Button gedrückt, um das Schnell-Menü zu öffnen: Insulin loggen, Fingertest, Training oder Symptome — ohne in die Navigation zu wechseln.",
       "done": "Los geht's"
