@@ -686,7 +686,7 @@ export default function PreviewHome() {
       </section>
 
       {/* PRICING — S/M/L-Struktur für Presale-Tiers:
-          Smart (€9/Mo, Early-Access-Badge) → Pro (€14,90/Mo, Most-Popular-
+          Smart (€9/Mo, Early-Access-Badge) → Pro (€19/Mo, Most-Popular-
           Badge, hervorgehoben) → Glev+ (€29/Mo, für Eltern/Caregiver).
           B2B-Klinik (€299/Mo) ist als eigene Landing Page /klinik
           ausgelagert und wird nur noch als Text-Link unter dem Grid

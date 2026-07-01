@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 
 // /pro is a "use client" page and cannot export metadata itself. This thin
-// server-component layout supplies the per-page title (→ "Glev Pro – €14,90/Monat | Glev"
+// server-component layout supplies the per-page title (→ "Glev Pro – €19/Monat | Glev"
 // via the root title.template) and its own canonical so it stops sharing the
 // homepage title.
 export const metadata: Metadata = {

@@ -535,7 +535,7 @@ function ValidCard({
   const C = locale === "en" ? EN : DE;
   const trialEnd = locale === "en" ? TRIAL_END_DISPLAY_EN : TRIAL_END_DISPLAY_DE;
 
-  // Tier-spezifische Copy: Pro = €14,90/Monat (monatlich kündbar), Plus =
+  // Tier-spezifische Copy: Pro = €19/Monat (monatlich kündbar), Plus =
   // €29/Monat (Lifetime-Lock — Preis bleibt für immer derselbe). Beide
   // landen auf dieser Seite, weil /api/checkout/plus auf das gleiche
   // success_url zeigt wie /api/checkout/pro.
