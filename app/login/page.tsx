@@ -476,7 +476,7 @@ export default function LoginPage() {
 
         <div style={{ textAlign: "center", marginTop: 10, fontSize: 12, color: "var(--text-faint)" }}>
           <Link
-            href="/"
+            href="/?marketing=1"
             style={{ color: "var(--text-muted)", textDecoration: "none", fontWeight: 500 }}
           >
             {t.back}

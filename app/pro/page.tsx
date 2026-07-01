@@ -403,7 +403,7 @@ function PreviewProContent() {
             {t("pricing_headline")}
           </div>
           <ul style={{ listStyle: "none", padding: 0, margin: 0, display: "flex", flexDirection: "column", gap: 8 }}>
-            {[1, 2, 3, 4].map((n) => (
+            {[1, 2, 3, 4, 5].map((n) => (
               <li
                 key={n}
                 style={{

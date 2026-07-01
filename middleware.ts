@@ -174,9 +174,11 @@ export function middleware(req: NextRequest) {
       return res;
     }
     if (hadSession(req)) {
-      const res = NextResponse.redirect(new URL("/login", req.url));
-      persistGeoLocaleCookie(req, res, country);
-      return res;
+      if (!searchParams.get("marketing")) {
+        const res = NextResponse.redirect(new URL("/login", req.url));
+        persistGeoLocaleCookie(req, res, country);
+        return res;
+      }
     }
   }
 
