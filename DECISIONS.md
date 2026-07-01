@@ -4,6 +4,10 @@
 
 | 2026-07-01 | debug(cgm): Dexcom raw response logging | fetchGlucose loggt Headers + Body wenn Response kein Array — Diagnose des Session-Limit-Verhaltens |
 
+| 2026-07-01 | fix(fab): FAB auf Glev AI Screen startet Sprachaufnahme | Problem: `voice-start` case in `Layout.tsx` rief `router.push("/glev-ai")` statt `glev:voice-start` zu dispatchen — FAB auf dem Glev AI Screen navigierte ins Leere. Fix: `window.dispatchEvent(new CustomEvent("glev:voice-start"))`. `GlevAIChatSheet` hört dieses Event (open={true}), ruft `startListening()` auf; Tap-anywhere-to-stop (250 ms Grace) war bereits fertig verdrahtet. |
+
+| 2026-07-01 | fix(cgm): Dexcom 2-step auth flow | Problem: `LoginPublisherAccountByName` Session erlaubt keine Glucose-Reads (HTTP 200, data: ""). Fix: 2-Schritt-Flow — `AuthenticatePublisherAccount` → accountId, dann `LoginPublisherAccountById` → echte sessionId für `ReadPublisherLatestGlucoseValues`. File: `lib/cgm/dexcom.ts` → `dexcomLogin()`. Reference: Nightscout/xDrip verwenden denselben Flow. |
+
 | 2026-07-01 | Build-Fix — CommunityVotePopup.tsx war in lokalem Worktree-Branch, nie zu main gemergt | CommunityVotePopupLoader.tsx war auf main committed und importierte dynamisch @/components/CommunityVotePopup — die Datei selbst (samt lib/community/, lib/communityPrefs.ts, allen API-Routes und der Admin-Page) war nie gestaged worden. Vercel-Build schlug mit "Module not found" fehl. Fix: alle 13 Community-Voting-Dateien (CommunityVotePopup.tsx, communityPrefs.ts, lib/community/types.ts, app/api/community/*, app/api/admin/community/*, app/api/me/community-voting/route.ts, app/api/revenuecat/identify/route.ts, app/glev-ops/community/page.tsx, settings/app/page.tsx Erweiterung, RevenueCatProvider.tsx Erweiterung, supabase revenuecat-webhook) in einem Commit auf main committed und gepusht. TypeScript-Check grün. |
 
 | 2026-07-01 | feat(pro): Pro Preis €19 + Discord Welcome | Alle hardcodierten €14.90 Pro-Preise auf €19 aktualisiert. Discord-Invite https://discord.gg/DRhquAhxP in Pro-Welcome-Mail ergänzt (Founder-Kreis-Framing). |
