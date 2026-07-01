@@ -263,6 +263,31 @@ export default function CgmStep({
         </p>
       </div>
 
+      {vendor == null && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          <p style={{ fontSize: 11, fontWeight: 700, color: TEXT_DIM, textTransform: "uppercase", letterSpacing: "0.08em", margin: "0 0 2px" }}>
+            Unterstützte Quellen
+          </p>
+          {([
+            { color: ORANGE, name: "FreeStyle Libre 2 / 3", detail: "über LibreLinkUp · EU verfügbar" },
+            { color: GREEN,  name: "Dexcom G6 / G7",        detail: "über Dexcom Share · EU + USA" },
+            { color: ACCENT, name: "Nightscout",            detail: "für alle CGMs mit Nightscout-Instanz" },
+            { color: PINK,   name: "Apple Health",          detail: "nur iPhone · Glucose aus der Health-App" },
+          ] as { color: string; name: string; detail: string }[]).map(({ color, name, detail }) => (
+            <div key={name} style={{
+              background: SURFACE,
+              border: `1px solid ${BORDER}`,
+              borderLeft: `3px solid ${color}`,
+              borderRadius: 10,
+              padding: "9px 12px",
+            }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: TEXT, lineHeight: 1.3 }}>{name}</div>
+              <div style={{ fontSize: 11.5, color: TEXT_DIM, lineHeight: 1.4, marginTop: 1 }}>{detail}</div>
+            </div>
+          ))}
+        </div>
+      )}
+
       {vendor == null ? (
         <VendorList onPick={setVendor} onHelp={() => setShowHelp(true)} t={t} />
       ) : (
