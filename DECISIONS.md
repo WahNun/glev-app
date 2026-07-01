@@ -776,3 +776,8 @@ Smart-Tier Käufer haben fälschlicherweise Glev+ Zugang bekommen statt Smart, w
 
 ## 2026-07-01 feat(cgm): CGM Diagnose-Reporting System
 | 2026-07-01 | feat(cgm): CGM Diagnose-Reporting System | Maschinenlesbare Fehlercodes in CGM-API (/api/cgm/history gibt jetzt error_code zurück: no_credentials, login_failed, timeout, network_error, internal), aussagekräftige deutsche Fehlermeldungen im Glucose-Card nach Kategorie, neue Tabelle cgm_error_logs (RLS: user_insert_own_log), POST /api/cgm/report-error Endpoint (auth-gesichert), "Problem melden →"-Button im Glucose-Card Fehlerzustand (POSTet Metadaten ohne Credentials), Admin-View /glev-ops/cgm-errors mit Filter nach error_code. |
+
+## 2026-07-01 feat(onboarding): CGM-Quellen-Erklärung + PWA-Screen entfernt
+
+- Add-to-Homescreen-Step (Step 8 / install.tsx) aus Onboarding entfernt: Import + conditional in page.tsx gestrichen, STEP_COUNT 9→8, Step-Typ auf 0–7 reduziert; Step 7 (CriticalAlerts) ist jetzt der finale Step.
+- CGM-Screen (cgm.tsx): Vor der Vendor-Auswahl wird im Stage-A-Zustand eine kompakte "Unterstützte Quellen"-Sektion eingeblendet mit den 4 Quellen (FreeStyle Libre 2/3 via LibreLinkUp, Dexcom G6/G7 via Share, Nightscout, Apple Health).

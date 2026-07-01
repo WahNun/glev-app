@@ -27,7 +27,6 @@ import EngineStep from "./engine";
 import InsightsStep from "./insights";
 import CgmStep from "./cgm";
 import CriticalAlertsStep from "./critical-alerts";
-import InstallStep from "./install";
 import GlevButtonStep from "./glev-button";
 import type { Step } from "./_shared";
 
@@ -51,7 +50,7 @@ function OnboardingFlow() {
     });
   }, []);
   const raw = parseInt(params.get("step") ?? "0", 10);
-  const step = (Number.isFinite(raw) ? Math.min(8, Math.max(0, raw)) : 0) as Step;
+  const step = (Number.isFinite(raw) ? Math.min(7, Math.max(0, raw)) : 0) as Step;
 
   function goTo(n: number) {
     router.push(`/onboarding?step=${n}`);
@@ -91,8 +90,8 @@ function OnboardingFlow() {
   }
 
   function next() {
-    if (step >= 8) {
-      // Step 8 (Install) is the final step. Hitting Continue
+    if (step >= 7) {
+      // Step 7 (CriticalAlerts) is the final step. Hitting Continue
       // completes onboarding and lands the user on /dashboard.
       void complete();
       return;
@@ -114,6 +113,5 @@ function OnboardingFlow() {
   if (step === 4) return <InsightsStep onNext={next} onBack={back} />;
   if (step === 5) return <GlevButtonStep onNext={next} onBack={back} />;
   if (step === 6) return <CgmStep onSkip={() => goTo(7)} onBack={back} />;
-  if (step === 7) return <CriticalAlertsStep onNext={next} onBack={back} />;
-  return <InstallStep onNext={next} onBack={back} onSkip={skip} />;
+  return <CriticalAlertsStep onNext={next} onBack={back} />;
 }
