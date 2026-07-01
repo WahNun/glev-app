@@ -231,19 +231,21 @@ async function fetchGlucose(
     })
   );
 
-  console.log("[dexcom] fetchGlucose status:", res.status, "isArray:", Array.isArray(res.data), "len:", Array.isArray(res.data) ? res.data.length : String(res.data).slice(0, 50));
-
-  if (res.status === 401) {
-    const e: Error & { status401?: boolean } = new Error("SessionIdNotFound");
-    e.status401 = true;
-    throw e;
+  const rawData = res.data;
+  console.log("[dexcom] fetchGlucose status:", res.status, "isArray:", Array.isArray(rawData));
+  if (!Array.isArray(rawData)) {
+    const rawStr = typeof rawData === "string" ? rawData : JSON.stringify(rawData);
+    console.log("[dexcom] fetchGlucose UNEXPECTED body:", JSON.stringify(rawStr).slice(0, 500));
+    console.log("[dexcom] fetchGlucose headers:", JSON.stringify({
+      "content-type": res.headers["content-type"],
+      "content-length": res.headers["content-length"],
+      "x-request-id": res.headers["x-request-id"],
+      "x-ratelimit-remaining": res.headers["x-ratelimit-remaining"],
+    }));
+    return [];
   }
-
-  if (res.status !== 200) {
-    throw new Error(`Dexcom API ${res.status}: ${JSON.stringify(res.data).slice(0, 200)}`);
-  }
-
-  return Array.isArray(res.data) ? res.data : [];
+  console.log("[dexcom] fetchGlucose ok — readings:", rawData.length);
+  return rawData;
 }
 
 function mapReading(r: DexcomReading): Reading | null {
