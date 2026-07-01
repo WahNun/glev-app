@@ -1,12 +1,6 @@
 "use client";
 
-import dynamic from "next/dynamic";
-
-const CommunityVotePopup = dynamic(
-  () => import("@/components/CommunityVotePopup"),
-  { ssr: false },
-);
-
+// Community Voting UI temporarily disabled — feature pending full implementation
 export default function CommunityVotePopupLoader() {
-  return <CommunityVotePopup />;
+  return null;
 }
