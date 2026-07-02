@@ -61,9 +61,13 @@ export async function GET(req: NextRequest) {
     const llu_email = credsRes.data?.llu_email ?? null;
     const dexcom_username = credsRes.data?.dexcom_username ?? null;
 
-    const llu_connected = source === "llu" && llu_email !== null;
-    const nightscout_connected = source === "nightscout" && nightscout_url !== null;
-    const dexcom_connected = source === "dexcom" && dexcom_username !== null;
+    // Derive connected state from credential presence, not from cgm_source.
+    // A user with llu_email set is "connected" to Libre regardless of which
+    // source is currently active — same logic the CRM uses.
+    const llu_connected = llu_email !== null;
+    const nightscout_connected = nightscout_url !== null;
+    const dexcom_connected = dexcom_username !== null;
+    // Apple Health has no credentials row — must infer from explicit source pin.
     const apple_health_connected = source === "apple_health";
 
     return NextResponse.json({
