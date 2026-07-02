@@ -97,7 +97,7 @@ export type CrmProRow = {
   user_id?: string;
 };
 
-type Tab = "alle" | "trial" | "beta" | "pro";
+type Tab = "alle" | "trial" | "app_store" | "meta_leads" | "beta" | "pro";
 
 type UserFilter =
   | "all"
@@ -210,7 +210,7 @@ export default function CrmView({
   const router = useRouter();
   const sp = useSearchParams();
   const rawTab = sp.get("tab") ?? "alle";
-  const tab: Tab = ["alle", "trial", "beta", "pro"].includes(rawTab) ? (rawTab as Tab) : "alle";
+  const tab: Tab = ["alle", "trial", "app_store", "meta_leads", "beta", "pro"].includes(rawTab) ? (rawTab as Tab) : "alle";
 
   function setTab(t: Tab) {
     const params = new URLSearchParams(sp.toString());
@@ -221,17 +221,32 @@ export default function CrmView({
   const trialUsers = useMemo(
     () =>
       users.filter(
-        (u) =>
-          u.signup_source === "meta_lead" ||
-          u.profile_trial_end_at != null ||
-          u.profile_trial_start_at != null,
+        (u) => u.profile_trial_end_at != null || u.profile_trial_start_at != null,
       ),
+    [users],
+  );
+
+  const appStoreUsers = useMemo(
+    () =>
+      users
+        .filter((u) => u.signup_source == null || u.signup_source === "app_store_organic")
+        .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()),
+    [users],
+  );
+
+  const metaLeadUsers = useMemo(
+    () =>
+      users
+        .filter((u) => u.signup_source === "meta_lead")
+        .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()),
     [users],
   );
 
   const tabs: Array<{ key: Tab; label: string; count: number }> = [
     { key: "alle", label: "Alle Nutzer", count: users.length },
-    { key: "trial", label: "Trial / Meta Leads", count: trialUsers.length },
+    { key: "trial", label: "Trial", count: trialUsers.length },
+    { key: "app_store", label: "App Store", count: appStoreUsers.length },
+    { key: "meta_leads", label: "Meta Leads", count: metaLeadUsers.length },
     { key: "beta", label: "Beta-Käufer (veraltet)", count: beta.length },
     { key: "pro", label: "Pro-Abos", count: pro.length },
   ];
@@ -255,6 +270,8 @@ export default function CrmView({
       <div style={{ paddingTop: 24 }}>
         {tab === "alle" && <AlleTab users={users} pageSize={pageSize} />}
         {tab === "trial" && <TrialTab users={trialUsers} />}
+        {tab === "app_store" && <TrialTab users={appStoreUsers} />}
+        {tab === "meta_leads" && <TrialTab users={metaLeadUsers} />}
         {tab === "beta" && <BetaTab rows={beta} />}
         {tab === "pro" && <ProTab rows={pro} />}
       </div>
