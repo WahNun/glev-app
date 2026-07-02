@@ -38,7 +38,7 @@ export async function setUserId(userId: string, attrs?: PurchasesUserAttrs): Pro
     await Purchases.setDisplayName({ displayName });
   }
   await Purchases.setAttributes({
-    attributes: { signup_source: attrs?.signupSource ?? "app_store_organic" },
+    signup_source: attrs?.signupSource ?? "app_store_organic",
   });
 }
 
