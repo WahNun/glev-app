@@ -1879,3 +1879,54 @@ export async function removeTesterAction(
   revalidateUserPaths(userId);
   return { ok: true };
 }
+
+/**
+ * Manuell einen CGM-Poll für einen einzelnen User anstoßen.
+ * Nützlich um Users wie Marie, die nie in die Poll-Queue aufgenommen
+ * wurden, sofort mit Daten zu versorgen ohne auf den nächsten Cron-Tick
+ * zu warten. Source-Auflösung spiegelt die Logik des cgm-poll-Crons.
+ */
+export async function triggerCgmPollAction(
+  formData: FormData,
+): Promise<{ ok: true; inserted: number; source: string } | { ok: false; error: string }> {
+  const adminToken = await requireAdminToken();
+  const userId = String(formData.get("userId") ?? "").trim();
+  if (!userId) return { ok: false, error: "userId fehlt" };
+
+  const sb = getSupabaseAdmin();
+
+  const [profileRes, credsRes] = await Promise.all([
+    sb.from("profiles").select("cgm_source, nightscout_url").eq("user_id", userId).maybeSingle(),
+    sb.from("cgm_credentials").select("llu_email, dexcom_username").eq("user_id", userId).maybeSingle(),
+  ]);
+
+  const explicitSource = (profileRes.data?.cgm_source as string | null) ?? null;
+  const hasLlu      = !!credsRes.data?.llu_email;
+  const hasDexcom   = !!credsRes.data?.dexcom_username;
+  const hasNightscout = !!profileRes.data?.nightscout_url;
+
+  type PollSource = "llu" | "nightscout" | "dexcom";
+  let source: PollSource;
+  if (explicitSource === "dexcom" && hasDexcom)           source = "dexcom";
+  else if (explicitSource === "nightscout" && hasNightscout) source = "nightscout";
+  else if (explicitSource === "llu" && hasLlu)            source = "llu";
+  else if (hasNightscout)                                 source = "nightscout";
+  else if (hasLlu)                                        source = "llu";
+  else if (hasDexcom)                                     source = "dexcom";
+  else return { ok: false, error: "Keine CGM-Credentials für diesen User" };
+
+  const { pollOne } = await import("@/app/api/cron/cgm-poll/route");
+  const result = await pollOne(userId, source);
+
+  await writeAuditLog({
+    action: "trigger_cgm_poll",
+    targetUserId: userId,
+    after: result.ok
+      ? { source, inserted: result.inserted }
+      : { source, error: result.error },
+    adminToken,
+  });
+
+  if (!result.ok) return { ok: false, error: result.error };
+  return { ok: true, inserted: result.inserted, source: result.source };
+}

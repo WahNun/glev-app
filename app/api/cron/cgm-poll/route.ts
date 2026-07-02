@@ -396,6 +396,10 @@ async function handle(req: NextRequest): Promise<NextResponse> {
   for (const uid of lluUsers) {
     if (!seen.has(uid)) toPoll.push({ userId: uid, source: "llu" });
   }
+  // Same catch-all for Dexcom users without a profile row.
+  for (const uid of dexcomUsers) {
+    if (!seen.has(uid)) toPoll.push({ userId: uid, source: "dexcom" });
+  }
 
   if (toPoll.length === 0) {
     console.log(`cgm-poll done in ${Date.now() - start}ms, ${toPoll.length} users`);
@@ -424,6 +428,14 @@ async function handle(req: NextRequest): Promise<NextResponse> {
     } else {
       failedUsers += 1;
       errors.push({ user: userId, source: r.source, error: r.error });
+      // Persist so /glev-ops/cgm-errors shows poll failures without log-diving.
+      void admin.from("cgm_error_logs").insert({
+        user_id: userId,
+        error_code: "poll_failed",
+        error_message: r.error,
+        cgm_source: r.source,
+        context: { cron: "cgm-poll" },
+      });
     }
   }
   if (errors.length > 0) {

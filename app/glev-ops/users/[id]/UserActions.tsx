@@ -20,6 +20,7 @@ import {
   grantAiConsentAction,
   setTesterAction,
   removeTesterAction,
+  triggerCgmPollAction,
 } from "../actions";
 import type { SetPlanResult } from "../actions";
 
@@ -108,6 +109,10 @@ export default function UserActions({
   const [consentAt, setConsentAt] = useState(aiConsentAt);
   const [consentPending, setConsentPending] = useState(false);
   const [consentResult, setConsentResult] = useState<{ ok: boolean; msg: string } | null>(null);
+
+  // Manueller CGM-Poll
+  const [pollPending, setPollPending] = useState(false);
+  const [pollResult, setPollResult] = useState<{ ok: boolean; msg: string } | null>(null);
 
   // Tester-Status (auth.users.app_metadata.is_tester)
   const [testerEnabled, setTesterEnabled] = useState(isTester);
@@ -459,6 +464,51 @@ export default function UserActions({
             </button>
           </form>
         ) : null}
+      </section>
+
+      {/* --- CGM Sync --- */}
+      <section style={section}>
+        <h2 style={h2}>CGM Sync</h2>
+        <p style={{ ...muted, margin: "0 0 12px" }}>
+          Löst einen sofortigen CGM-Poll für diesen User aus (ohne auf den nächsten
+          2-min-Cron zu warten). Nützlich wenn der User gerade keine Daten erhält
+          und die Ursache in der Queue-Auflösung liegt. Source wird automatisch aus
+          den Credentials ermittelt.
+        </p>
+        <button
+          type="button"
+          disabled={pollPending}
+          onClick={() => {
+            if (pollPending) return;
+            setPollPending(true);
+            setPollResult(null);
+            const fd = new FormData();
+            fd.set("userId", userId);
+            void triggerCgmPollAction(fd).then((res) => {
+              if (res.ok) {
+                setPollResult({
+                  ok: true,
+                  msg: `✅ Poll OK — ${res.inserted} neue Samples (source: ${res.source})`,
+                });
+              } else {
+                setPollResult({ ok: false, msg: `❌ ${res.error}` });
+              }
+              setPollPending(false);
+            });
+          }}
+          style={{
+            ...btnSecondary,
+            opacity: pollPending ? 0.6 : 1,
+            cursor: pollPending ? "not-allowed" : "pointer",
+          }}
+        >
+          {pollPending ? "Polling…" : "📡 CGM-Poll jetzt auslösen"}
+        </button>
+        {pollResult && (
+          <p style={{ margin: "10px 0 0", fontSize: 13, color: pollResult.ok ? "#15803d" : "#991b1b" }}>
+            {pollResult.msg}
+          </p>
+        )}
       </section>
 
       {/* --- Push-Test --- */}

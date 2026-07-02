@@ -51,7 +51,7 @@ export type CrmUserRow = {
   gift_label: string | null;
   deleted_at: string | null;
   created_by_admin: boolean;
-  cgm: "none" | "llu" | "nightscout" | "applehealth" | "junction";
+  cgm: "none" | "llu" | "nightscout" | "applehealth" | "junction" | "dexcom";
   pro_status: string | null;
   trial_ends_at: string | null;
   profile_trial_end_at: string | null;
@@ -164,6 +164,7 @@ function fmtAmount(cents: number | null | undefined, ccy: string | null | undefi
 }
 function cgmLabel(c: CrmUserRow["cgm"]): string {
   if (c === "llu") return "LibreLinkUp";
+  if (c === "dexcom") return "Dexcom";
   if (c === "nightscout") return "Nightscout";
   if (c === "applehealth") return "Apple Health";
   if (c === "junction") return "Junction";
