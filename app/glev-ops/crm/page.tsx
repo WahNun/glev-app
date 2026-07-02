@@ -43,7 +43,7 @@ export default async function CrmPage({
       sb.from("profiles").select(
         "user_id, display_name, role, language, plan, cgm_connected, cgm_source, nightscout_url, trial_end_at, trial_start_at, signup_source, onboarding_completed_at, created_at",
       ),
-      sb.from("cgm_credentials").select("user_id, llu_email"),
+      sb.from("cgm_credentials").select("user_id, llu_email, dexcom_username"),
       sb.from("pro_subscriptions")
         .select("id, email, full_name, status, trial_ends_at, current_period_end, stripe_session_id, stripe_customer_id, stripe_subscription_id, currency, country, created_at")
         .order("created_at", { ascending: false })
@@ -134,13 +134,16 @@ export default async function CrmPage({
 
   const profiles = (profilesRes.data ?? []) as ProfRow[];
   const profilesOpt = (profilesOptRes.data ?? []) as ProfOptRow[];
-  const cgms = (cgmRes.data ?? []) as { user_id: string; llu_email: string }[];
+  const cgms = (cgmRes.data ?? []) as { user_id: string; llu_email: string | null; dexcom_username: string | null }[];
   const pros = (proRes.data ?? []) as ProSubRow[];
   const betas = (betaRes.data ?? []) as BetaResRow[];
 
   const profileById = new Map(profiles.map((p) => [p.user_id, p]));
   const profileOptById = new Map(profilesOpt.map((p) => [p.user_id, p]));
-  const lluByUser = new Map(cgms.map((c) => [c.user_id, c.llu_email]));
+  // Only flag LLU when llu_email is actually set — a cgm_credentials row with
+  // only Dexcom fields would otherwise wrongly show "LibreLinkUp" in the list.
+  const lluByUser = new Map(cgms.filter(c => c.llu_email).map((c) => [c.user_id, c.llu_email]));
+  const dexcomUserIds = new Set(cgms.filter(c => c.dexcom_username).map(c => c.user_id));
   const proByEmail = new Map(pros.map((p) => [p.email.toLowerCase(), p]));
   const betaByEmail = new Map(betas.map((b) => [b.email.toLowerCase(), b]));
 
@@ -204,7 +207,8 @@ export default async function CrmPage({
     });
 
     let cgmKind: CrmUserRow["cgm"] = "none";
-    if (lluByUser.has(u.id)) cgmKind = "llu";
+    if (p?.cgm_source === "dexcom" && dexcomUserIds.has(u.id)) cgmKind = "dexcom";
+    else if (lluByUser.has(u.id)) cgmKind = "llu";
     else if (p?.nightscout_url) cgmKind = "nightscout";
     else if (p?.cgm_source === "apple_health") cgmKind = "applehealth";
     else if (p?.cgm_connected) cgmKind = "junction";
