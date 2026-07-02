@@ -429,13 +429,13 @@ async function handle(req: NextRequest): Promise<NextResponse> {
       failedUsers += 1;
       errors.push({ user: userId, source: r.source, error: r.error });
       // Persist so /glev-ops/cgm-errors shows poll failures without log-diving.
-      admin.from("cgm_error_logs").insert({
+      void admin.from("cgm_error_logs").insert({
         user_id: userId,
         error_code: "poll_failed",
         error_message: r.error,
         cgm_source: r.source,
         context: { cron: "cgm-poll" },
-      }).catch(() => {});
+      });
     }
   }
   if (errors.length > 0) {
